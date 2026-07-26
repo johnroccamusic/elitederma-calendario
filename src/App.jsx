@@ -800,12 +800,70 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
   );
 }
 
+// ---------- Cerca iscritto ----------
+function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBack }) {
+  const [query, setQuery] = useState("");
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const corsoDataById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+
+  const q = query.trim().toLowerCase();
+  const risultati = q
+    ? iscritti.filter((i) => i.nome.toLowerCase().includes(q) || i.cognome.toLowerCase().includes(q))
+    : [];
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Cerca iscritto" onBack={onBack} />
+      <div style={cardStyle}>
+        <Field label="Nome o cognome">
+          <input
+            style={inputStyle}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="es. Rossi"
+            autoFocus
+          />
+        </Field>
+      </div>
+
+      {q && risultati.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Nessun iscritto trovato con questo nome.</div>
+      )}
+
+      {risultati.map((i) => {
+        const cd = corsoDataById[i.corso_data_id];
+        if (!cd) return null;
+        const corso = corsoById[cd.corso_id];
+        const loc = locById[cd.location_id];
+        return (
+          <div
+            key={i.id}
+            onClick={() => onApriData(cd)}
+            style={{ ...cardStyle, cursor: "pointer", padding: "16px 20px", marginBottom: 10 }}
+          >
+            <div style={{ ...fontBody, fontSize: 15, color: NAVY, fontWeight: 500, marginBottom: 3 }}>{i.nome} {i.cognome}</div>
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED, display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
+              {corso?.nome || "?"} · {loc?.nome || "?"} · {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ---------- Scheda data (iscritti) ----------
 function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica, onBack }) {
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
   const [note, setNote] = useState("");
   const [spostaTarget, setSpostaTarget] = useState({});
+  const [inModifica, setInModifica] = useState(null); // id dell'iscritto in modifica
+  const [modNome, setModNome] = useState("");
+  const [modCognome, setModCognome] = useState("");
   const [msg, setMsg] = useState("");
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
@@ -840,11 +898,56 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
+  function apriModifica(i) {
+    setInModifica(i.id);
+    setModNome(i.nome);
+    setModCognome(i.cognome);
+  }
+
+  async function salvaModifica(id) {
+    if (!modNome.trim() || !modCognome.trim()) { setMsg("Nome e cognome non possono essere vuoti."); return; }
+    const { error } = await supabase.from("iscritti").update({ nome: modNome.trim(), cognome: modCognome.trim() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setInModifica(null);
+    setMsg("Nome corretto.");
+    ricarica();
+  }
+
+  async function cambiaPosti(delta) {
+    const nuovo = Math.max(listaIscritti.length, max + delta);
+    const { error } = await supabase.from("corsi_date").update({ posti_max: nuovo }).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={`${corso?.nome || ""} · ${loc?.nome || ""}`} onBack={onBack} />
       <div style={{ ...fontBody, color: MUTED, fontSize: 14, marginBottom: 18 }}>
         {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Posti in classe</div>
+        <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+          <button
+            type="button"
+            onClick={() => cambiaPosti(-1)}
+            disabled={max <= listaIscritti.length}
+            style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: max <= listaIscritti.length ? "default" : "pointer", opacity: max <= listaIscritti.length ? 0.35 : 1 }}
+          >
+            −
+          </button>
+          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{max}</div>
+          <button
+            type="button"
+            onClick={() => cambiaPosti(1)}
+            style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+          >
+            +
+          </button>
+        </div>
       </div>
 
       <div style={cardStyle}>
@@ -866,13 +969,30 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         {listaIscritti.length === 0 && <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora.</div>}
         {listaIscritti.map((i) => (
           <div key={i.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ ...fontBody, fontSize: 14, color: NAVY }}>
-                {i.nome} {i.cognome}
-                {i.note && <div style={{ fontSize: 12, color: MUTED }}>{i.note}</div>}
+            {inModifica === i.id ? (
+              <div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...inputStyle, fontSize: 14 }} value={modNome} onChange={(e) => setModNome(e.target.value)} placeholder="Nome" />
+                  <input style={{ ...inputStyle, fontSize: 14 }} value={modCognome} onChange={(e) => setModCognome(e.target.value)} placeholder="Cognome" />
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <Button onClick={() => salvaModifica(i.id)}>Salva</Button>
+                  <Button variant="ghost" onClick={() => setInModifica(null)}>Annulla</Button>
+                </div>
               </div>
-              <Button variant="danger" onClick={() => elimina(i.id)}>Elimina</Button>
-            </div>
+            ) : (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  onClick={() => apriModifica(i)}
+                  title="Clicca per correggere il nome"
+                  style={{ ...fontBody, fontSize: 14, color: NAVY, cursor: "pointer" }}
+                >
+                  {i.nome} {i.cognome}
+                  {i.note && <div style={{ fontSize: 12, color: MUTED }}>{i.note}</div>}
+                </div>
+                <Button variant="danger" onClick={() => elimina(i.id)}>Elimina</Button>
+              </div>
+            )}
             {altreDate.length > 0 && (
               <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
                 <select
@@ -959,9 +1079,10 @@ export default function App() {
   }
 
   function apriData(cd) {
-    setCorsoDataAperta(cd);
+    setCorsoDataAperta(cd.id);
     setView("scheda");
   }
+  const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
 
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
@@ -970,6 +1091,7 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: 30, color: NAVY, marginBottom: 30, textAlign: "center" }}>Calendario Corsi</div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
+          <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Crea data/location" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
 
           <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1 }}>DATE IN PROGRAMMAZIONE</div>
@@ -989,9 +1111,13 @@ export default function App() {
         <CercaCorso corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} onBack={() => setView("home")} />
       )}
 
-      {view === "scheda" && corsoDataAperta && (
+      {view === "cercaiscritto" && (
+        <CercaIscritto corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} onBack={() => setView("home")} />
+      )}
+
+      {view === "scheda" && corsoDataApertaObj && (
         <SchedaData
-          corsoData={corsoDataAperta}
+          corsoData={corsoDataApertaObj}
           corsi={corsi}
           location={location}
           corsiDate={corsiDate}
