@@ -158,6 +158,8 @@ const inputStyle = {
 };
 
 // ---------- helper per i calcoli di imponibile/IVA/totale ----------
+const PREZZO_MODELLA = 60;
+
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -1034,6 +1036,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [pagSaldo, setPagSaldo] = useState(QUOTA_VUOTA);
   const [accordiCommerciali, setAccordiCommerciali] = useState("");
   const [richiedeModelle, setRichiedeModelle] = useState("");
+  const [numeroModelle, setNumeroModelle] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
@@ -1076,7 +1079,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
-    setAccordiCommerciali(""); setRichiedeModelle("");
+    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
 
@@ -1107,6 +1110,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     });
     setAccordiCommerciali(i.accordi_commerciali || "");
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
+    setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
     setModificandoId(i.id);
     setMsg("");
@@ -1148,6 +1152,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         saldo_metodo: pagSaldo.metodo || null,
         accordi_commerciali: accordiCommerciali.trim() || null,
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
+        numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         file_iscrizione: pathIscrizione,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
@@ -1175,6 +1180,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   async function elimina(id) {
     if (!window.confirm("Sei sicuro di voler cancellare in modo definitivo l'allievo?")) return;
     const { error } = await supabase.from("iscritti").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  async function toggleIncassato(i) {
+    const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
@@ -1301,6 +1312,21 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             </div>
           </Field>
 
+          {richiedeModelle === "si" && (
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Quante modelle">
+                  <input type="number" min="0" style={inputStyle} value={numeroModelle} onChange={(e) => setNumeroModelle(e.target.value)} />
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Da pagare per modelle">
+                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={numeroModelle === "" ? "" : (parseNum(numeroModelle) * 60).toFixed(2)} disabled />
+                </Field>
+              </div>
+            </div>
+          )}
+
           <Field label="Modulo iscrizione (PDF)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
@@ -1382,30 +1408,61 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   </div>
                 )}
                 {mostraGestione && (
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
-                    {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
-                    {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
-                    {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
-                    {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
-                    {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
-                    {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                      <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
-                    )}
-                    {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
-                      <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
-                    )}
-                    {i.accordi_commerciali && <div style={{ gridColumn: "1 / -1" }}><b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}</div>}
-                    {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
-                      <div style={{ gridColumn: "1 / -1", display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" }}>
-                        {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
-                        {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
-                        {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
-                      </div>
-                    )}
-                    {!i.tutor && !i.telefono && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
-                      <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
-                    )}
-                  </div>
+                  <>
+                    <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
+                      {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
+                      {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
+                      {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
+                      {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
+                      {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
+                      {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+                        <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
+                      )}
+                      {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
+                        <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
+                      )}
+                      {i.richiede_modelle && i.numero_modelle != null && (
+                        <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} × 60 € = {round2(i.numero_modelle * 60)} €</div>
+                      )}
+                      {i.accordi_commerciali && <div style={{ gridColumn: "1 / -1" }}><b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}</div>}
+                      {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
+                        <div style={{ gridColumn: "1 / -1", display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" }}>
+                          {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
+                          {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
+                          {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
+                        </div>
+                      )}
+                      {!i.tutor && !i.telefono && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
+                        <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
+                      )}
+                    </div>
+                    {(i.saldo_totale != null || i.numero_modelle != null) && (() => {
+                      const daIncassare = round2((i.saldo_totale || 0) + (i.numero_modelle || 0) * 60);
+                      const colore = i.incassato ? "#2E7D32" : "#C0392B";
+                      return (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            padding: "10px 14px",
+                            background: i.incassato ? "#E8F5E9" : "#FDECEC",
+                            border: `1px solid ${colore}`,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: colore }}>
+                            DA INCASSARE {daIncassare} €
+                          </div>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12, color: colore }}>
+                            <input type="checkbox" checked={!!i.incassato} onChange={() => toggleIncassato(i)} style={{ width: 22, height: 22, cursor: "pointer" }} />
+                            incassato
+                          </label>
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             ))}
@@ -1465,13 +1522,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
                   )}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
+                  {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} × 60 € = {round2(i.numero_modelle * 60)} €</div>}
+                  {(i.saldo_totale != null || i.numero_modelle != null) && (
+                    <div style={{ fontWeight: 700 }}>
+                      Da incassare: {round2((i.saldo_totale || 0) + (i.numero_modelle || 0) * 60)} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
+                    </div>
+                  )}
                   {i.accordi_commerciali && <div>Accordi commerciali: {i.accordi_commerciali}</div>}
                   {i.note && <div>Note: {i.note}</div>}
                 </div>
               ))}
               {listaIscritti.length > 0 && (
                 <div style={{ marginTop: 20, paddingTop: 12, borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
-                  Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0), 0))} € imp. → {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} € tot.
+                  <div>Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0), 0))} € imp. → {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} € tot.</div>
+                  <div style={{ marginTop: 6 }}>Totale ancora da incassare: {round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + (i.numero_modelle || 0) * 60), 0))} €</div>
                 </div>
               )}
             </div>
