@@ -1,0 +1,587 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
+
+const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
+
+const NAVY = "#0E1B33";
+const CREAM_BORDER = "#E8E3D6";
+const BG = "#FAF8F3";
+const MUTED = "#8B8FA3";
+
+const fontDisplay = { fontFamily: "'Cormorant Garamond',serif" };
+const fontBody = { fontFamily: "'Jost',sans-serif" };
+
+const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+const GIORNI = ["L","M","M","G","V","S","D"];
+
+function fmtData(d) {
+  const [y, m, day] = d.split("-");
+  return `${day}/${m}/${y}`;
+}
+
+// ---------- Card / pulsanti base ----------
+function CardHome({ title, sub, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        ...fontBody,
+        textAlign: "left",
+        width: "100%",
+        background: "#FFFFFF",
+        border: `1px solid ${CREAM_BORDER}`,
+        borderRadius: 14,
+        padding: "20px 22px",
+        marginBottom: 14,
+        cursor: "pointer",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      }}
+    >
+      <div>
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{title}</div>
+        <div style={{ fontSize: 13, color: MUTED }}>{sub}</div>
+      </div>
+      <div style={{ fontSize: 22, color: NAVY }}>&rsaquo;</div>
+    </button>
+  );
+}
+
+function Button({ children, onClick, variant = "primary", style = {}, disabled }) {
+  const base = {
+    ...fontBody,
+    fontSize: 14,
+    padding: "10px 18px",
+    borderRadius: 10,
+    cursor: disabled ? "default" : "pointer",
+    border: "1px solid " + NAVY,
+    opacity: disabled ? 0.5 : 1,
+  };
+  const variants = {
+    primary: { background: NAVY, color: "#fff" },
+    ghost: { background: "transparent", color: NAVY },
+    danger: { background: "#fff", color: "#C0392B", border: "1px solid #C0392B" },
+  };
+  return (
+    <button disabled={disabled} onClick={onClick} style={{ ...base, ...variants[variant], ...style }}>
+      {children}
+    </button>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle = {
+  ...fontBody,
+  width: "100%",
+  boxSizing: "border-box",
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: `1px solid ${CREAM_BORDER}`,
+  fontSize: 14,
+};
+
+function TopBar({ title, onBack }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+      <button onClick={onBack} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", fontSize: 20, color: NAVY }}>
+        &larr;
+      </button>
+      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{title}</div>
+    </div>
+  );
+}
+
+// ---------- Gate di accesso ----------
+function Gate({ onOk }) {
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState(false);
+  return (
+    <div style={{ ...fontBody, maxWidth: 340, margin: "120px auto", textAlign: "center" }}>
+      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, marginBottom: 18 }}>Calendario Corsi</div>
+      <input
+        type="password"
+        placeholder="Codice d'accesso"
+        value={code}
+        onChange={(e) => { setCode(e.target.value); setErr(false); }}
+        style={{ ...inputStyle, textAlign: "center", marginBottom: 12 }}
+        onKeyDown={(e) => e.key === "Enter" && check()}
+      />
+      <Button onClick={check} style={{ width: "100%" }}>Entra</Button>
+      {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
+    </div>
+  );
+  function check() {
+    if (!ACCESS_CODE || code === ACCESS_CODE) {
+      sessionStorage.setItem("edc_ok", "1");
+      onOk();
+    } else setErr(true);
+  }
+}
+
+// ---------- Impostazioni ----------
+function Impostazioni({ corsi, location, ricarica, onBack }) {
+  const [nomeCorso, setNomeCorso] = useState("");
+  const [colore, setColore] = useState("#4A90D9");
+  const [postiMax, setPostiMax] = useState(10);
+  const [nomeLoc, setNomeLoc] = useState("");
+  const [corsoSel, setCorsoSel] = useState("");
+  const [locSel, setLocSel] = useState("");
+  const [dataSel, setDataSel] = useState("");
+  const [postiData, setPostiData] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
+
+  async function aggiungiCorso() {
+    if (!nomeCorso.trim()) return;
+    if (coloriUsati.includes(colore.toLowerCase())) {
+      setMsg("Questo colore è già usato da un altro corso: scegline un altro.");
+      return;
+    }
+    const { error } = await supabase.from("corsi").insert({ nome: nomeCorso.trim(), colore, posti_max: Number(postiMax) || 10 });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNomeCorso(""); setMsg("Corso aggiunto.");
+    ricarica();
+  }
+
+  async function aggiungiLocation() {
+    if (!nomeLoc.trim()) return;
+    const { error } = await supabase.from("location").insert({ nome: nomeLoc.trim() });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNomeLoc(""); setMsg("Location aggiunta.");
+    ricarica();
+  }
+
+  async function aggiungiData() {
+    if (!corsoSel || !locSel || !dataSel) { setMsg("Seleziona corso, location e data."); return; }
+    const { error } = await supabase.from("corsi_date").insert({
+      corso_id: corsoSel,
+      location_id: locSel,
+      data: dataSel,
+      posti_max: postiData ? Number(postiData) : null,
+    });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setDataSel(""); setPostiData(""); setMsg("Data aggiunta al calendario.");
+    ricarica();
+  }
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Impostazioni" onBack={onBack} />
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Aggiungi corso</div>
+        <div style={subStyle}>Nome, colore univoco per il calendario, posti massimi di default.</div>
+        <Field label="Nome corso">
+          <input style={inputStyle} value={nomeCorso} onChange={(e) => setNomeCorso(e.target.value)} placeholder="es. Microblading" />
+        </Field>
+        <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Colore">
+              <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+            </Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Posti massimi">
+              <input type="number" min="1" style={inputStyle} value={postiMax} onChange={(e) => setPostiMax(e.target.value)} />
+            </Field>
+          </div>
+        </div>
+        <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Nuova location</div>
+        <div style={subStyle}>Aggiungi una città in cui si terranno i corsi.</div>
+        <Field label="Città">
+          <input style={inputStyle} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value)} placeholder="es. Milano" />
+        </Field>
+        <Button onClick={aggiungiLocation}>Aggiungi location</Button>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Aggiungi data</div>
+        <div style={subStyle}>Crea una nuova edizione: corso + città + giorno.</div>
+        <Field label="Corso">
+          <select style={inputStyle} value={corsoSel} onChange={(e) => setCorsoSel(e.target.value)}>
+            <option value="">Seleziona corso</option>
+            {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </Field>
+        <Field label="Città">
+          <select style={inputStyle} value={locSel} onChange={(e) => setLocSel(e.target.value)}>
+            <option value="">Seleziona città</option>
+            {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+          </select>
+        </Field>
+        <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Data">
+              <input type="date" style={inputStyle} value={dataSel} onChange={(e) => setDataSel(e.target.value)} />
+            </Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Posti (opzionale)">
+              <input type="number" min="1" style={inputStyle} value={postiData} onChange={(e) => setPostiData(e.target.value)} placeholder="usa il default del corso" />
+            </Field>
+          </div>
+        </div>
+        <Button onClick={aggiungiData}>Aggiungi data</Button>
+      </div>
+
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
+    </div>
+  );
+}
+
+const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18 };
+const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
+const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
+
+// ---------- Calendario ----------
+function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
+  const [mese, setMese] = useState(new Date().getMonth());
+  const [anno, setAnno] = useState(new Date().getFullYear());
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const primoGiorno = new Date(anno, mese, 1);
+  const offset = (primoGiorno.getDay() + 6) % 7; // lunedì=0
+  const giorniMese = new Date(anno, mese + 1, 0).getDate();
+
+  const celle = [];
+  for (let i = 0; i < offset; i++) celle.push(null);
+  for (let d = 1; d <= giorniMese; d++) celle.push(d);
+
+  function dateStr(d) {
+    return `${anno}-${String(mese + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  return (
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Calendario" onBack={onBack} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <Button variant="ghost" onClick={() => { const m = mese - 1; if (m < 0) { setMese(11); setAnno(anno - 1); } else setMese(m); }}>&larr;</Button>
+        <div style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>{MESI[mese]} {anno}</div>
+        <Button variant="ghost" onClick={() => { const m = mese + 1; if (m > 11) { setMese(0); setAnno(anno + 1); } else setMese(m); }}>&rarr;</Button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
+        {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+        {celle.map((d, i) => {
+          if (!d) return <div key={i} />;
+          const ds = dateStr(d);
+          const eventi = corsiDate.filter((cd) => cd.data === ds);
+          return (
+            <div key={i} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, minHeight: 66, padding: 4, background: "#fff" }}>
+              <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginBottom: 4 }}>{d}</div>
+              {eventi.map((ev) => (
+                <div
+                  key={ev.id}
+                  onClick={() => onApriData(ev)}
+                  title={`${corsoById[ev.corso_id]?.nome} · ${locById[ev.location_id]?.nome}`}
+                  style={{
+                    background: corsoById[ev.corso_id]?.colore || NAVY,
+                    height: 6,
+                    borderRadius: 3,
+                    marginBottom: 3,
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 16 }}>
+        Ogni striscia colorata è un corso attivo in quel giorno — clicca per aprire iscritti e posti disponibili.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Cerca corso ----------
+function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }) {
+  const [citta, setCitta] = useState("");
+  const [corso, setCorso] = useState("");
+  const [data, setData] = useState("");
+  const [tutti, setTutti] = useState(false);
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const filtrati = corsiDate.filter((cd) => {
+    if (!tutti) {
+      if (citta && cd.location_id !== citta) return false;
+      if (corso && cd.corso_id !== corso) return false;
+      if (data && cd.data !== data) return false;
+      if (!citta && !corso && !data) return false;
+    }
+    return true;
+  });
+
+  // raggruppa per corso + città
+  const gruppi = {};
+  filtrati.forEach((cd) => {
+    const key = cd.corso_id + "|" + cd.location_id;
+    if (!gruppi[key]) gruppi[key] = [];
+    gruppi[key].push(cd);
+  });
+
+  function postiLiberi(cd) {
+    const max = cd.posti_max ?? corsoById[cd.corso_id]?.posti_max ?? 0;
+    const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+    return Math.max(0, max - occupati);
+  }
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Cerca corso" onBack={onBack} />
+
+      <div style={{ ...cardStyle, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Città">
+            <select style={inputStyle} value={citta} onChange={(e) => { setCitta(e.target.value); setTutti(false); }}>
+              <option value="">Tutte</option>
+              {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Corso">
+            <select style={inputStyle} value={corso} onChange={(e) => { setCorso(e.target.value); setTutti(false); }}>
+              <option value="">Tutti</option>
+              {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Data">
+            <input type="date" style={inputStyle} value={data} onChange={(e) => { setData(e.target.value); setTutti(false); }} />
+          </Field>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <Button variant={tutti ? "primary" : "ghost"} onClick={() => { setTutti(true); setCitta(""); setCorso(""); setData(""); }}>Tutti i corsi</Button>
+        </div>
+      </div>
+
+      {Object.keys(gruppi).length === 0 && (
+        <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Imposta un filtro oppure premi "Tutti i corsi" per vedere l'elenco.</div>
+      )}
+
+      {Object.entries(gruppi).map(([key, date]) => {
+        const first = date[0];
+        return (
+          <div key={key} style={cardStyle}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: corsoById[first.corso_id]?.colore }} />
+              <div style={hStyle}>{corsoById[first.corso_id]?.nome} · {locById[first.location_id]?.nome}</div>
+            </div>
+            {date.sort((a, b) => a.data.localeCompare(b.data)).map((cd) => (
+              <div
+                key={cd.id}
+                onClick={() => onApriData(cd)}
+                style={{ ...fontBody, fontSize: 14, color: NAVY, padding: "8px 4px", borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer", display: "flex", justifyContent: "space-between" }}
+              >
+                <span>{fmtData(cd.data)}</span>
+                <span style={{ color: MUTED }}>{postiLiberi(cd)} posti liberi</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ---------- Scheda data (iscritti) ----------
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica, onBack }) {
+  const [nome, setNome] = useState("");
+  const [cognome, setCognome] = useState("");
+  const [note, setNote] = useState("");
+  const [spostaTarget, setSpostaTarget] = useState({});
+  const [msg, setMsg] = useState("");
+
+  const corso = corsi.find((c) => c.id === corsoData.corso_id);
+  const loc = location.find((l) => l.id === corsoData.location_id);
+  const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
+  const max = corsoData.posti_max ?? corso?.posti_max ?? 0;
+  const liberi = Math.max(0, max - listaIscritti.length);
+
+  const altreDate = corsiDate.filter((cd) => cd.corso_id === corsoData.corso_id && cd.id !== corsoData.id);
+
+  async function aggiungiIscritto() {
+    if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return; }
+    if (liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return; }
+    const { error } = await supabase.from("iscritti").insert({ corso_data_id: corsoData.id, nome: nome.trim(), cognome: cognome.trim(), note: note.trim() || null });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNome(""); setCognome(""); setNote(""); setMsg("Iscritto aggiunto.");
+    ricarica();
+  }
+
+  async function elimina(id) {
+    const { error } = await supabase.from("iscritti").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  async function sposta(id) {
+    const target = spostaTarget[id];
+    if (!target) return;
+    const { error } = await supabase.from("iscritti").update({ corso_data_id: target }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Iscritto spostato.");
+    ricarica();
+  }
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title={`${corso?.nome || ""} · ${loc?.nome || ""}`} onBack={onBack} />
+      <div style={{ ...fontBody, color: MUTED, fontSize: 14, marginBottom: 18 }}>
+        {fmtData(corsoData.data)} — {liberi} posti liberi su {max}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Aggiungi iscritto</div>
+        <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Nome"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} /></Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Cognome"><input style={inputStyle} value={cognome} onChange={(e) => setCognome(e.target.value)} /></Field>
+          </div>
+        </div>
+        <Field label="Note (opzionale)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <Button onClick={aggiungiIscritto} disabled={liberi <= 0}>{liberi <= 0 ? "Nessun posto disponibile" : "Aggiungi iscritto"}</Button>
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Iscritti ({listaIscritti.length})</div>
+        {listaIscritti.length === 0 && <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora.</div>}
+        {listaIscritti.map((i) => (
+          <div key={i.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ ...fontBody, fontSize: 14, color: NAVY }}>
+                {i.nome} {i.cognome}
+                {i.note && <div style={{ fontSize: 12, color: MUTED }}>{i.note}</div>}
+              </div>
+              <Button variant="danger" onClick={() => elimina(i.id)}>Elimina</Button>
+            </div>
+            {altreDate.length > 0 && (
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+                <select
+                  style={{ ...inputStyle, fontSize: 13 }}
+                  value={spostaTarget[i.id] || ""}
+                  onChange={(e) => setSpostaTarget({ ...spostaTarget, [i.id]: e.target.value })}
+                >
+                  <option value="">Sposta su un'altra data...</option>
+                  {altreDate.map((cd) => <option key={cd.id} value={cd.id}>{fmtData(cd.data)}</option>)}
+                </select>
+                <Button variant="ghost" onClick={() => sposta(i.id)}>Sposta</Button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+    </div>
+  );
+}
+
+// ---------- App principale ----------
+export default function App() {
+  const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
+  const [view, setView] = useState("home");
+  const [corsoDataAperta, setCorsoDataAperta] = useState(null);
+  const [corsi, setCorsi] = useState([]);
+  const [location, setLocation] = useState([]);
+  const [corsiDate, setCorsiDate] = useState([]);
+  const [iscritti, setIscritti] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  async function carica() {
+    setLoading(true);
+    const [c, l, cd, i] = await Promise.all([
+      supabase.from("corsi").select("*").order("nome"),
+      supabase.from("location").select("*").order("nome"),
+      supabase.from("corsi_date").select("*").order("data"),
+      supabase.from("iscritti").select("*"),
+    ]);
+    setCorsi(c.data || []);
+    setLocation(l.data || []);
+    setCorsiDate(cd.data || []);
+    setIscritti(i.data || []);
+    setLoading(false);
+  }
+
+  useEffect(() => { if (ok) carica(); }, [ok]);
+
+  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={() => setOk(true)} /></div>;
+
+  if (loading) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
+        Caricamento…
+      </div>
+    );
+  }
+
+  function apriData(cd) {
+    setCorsoDataAperta(cd);
+    setView("scheda");
+  }
+
+  return (
+    <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+      {view === "home" && (
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
+          <div style={{ ...fontDisplay, fontSize: 30, color: NAVY, marginBottom: 30, textAlign: "center" }}>Calendario Corsi</div>
+          <CardHome title="Impostazioni" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
+          <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
+          <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
+        </div>
+      )}
+
+      {view === "impostazioni" && (
+        <Impostazioni corsi={corsi} location={location} ricarica={carica} onBack={() => setView("home")} />
+      )}
+
+      {view === "calendario" && (
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} onApriData={apriData} onBack={() => setView("home")} />
+      )}
+
+      {view === "cerca" && (
+        <CercaCorso corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} onBack={() => setView("home")} />
+      )}
+
+      {view === "scheda" && corsoDataAperta && (
+        <SchedaData
+          corsoData={corsoDataAperta}
+          corsi={corsi}
+          location={location}
+          corsiDate={corsiDate}
+          iscritti={iscritti}
+          ricarica={carica}
+          onBack={() => setView("home")}
+        />
+      )}
+    </div>
+  );
+}
