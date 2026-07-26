@@ -967,7 +967,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
       <div style={cardStyle}>
         <div style={hStyle}>Iscritti ({listaIscritti.length})</div>
         {listaIscritti.length === 0 && <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora.</div>}
-        {listaIscritti.map((i) => (
+        {listaIscritti.map((i, idx) => (
           <div key={i.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
             {inModifica === i.id ? (
               <div>
@@ -981,16 +981,28 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 </div>
               </div>
             ) : (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                 <div
                   onClick={() => apriModifica(i)}
                   title="Clicca per correggere il nome"
-                  style={{ ...fontBody, fontSize: 14, color: NAVY, cursor: "pointer" }}
+                  style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                 >
-                  {i.nome} {i.cognome}
-                  {i.note && <div style={{ fontSize: 12, color: MUTED }}>{i.note}</div>}
+                  <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
+                  {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                 </div>
-                <Button variant="danger" onClick={() => elimina(i.id)}>Elimina</Button>
+                <button
+                  onClick={() => elimina(i.id)}
+                  title="Elimina"
+                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                    <path d="M10 11v6" /><path d="M14 11v6" />
+                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                  </svg>
+                </button>
               </div>
             )}
             {altreDate.length > 0 && (
@@ -1025,8 +1037,9 @@ export default function App() {
   const [iscritti, setIscritti] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  async function carica() {
-    setLoading(true);
+  // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
+  // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
+  async function fetchDati() {
     const [c, l, cd, i] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
@@ -1037,10 +1050,15 @@ export default function App() {
     setLocation(l.data || []);
     setCorsiDate(cd.data || []);
     setIscritti(i.data || []);
+  }
+
+  async function caricaIniziale() {
+    setLoading(true);
+    await fetchDati();
     setLoading(false);
   }
 
-  useEffect(() => { if (ok) carica(); }, [ok]);
+  useEffect(() => { if (ok) caricaIniziale(); }, [ok]);
 
   // swipe da sinistra a destra su mobile → torna alla home (come i pulsanti "indietro")
   useEffect(() => {
@@ -1100,7 +1118,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} ricarica={carica} onBack={() => setView("home")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "calendario" && (
@@ -1122,7 +1140,7 @@ export default function App() {
           location={location}
           corsiDate={corsiDate}
           iscritti={iscritti}
-          ricarica={carica}
+          ricarica={fetchDati}
           onBack={() => setView("home")}
         />
       )}
