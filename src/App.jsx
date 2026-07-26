@@ -157,6 +157,79 @@ const inputStyle = {
   fontSize: 14,
 };
 
+// ---------- helper per i calcoli di imponibile/IVA/totale ----------
+function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+function parseNum(v) {
+  const n = parseFloat(String(v).replace(",", "."));
+  return isNaN(n) ? 0 : n;
+}
+// data una quota { imponibile, totale, metodo }, aggiorna l'imponibile e ricalcola il totale
+// (o viceversa). applicaIva=false = nessun calcolo IVA (es. saldo pagato in contanti)
+function conImponibileAggiornato(prev, valore, applicaIva) {
+  const num = parseNum(valore);
+  const totale = valore === "" ? "" : String(applicaIva ? round2(num * 1.22) : num);
+  return { ...prev, imponibile: valore, totale };
+}
+function conTotaleAggiornato(prev, valore, applicaIva) {
+  const num = parseNum(valore);
+  const imponibile = valore === "" ? "" : String(applicaIva ? round2(num / 1.22) : num);
+  return { ...prev, totale: valore, imponibile };
+}
+function ivaDiQuota(q) {
+  if (q.imponibile === "" && q.totale === "") return "";
+  return round2(parseNum(q.totale) - parseNum(q.imponibile)).toFixed(2);
+}
+
+// blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
+function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, soloLettura }) {
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 90px" }}>
+          <Field label="Imponibile">
+            <input
+              style={{ ...inputStyle, background: soloLettura ? "#EFEFEF" : "#fff", color: soloLettura ? MUTED : NAVY }}
+              inputMode="decimal"
+              value={valori.imponibile}
+              disabled={soloLettura}
+              onChange={(e) => onImponibile && onImponibile(e.target.value)}
+            />
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 90px" }}>
+          <Field label="IVA 22%">
+            <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={ivaDiQuota(valori)} disabled />
+          </Field>
+        </div>
+        <div style={{ flex: "1 1 90px" }}>
+          <Field label="Totale">
+            <input
+              style={{ ...inputStyle, background: soloLettura ? "#EFEFEF" : "#fff", color: soloLettura ? MUTED : NAVY }}
+              inputMode="decimal"
+              value={valori.totale}
+              disabled={soloLettura}
+              onChange={(e) => onTotale && onTotale(e.target.value)}
+            />
+          </Field>
+        </div>
+      </div>
+      {onMetodo && (
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+          {["Sito", "Bonifico", "Pos", "Contanti"].map((opz) => (
+            <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+              <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
+              {opz}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TopBar({ title, onBack }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
@@ -955,8 +1028,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [note, setNote] = useState("");
   const [tutor, setTutor] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [acconto, setAcconto] = useState("");
-  const [pagatoCome, setPagatoCome] = useState("");
+  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "" };
+  const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
+  const [pagPrecorso, setPagPrecorso] = useState(QUOTA_VUOTA);
+  const [pagSaldo, setPagSaldo] = useState(QUOTA_VUOTA);
   const [accordiCommerciali, setAccordiCommerciali] = useState("");
   const [richiedeModelle, setRichiedeModelle] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
@@ -1000,7 +1075,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
-    setAcconto(""); setPagatoCome(""); setAccordiCommerciali(""); setRichiedeModelle("");
+    setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
+    setAccordiCommerciali(""); setRichiedeModelle("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
 
@@ -1014,7 +1090,21 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   function apriModificaCompleta(i) {
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
-    setAcconto(i.acconto || ""); setPagatoCome(i.pagato_come || "");
+    setPagAcconto({
+      imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
+      totale: i.acconto_totale != null ? String(i.acconto_totale) : "",
+      metodo: i.acconto_metodo || "",
+    });
+    setPagPrecorso({
+      imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
+      totale: i.precorso_totale != null ? String(i.precorso_totale) : "",
+      metodo: i.precorso_metodo || "",
+    });
+    setPagSaldo({
+      imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
+      totale: i.saldo_totale != null ? String(i.saldo_totale) : "",
+      metodo: i.saldo_metodo || "",
+    });
     setAccordiCommerciali(i.accordi_commerciali || "");
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
@@ -1047,8 +1137,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         note: note.trim() || null,
         tutor: tutor.trim() || null,
         telefono: telefono.trim() || null,
-        acconto: acconto.trim() || null,
-        pagato_come: pagatoCome || null,
+        acconto_imponibile: pagAcconto.imponibile === "" ? null : parseNum(pagAcconto.imponibile),
+        acconto_totale: pagAcconto.totale === "" ? null : parseNum(pagAcconto.totale),
+        acconto_metodo: pagAcconto.metodo || null,
+        precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
+        precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
+        precorso_metodo: pagPrecorso.metodo || null,
+        saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
+        saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
+        saldo_metodo: pagSaldo.metodo || null,
         accordi_commerciali: accordiCommerciali.trim() || null,
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         file_iscrizione: pathIscrizione,
@@ -1154,19 +1251,42 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               <Field label="Numero di telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
             </div>
           </div>
-          <Field label="Acconto pagato">
-            <input style={inputStyle} value={acconto} onChange={(e) => setAcconto(e.target.value)} />
-          </Field>
-          <Field label="Pagato come">
-            <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
-              {["Sito", "Pos", "Contanti"].map((opz) => (
-                <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                  <input type="radio" name="pagatoCome" checked={pagatoCome === opz} onChange={() => setPagatoCome(opz)} />
-                  {opz}
-                </label>
-              ))}
-            </div>
-          </Field>
+          <BloccoQuota
+            titolo="Quota acconto"
+            valori={pagAcconto}
+            onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
+            onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
+            onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v }))}
+          />
+          <BloccoQuota
+            titolo="Quota pre corso"
+            valori={pagPrecorso}
+            onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, true))}
+            onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, true))}
+            onMetodo={(v) => setPagPrecorso((prev) => ({ ...prev, metodo: v }))}
+          />
+          <BloccoQuota
+            titolo="Da avere al corso"
+            valori={pagSaldo}
+            onImponibile={(v) => setPagSaldo((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Contanti"))}
+            onTotale={(v) => setPagSaldo((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Contanti"))}
+            onMetodo={(v) =>
+              setPagSaldo((prev) => {
+                const applicaIva = v !== "Contanti";
+                const imp = parseNum(prev.imponibile);
+                const totale = prev.imponibile === "" ? "" : String(applicaIva ? round2(imp * 1.22) : imp);
+                return { ...prev, metodo: v, totale };
+              })
+            }
+          />
+          <BloccoQuota
+            titolo="Totale pagato"
+            soloLettura
+            valori={{
+              imponibile: (parseNum(pagAcconto.imponibile) + parseNum(pagPrecorso.imponibile) + parseNum(pagSaldo.imponibile)).toFixed(2),
+              totale: (parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale)).toFixed(2),
+            }}
+          />
           <Field label="Accordi commerciali">
             <input style={inputStyle} value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value)} />
           </Field>
@@ -1265,8 +1385,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
                     {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
                     {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
-                    {i.acconto && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto}</div>}
-                    {i.pagato_come && <div><b style={{ color: NAVY }}>Pagato come:</b> {i.pagato_come}</div>}
+                    {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_totale} € ({i.acconto_metodo || "?"})</div>}
+                    {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_totale} € ({i.precorso_metodo || "?"})</div>}
+                    {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
+                    {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+                      <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} €</div>
+                    )}
                     {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
                       <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
                     )}
@@ -1278,7 +1402,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                         {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
                       </div>
                     )}
-                    {!i.tutor && !i.telefono && !i.acconto && !i.pagato_come && !i.accordi_commerciali && !i.file_iscrizione && (
+                    {!i.tutor && !i.telefono && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
                       <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
                     )}
                   </div>
@@ -1334,13 +1458,22 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome} {i.cognome}</div>
                   {i.tutor && <div>Tutor: {i.tutor}</div>}
                   {i.telefono && <div>Telefono: {i.telefono}</div>}
-                  {i.acconto && <div>Acconto: {i.acconto}</div>}
-                  {i.pagato_come && <div>Pagato come: {i.pagato_come}</div>}
+                  {i.acconto_totale != null && <div>Acconto: {i.acconto_totale} € ({i.acconto_metodo || "?"})</div>}
+                  {i.precorso_totale != null && <div>Pre corso: {i.precorso_totale} € ({i.precorso_metodo || "?"})</div>}
+                  {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
+                  {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+                    <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} €</div>
+                  )}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
                   {i.accordi_commerciali && <div>Accordi commerciali: {i.accordi_commerciali}</div>}
                   {i.note && <div>Note: {i.note}</div>}
                 </div>
               ))}
+              {listaIscritti.length > 0 && (
+                <div style={{ marginTop: 20, paddingTop: 12, borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
+                  Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} €
+                </div>
+              )}
             </div>
           )}
         </>
