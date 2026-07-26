@@ -109,6 +109,7 @@ function TopBar({ title, onBack }) {
 function Gate({ onOk }) {
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
+  const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(VITE_SUPABASE_URL non impostata)";
   return (
     <div style={{ ...fontBody, maxWidth: 340, margin: "120px auto", textAlign: "center" }}>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, marginBottom: 18 }}>Calendario Corsi</div>
@@ -122,6 +123,9 @@ function Gate({ onOk }) {
       />
       <Button onClick={check} style={{ width: "100%" }}>Entra</Button>
       {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
+      <div style={{ fontSize: 10, color: MUTED, marginTop: 30, wordBreak: "break-all" }}>
+        Database collegato: {urlDebug}
+      </div>
     </div>
   );
   function check() {
@@ -140,7 +144,8 @@ function Impostazioni({ corsi, location, ricarica, onBack }) {
   const [nomeLoc, setNomeLoc] = useState("");
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState("");
-  const [dataSel, setDataSel] = useState("");
+  const [dataInizio, setDataInizio] = useState("");
+  const [dataFine, setDataFine] = useState("");
   const [postiData, setPostiData] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -167,15 +172,18 @@ function Impostazioni({ corsi, location, ricarica, onBack }) {
   }
 
   async function aggiungiData() {
-    if (!corsoSel || !locSel || !dataSel) { setMsg("Seleziona corso, location e data."); return; }
+    if (!corsoSel || !locSel || !dataInizio) { setMsg("Seleziona corso, location e data d'inizio."); return; }
+    const fine = dataFine || dataInizio;
+    if (fine < dataInizio) { setMsg("La data di fine non può essere prima della data di inizio."); return; }
     const { error } = await supabase.from("corsi_date").insert({
       corso_id: corsoSel,
       location_id: locSel,
-      data: dataSel,
+      data_inizio: dataInizio,
+      data_fine: fine,
       posti_max: postiData ? Number(postiData) : null,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setDataSel(""); setPostiData(""); setMsg("Data aggiunta al calendario.");
+    setDataInizio(""); setDataFine(""); setPostiData(""); setMsg("Data aggiunta al calendario.");
     ricarica();
   }
 
@@ -230,16 +238,19 @@ function Impostazioni({ corsi, location, ricarica, onBack }) {
         </Field>
         <div style={{ display: "flex", gap: 14 }}>
           <div style={{ flex: 1 }}>
-            <Field label="Data">
-              <input type="date" style={inputStyle} value={dataSel} onChange={(e) => setDataSel(e.target.value)} />
+            <Field label="Data inizio">
+              <input type="date" style={inputStyle} value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
             </Field>
           </div>
           <div style={{ flex: 1 }}>
-            <Field label="Posti (opzionale)">
-              <input type="number" min="1" style={inputStyle} value={postiData} onChange={(e) => setPostiData(e.target.value)} placeholder="usa il default del corso" />
+            <Field label="Data fine (opzionale, se il corso dura più giorni)">
+              <input type="date" style={inputStyle} value={dataFine} min={dataInizio || undefined} onChange={(e) => setDataFine(e.target.value)} />
             </Field>
           </div>
         </div>
+        <Field label="Posti (opzionale)">
+          <input type="number" min="1" style={inputStyle} value={postiData} onChange={(e) => setPostiData(e.target.value)} placeholder="usa il default del corso" />
+        </Field>
         <Button onClick={aggiungiData}>Aggiungi data</Button>
       </div>
 
@@ -253,6 +264,9 @@ const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
 
 // ---------- Calendario ----------
+const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
+const HEADER_H = 26; // spazio per il numero del giorno
+
 function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
   const [mese, setMese] = useState(new Date().getMonth());
   const [anno, setAnno] = useState(new Date().getFullYear());
@@ -264,16 +278,25 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
   const offset = (primoGiorno.getDay() + 6) % 7; // lunedì=0
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
 
+  // costruisco le celle (con padding a inizio/fine) e le divido in settimane
   const celle = [];
   for (let i = 0; i < offset; i++) celle.push(null);
   for (let d = 1; d <= giorniMese; d++) celle.push(d);
+  while (celle.length % 7 !== 0) celle.push(null);
+  const settimane = [];
+  for (let i = 0; i < celle.length; i += 7) settimane.push(celle.slice(i, i + 7));
 
   function dateStr(d) {
     return `${anno}-${String(mese + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
   }
 
+  // eventi come stringhe "YYYY-MM-DD" per confronto testuale (funziona perché ISO ordina bene)
+  const eventiMese = corsiDate.filter(
+    (cd) => cd.data_inizio <= dateStr(giorniMese) && cd.data_fine >= dateStr(1)
+  );
+
   return (
-    <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px" }}>
+    <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Calendario" onBack={onBack} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <Button variant="ghost" onClick={() => { const m = mese - 1; if (m < 0) { setMese(11); setAnno(anno - 1); } else setMese(m); }}>&larr;</Button>
@@ -284,34 +307,81 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
         {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
-        {celle.map((d, i) => {
-          if (!d) return <div key={i} />;
-          const ds = dateStr(d);
-          const eventi = corsiDate.filter((cd) => cd.data === ds);
-          return (
-            <div key={i} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, minHeight: 66, padding: 4, background: "#fff" }}>
-              <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginBottom: 4 }}>{d}</div>
-              {eventi.map((ev) => (
-                <div
-                  key={ev.id}
-                  onClick={() => onApriData(ev)}
-                  title={`${corsoById[ev.corso_id]?.nome} · ${locById[ev.location_id]?.nome}`}
-                  style={{
-                    background: corsoById[ev.corso_id]?.colore || NAVY,
-                    height: 6,
-                    borderRadius: 3,
-                    marginBottom: 3,
-                    cursor: "pointer",
-                  }}
-                />
+
+      {settimane.map((settimana, wi) => {
+        // date di inizio/fine visibili di questa riga (ignorando le celle vuote)
+        const giorniValidi = settimana.filter((d) => d !== null);
+        if (giorniValidi.length === 0) return null;
+        const inizioRiga = dateStr(giorniValidi[0]);
+        const fineRiga = dateStr(giorniValidi[giorniValidi.length - 1]);
+
+        // eventi che toccano questa riga
+        const eventiRiga = eventiMese.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
+
+        // assegno una "corsia" (lane) a ciascun evento evitando sovrapposizioni
+        const lanes = [];
+        const eventiConLane = eventiRiga
+          .slice()
+          .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+          .map((ev) => {
+            let lane = 0;
+            while (lanes[lane] && lanes[lane] >= ev.data_inizio) lane++;
+            lanes[lane] = ev.data_fine;
+            return { ...ev, lane };
+          });
+        const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
+        const rowHeight = HEADER_H + (maxLane + 1) * LANE_H + 6;
+
+        return (
+          <div key={wi} style={{ position: "relative", marginBottom: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+              {settimana.map((d, i) => (
+                <div key={i} style={{ border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8, height: rowHeight, background: d ? "#fff" : "transparent", boxSizing: "border-box" }}>
+                  {d && <div style={{ ...fontBody, fontSize: 12, color: NAVY, padding: "4px 6px" }}>{d}</div>}
+                </div>
               ))}
             </div>
-          );
-        })}
-      </div>
+            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0 }}>
+              {eventiConLane.map((ev) => {
+                const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
+                const colStart = startIdx >= 0 ? startIdx : 0;
+                const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
+                const colSpan = endIdx - colStart + 1;
+                return (
+                  <div
+                    key={ev.id}
+                    onClick={() => onApriData(ev)}
+                    title={`${corsoById[ev.corso_id]?.nome} · ${locById[ev.location_id]?.nome}`}
+                    style={{
+                      position: "absolute",
+                      top: ev.lane * LANE_H,
+                      left: `calc(${(colStart / 7) * 100}% + 2px)`,
+                      width: `calc(${(colSpan / 7) * 100}% - 4px)`,
+                      height: LANE_H - 4,
+                      background: corsoById[ev.corso_id]?.colore || NAVY,
+                      borderRadius: 4,
+                      color: "#fff",
+                      fontSize: 11,
+                      ...fontBody,
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0 6px",
+                      overflow: "hidden",
+                      whiteSpace: "nowrap",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {corsoById[ev.corso_id]?.nome} · {locById[ev.location_id]?.nome}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 16 }}>
-        Ogni striscia colorata è un corso attivo in quel giorno — clicca per aprire iscritti e posti disponibili.
+        Ogni barra colorata è un corso, continua sui giorni in cui si svolge — clicca per aprire iscritti e posti disponibili.
       </div>
     </div>
   );
@@ -331,7 +401,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
     if (!tutti) {
       if (citta && cd.location_id !== citta) return false;
       if (corso && cd.corso_id !== corso) return false;
-      if (data && cd.data !== data) return false;
+      if (data && !(cd.data_inizio <= data && cd.data_fine >= data)) return false;
       if (!citta && !corso && !data) return false;
     }
     return true;
@@ -394,13 +464,13 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: corsoById[first.corso_id]?.colore }} />
               <div style={hStyle}>{corsoById[first.corso_id]?.nome} · {locById[first.location_id]?.nome}</div>
             </div>
-            {date.sort((a, b) => a.data.localeCompare(b.data)).map((cd) => (
+            {date.sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)).map((cd) => (
               <div
                 key={cd.id}
                 onClick={() => onApriData(cd)}
                 style={{ ...fontBody, fontSize: 14, color: NAVY, padding: "8px 4px", borderTop: `1px solid ${CREAM_BORDER}`, cursor: "pointer", display: "flex", justifyContent: "space-between" }}
               >
-                <span>{fmtData(cd.data)}</span>
+                <span>{cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}</span>
                 <span style={{ color: MUTED }}>{postiLiberi(cd)} posti liberi</span>
               </div>
             ))}
@@ -455,7 +525,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={`${corso?.nome || ""} · ${loc?.nome || ""}`} onBack={onBack} />
       <div style={{ ...fontBody, color: MUTED, fontSize: 14, marginBottom: 18 }}>
-        {fmtData(corsoData.data)} — {liberi} posti liberi su {max}
+        {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
       </div>
 
       <div style={cardStyle}>
@@ -492,7 +562,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   onChange={(e) => setSpostaTarget({ ...spostaTarget, [i.id]: e.target.value })}
                 >
                   <option value="">Sposta su un'altra data...</option>
-                  {altreDate.map((cd) => <option key={cd.id} value={cd.id}>{fmtData(cd.data)}</option>)}
+                  {altreDate.map((cd) => <option key={cd.id} value={cd.id}>{cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}</option>)}
                 </select>
                 <Button variant="ghost" onClick={() => sposta(i.id)}>Sposta</Button>
               </div>
@@ -521,7 +591,7 @@ export default function App() {
     const [c, l, cd, i] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
-      supabase.from("corsi_date").select("*").order("data"),
+      supabase.from("corsi_date").select("*").order("data_inizio"),
       supabase.from("iscritti").select("*"),
     ]);
     setCorsi(c.data || []);
