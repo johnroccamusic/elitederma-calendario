@@ -1452,7 +1452,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                             borderRadius: 8,
                           }}
                         >
-                          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: colore }}>
+                          <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: colore }}>
                             DA INCASSARE {daIncassare} €
                           </div>
                           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12, color: colore }}>
@@ -1564,7 +1564,7 @@ export default function App() {
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
-      supabase.from("iscritti").select("*"),
+      supabase.from("iscritti").select("*").order("ts"),
     ]);
     setCorsi(c.data || []);
     setLocation(l.data || []);
