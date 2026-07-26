@@ -923,8 +923,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   async function confermaPosti() {
     const { error } = await supabase.from("corsi_date").update({ posti_max: postiLocali }).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + error.message); return; }
+    await ricarica();
     setMsg("Posti aggiornati.");
-    ricarica();
   }
 
   return (
