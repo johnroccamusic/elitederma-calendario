@@ -456,7 +456,79 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
   );
 }
 
-// ---------- Calendario ----------
+// Selettore usato per spostare un iscritto: stessa struttura città→corso→date,
+// ma cliccabile per scegliere la destinazione e con le date già al completo disattivate.
+function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataEscluso, onScegli }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const disponibili = corsiDate.filter((cd) => cd.id !== corsoDataEscluso);
+  const perCitta = {};
+  disponibili.forEach((cd) => {
+    const locId = cd.location_id;
+    if (!perCitta[locId]) perCitta[locId] = { nome: locById[locId]?.nome || "?", corsi: {} };
+    if (!perCitta[locId].corsi[cd.corso_id]) perCitta[locId].corsi[cd.corso_id] = { corso: corsoById[cd.corso_id], date: [] };
+    perCitta[locId].corsi[cd.corso_id].date.push(cd);
+  });
+  const cittaOrdinate = Object.values(perCitta).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  if (disponibili.length === 0) {
+    return <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Non ci sono altre date disponibili.</div>;
+  }
+
+  return (
+    <div>
+      {cittaOrdinate.map((c) => (
+        <div key={c.nome} style={{ marginBottom: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, color: NAVY, marginBottom: 6, letterSpacing: 0.5 }}>{c.nome.toUpperCase()}</div>
+          {Object.values(c.corsi)
+            .sort((a, b) => (a.corso?.nome || "").localeCompare(b.corso?.nome || ""))
+            .map((gruppo) => (
+              <div key={gruppo.corso?.id || Math.random()} style={{ marginBottom: 8, paddingLeft: 4 }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 3, display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: gruppo.corso?.colore || NAVY, flexShrink: 0 }} />
+                  {gruppo.corso?.nome || "?"}
+                </div>
+                {gruppo.date
+                  .slice()
+                  .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+                  .map((cd) => {
+                    const max = cd.posti_max ?? gruppo.corso?.posti_max ?? 0;
+                    const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                    const liberi = Math.max(0, max - occupati);
+                    const pieno = liberi <= 0;
+                    return (
+                      <div
+                        key={cd.id}
+                        onClick={() => !pieno && onScegli(cd, gruppo.corso, locById[cd.location_id])}
+                        style={{
+                          ...fontBody,
+                          fontSize: 13,
+                          color: pieno ? "#C9A9A9" : MUTED,
+                          padding: "5px 8px",
+                          marginLeft: 15,
+                          borderRadius: 6,
+                          cursor: pieno ? "default" : "pointer",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          maxWidth: 380,
+                          background: pieno ? "#F6EFEF" : "transparent",
+                        }}
+                      >
+                        <span>{cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}</span>
+                        <span>{pieno ? "completo" : `${liberi} posti liberi`}</span>
+                      </div>
+                    );
+                  })}
+              </div>
+            ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
 const HEADER_H = 26; // spazio per il numero del giorno
 
@@ -860,7 +932,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
   const [note, setNote] = useState("");
-  const [spostaTarget, setSpostaTarget] = useState({});
+  const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
   const [inModifica, setInModifica] = useState(null); // id dell'iscritto in modifica
   const [modNome, setModNome] = useState("");
   const [modCognome, setModCognome] = useState("");
@@ -871,10 +943,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
   const max = corsoData.posti_max ?? corso?.posti_max ?? 0;
   const liberi = Math.max(0, max - listaIscritti.length);
-
-  const altreDate = corsiDate.filter((cd) => cd.id !== corsoData.id);
-  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   async function aggiungiIscritto() {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return; }
@@ -891,20 +959,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
-  async function sposta(id) {
-    const target = spostaTarget[id];
-    if (!target) return;
-    const cdTarget = corsiDate.find((cd) => cd.id === target);
-    if (cdTarget) {
-      const maxTarget = cdTarget.posti_max ?? corsoById[cdTarget.corso_id]?.posti_max ?? 0;
-      const occupatiTarget = iscritti.filter((x) => x.corso_data_id === target).length;
-      if (occupatiTarget >= maxTarget) {
-        setMsg("Il corso/data scelto è già al completo.");
-        return;
-      }
-    }
-    const { error } = await supabase.from("iscritti").update({ corso_data_id: target }).eq("id", id);
+  async function eseguiSpostamento(iscritto, cdTarget, corsoTarget, locTarget) {
+    const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
+    if (!window.confirm(`Spostare ${iscritto.nome} ${iscritto.cognome} su ${corsoTarget?.nome || "?"} · ${locTarget?.nome || "?"} · ${etichetta}?`)) return;
+    const { error } = await supabase.from("iscritti").update({ corso_data_id: cdTarget.id }).eq("id", iscritto.id);
     if (error) { setMsg("Errore: " + error.message); return; }
+    setSpostaIscrittoId(null);
     setMsg("Iscritto spostato.");
     ricarica();
   }
@@ -1012,38 +1072,37 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
                   {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                 </div>
-                <button
-                  onClick={() => elimina(i.id)}
-                  title="Elimina"
-                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                    <path d="M10 11v6" /><path d="M14 11v6" />
-                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                  </svg>
-                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                  <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "6px 12px", fontSize: 13 }}>
+                    Sposta
+                  </Button>
+                  <button
+                    onClick={() => elimina(i.id)}
+                    title="Elimina"
+                    style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6" /><path d="M14 11v6" />
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             )}
-            {altreDate.length > 0 && (
-              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <select
-                  style={{ ...inputStyle, fontSize: 13 }}
-                  value={spostaTarget[i.id] || ""}
-                  onChange={(e) => setSpostaTarget({ ...spostaTarget, [i.id]: e.target.value })}
-                >
-                  <option value="">Sposta su un altro corso/data...</option>
-                  {altreDate
-                    .slice()
-                    .sort((a, b) => (corsoById[a.corso_id]?.nome || "").localeCompare(corsoById[b.corso_id]?.nome || "") || a.data_inizio.localeCompare(b.data_inizio))
-                    .map((cd) => (
-                      <option key={cd.id} value={cd.id}>
-                        {corsoById[cd.corso_id]?.nome || "?"} · {locById[cd.location_id]?.nome || "?"} · {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
-                      </option>
-                    ))}
-                </select>
-                <Button variant="ghost" onClick={() => sposta(i.id)}>Sposta</Button>
+            {spostaIscrittoId === i.id && (
+              <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
+                <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome} {i.cognome}:</div>
+                <SelettoreSpostamento
+                  corsi={corsi}
+                  location={location}
+                  corsiDate={corsiDate}
+                  iscritti={iscritti}
+                  corsoDataEscluso={corsoData.id}
+                  onScegli={(cd, corsoTarget, locTarget) => eseguiSpostamento(i, cd, corsoTarget, locTarget)}
+                />
+                <Button variant="ghost" onClick={() => setSpostaIscrittoId(null)} style={{ marginTop: 8 }}>Annulla</Button>
               </div>
             )}
           </div>
