@@ -212,8 +212,6 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
   const [msg, setMsg] = useState("");
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
-  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   async function eliminaCorso(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
@@ -355,19 +353,8 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 
       <div style={cardStyle}>
         <div style={hStyle}>Date esistenti</div>
-        <div style={subStyle}>Tutte le edizioni create finora. Clicca il cestino per eliminarne una (rimuove anche i suoi iscritti).</div>
-        {corsiDate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna data ancora.</div>}
-        {corsiDate
-          .slice()
-          .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-          .map((cd) => (
-            <RigaEliminabile
-              key={cd.id}
-              label={`${corsoById[cd.corso_id]?.nome || "?"} · ${locById[cd.location_id]?.nome || "?"}`}
-              dettaglio={cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
-              onDelete={() => eliminaData(cd.id)}
-            />
-          ))}
+        <div style={subStyle}>Tutte le edizioni create finora, divise per città e corso. Clicca il cestino per eliminarne una (rimuove anche i suoi iscritti).</div>
+        <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} onDelete={eliminaData} />
       </div>
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
@@ -398,6 +385,67 @@ function RigaEliminabile({ label, dettaglio, onDelete }) {
           <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
         </svg>
       </button>
+    </div>
+  );
+}
+
+// Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
+// che in Impostazioni (con cestino per eliminare).
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, onApriData, onDelete }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const perCitta = {};
+  corsiDate.forEach((cd) => {
+    const locId = cd.location_id;
+    if (!perCitta[locId]) perCitta[locId] = { nome: locById[locId]?.nome || "?", corsi: {} };
+    if (!perCitta[locId].corsi[cd.corso_id]) perCitta[locId].corsi[cd.corso_id] = { corso: corsoById[cd.corso_id], date: [] };
+    perCitta[locId].corsi[cd.corso_id].date.push(cd);
+  });
+  const cittaOrdinate = Object.values(perCitta).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  if (corsiDate.length === 0) {
+    return <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna data ancora.</div>;
+  }
+
+  return (
+    <div>
+      {cittaOrdinate.map((c) => (
+        <div key={c.nome} style={{ marginBottom: 18 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, color: NAVY, marginBottom: 8, letterSpacing: 0.5 }}>{c.nome.toUpperCase()}</div>
+          {Object.values(c.corsi)
+            .sort((a, b) => (a.corso?.nome || "").localeCompare(b.corso?.nome || ""))
+            .map((gruppo) => (
+              <div key={gruppo.corso?.id || Math.random()} style={{ marginBottom: 10, paddingLeft: 4 }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: gruppo.corso?.colore || NAVY, flexShrink: 0 }} />
+                  {gruppo.corso?.nome || "?"}
+                </div>
+                {gruppo.date
+                  .slice()
+                  .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+                  .map((cd) =>
+                    onDelete ? (
+                      <div key={cd.id} style={{ paddingLeft: 15 }}>
+                        <RigaEliminabile
+                          label={cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+                          onDelete={() => onDelete(cd.id)}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        key={cd.id}
+                        onClick={() => onApriData?.(cd)}
+                        style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "3px 0 3px 15px", cursor: onApriData ? "pointer" : "default" }}
+                      >
+                        {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+                      </div>
+                    )
+                  )}
+              </div>
+            ))}
+        </div>
+      ))}
     </div>
   );
 }
@@ -891,6 +939,9 @@ export default function App() {
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
           <CardHome title="Impostazioni" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
+
+          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px" }}>Date esistenti</div>
+          <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} onApriData={apriData} />
         </div>
       )}
 
