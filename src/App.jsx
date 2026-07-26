@@ -1076,6 +1076,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   }
 
   async function elimina(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare in modo definitivo l'allievo?")) return;
     const { error } = await supabase.from("iscritti").delete().eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
