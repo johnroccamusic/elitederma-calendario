@@ -391,7 +391,7 @@ function RigaEliminabile({ label, dettaglio, onDelete }) {
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, onApriData, onDelete }) {
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriData, onDelete }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -436,9 +436,15 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, onApriData, onDel
                       <div
                         key={cd.id}
                         onClick={() => onApriData?.(cd)}
-                        style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "3px 0 3px 15px", cursor: onApriData ? "pointer" : "default" }}
+                        style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "3px 0 3px 15px", cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", maxWidth: 360 }}
                       >
-                        {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+                        <span>{cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}</span>
+                        {iscritti && (() => {
+                          const max = cd.posti_max ?? gruppo.corso?.posti_max ?? 0;
+                          const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                          const liberi = Math.max(0, max - occupati);
+                          return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
+                        })()}
                       </div>
                     )
                   )}
@@ -916,6 +922,32 @@ export default function App() {
 
   useEffect(() => { if (ok) carica(); }, [ok]);
 
+  // swipe da sinistra a destra su mobile → torna alla home (come i pulsanti "indietro")
+  useEffect(() => {
+    let startX = 0, startY = 0, tracking = false;
+    function onTouchStart(e) {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }
+    function onTouchEnd(e) {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (view !== "home" && dx > 80 && Math.abs(dy) < Math.abs(dx) * 0.6) {
+        setView("home");
+      }
+    }
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [view]);
+
   if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={() => setOk(true)} /></div>;
 
   if (loading) {
@@ -938,10 +970,10 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: 30, color: NAVY, marginBottom: 30, textAlign: "center" }}>Calendario Corsi</div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
-          <CardHome title="Impostazioni" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
+          <CardHome title="Crea data/location" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
 
-          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px" }}>Date esistenti</div>
-          <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} onApriData={apriData} />
+          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1 }}>DATE IN PROGRAMMAZIONE</div>
+          <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} />
         </div>
       )}
 
