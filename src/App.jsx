@@ -1385,9 +1385,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
                     {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
                     {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
-                    {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_totale} € ({i.acconto_metodo || "?"})</div>}
-                    {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_totale} € ({i.precorso_metodo || "?"})</div>}
-                    {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
+                    {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
+                    {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
+                    {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                     {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                       <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} €</div>
                     )}
@@ -1458,9 +1458,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome} {i.cognome}</div>
                   {i.tutor && <div>Tutor: {i.tutor}</div>}
                   {i.telefono && <div>Telefono: {i.telefono}</div>}
-                  {i.acconto_totale != null && <div>Acconto: {i.acconto_totale} € ({i.acconto_metodo || "?"})</div>}
-                  {i.precorso_totale != null && <div>Pre corso: {i.precorso_totale} € ({i.precorso_metodo || "?"})</div>}
-                  {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
+                  {i.acconto_totale != null && <div>Acconto: {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
+                  {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
+                  {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                   {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                     <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} €</div>
                   )}
