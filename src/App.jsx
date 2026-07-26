@@ -872,7 +872,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const max = corsoData.posti_max ?? corso?.posti_max ?? 0;
   const liberi = Math.max(0, max - listaIscritti.length);
 
-  const altreDate = corsiDate.filter((cd) => cd.corso_id === corsoData.corso_id && cd.id !== corsoData.id);
+  const altreDate = corsiDate.filter((cd) => cd.id !== corsoData.id);
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   async function aggiungiIscritto() {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return; }
@@ -892,6 +894,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   async function sposta(id) {
     const target = spostaTarget[id];
     if (!target) return;
+    const cdTarget = corsiDate.find((cd) => cd.id === target);
+    if (cdTarget) {
+      const maxTarget = cdTarget.posti_max ?? corsoById[cdTarget.corso_id]?.posti_max ?? 0;
+      const occupatiTarget = iscritti.filter((x) => x.corso_data_id === target).length;
+      if (occupatiTarget >= maxTarget) {
+        setMsg("Il corso/data scelto è già al completo.");
+        return;
+      }
+    }
     const { error } = await supabase.from("iscritti").update({ corso_data_id: target }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("Iscritto spostato.");
@@ -1016,14 +1027,21 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               </div>
             )}
             {altreDate.length > 0 && (
-              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <select
                   style={{ ...inputStyle, fontSize: 13 }}
                   value={spostaTarget[i.id] || ""}
                   onChange={(e) => setSpostaTarget({ ...spostaTarget, [i.id]: e.target.value })}
                 >
-                  <option value="">Sposta su un'altra data...</option>
-                  {altreDate.map((cd) => <option key={cd.id} value={cd.id}>{cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}</option>)}
+                  <option value="">Sposta su un altro corso/data...</option>
+                  {altreDate
+                    .slice()
+                    .sort((a, b) => (corsoById[a.corso_id]?.nome || "").localeCompare(corsoById[b.corso_id]?.nome || "") || a.data_inizio.localeCompare(b.data_inizio))
+                    .map((cd) => (
+                      <option key={cd.id} value={cd.id}>
+                        {corsoById[cd.corso_id]?.nome || "?"} · {locById[cd.location_id]?.nome || "?"} · {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+                      </option>
+                    ))}
                 </select>
                 <Button variant="ghost" onClick={() => sposta(i.id)}>Sposta</Button>
               </div>
