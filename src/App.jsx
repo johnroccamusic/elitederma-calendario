@@ -54,6 +54,39 @@ function assegnaLane(eventiRiga) {
     });
 }
 
+// sigle automobilistiche delle principali città italiane, per le etichette nel calendario
+const SIGLE_CITTA = {
+  "milano": "MI", "roma": "RM", "napoli": "NA", "torino": "TO", "bologna": "BO",
+  "firenze": "FI", "verona": "VR", "venezia": "VE", "palermo": "PA", "genova": "GE",
+  "bari": "BA", "catania": "CT", "padova": "PD", "bergamo": "BG", "brescia": "BS",
+  "modena": "MO", "parma": "PR", "reggio emilia": "RE", "perugia": "PG", "cagliari": "CA",
+  "ancona": "AN", "pescara": "PE", "trento": "TN", "bolzano": "BZ", "trieste": "TS",
+  "udine": "UD", "rimini": "RN", "salerno": "SA", "livorno": "LI", "pisa": "PI",
+  "siena": "SI", "lucca": "LU", "ravenna": "RA", "ferrara": "FE", "vicenza": "VI",
+  "treviso": "TV", "como": "CO", "varese": "VA", "monza": "MB", "brindisi": "BR",
+  "lecce": "LE", "taranto": "TA", "foggia": "FG", "messina": "ME", "siracusa": "SR",
+  "sassari": "SS", "reggio calabria": "RC", "cosenza": "CS", "latina": "LT", "pavia": "PV",
+  "piacenza": "PC", "cremona": "CR", "mantova": "MN", "novara": "NO", "asti": "AT",
+  "cuneo": "CN", "aosta": "AO", "la spezia": "SP", "pistoia": "PT", "arezzo": "AR",
+  "grosseto": "GR", "terni": "TR", "viterbo": "VT", "rieti": "RI", "frosinone": "FR",
+  "campobasso": "CB", "potenza": "PZ", "matera": "MT", "avellino": "AV", "benevento": "BN",
+  "caserta": "CE", "nuoro": "NU", "oristano": "OR", "imperia": "IM", "savona": "SV",
+  "alessandria": "AL", "biella": "BI", "vercelli": "VC", "lodi": "LO", "sondrio": "SO",
+  "belluno": "BL", "rovigo": "RO", "gorizia": "GO", "pordenone": "PN", "chieti": "CH",
+  "teramo": "TE", "isernia": "IS", "l'aquila": "AQ", "macerata": "MC", "fermo": "FM",
+  "pesaro": "PU", "prato": "PO", "massa": "MS",
+};
+function siglaCitta(nome) {
+  if (!nome) return "";
+  const s = SIGLE_CITTA[nome.trim().toLowerCase()];
+  return s || nome.trim().slice(0, 2).toUpperCase();
+}
+// etichetta breve per le barre del calendario: nome corso (max 10 caratteri) + sigla città
+function etichettaBarra(corso, loc) {
+  const nome = (corso?.nome || "").slice(0, 10);
+  return `${nome} ${siglaCitta(loc?.nome)}`;
+}
+
 // ---------- Card / pulsanti base ----------
 function CardHome({ title, sub, onClick }) {
   return (
@@ -179,6 +212,30 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
   const [msg, setMsg] = useState("");
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  async function eliminaCorso(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("corsi").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Corso eliminato.");
+    ricarica();
+  }
+  async function eliminaLocation(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("location").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Città eliminata.");
+    ricarica();
+  }
+  async function eliminaData(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Data eliminata.");
+    ricarica();
+  }
 
   async function aggiungiCorso() {
     if (!nomeCorso.trim()) return;
@@ -273,6 +330,46 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
         <Button onClick={aggiungiData}>Aggiungi data</Button>
       </div>
 
+      <div style={cardStyle}>
+        <div style={hStyle}>Corsi esistenti</div>
+        <div style={subStyle}>Clicca il cestino per eliminare un corso (rimuove anche le sue date e i relativi iscritti).</div>
+        {corsi.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso ancora.</div>}
+        {corsi.map((c) => (
+          <RigaEliminabile
+            key={c.id}
+            label={<span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />{c.nome}</span>}
+            dettaglio={`posti default: ${c.posti_max}`}
+            onDelete={() => eliminaCorso(c.id)}
+          />
+        ))}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Città esistenti</div>
+        <div style={subStyle}>Clicca il cestino per eliminare una città (rimuove anche le date collegate a quella città).</div>
+        {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora.</div>}
+        {location.map((l) => (
+          <RigaEliminabile key={l.id} label={l.nome} onDelete={() => eliminaLocation(l.id)} />
+        ))}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Date esistenti</div>
+        <div style={subStyle}>Tutte le edizioni create finora. Clicca il cestino per eliminarne una (rimuove anche i suoi iscritti).</div>
+        {corsiDate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna data ancora.</div>}
+        {corsiDate
+          .slice()
+          .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+          .map((cd) => (
+            <RigaEliminabile
+              key={cd.id}
+              label={`${corsoById[cd.corso_id]?.nome || "?"} · ${locById[cd.location_id]?.nome || "?"}`}
+              dettaglio={cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+              onDelete={() => eliminaData(cd.id)}
+            />
+          ))}
+      </div>
+
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
     </div>
   );
@@ -281,6 +378,29 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18 };
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
+
+function RigaEliminabile({ label, dettaglio, onDelete }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+      <div>
+        <div style={{ ...fontBody, fontSize: 14, color: NAVY }}>{label}</div>
+        {dettaglio && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{dettaglio}</div>}
+      </div>
+      <button
+        onClick={onDelete}
+        title="Elimina"
+        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex", alignItems: "center" }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6" /><path d="M14 11v6" />
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+        </svg>
+      </button>
+    </div>
+  );
+}
 
 // ---------- Calendario ----------
 const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
@@ -360,16 +480,18 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
                       borderRadius: 4,
                       color: "#fff",
                       fontSize: 11,
+                      fontWeight: 500,
                       ...fontBody,
                       display: "flex",
                       alignItems: "center",
                       padding: "0 6px",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
                       cursor: "pointer",
                     }}
                   >
-                    {corsoById[ev.corso_id]?.nome} · {locById[ev.location_id]?.nome}
+                    {etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id])}
                   </div>
                 );
               })}
@@ -426,7 +548,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
         const eventiRiga = corsiDate.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
         const eventiConLane = assegnaLane(eventiRiga);
         const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
-        const barH = 10;
+        const barH = 15;
         const rowHeight = 20 + Math.max(0, maxLane + 1) * barH + 4;
 
         return (
@@ -475,8 +597,20 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
                       height: barH - 3,
                       background: corsoById[ev.corso_id]?.colore || NAVY,
                       borderRadius: 3,
+                      color: "#fff",
+                      fontSize: 9,
+                      fontWeight: 500,
+                      ...fontBody,
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "0 4px",
+                      overflow: "hidden",
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
                     }}
-                  />
+                  >
+                    {etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id])}
+                  </div>
                 );
               })}
             </div>
@@ -728,9 +862,9 @@ export default function App() {
       {view === "home" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
           <div style={{ ...fontDisplay, fontSize: 30, color: NAVY, marginBottom: 30, textAlign: "center" }}>Calendario Corsi</div>
-          <CardHome title="Impostazioni" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
+          <CardHome title="Impostazioni" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
         </div>
       )}
 
