@@ -13,7 +13,7 @@ const CREAM_BORDER = "#E8E3D6";
 const BG = "#FAF8F3";
 const MUTED = "#8B8FA3";
 
-const fontDisplay = { fontFamily: "'Cormorant Garamond',serif" };
+const fontDisplay = { fontFamily: "'Quicksand',sans-serif", fontWeight: 600 };
 const fontBody = { fontFamily: "'Jost',sans-serif" };
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
@@ -175,7 +175,8 @@ function Gate({ onOk }) {
   const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(VITE_SUPABASE_URL non impostata)";
   return (
     <div style={{ ...fontBody, maxWidth: 340, margin: "120px auto", textAlign: "center" }}>
-      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, marginBottom: 18 }}>Calendario Corsi</div>
+      <div style={{ ...fontDisplay, fontSize: 24, color: NAVY, marginBottom: 4, letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
+      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 500, color: MUTED, marginBottom: 18, letterSpacing: 2 }}>ELITEDERMA</div>
       <input
         type="password"
         placeholder="Codice d'accesso"
@@ -1193,13 +1194,16 @@ export default function App() {
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
       {view === "home" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
-          <div style={{ ...fontDisplay, fontSize: 30, color: NAVY, marginBottom: 30, textAlign: "center" }}>Calendario Corsi</div>
+          <div style={{ ...fontDisplay, fontSize: 30, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 500, color: MUTED, marginBottom: 30, textAlign: "center", letterSpacing: 3 }}>ELITEDERMA</div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Crea data/location" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
 
-          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1 }}>DATE IN PROGRAMMAZIONE</div>
+          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
+            DATE IN<br />PROGRAMMAZIONE
+          </div>
           <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} />
         </div>
       )}
