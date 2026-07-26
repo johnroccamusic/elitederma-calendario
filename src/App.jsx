@@ -1427,7 +1427,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 {mostraGestione && (
                   <>
                     <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
-                      {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
                       {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
                       {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
                       {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
