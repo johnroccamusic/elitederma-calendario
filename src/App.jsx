@@ -1116,16 +1116,24 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         {vista === "lista" ? (
           <div style={{ display: "flex", gap: 8 }}>
             <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
-              {mostraGestione ? "Nascondi gestione classe" : "Gestione classe"}
+              {mostraGestione ? "Esci da gestione classe" : "Gestione classe"}
             </Button>
-            <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
-              {liberi <= 0 ? "Completo" : "Iscrivi"}
-            </Button>
+            {!mostraGestione && (
+              <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
+                {liberi <= 0 ? "Completo" : "Iscrivi"}
+              </Button>
+            )}
           </div>
         ) : (
           <Button variant="ghost" onClick={annullaForm}>&larr; Torna alla lista</Button>
         )}
       </div>
+
+      {vista === "lista" && mostraGestione && (
+        <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "center", textTransform: "uppercase", letterSpacing: 1, marginBottom: 18 }}>
+          Gestione classe
+        </div>
+      )}
 
       {vista === "form" && (
         <div style={cardStyle}>
@@ -1280,31 +1288,61 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
           </div>
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
-          <div style={cardStyle}>
-            <div style={hStyle}>Posti in classe</div>
-            <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                onClick={() => cambiaPostiLocali(-1)}
-                disabled={postiLocali <= listaIscritti.length}
-                style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: postiLocali <= listaIscritti.length ? "default" : "pointer", opacity: postiLocali <= listaIscritti.length ? 0.35 : 1 }}
-              >
-                −
-              </button>
-              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{postiLocali}</div>
-              <button
-                type="button"
-                onClick={() => cambiaPostiLocali(1)}
-                style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
-              >
-                +
-              </button>
-              <Button onClick={confermaPosti} disabled={postiLocali === max} style={{ marginLeft: 6 }}>
-                Conferma
-              </Button>
+          {mostraGestione ? (
+            <div style={cardStyle}>
+              <Button onClick={() => window.print()} style={{ width: "100%" }}>Stampa elenco classe</Button>
             </div>
-          </div>
+          ) : (
+            <div style={cardStyle}>
+              <div style={hStyle}>Posti in classe</div>
+              <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={() => cambiaPostiLocali(-1)}
+                  disabled={postiLocali <= listaIscritti.length}
+                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: postiLocali <= listaIscritti.length ? "default" : "pointer", opacity: postiLocali <= listaIscritti.length ? 0.35 : 1 }}
+                >
+                  −
+                </button>
+                <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{postiLocali}</div>
+                <button
+                  type="button"
+                  onClick={() => cambiaPostiLocali(1)}
+                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+                >
+                  +
+                </button>
+                <Button onClick={confermaPosti} disabled={postiLocali === max} style={{ marginLeft: 6 }}>
+                  Conferma
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {mostraGestione && (
+            <div
+              className="stampa-classe"
+              style={{ position: "absolute", left: "-9999px", top: 0, width: 700, background: "#fff", padding: 24, fontFamily: "'Jost',sans-serif", color: "#000" }}
+            >
+              <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, marginBottom: 24, textTransform: "uppercase" }}>
+                Contabilità corso {corso?.nome} {loc?.nome} {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} – ${fmtData(corsoData.data_fine)}`}
+              </div>
+              {listaIscritti.length === 0 && <div>Nessun iscritto.</div>}
+              {listaIscritti.map((i, idx) => (
+                <div key={i.id} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #ccc" }}>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome} {i.cognome}</div>
+                  {i.tutor && <div>Tutor: {i.tutor}</div>}
+                  {i.telefono && <div>Telefono: {i.telefono}</div>}
+                  {i.acconto && <div>Acconto: {i.acconto}</div>}
+                  {i.pagato_come && <div>Pagato come: {i.pagato_come}</div>}
+                  {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
+                  {i.accordi_commerciali && <div>Accordi commerciali: {i.accordi_commerciali}</div>}
+                  {i.note && <div>Note: {i.note}</div>}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
