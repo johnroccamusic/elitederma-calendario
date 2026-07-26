@@ -474,9 +474,13 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
   const perCitta = {};
   corsiDate.forEach((cd) => {
     const locId = cd.location_id;
-    if (!perCitta[locId]) perCitta[locId] = { nome: locById[locId]?.nome || "?", corsi: {} };
-    if (!perCitta[locId].corsi[cd.corso_id]) perCitta[locId].corsi[cd.corso_id] = { corso: corsoById[cd.corso_id], date: [] };
-    perCitta[locId].corsi[cd.corso_id].date.push(cd);
+    if (!perCitta[locId]) perCitta[locId] = { nome: locById[locId]?.nome || "?", mesi: {} };
+    const [anno, mese] = cd.data_inizio.split("-");
+    const chiaveMese = `${anno}-${mese}`;
+    if (!perCitta[locId].mesi[chiaveMese]) {
+      perCitta[locId].mesi[chiaveMese] = { etichetta: `${MESI[parseInt(mese, 10) - 1]} ${anno}`, voci: [] };
+    }
+    perCitta[locId].mesi[chiaveMese].voci.push(cd);
   });
   const cittaOrdinate = Object.values(perCitta).sort((a, b) => a.nome.localeCompare(b.nome));
 
@@ -489,43 +493,56 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
       {cittaOrdinate.map((c) => (
         <div key={c.nome} style={{ marginBottom: 18 }}>
           <div style={{ ...fontDisplay, fontSize: 18, color: NAVY, marginBottom: 8, letterSpacing: 0.5 }}>{c.nome.toUpperCase()}</div>
-          {Object.values(c.corsi)
-            .sort((a, b) => (a.corso?.nome || "").localeCompare(b.corso?.nome || ""))
-            .map((gruppo) => (
-              <div key={gruppo.corso?.id || Math.random()} style={{ marginBottom: 10, paddingLeft: 4 }}>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 4, display: "flex", alignItems: "center", gap: 7 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: gruppo.corso?.colore || NAVY, flexShrink: 0 }} />
-                  {gruppo.corso?.nome || "?"}
+          {Object.keys(c.mesi)
+            .sort()
+            .map((chiaveMese) => {
+              const gruppoMese = c.mesi[chiaveMese];
+              return (
+                <div key={chiaveMese} style={{ marginBottom: 10 }}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>
+                    {gruppoMese.etichetta}
+                  </div>
+                  {gruppoMese.voci
+                    .slice()
+                    .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+                    .map((cd) => {
+                      const corso = corsoById[cd.corso_id];
+                      const dataEtichetta = cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`;
+                      return onDelete ? (
+                        <div key={cd.id} style={{ paddingLeft: 4 }}>
+                          <RigaEliminabile
+                            label={
+                              <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
+                                {corso?.nome || "?"} — {dataEtichetta}
+                              </span>
+                            }
+                            onDelete={() => onDelete(cd.id)}
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          key={cd.id}
+                          onClick={() => onApriData?.(cd)}
+                          style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "5px 4px", cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 420 }}
+                        >
+                          <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
+                            <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome || "?"}</b>
+                            <span>— {dataEtichetta}</span>
+                          </span>
+                          {iscritti && (() => {
+                            const max = cd.posti_max ?? corso?.posti_max ?? 0;
+                            const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                            const liberi = Math.max(0, max - occupati);
+                            return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
+                          })()}
+                        </div>
+                      );
+                    })}
                 </div>
-                {gruppo.date
-                  .slice()
-                  .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-                  .map((cd) =>
-                    onDelete ? (
-                      <div key={cd.id} style={{ paddingLeft: 15 }}>
-                        <RigaEliminabile
-                          label={cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
-                          onDelete={() => onDelete(cd.id)}
-                        />
-                      </div>
-                    ) : (
-                      <div
-                        key={cd.id}
-                        onClick={() => onApriData?.(cd)}
-                        style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "3px 0 3px 15px", cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", maxWidth: 360 }}
-                      >
-                        <span>{cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}</span>
-                        {iscritti && (() => {
-                          const max = cd.posti_max ?? gruppo.corso?.posti_max ?? 0;
-                          const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
-                          const liberi = Math.max(0, max - occupati);
-                          return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
-                        })()}
-                      </div>
-                    )
-                  )}
-              </div>
-            ))}
+              );
+            })}
         </div>
       ))}
     </div>
