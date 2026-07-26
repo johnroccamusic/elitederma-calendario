@@ -913,10 +913,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
-  async function cambiaPosti(delta) {
-    const nuovo = Math.max(listaIscritti.length, max + delta);
-    const { error } = await supabase.from("corsi_date").update({ posti_max: nuovo }).eq("id", corsoData.id);
+  const [postiLocali, setPostiLocali] = useState(max);
+  useEffect(() => { setPostiLocali(max); }, [corsoData.id, max]);
+
+  function cambiaPostiLocali(delta) {
+    setPostiLocali((p) => Math.max(listaIscritti.length, p + delta));
+  }
+
+  async function confermaPosti() {
+    const { error } = await supabase.from("corsi_date").update({ posti_max: postiLocali }).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Posti aggiornati.");
     ricarica();
   }
 
@@ -930,23 +937,26 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
       <div style={cardStyle}>
         <div style={hStyle}>Posti in classe</div>
         <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
           <button
             type="button"
-            onClick={() => cambiaPosti(-1)}
-            disabled={max <= listaIscritti.length}
-            style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: max <= listaIscritti.length ? "default" : "pointer", opacity: max <= listaIscritti.length ? 0.35 : 1 }}
+            onClick={() => cambiaPostiLocali(-1)}
+            disabled={postiLocali <= listaIscritti.length}
+            style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: postiLocali <= listaIscritti.length ? "default" : "pointer", opacity: postiLocali <= listaIscritti.length ? 0.35 : 1 }}
           >
             −
           </button>
-          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{max}</div>
+          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{postiLocali}</div>
           <button
             type="button"
-            onClick={() => cambiaPosti(1)}
+            onClick={() => cambiaPostiLocali(1)}
             style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
           >
             +
           </button>
+          <Button onClick={confermaPosti} disabled={postiLocali === max} style={{ marginLeft: 6 }}>
+            Conferma
+          </Button>
         </div>
       </div>
 
