@@ -1438,7 +1438,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     </div>
                     {(i.saldo_totale != null || i.numero_modelle != null) && (() => {
                       const daIncassare = round2((i.saldo_totale || 0) + (i.numero_modelle || 0) * 60);
-                      const colore = i.incassato ? "#2E7D32" : "#C0392B";
+                      const aPosto = i.incassato || daIncassare === 0;
+                      const colore = aPosto ? "#2E7D32" : "#C0392B";
                       return (
                         <div
                           style={{
@@ -1447,7 +1448,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                             alignItems: "center",
                             justifyContent: "space-between",
                             padding: "10px 14px",
-                            background: i.incassato ? "#E8F5E9" : "#FDECEC",
+                            background: aPosto ? "#E8F5E9" : "#FDECEC",
                             border: `1px solid ${colore}`,
                             borderRadius: 8,
                           }}
