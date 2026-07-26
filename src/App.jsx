@@ -929,15 +929,45 @@ function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBac
 }
 
 // ---------- Scheda data (iscritti) ----------
+const ADMIN_CODE = import.meta.env.VITE_ADMIN_CODE || "";
+
+// link cliccabile a un allegato caricato nello storage "allegati-iscritti"
+function AllegatoLink({ percorso, etichetta }) {
+  const { data } = supabase.storage.from("allegati-iscritti").getPublicUrl(percorso);
+  return (
+    <a
+      href={data.publicUrl}
+      target="_blank"
+      rel="noreferrer"
+      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline" }}
+    >
+      {etichetta}
+    </a>
+  );
+}
+
 function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica, onBack }) {
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
   const [note, setNote] = useState("");
+  const [tutor, setTutor] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [tipoCorso, setTipoCorso] = useState("");
+  const [acconto, setAcconto] = useState("");
+  const [pagatoCome, setPagatoCome] = useState("");
+  const [accordiCommerciali, setAccordiCommerciali] = useState("");
+  const [richiedeModelle, setRichiedeModelle] = useState("");
+  const [fileIscrizione, setFileIscrizione] = useState(null);
+  const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
+  const [fileScreenRecap, setFileScreenRecap] = useState(null);
+  const [caricando, setCaricando] = useState(false);
   const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
   const [inModifica, setInModifica] = useState(null); // id dell'iscritto in modifica
   const [modNome, setModNome] = useState("");
   const [modCognome, setModCognome] = useState("");
   const [msg, setMsg] = useState("");
+  const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
+  const [mostraGestione, setMostraGestione] = useState(false);
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
@@ -945,13 +975,66 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const max = corsoData.posti_max ?? corso?.posti_max ?? 0;
   const liberi = Math.max(0, max - listaIscritti.length);
 
+  function apriGestioneClasse() {
+    if (mostraGestione) { setMostraGestione(false); return; }
+    if (adminSbloccato) { setMostraGestione(true); return; }
+    const codice = window.prompt("Codice amministratore per aprire la gestione classe:");
+    if (codice === null) return;
+    if (ADMIN_CODE && codice === ADMIN_CODE) {
+      sessionStorage.setItem("edc_admin_ok", "1");
+      setAdminSbloccato(true);
+      setMostraGestione(true);
+    } else {
+      window.alert("Codice non corretto.");
+    }
+  }
+
+  // carica un file nello storage "allegati-iscritti" e restituisce il percorso salvato
+  async function caricaAllegato(file, prefisso) {
+    if (!file) return null;
+    const percorso = `${corsoData.id}/${prefisso}-${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
+    if (error) throw error;
+    return percorso;
+  }
+
   async function aggiungiIscritto() {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return; }
     if (liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return; }
-    const { error } = await supabase.from("iscritti").insert({ corso_data_id: corsoData.id, nome: nome.trim(), cognome: cognome.trim(), note: note.trim() || null });
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setNome(""); setCognome(""); setNote(""); setMsg("Iscritto aggiunto.");
-    ricarica();
+    setCaricando(true);
+    try {
+      const [pathIscrizione, pathAcconto, pathRecap] = await Promise.all([
+        caricaAllegato(fileIscrizione, "modulo"),
+        caricaAllegato(fileScreenAcconto, "acconto"),
+        caricaAllegato(fileScreenRecap, "recap"),
+      ]);
+      const { error } = await supabase.from("iscritti").insert({
+        corso_data_id: corsoData.id,
+        nome: nome.trim(),
+        cognome: cognome.trim(),
+        note: note.trim() || null,
+        tutor: tutor.trim() || null,
+        telefono: telefono.trim() || null,
+        tipo_corso: tipoCorso.trim() || null,
+        acconto: acconto.trim() || null,
+        pagato_come: pagatoCome || null,
+        accordi_commerciali: accordiCommerciali.trim() || null,
+        richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
+        file_iscrizione: pathIscrizione,
+        file_screen_acconto: pathAcconto,
+        file_screen_recap: pathRecap,
+      });
+      if (error) { setMsg("Errore: " + error.message); return; }
+      setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setTipoCorso("");
+      setAcconto(""); setPagatoCome(""); setAccordiCommerciali(""); setRichiedeModelle("");
+      setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
+      setMsg("Iscritto aggiunto.");
+      ricarica();
+    } catch (e) {
+      setMsg("Errore nel caricamento allegati: " + e.message);
+    } finally {
+      setCaricando(false);
+    }
   }
 
   async function elimina(id) {
@@ -1002,8 +1085,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={`${corso?.nome || ""} · ${loc?.nome || ""}`} onBack={onBack} />
-      <div style={{ ...fontBody, color: MUTED, fontSize: 14, marginBottom: 18 }}>
-        {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
+          {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
+        </div>
+        <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
+          {mostraGestione ? "Nascondi gestione classe" : "Gestione classe"}
+        </Button>
       </div>
 
       <div style={cardStyle}>
@@ -1042,8 +1130,56 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             <Field label="Cognome"><input style={inputStyle} value={cognome} onChange={(e) => setCognome(e.target.value)} /></Field>
           </div>
         </div>
+        <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Tutor"><input style={inputStyle} value={tutor} onChange={(e) => setTutor(e.target.value)} /></Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Numero di telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
+          </div>
+        </div>
+        <Field label="Tipo di corso">
+          <input style={inputStyle} value={tipoCorso} onChange={(e) => setTipoCorso(e.target.value)} placeholder="es. Base, Advanced..." />
+        </Field>
+        <Field label="Acconto pagato">
+          <input style={inputStyle} value={acconto} onChange={(e) => setAcconto(e.target.value)} />
+        </Field>
+        <Field label="Pagato come">
+          <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
+            {["Sito", "Pos", "Contanti"].map((opz) => (
+              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                <input type="radio" name="pagatoCome" checked={pagatoCome === opz} onChange={() => setPagatoCome(opz)} />
+                {opz}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label="Accordi commerciali">
+          <input style={inputStyle} value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value)} />
+        </Field>
+        <Field label="Richiede modelle a pagamento?">
+          <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
+            {[["si", "Sì"], ["no", "No"]].map(([val, lab]) => (
+              <label key={val} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                <input type="radio" name="richiedeModelle" checked={richiedeModelle === val} onChange={() => setRichiedeModelle(val)} />
+                {lab}
+              </label>
+            ))}
+          </div>
+        </Field>
+        <Field label="Modulo iscrizione (PDF)">
+          <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFileIscrizione(e.target.files?.[0] || null)} />
+        </Field>
+        <Field label="Screen acconto (opzionale)">
+          <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
+        </Field>
+        <Field label="Screen di recap (opzionale)">
+          <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
+        </Field>
         <Field label="Note (opzionale)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-        <Button onClick={aggiungiIscritto} disabled={liberi <= 0}>{liberi <= 0 ? "Nessun posto disponibile" : "Aggiungi iscritto"}</Button>
+        <Button onClick={aggiungiIscritto} disabled={liberi <= 0 || caricando}>
+          {caricando ? "Caricamento…" : liberi <= 0 ? "Nessun posto disponibile" : "Aggiungi iscritto"}
+        </Button>
       </div>
 
       <div style={cardStyle}>
@@ -1104,6 +1240,29 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   onScegli={(cd, corsoTarget, locTarget) => eseguiSpostamento(i, cd, corsoTarget, locTarget)}
                 />
                 <Button variant="ghost" onClick={() => setSpostaIscrittoId(null)} style={{ marginTop: 8 }}>Annulla</Button>
+              </div>
+            )}
+            {mostraGestione && (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
+                {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
+                {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
+                {i.tipo_corso && <div><b style={{ color: NAVY }}>Tipo di corso:</b> {i.tipo_corso}</div>}
+                {i.acconto && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto}</div>}
+                {i.pagato_come && <div><b style={{ color: NAVY }}>Pagato come:</b> {i.pagato_come}</div>}
+                {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
+                  <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
+                )}
+                {i.accordi_commerciali && <div style={{ gridColumn: "1 / -1" }}><b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}</div>}
+                {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
+                  <div style={{ gridColumn: "1 / -1", display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" }}>
+                    {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
+                    {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
+                    {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
+                  </div>
+                )}
+                {!i.tutor && !i.telefono && !i.tipo_corso && !i.acconto && !i.pagato_come && !i.accordi_commerciali && !i.file_iscrizione && (
+                  <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
+                )}
               </div>
             )}
           </div>
