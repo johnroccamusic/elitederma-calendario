@@ -1389,7 +1389,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
                     {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                     {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                      <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} €</div>
+                      <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
                     )}
                     {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
                       <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
@@ -1462,7 +1462,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
                   {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                   {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                    <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} €</div>
+                    <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
                   )}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
                   {i.accordi_commerciali && <div>Accordi commerciali: {i.accordi_commerciali}</div>}
@@ -1471,7 +1471,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               ))}
               {listaIscritti.length > 0 && (
                 <div style={{ marginTop: 20, paddingTop: 12, borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
-                  Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} €
+                  Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0), 0))} € imp. → {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} € tot.
                 </div>
               )}
             </div>
