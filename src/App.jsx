@@ -406,46 +406,29 @@ function RigaEliminabile({ label, dettaglio, onDelete }) {
 const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
 const HEADER_H = 26; // spazio per il numero del giorno
 
-function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
-  const [mese, setMese] = useState(new Date().getMonth());
-  const [anno, setAnno] = useState(new Date().getFullYear());
-
-  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-
+// un singolo mese: titolo + griglia con le barre degli eventi
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corsoById, locById }) {
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
 
-  // eventi come stringhe "YYYY-MM-DD" per confronto testuale (funziona perché ISO ordina bene)
   const eventiMese = corsiDate.filter(
     (cd) => cd.data_inizio <= dateStr(giorniMese) && cd.data_fine >= dateStr(1)
   );
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Calendario" onBack={onBack} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <Button variant="ghost" onClick={() => { const m = mese - 1; if (m < 0) { setMese(11); setAnno(anno - 1); } else setMese(m); }}>&larr;</Button>
-        <div style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>{MESI[mese]} {anno}</div>
-        <Button variant="ghost" onClick={() => { const m = mese + 1; if (m > 11) { setMese(0); setAnno(anno + 1); } else setMese(m); }}>&rarr;</Button>
-      </div>
-
+    <div style={{ marginBottom: 34 }}>
+      <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>{MESI[mese]} {anno}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
         {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
       </div>
 
       {settimane.map((settimana, wi) => {
-        // date di inizio/fine visibili di questa riga (ignorando le celle vuote)
         const giorniValidi = settimana.filter((d) => d !== null);
         if (giorniValidi.length === 0) return null;
         const inizioRiga = dateStr(giorniValidi[0]);
         const fineRiga = dateStr(giorniValidi[giorniValidi.length - 1]);
-
-        // eventi che toccano questa riga
         const eventiRiga = eventiMese.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
-
-        // assegno una "corsia" (lane) a ciascun evento evitando sovrapposizioni
         const eventiConLane = assegnaLane(eventiRiga);
         const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
         const rowHeight = HEADER_H + (maxLane + 1) * LANE_H + 6;
@@ -499,10 +482,45 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
           </div>
         );
       })}
+    </div>
+  );
+}
 
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 16 }}>
-        Ogni barra colorata è un corso, continua sui giorni in cui si svolge — clicca per aprire iscritti e posti disponibili.
+function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const oggi = new Date();
+  // elenco continuo di mesi: da 6 mesi fa a 12 mesi avanti, così basta scorrere invece di usare frecce
+  const mesi = useMemo(() => {
+    const arr = [];
+    for (let i = -6; i <= 12; i++) {
+      const d = new Date(oggi.getFullYear(), oggi.getMonth() + i, 1);
+      arr.push({ anno: d.getFullYear(), mese: d.getMonth() });
+    }
+    return arr;
+  }, []);
+
+  const refOggi = React.useRef(null);
+  useEffect(() => {
+    refOggi.current?.scrollIntoView({ block: "start" });
+  }, []);
+
+  return (
+    <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <TopBar title="Calendario" onBack={onBack} />
+        <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
       </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
+        Scorri su o giù per vedere gli altri mesi. Ogni barra colorata è un corso — clicca per aprire iscritti e posti disponibili.
+      </div>
+
+      {mesi.map(({ anno, mese }) => (
+        <div key={`${anno}-${mese}`} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
+          <MeseGriglia anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} onApriData={onApriData} corsoById={corsoById} locById={locById} />
+        </div>
+      ))}
     </div>
   );
 }
@@ -630,18 +648,26 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
 function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }) {
   const [citta, setCitta] = useState("");
   const [corso, setCorso] = useState("");
-  const [data, setData] = useState("");
+  const [mese, setMese] = useState(""); // formato "YYYY-MM" dall'input type="month"
   const [tutti, setTutti] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
+  // trasformo il mese selezionato in un intervallo primo/ultimo giorno per il confronto
+  let meseInizio = null, meseFine = null;
+  if (mese) {
+    const [y, m] = mese.split("-").map(Number);
+    meseInizio = `${mese}-01`;
+    meseFine = `${mese}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+  }
+
   const filtrati = corsiDate.filter((cd) => {
     if (!tutti) {
       if (citta && cd.location_id !== citta) return false;
       if (corso && cd.corso_id !== corso) return false;
-      if (data && !(cd.data_inizio <= data && cd.data_fine >= data)) return false;
-      if (!citta && !corso && !data) return false;
+      if (mese && !(cd.data_inizio <= meseFine && cd.data_fine >= meseInizio)) return false;
+      if (!citta && !corso && !mese) return false;
     }
     return true;
   });
@@ -682,12 +708,12 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
           </Field>
         </div>
         <div style={{ flex: "1 1 140px" }}>
-          <Field label="Data">
-            <input type="date" style={inputStyle} value={data} onChange={(e) => { setData(e.target.value); setTutti(false); }} />
+          <Field label="Mese">
+            <input type="month" style={inputStyle} value={mese} onChange={(e) => { setMese(e.target.value); setTutti(false); }} />
           </Field>
         </div>
         <div style={{ marginBottom: 14 }}>
-          <Button variant={tutti ? "primary" : "ghost"} onClick={() => { setTutti(true); setCitta(""); setCorso(""); setData(""); }}>Tutti i corsi</Button>
+          <Button variant={tutti ? "primary" : "ghost"} onClick={() => { setTutti(true); setCitta(""); setCorso(""); setMese(""); }}>Tutti i corsi</Button>
         </div>
       </div>
 
