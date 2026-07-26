@@ -947,12 +947,14 @@ function AllegatoLink({ percorso, etichetta }) {
 }
 
 function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica, onBack }) {
+  const [vista, setVista] = useState("lista"); // 'lista' | 'form'
+  const [modificandoId, setModificandoId] = useState(null); // id dell'iscritto in modifica, null se è una nuova iscrizione
+
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
   const [note, setNote] = useState("");
   const [tutor, setTutor] = useState("");
   const [telefono, setTelefono] = useState("");
-  const [tipoCorso, setTipoCorso] = useState("");
   const [acconto, setAcconto] = useState("");
   const [pagatoCome, setPagatoCome] = useState("");
   const [accordiCommerciali, setAccordiCommerciali] = useState("");
@@ -961,10 +963,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
   const [caricando, setCaricando] = useState(false);
+
   const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
-  const [inModifica, setInModifica] = useState(null); // id dell'iscritto in modifica
-  const [modNome, setModNome] = useState("");
-  const [modCognome, setModCognome] = useState("");
   const [msg, setMsg] = useState("");
   const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
   const [mostraGestione, setMostraGestione] = useState(false);
@@ -998,24 +998,55 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     return percorso;
   }
 
-  async function aggiungiIscritto() {
+  function resetCampi() {
+    setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
+    setAcconto(""); setPagatoCome(""); setAccordiCommerciali(""); setRichiedeModelle("");
+    setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
+  }
+
+  function apriIscrizione() {
+    resetCampi();
+    setModificandoId(null);
+    setMsg("");
+    setVista("form");
+  }
+
+  function apriModificaCompleta(i) {
+    setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
+    setTutor(i.tutor || ""); setTelefono(i.telefono || "");
+    setAcconto(i.acconto || ""); setPagatoCome(i.pagato_come || "");
+    setAccordiCommerciali(i.accordi_commerciali || "");
+    setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
+    setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
+    setModificandoId(i.id);
+    setMsg("");
+    setVista("form");
+  }
+
+  function annullaForm() {
+    resetCampi();
+    setModificandoId(null);
+    setMsg("");
+    setVista("lista");
+  }
+
+  async function salvaIscritto() {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return; }
-    if (liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return; }
+    if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return; }
     setCaricando(true);
     try {
+      const originale = modificandoId ? iscritti.find((x) => x.id === modificandoId) : null;
       const [pathIscrizione, pathAcconto, pathRecap] = await Promise.all([
-        caricaAllegato(fileIscrizione, "modulo"),
-        caricaAllegato(fileScreenAcconto, "acconto"),
-        caricaAllegato(fileScreenRecap, "recap"),
+        fileIscrizione ? caricaAllegato(fileIscrizione, "modulo") : Promise.resolve(originale?.file_iscrizione ?? null),
+        fileScreenAcconto ? caricaAllegato(fileScreenAcconto, "acconto") : Promise.resolve(originale?.file_screen_acconto ?? null),
+        fileScreenRecap ? caricaAllegato(fileScreenRecap, "recap") : Promise.resolve(originale?.file_screen_recap ?? null),
       ]);
-      const { error } = await supabase.from("iscritti").insert({
-        corso_data_id: corsoData.id,
+      const payload = {
         nome: nome.trim(),
         cognome: cognome.trim(),
         note: note.trim() || null,
         tutor: tutor.trim() || null,
         telefono: telefono.trim() || null,
-        tipo_corso: tipoCorso.trim() || null,
         acconto: acconto.trim() || null,
         pagato_come: pagatoCome || null,
         accordi_commerciali: accordiCommerciali.trim() || null,
@@ -1023,12 +1054,19 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         file_iscrizione: pathIscrizione,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
-      });
+      };
+      let error;
+      if (modificandoId) {
+        ({ error } = await supabase.from("iscritti").update(payload).eq("id", modificandoId));
+      } else {
+        payload.corso_data_id = corsoData.id;
+        ({ error } = await supabase.from("iscritti").insert(payload));
+      }
       if (error) { setMsg("Errore: " + error.message); return; }
-      setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setTipoCorso("");
-      setAcconto(""); setPagatoCome(""); setAccordiCommerciali(""); setRichiedeModelle("");
-      setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
-      setMsg("Iscritto aggiunto.");
+      setMsg(modificandoId ? "Iscritto aggiornato." : "Iscritto aggiunto.");
+      resetCampi();
+      setModificandoId(null);
+      setVista("lista");
       ricarica();
     } catch (e) {
       setMsg("Errore nel caricamento allegati: " + e.message);
@@ -1053,21 +1091,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
-  function apriModifica(i) {
-    setInModifica(i.id);
-    setModNome(i.nome);
-    setModCognome(i.cognome);
-  }
-
-  async function salvaModifica(id) {
-    if (!modNome.trim() || !modCognome.trim()) { setMsg("Nome e cognome non possono essere vuoti."); return; }
-    const { error } = await supabase.from("iscritti").update({ nome: modNome.trim(), cognome: modCognome.trim() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setInModifica(null);
-    setMsg("Nome corretto.");
-    ricarica();
-  }
-
   const [postiLocali, setPostiLocali] = useState(max);
   useEffect(() => { setPostiLocali(max); }, [corsoData.id, max]);
 
@@ -1089,186 +1112,200 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
           {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
         </div>
-        <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
-          {mostraGestione ? "Nascondi gestione classe" : "Gestione classe"}
-        </Button>
+        {vista === "lista" ? (
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
+              {mostraGestione ? "Nascondi gestione classe" : "Gestione classe"}
+            </Button>
+            <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
+              {liberi <= 0 ? "Completo" : "Iscrivi"}
+            </Button>
+          </div>
+        ) : (
+          <Button variant="ghost" onClick={annullaForm}>&larr; Torna alla lista</Button>
+        )}
       </div>
 
-      <div style={cardStyle}>
-        <div style={hStyle}>Posti in classe</div>
-        <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => cambiaPostiLocali(-1)}
-            disabled={postiLocali <= listaIscritti.length}
-            style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: postiLocali <= listaIscritti.length ? "default" : "pointer", opacity: postiLocali <= listaIscritti.length ? 0.35 : 1 }}
-          >
-            −
-          </button>
-          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{postiLocali}</div>
-          <button
-            type="button"
-            onClick={() => cambiaPostiLocali(1)}
-            style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
-          >
-            +
-          </button>
-          <Button onClick={confermaPosti} disabled={postiLocali === max} style={{ marginLeft: 6 }}>
-            Conferma
-          </Button>
-        </div>
-      </div>
+      {vista === "form" && (
+        <div style={cardStyle}>
+          <div style={hStyle}>{modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Nome"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} /></Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Cognome"><input style={inputStyle} value={cognome} onChange={(e) => setCognome(e.target.value)} /></Field>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Tutor"><input style={inputStyle} value={tutor} onChange={(e) => setTutor(e.target.value)} /></Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Numero di telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
+            </div>
+          </div>
+          <Field label="Acconto pagato">
+            <input style={inputStyle} value={acconto} onChange={(e) => setAcconto(e.target.value)} />
+          </Field>
+          <Field label="Pagato come">
+            <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
+              {["Sito", "Pos", "Contanti"].map((opz) => (
+                <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                  <input type="radio" name="pagatoCome" checked={pagatoCome === opz} onChange={() => setPagatoCome(opz)} />
+                  {opz}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <Field label="Accordi commerciali">
+            <input style={inputStyle} value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value)} />
+          </Field>
+          <Field label="Richiede modelle a pagamento?">
+            <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
+              {[["si", "Sì"], ["no", "No"]].map(([val, lab]) => (
+                <label key={val} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                  <input type="radio" name="richiedeModelle" checked={richiedeModelle === val} onChange={() => setRichiedeModelle(val)} />
+                  {lab}
+                </label>
+              ))}
+            </div>
+          </Field>
 
-      <div style={cardStyle}>
-        <div style={hStyle}>Aggiungi iscritto</div>
-        <div style={{ display: "flex", gap: 14 }}>
-          <div style={{ flex: 1 }}>
-            <Field label="Nome"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} /></Field>
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field label="Cognome"><input style={inputStyle} value={cognome} onChange={(e) => setCognome(e.target.value)} /></Field>
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 14 }}>
-          <div style={{ flex: 1 }}>
-            <Field label="Tutor"><input style={inputStyle} value={tutor} onChange={(e) => setTutor(e.target.value)} /></Field>
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field label="Numero di telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
-          </div>
-        </div>
-        <Field label="Tipo di corso">
-          <input style={inputStyle} value={tipoCorso} onChange={(e) => setTipoCorso(e.target.value)} placeholder="es. Base, Advanced..." />
-        </Field>
-        <Field label="Acconto pagato">
-          <input style={inputStyle} value={acconto} onChange={(e) => setAcconto(e.target.value)} />
-        </Field>
-        <Field label="Pagato come">
-          <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
-            {["Sito", "Pos", "Contanti"].map((opz) => (
-              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                <input type="radio" name="pagatoCome" checked={pagatoCome === opz} onChange={() => setPagatoCome(opz)} />
-                {opz}
-              </label>
-            ))}
-          </div>
-        </Field>
-        <Field label="Accordi commerciali">
-          <input style={inputStyle} value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value)} />
-        </Field>
-        <Field label="Richiede modelle a pagamento?">
-          <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
-            {[["si", "Sì"], ["no", "No"]].map(([val, lab]) => (
-              <label key={val} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-                <input type="radio" name="richiedeModelle" checked={richiedeModelle === val} onChange={() => setRichiedeModelle(val)} />
-                {lab}
-              </label>
-            ))}
-          </div>
-        </Field>
-        <Field label="Modulo iscrizione (PDF)">
-          <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFileIscrizione(e.target.files?.[0] || null)} />
-        </Field>
-        <Field label="Screen acconto (opzionale)">
-          <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
-        </Field>
-        <Field label="Screen di recap (opzionale)">
-          <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
-        </Field>
-        <Field label="Note (opzionale)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-        <Button onClick={aggiungiIscritto} disabled={liberi <= 0 || caricando}>
-          {caricando ? "Caricamento…" : liberi <= 0 ? "Nessun posto disponibile" : "Aggiungi iscritto"}
-        </Button>
-      </div>
+          <Field label="Modulo iscrizione (PDF)">
+            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
+              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+            )}
+            <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFileIscrizione(e.target.files?.[0] || null)} />
+          </Field>
+          <Field label="Screen acconto (opzionale)">
+            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
+              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+            )}
+            <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
+          </Field>
+          <Field label="Screen di recap (opzionale)">
+            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
+              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+            )}
+            <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
+          </Field>
+          <Field label="Note (opzionale)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
 
-      <div style={cardStyle}>
-        <div style={hStyle}>Iscritti ({listaIscritti.length})</div>
-        {listaIscritti.length === 0 && <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora.</div>}
-        {listaIscritti.map((i, idx) => (
-          <div key={i.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
-            {inModifica === i.id ? (
-              <div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input style={{ ...inputStyle, fontSize: 14 }} value={modNome} onChange={(e) => setModNome(e.target.value)} placeholder="Nome" />
-                  <input style={{ ...inputStyle, fontSize: 14 }} value={modCognome} onChange={(e) => setModCognome(e.target.value)} placeholder="Cognome" />
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <Button onClick={() => salvaModifica(i.id)}>Salva</Button>
-                  <Button variant="ghost" onClick={() => setInModifica(null)}>Annulla</Button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                <div
-                  onClick={() => apriModifica(i)}
-                  title="Clicca per correggere il nome"
-                  style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                >
-                  <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
-                  <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
-                  {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                  <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "6px 12px", fontSize: 13 }}>
-                    Sposta
-                  </Button>
-                  <button
-                    onClick={() => elimina(i.id)}
-                    title="Elimina"
-                    style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
+          <div style={{ display: "flex", gap: 10 }}>
+            <Button onClick={salvaIscritto} disabled={caricando}>
+              {caricando ? "Caricamento…" : modificandoId ? "Salva modifiche" : "Aggiungi iscritto"}
+            </Button>
+            <Button variant="ghost" onClick={annullaForm}>Annulla</Button>
+          </div>
+          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+        </div>
+      )}
+
+      {vista === "lista" && (
+        <>
+          <div style={cardStyle}>
+            <div style={hStyle}>Iscritti ({listaIscritti.length})</div>
+            {listaIscritti.length === 0 && <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>}
+            {listaIscritti.map((i, idx) => (
+              <div key={i.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <div
+                    onClick={() => apriModificaCompleta(i)}
+                    title="Clicca per modificare i dati dell'iscritto"
+                    style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      <path d="M10 11v6" /><path d="M14 11v6" />
-                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                    </svg>
-                  </button>
+                    <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
+                    {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                    {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "6px 12px", fontSize: 13 }}>
+                      Sposta
+                    </Button>
+                    <button
+                      onClick={() => elimina(i.id)}
+                      title="Elimina"
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" /><path d="M14 11v6" />
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
-            {spostaIscrittoId === i.id && (
-              <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
-                <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome} {i.cognome}:</div>
-                <SelettoreSpostamento
-                  corsi={corsi}
-                  location={location}
-                  corsiDate={corsiDate}
-                  iscritti={iscritti}
-                  corsoDataEscluso={corsoData.id}
-                  onScegli={(cd, corsoTarget, locTarget) => eseguiSpostamento(i, cd, corsoTarget, locTarget)}
-                />
-                <Button variant="ghost" onClick={() => setSpostaIscrittoId(null)} style={{ marginTop: 8 }}>Annulla</Button>
-              </div>
-            )}
-            {mostraGestione && (
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
-                {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
-                {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
-                {i.tipo_corso && <div><b style={{ color: NAVY }}>Tipo di corso:</b> {i.tipo_corso}</div>}
-                {i.acconto && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto}</div>}
-                {i.pagato_come && <div><b style={{ color: NAVY }}>Pagato come:</b> {i.pagato_come}</div>}
-                {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
-                  <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
-                )}
-                {i.accordi_commerciali && <div style={{ gridColumn: "1 / -1" }}><b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}</div>}
-                {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
-                  <div style={{ gridColumn: "1 / -1", display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" }}>
-                    {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
-                    {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
-                    {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
+                {spostaIscrittoId === i.id && (
+                  <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
+                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome} {i.cognome}:</div>
+                    <SelettoreSpostamento
+                      corsi={corsi}
+                      location={location}
+                      corsiDate={corsiDate}
+                      iscritti={iscritti}
+                      corsoDataEscluso={corsoData.id}
+                      onScegli={(cd, corsoTarget, locTarget) => eseguiSpostamento(i, cd, corsoTarget, locTarget)}
+                    />
+                    <Button variant="ghost" onClick={() => setSpostaIscrittoId(null)} style={{ marginTop: 8 }}>Annulla</Button>
                   </div>
                 )}
-                {!i.tutor && !i.telefono && !i.tipo_corso && !i.acconto && !i.pagato_come && !i.accordi_commerciali && !i.file_iscrizione && (
-                  <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
+                {mostraGestione && (
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
+                    {i.tutor && <div><b style={{ color: NAVY }}>Tutor:</b> {i.tutor}</div>}
+                    {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
+                    {i.acconto && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto}</div>}
+                    {i.pagato_come && <div><b style={{ color: NAVY }}>Pagato come:</b> {i.pagato_come}</div>}
+                    {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
+                      <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
+                    )}
+                    {i.accordi_commerciali && <div style={{ gridColumn: "1 / -1" }}><b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}</div>}
+                    {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
+                      <div style={{ gridColumn: "1 / -1", display: "flex", gap: 14, marginTop: 4, flexWrap: "wrap" }}>
+                        {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
+                        {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
+                        {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
+                      </div>
+                    )}
+                    {!i.tutor && !i.telefono && !i.acconto && !i.pagato_come && !i.accordi_commerciali && !i.file_iscrizione && (
+                      <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
-      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+
+          <div style={cardStyle}>
+            <div style={hStyle}>Posti in classe</div>
+            <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={() => cambiaPostiLocali(-1)}
+                disabled={postiLocali <= listaIscritti.length}
+                style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: postiLocali <= listaIscritti.length ? "default" : "pointer", opacity: postiLocali <= listaIscritti.length ? 0.35 : 1 }}
+              >
+                −
+              </button>
+              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{postiLocali}</div>
+              <button
+                type="button"
+                onClick={() => cambiaPostiLocali(1)}
+                style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+              >
+                +
+              </button>
+              <Button onClick={confermaPosti} disabled={postiLocali === max} style={{ marginLeft: 6 }}>
+                Conferma
+              </Button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
