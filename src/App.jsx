@@ -24,6 +24,36 @@ function fmtData(d) {
   return `${day}/${m}/${y}`;
 }
 
+// genera la griglia di un mese come array di settimane (7 celle, null=padding)
+function generaSettimane(anno, mese) {
+  const primoGiorno = new Date(anno, mese, 1);
+  const offset = (primoGiorno.getDay() + 6) % 7; // lunedì=0
+  const giorniMese = new Date(anno, mese + 1, 0).getDate();
+  const celle = [];
+  for (let i = 0; i < offset; i++) celle.push(null);
+  for (let d = 1; d <= giorniMese; d++) celle.push(d);
+  while (celle.length % 7 !== 0) celle.push(null);
+  const settimane = [];
+  for (let i = 0; i < celle.length; i += 7) settimane.push(celle.slice(i, i + 7));
+  return settimane;
+}
+function dateStrFor(anno, mese, d) {
+  return `${anno}-${String(mese + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+// assegna una "corsia" (lane) a ciascun evento di una riga evitando sovrapposizioni
+function assegnaLane(eventiRiga) {
+  const lanes = [];
+  return eventiRiga
+    .slice()
+    .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+    .map((ev) => {
+      let lane = 0;
+      while (lanes[lane] && lanes[lane] >= ev.data_inizio) lane++;
+      lanes[lane] = ev.data_fine;
+      return { ...ev, lane };
+    });
+}
+
 // ---------- Card / pulsanti base ----------
 function CardHome({ title, sub, onClick }) {
   return (
@@ -137,15 +167,14 @@ function Gate({ onOk }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, ricarica, onBack }) {
+function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
   const [nomeLoc, setNomeLoc] = useState("");
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState("");
-  const [dataInizio, setDataInizio] = useState("");
-  const [dataFine, setDataFine] = useState("");
+  const [valoreDate, setValoreDate] = useState({ inizio: null, fine: null });
   const [postiData, setPostiData] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -172,18 +201,17 @@ function Impostazioni({ corsi, location, ricarica, onBack }) {
   }
 
   async function aggiungiData() {
-    if (!corsoSel || !locSel || !dataInizio) { setMsg("Seleziona corso, location e data d'inizio."); return; }
-    const fine = dataFine || dataInizio;
-    if (fine < dataInizio) { setMsg("La data di fine non può essere prima della data di inizio."); return; }
+    if (!corsoSel || !locSel || !valoreDate.inizio) { setMsg("Seleziona corso, città e almeno un giorno sul calendario."); return; }
+    const fine = valoreDate.fine || valoreDate.inizio;
     const { error } = await supabase.from("corsi_date").insert({
       corso_id: corsoSel,
       location_id: locSel,
-      data_inizio: dataInizio,
+      data_inizio: valoreDate.inizio,
       data_fine: fine,
       posti_max: postiData ? Number(postiData) : null,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setDataInizio(""); setDataFine(""); setPostiData(""); setMsg("Data aggiunta al calendario.");
+    setValoreDate({ inizio: null, fine: null }); setPostiData(""); setMsg("Data aggiunta al calendario.");
     ricarica();
   }
 
@@ -236,18 +264,9 @@ function Impostazioni({ corsi, location, ricarica, onBack }) {
             {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
           </select>
         </Field>
-        <div style={{ display: "flex", gap: 14 }}>
-          <div style={{ flex: 1 }}>
-            <Field label="Data inizio">
-              <input type="date" style={inputStyle} value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
-            </Field>
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field label="Data fine (opzionale, se il corso dura più giorni)">
-              <input type="date" style={inputStyle} value={dataFine} min={dataInizio || undefined} onChange={(e) => setDataFine(e.target.value)} />
-            </Field>
-          </div>
-        </div>
+        <Field label="Date">
+          <SelettoreCalendario corsi={corsi} location={location} corsiDate={corsiDate} valore={valoreDate} onCambia={setValoreDate} />
+        </Field>
         <Field label="Posti (opzionale)">
           <input type="number" min="1" style={inputStyle} value={postiData} onChange={(e) => setPostiData(e.target.value)} placeholder="usa il default del corso" />
         </Field>
@@ -274,21 +293,9 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
-  const primoGiorno = new Date(anno, mese, 1);
-  const offset = (primoGiorno.getDay() + 6) % 7; // lunedì=0
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
-
-  // costruisco le celle (con padding a inizio/fine) e le divido in settimane
-  const celle = [];
-  for (let i = 0; i < offset; i++) celle.push(null);
-  for (let d = 1; d <= giorniMese; d++) celle.push(d);
-  while (celle.length % 7 !== 0) celle.push(null);
-  const settimane = [];
-  for (let i = 0; i < celle.length; i += 7) settimane.push(celle.slice(i, i + 7));
-
-  function dateStr(d) {
-    return `${anno}-${String(mese + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  }
+  const settimane = generaSettimane(anno, mese);
+  function dateStr(d) { return dateStrFor(anno, mese, d); }
 
   // eventi come stringhe "YYYY-MM-DD" per confronto testuale (funziona perché ISO ordina bene)
   const eventiMese = corsiDate.filter(
@@ -319,16 +326,7 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
         const eventiRiga = eventiMese.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
 
         // assegno una "corsia" (lane) a ciascun evento evitando sovrapposizioni
-        const lanes = [];
-        const eventiConLane = eventiRiga
-          .slice()
-          .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-          .map((ev) => {
-            let lane = 0;
-            while (lanes[lane] && lanes[lane] >= ev.data_inizio) lane++;
-            lanes[lane] = ev.data_fine;
-            return { ...ev, lane };
-          });
+        const eventiConLane = assegnaLane(eventiRiga);
         const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
         const rowHeight = HEADER_H + (maxLane + 1) * LANE_H + 6;
 
@@ -382,6 +380,113 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
 
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 16 }}>
         Ogni barra colorata è un corso, continua sui giorni in cui si svolge — clicca per aprire iscritti e posti disponibili.
+      </div>
+    </div>
+  );
+}
+
+// ---------- Selettore date dal calendario (per Aggiungi data) ----------
+function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
+  const [mese, setMese] = useState(new Date().getMonth());
+  const [anno, setAnno] = useState(new Date().getFullYear());
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const settimane = generaSettimane(anno, mese);
+  function dateStr(d) { return dateStrFor(anno, mese, d); }
+
+  function clicGiorno(d) {
+    const ds = dateStr(d);
+    if (!valore.inizio || valore.fine) {
+      onCambia({ inizio: ds, fine: null });
+    } else if (ds < valore.inizio) {
+      onCambia({ inizio: ds, fine: valore.inizio });
+    } else {
+      onCambia({ inizio: valore.inizio, fine: ds });
+    }
+  }
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <button type="button" onClick={() => { const m = mese - 1; if (m < 0) { setMese(11); setAnno(anno - 1); } else setMese(m); }} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY }}>&larr;</button>
+        <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500 }}>{MESI[mese]} {anno}</div>
+        <button type="button" onClick={() => { const m = mese + 1; if (m > 11) { setMese(0); setAnno(anno + 1); } else setMese(m); }} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY }}>&rarr;</button>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 3 }}>
+        {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 10, color: MUTED, textAlign: "center" }}>{g}</div>)}
+      </div>
+
+      {settimane.map((settimana, wi) => {
+        const giorniValidi = settimana.filter((d) => d !== null);
+        if (giorniValidi.length === 0) return null;
+        const inizioRiga = dateStr(giorniValidi[0]);
+        const fineRiga = dateStr(giorniValidi[giorniValidi.length - 1]);
+        const eventiRiga = corsiDate.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
+        const eventiConLane = assegnaLane(eventiRiga);
+        const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
+        const barH = 10;
+        const rowHeight = 20 + Math.max(0, maxLane + 1) * barH + 4;
+
+        return (
+          <div key={wi} style={{ position: "relative", marginBottom: 3 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3 }}>
+              {settimana.map((d, i) => {
+                if (!d) return <div key={i} style={{ height: rowHeight }} />;
+                const ds = dateStr(d);
+                const selezionato = valore.inizio && (
+                  (valore.fine && ds >= valore.inizio && ds <= valore.fine) ||
+                  (!valore.fine && ds === valore.inizio)
+                );
+                return (
+                  <div
+                    key={i}
+                    onClick={() => clicGiorno(d)}
+                    style={{
+                      height: rowHeight,
+                      borderRadius: 6,
+                      background: selezionato ? "#D9E6F5" : "#fff",
+                      border: `1px solid ${selezionato ? "#7FA8D9" : CREAM_BORDER}`,
+                      cursor: "pointer",
+                      boxSizing: "border-box",
+                    }}
+                  >
+                    <div style={{ ...fontBody, fontSize: 11, color: NAVY, padding: "2px 5px" }}>{d}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, pointerEvents: "none" }}>
+              {eventiConLane.map((ev) => {
+                const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
+                const colStart = startIdx >= 0 ? startIdx : 0;
+                const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
+                const colSpan = endIdx - colStart + 1;
+                return (
+                  <div
+                    key={ev.id}
+                    title={`${corsoById[ev.corso_id]?.nome} · ${locById[ev.location_id]?.nome}`}
+                    style={{
+                      position: "absolute",
+                      top: ev.lane * barH,
+                      left: `calc(${(colStart / 7) * 100}% + 2px)`,
+                      width: `calc(${(colSpan / 7) * 100}% - 4px)`,
+                      height: barH - 3,
+                      background: corsoById[ev.corso_id]?.colore || NAVY,
+                      borderRadius: 3,
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 8 }}>
+        {!valore.inizio && "Clicca il primo giorno del corso."}
+        {valore.inizio && !valore.fine && `Inizio: ${fmtData(valore.inizio)} — clicca l'ultimo giorno (o lo stesso giorno se dura un giorno solo).`}
+        {valore.inizio && valore.fine && `Selezionato: ${fmtData(valore.inizio)}${valore.fine !== valore.inizio ? ` → ${fmtData(valore.fine)}` : ""}. Clicca un altro giorno per ricominciare.`}
       </div>
     </div>
   );
@@ -630,7 +735,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} ricarica={carica} onBack={() => setView("home")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} ricarica={carica} onBack={() => setView("home")} />
       )}
 
       {view === "calendario" && (
