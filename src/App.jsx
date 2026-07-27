@@ -98,9 +98,9 @@ function CardHome({ title, sub, onClick }) {
         width: "100%",
         background: "#FFFFFF",
         border: `1px solid ${CREAM_BORDER}`,
-        borderRadius: 14,
-        padding: "20px 22px",
-        marginBottom: 14,
+        borderRadius: 12,
+        padding: "12px 16px",
+        marginBottom: 8,
         cursor: "pointer",
         display: "flex",
         justifyContent: "space-between",
@@ -108,10 +108,10 @@ function CardHome({ title, sub, onClick }) {
       }}
     >
       <div>
-        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{title}</div>
-        <div style={{ fontSize: 13, color: MUTED }}>{sub}</div>
+        <div style={{ ...fontDisplay, fontSize: 16, color: NAVY }}>{title}</div>
+        {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{sub}</div>}
       </div>
-      <div style={{ fontSize: 22, color: NAVY }}>&rsaquo;</div>
+      <div style={{ fontSize: 18, color: NAVY }}>&rsaquo;</div>
     </button>
   );
 }
@@ -182,6 +182,17 @@ function conTotaleAggiornato(prev, valore, applicaIva) {
 function ivaDiQuota(q) {
   if (q.imponibile === "" && q.totale === "") return "";
   return round2(parseNum(q.totale) - parseNum(q.imponibile)).toFixed(2);
+}
+// quota venditore: 7% del totale pattuito, min 50€, altrimenti arrotondata ai 5€ superiori
+function quotaVenditoreDi(totalePattuito) {
+  const base = parseNum(totalePattuito) * 0.07;
+  if (base <= 50) return 50;
+  return Math.ceil(base / 5) * 5;
+}
+// data odierna in formato "YYYY-MM-DD", per confrontare con data_inizio/data_fine
+function dataOggiStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
@@ -1054,6 +1065,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [accordiCommerciali, setAccordiCommerciali] = useState("");
   const [richiedeModelle, setRichiedeModelle] = useState("");
   const [numeroModelle, setNumeroModelle] = useState("");
+  const [totalePattuito, setTotalePattuito] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
@@ -1096,7 +1108,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
-    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle("");
+    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setTotalePattuito("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
 
@@ -1128,6 +1140,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     setAccordiCommerciali(i.accordi_commerciali || "");
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
+    setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
     setModificandoId(i.id);
     setMsg("");
@@ -1170,6 +1183,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         accordi_commerciali: accordiCommerciali.trim() || null,
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
+        totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
+        quota_venditore: totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito),
         file_iscrizione: pathIscrizione,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
@@ -1203,6 +1218,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
   async function toggleIncassato(i) {
     const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  async function toggleRicontattato(i) {
+    const { error } = await supabase.from("iscritti").update({ ricontattato: !i.ricontattato }).eq("id", i.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
@@ -1277,6 +1298,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             </div>
             <div style={{ flex: 1 }}>
               <Field label="Numero di telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
+            </div>
+          </div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Totale pattuito per la vendita (senza IVA)">
+                  <input style={inputStyle} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Quota venditore (7%)">
+                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                </Field>
+              </div>
             </div>
           </div>
           <BloccoQuota
@@ -1390,27 +1425,39 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                    {mostraGestione && (
+                      <span
+                        onClick={(e) => { e.stopPropagation(); toggleRicontattato(i); }}
+                        title={i.ricontattato ? "Ricontattato" : "Non ancora ricontattato — clicca per segnare"}
+                        style={{ display: "inline-flex", flexDirection: "column", gap: 2, cursor: "pointer", padding: "2px 4px" }}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B" }} />
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0" }} />
+                      </span>
+                    )}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                    <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "6px 12px", fontSize: 13 }}>
-                      Sposta
-                    </Button>
-                    <button
-                      onClick={() => elimina(i.id)}
-                      title="Elimina"
-                      style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6" /><path d="M14 11v6" />
-                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                      </svg>
-                    </button>
-                  </div>
+                  {mostraGestione && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                      <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "6px 12px", fontSize: 13 }}>
+                        Sposta
+                      </Button>
+                      <button
+                        onClick={() => elimina(i.id)}
+                        title="Elimina"
+                        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" /><path d="M14 11v6" />
+                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {spostaIscrittoId === i.id && (
+                {mostraGestione && spostaIscrittoId === i.id && (
                   <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
                     <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome} {i.cognome}:</div>
                     <SelettoreSpostamento
@@ -1649,11 +1696,34 @@ export default function App() {
           <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Crea data/location" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
+          <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
 
           <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
             DATE IN<br />PROGRAMMAZIONE
           </div>
-          <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} />
+          <DateRaggruppatePerCitta
+            corsi={corsi}
+            location={location}
+            corsiDate={corsiDate.filter((cd) => cd.data_fine >= dataOggiStr())}
+            iscritti={iscritti}
+            onApriData={apriData}
+          />
+        </div>
+      )}
+
+      {view === "archivio" && (
+        <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+          <TopBar title="Archivio corsi" onBack={() => setView("home")} />
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+            Corsi con data già conclusa, completi dei dati registrati.
+          </div>
+          <DateRaggruppatePerCitta
+            corsi={corsi}
+            location={location}
+            corsiDate={corsiDate.filter((cd) => cd.data_fine < dataOggiStr())}
+            iscritti={iscritti}
+            onApriData={apriData}
+          />
         </div>
       )}
 
