@@ -194,9 +194,13 @@ function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+// totale effettivo di una quota (acconto/precorso) salvata su un iscritto, interessi compresi
+function totQuota(i, prefisso) {
+  return round2((i[`${prefisso}_totale`] || 0) + (i[`${prefisso}_interessi`] || 0));
+}
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
-function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, soloLettura }) {
+function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, soloLettura, opzioniMetodo }) {
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
       <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
@@ -231,12 +235,29 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, soloLet
       </div>
       {onMetodo && (
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-          {["Sito", "Bonifico", "Pos", "Contanti"].map((opz) => (
+          {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
             <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
               <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
               {opz}
             </label>
           ))}
+        </div>
+      )}
+      {onMetodo && valori.metodo === "Rate" && (
+        <div style={{ marginTop: 10 }}>
+          <Field label="Interessi (si sommano al totale di questa quota)">
+            <input
+              style={inputStyle}
+              inputMode="decimal"
+              value={valori.interessi || ""}
+              onChange={(e) => onInteressi && onInteressi(e.target.value)}
+            />
+          </Field>
+          {valori.interessi !== "" && valori.interessi != null && (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+              Totale con interessi: {round2(parseNum(valori.totale) + parseNum(valori.interessi)).toFixed(2)} €
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1058,7 +1079,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [note, setNote] = useState("");
   const [tutor, setTutor] = useState("");
   const [telefono, setTelefono] = useState("");
-  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "" };
+  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "" };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagPrecorso, setPagPrecorso] = useState(QUOTA_VUOTA);
   const [pagSaldo, setPagSaldo] = useState(QUOTA_VUOTA);
@@ -1126,11 +1147,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
       totale: i.acconto_totale != null ? String(i.acconto_totale) : "",
       metodo: i.acconto_metodo || "",
+      interessi: i.acconto_interessi != null ? String(i.acconto_interessi) : "",
     });
     setPagPrecorso({
       imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
       totale: i.precorso_totale != null ? String(i.precorso_totale) : "",
       metodo: i.precorso_metodo || "",
+      interessi: i.precorso_interessi != null ? String(i.precorso_interessi) : "",
     });
     setPagSaldo({
       imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
@@ -1174,9 +1197,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         acconto_imponibile: pagAcconto.imponibile === "" ? null : parseNum(pagAcconto.imponibile),
         acconto_totale: pagAcconto.totale === "" ? null : parseNum(pagAcconto.totale),
         acconto_metodo: pagAcconto.metodo || null,
+        acconto_interessi: pagAcconto.metodo === "Rate" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
         precorso_metodo: pagPrecorso.metodo || null,
+        precorso_interessi: pagPrecorso.metodo === "Rate" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
         saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
         saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
         saldo_metodo: pagSaldo.metodo || null,
@@ -1323,16 +1348,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
             onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v }))}
+            onInteressi={(v) => setPagAcconto((prev) => ({ ...prev, interessi: v }))}
           />
           <BloccoQuota
             titolo="Quota pre corso"
             valori={pagPrecorso}
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
             onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, true))}
             onMetodo={(v) => setPagPrecorso((prev) => ({ ...prev, metodo: v }))}
+            onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
           />
           <BloccoQuota
             titolo="Da avere al corso"
@@ -1353,7 +1382,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             soloLettura
             valori={{
               imponibile: (parseNum(pagAcconto.imponibile) + parseNum(pagPrecorso.imponibile) + parseNum(pagSaldo.imponibile)).toFixed(2),
-              totale: (parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale)).toFixed(2),
+              totale: (parseNum(pagAcconto.totale) + parseNum(pagAcconto.interessi) + parseNum(pagPrecorso.totale) + parseNum(pagPrecorso.interessi) + parseNum(pagSaldo.totale)).toFixed(2),
             }}
           />
           <Field label="Accordi commerciali">
@@ -1496,11 +1525,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
                       {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
                       {i.totale_pattuito != null && <div><b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} € {i.quota_venditore != null && `(quota venditore: ${i.quota_venditore} €)`}</div>}
-                      {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
-                      {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
+                      {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {totQuota(i, "acconto")} € tot. ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
+                      {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {totQuota(i, "precorso")} € tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
                       {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                        <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
+                        <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} € tot.</div>
                       )}
                       {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
                         <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
@@ -1599,11 +1628,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome} {i.cognome}</div>
                   {i.tutor && <div>Tutor: {i.tutor}</div>}
                   {i.telefono && <div>Telefono: {i.telefono}</div>}
-                  {i.acconto_totale != null && <div>Acconto: {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
-                  {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
+                  {i.acconto_totale != null && <div>Acconto: {i.acconto_imponibile} € imp. → {totQuota(i, "acconto")} € tot. ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
+                  {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {totQuota(i, "precorso")} € tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
                   {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                   {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                    <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € tot.</div>
+                    <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} € tot.</div>
                   )}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
                   {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} × 60 € = {round2(i.numero_modelle * 60)} €</div>}
@@ -1618,7 +1647,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               ))}
               {listaIscritti.length > 0 && (
                 <div style={{ marginTop: 20, paddingTop: 12, borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
-                  <div>Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0), 0))} € imp. → {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} € tot.</div>
+                  <div>Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0), 0))} € imp. → {round2(listaIscritti.reduce((s, i) => s + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0), 0))} € tot.</div>
                   <div style={{ marginTop: 6 }}>Totale ancora da incassare: {round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + (i.numero_modelle || 0) * 60), 0))} €</div>
                 </div>
               )}
