@@ -1128,6 +1128,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [msg, setMsg] = useState("");
   const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
   const [mostraGestione, setMostraGestione] = useState(false);
+  const [linkMaster, setLinkMaster] = useState("");
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
@@ -1275,14 +1276,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
-  async function creaLinkMaster() {
-    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), corsoData.data_inizio].filter(Boolean).join("/");
-    const url = `${window.location.origin}${window.location.pathname}?master=${leggibile}__${corsoData.id}`;
+  function generaLinkMaster() {
+    const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
+    const dataLeggibile = `${gg}-${mm}-${aaaa}`;
+    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), dataLeggibile].filter(Boolean).join("/");
+    const url = `${window.location.origin}${window.location.pathname}?master=${leggibile}`;
+    setLinkMaster(url);
+  }
+
+  async function copiaLinkMaster() {
     try {
-      await navigator.clipboard.writeText(url);
-      setMsg("Link copiato: " + url);
+      await navigator.clipboard.writeText(linkMaster);
+      setMsg("Link copiato.");
     } catch (e) {
-      setMsg("Copia questo link: " + url);
+      setMsg("Seleziona e copia il link qui sopra.");
     }
   }
 
@@ -1693,9 +1700,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
           {mostraGestione ? (
             <div style={cardStyle}>
               <Button onClick={() => window.print()} style={{ width: "100%", marginBottom: 8 }}>Stampa elenco classe</Button>
-              <Button variant="ghost" onClick={creaLinkMaster} style={{ width: "100%" }}>Crea link per master</Button>
+              <Button variant="ghost" onClick={generaLinkMaster} style={{ width: "100%" }}>Crea link per master</Button>
+              {linkMaster && (
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                  <input
+                    readOnly
+                    value={linkMaster}
+                    onFocus={(e) => e.target.select()}
+                    style={{ ...inputStyle, flex: "1 1 200px", fontSize: 12, color: MUTED }}
+                  />
+                  <Button variant="ghost" onClick={copiaLinkMaster}>Copia link</Button>
+                </div>
+              )}
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
-                Genera un link di sola lettura da mandare al/alla master: potrà vedere nome, telefono e importo da incassare di ogni allievo, senza poter modificare nulla né accedere al resto dell'app.
+                Genera un link di sola lettura da mandare al/alla master: potrà vedere tutti i dati e gli allegati di ogni allievo, senza poter modificare nulla né accedere al resto dell'app.
               </div>
             </div>
           ) : (
@@ -1773,23 +1791,40 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
 // ---------- App principale ----------
 // ---------- Vista master: pagina pubblica di sola lettura per richiedere i pagamenti ----------
-function VistaMaster({ corsoDataId }) {
+function VistaMaster({ param }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
 
   useEffect(() => {
     async function carica() {
-      const { data: cd, error: e1 } = await supabase.from("corsi_date").select("*").eq("id", corsoDataId).single();
-      if (e1 || !cd) { setErrore(true); return; }
-      const [{ data: corso }, { data: loc }, { data: iscritti }] = await Promise.all([
-        supabase.from("corsi").select("*").eq("id", cd.corso_id).single(),
-        supabase.from("location").select("*").eq("id", cd.location_id).single(),
-        supabase.from("iscritti").select("*").eq("corso_data_id", corsoDataId).order("ts"),
+      const parti = decodeURIComponent(param || "").split("/");
+      const [slugCorso, slugCitta, dataLeggibile] = parti;
+      const match = (dataLeggibile || "").match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (!slugCorso || !slugCitta || !match) { setErrore(true); return; }
+      const dataIso = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+
+      const [{ data: corsi }, { data: location }] = await Promise.all([
+        supabase.from("corsi").select("*"),
+        supabase.from("location").select("*"),
       ]);
+      const corso = (corsi || []).find((c) => slugify(c.nome) === slugCorso);
+      const loc = (location || []).find((l) => slugify(l.nome) === slugCitta);
+      if (!corso || !loc) { setErrore(true); return; }
+
+      const { data: cd } = await supabase
+        .from("corsi_date")
+        .select("*")
+        .eq("corso_id", corso.id)
+        .eq("location_id", loc.id)
+        .eq("data_inizio", dataIso)
+        .maybeSingle();
+      if (!cd) { setErrore(true); return; }
+
+      const { data: iscritti } = await supabase.from("iscritti").select("*").eq("corso_data_id", cd.id).order("ts");
       setDati({ cd, corso, loc, iscritti: iscritti || [] });
     }
     carica();
-  }, [corsoDataId]);
+  }, [param]);
 
   if (errore) {
     return (
@@ -1895,15 +1930,21 @@ function VistaMaster({ corsoDataId }) {
                 style={{
                   marginTop: 10,
                   padding: "10px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   background: aPosto ? "#E8F5E9" : "#FDECEC",
                   border: `1px solid ${colore}`,
                   borderRadius: 8,
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: colore,
                 }}
               >
-                {aPosto ? "SALDATO" : `DA INCASSARE ${daIncassare} €`}
+                <div style={{ fontSize: 15, fontWeight: 700, color: colore }}>
+                  DA INCASSARE {daIncassare} €
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
+                  <input type="checkbox" checked={!!i.incassato} disabled style={{ width: 20, height: 20 }} />
+                  incassato
+                </label>
               </div>
             </div>
           );
@@ -1921,9 +1962,8 @@ export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
   const paramMaster = new URLSearchParams(window.location.search).get("master");
-  const idMaster = paramMaster && paramMaster.includes("__") ? paramMaster.split("__").pop() : paramMaster;
-  if (idMaster) {
-    return <VistaMaster corsoDataId={idMaster} />;
+  if (paramMaster) {
+    return <VistaMaster param={paramMaster} />;
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
