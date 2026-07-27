@@ -190,6 +190,16 @@ function quotaVenditoreDi(totalePattuito) {
   return Math.ceil(base / 5) * 5;
 }
 // data odierna in formato "YYYY-MM-DD", per confrontare con data_inizio/data_fine
+// trasforma un testo in una forma leggibile per l'URL: "Microblading Base" → "microblading-base"
+function slugify(testo) {
+  return (testo || "")
+    .toString()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -1266,7 +1276,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   }
 
   async function creaLinkMaster() {
-    const url = `${window.location.origin}${window.location.pathname}?master=${corsoData.id}`;
+    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), corsoData.data_inizio].filter(Boolean).join("/");
+    const url = `${window.location.origin}${window.location.pathname}?master=${leggibile}__${corsoData.id}`;
     try {
       await navigator.clipboard.writeText(url);
       setMsg("Link copiato: " + url);
@@ -1909,7 +1920,8 @@ function VistaMaster({ corsoDataId }) {
 export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
-  const idMaster = new URLSearchParams(window.location.search).get("master");
+  const paramMaster = new URLSearchParams(window.location.search).get("master");
+  const idMaster = paramMaster && paramMaster.includes("__") ? paramMaster.split("__").pop() : paramMaster;
   if (idMaster) {
     return <VistaMaster corsoDataId={idMaster} />;
   }
