@@ -10,8 +10,8 @@ const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 
 const NAVY = "#0E1B33";
 const CREAM_BORDER = "#E8E3D6";
-const BG = "#EFE9DC";
-const BG_CHIARO = "#FAF8F3"; // per i riquadri interni alle schede, più chiaro dello sfondo pagina
+const BG = "#FAF8F3";
+const BG_CHIARO = "#FAF8F3"; // per i riquadri interni alle schede
 const MUTED = "#8B8FA3";
 
 const fontDisplay = { fontFamily: "'Quicksand',sans-serif", fontWeight: 500 };
@@ -1859,6 +1859,15 @@ function VistaMaster({ param }) {
     carica();
   }, [param]);
 
+  async function toggleIncassato(i) {
+    const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
+    if (error) return;
+    setDati((prev) => ({
+      ...prev,
+      iscritti: prev.iscritti.map((x) => (x.id === i.id ? { ...x, incassato: !x.incassato } : x)),
+    }));
+  }
+
   if (errore) {
     return (
       <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, padding: 20, textAlign: "center" }}>
@@ -1966,24 +1975,26 @@ function VistaMaster({ param }) {
               </div>
 
               <div
+                onClick={() => toggleIncassato(i)}
                 style={{
                   marginTop: 10,
-                  padding: "10px 14px",
+                  padding: "12px 14px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                   background: aPosto ? "#E8F5E9" : "#FDECEC",
                   border: `1px solid ${colore}`,
                   borderRadius: 8,
+                  cursor: "pointer",
                 }}
               >
                 <div style={{ fontSize: 15, fontWeight: 700, color: colore }}>
                   DA INCASSARE {daIncassare} €
                 </div>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
-                  <input type="checkbox" checked={!!i.incassato} disabled style={{ width: 20, height: 20 }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
+                  <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
                   incassato
-                </label>
+                </div>
               </div>
             </div>
           );
