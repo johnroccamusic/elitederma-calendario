@@ -1228,6 +1228,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
+  async function salvaNotaRicontatto(id, valore) {
+    const { error } = await supabase.from("iscritti").update({ note_ricontatto: valore.trim() || null }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
   async function eseguiSpostamento(iscritto, cdTarget, corsoTarget, locTarget) {
     const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
     if (!window.confirm(`Spostare ${iscritto.nome} ${iscritto.cognome} su ${corsoTarget?.nome || "?"} · ${locTarget?.nome || "?"} · ${etichetta}?`)) return;
@@ -1457,6 +1463,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                       <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
                       <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
                     </div>
+                  </div>
+                )}
+                {mostraGestione && (
+                  <div style={{ marginTop: 6 }}>
+                    <input
+                      type="text"
+                      defaultValue={i.note_ricontatto || ""}
+                      placeholder="Note dopo il ricontatto"
+                      onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value)}
+                      style={{ ...inputStyle, fontSize: 13 }}
+                    />
                   </div>
                 )}
                 {mostraGestione && spostaIscrittoId === i.id && (
