@@ -1118,6 +1118,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [richiedeModelle, setRichiedeModelle] = useState("");
   const [numeroModelle, setNumeroModelle] = useState("");
   const [prezzoSpecialeModelle, setPrezzoSpecialeModelle] = useState("");
+  const [pacchettoKit, setPacchettoKit] = useState("");
+  const [tagliaDivisa, setTagliaDivisa] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
@@ -1163,6 +1165,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTotalePattuito("");
+    setPacchettoKit(""); setTagliaDivisa("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
 
@@ -1197,6 +1200,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
     setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
+    setPacchettoKit(i.pacchetto_kit || "");
+    setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
     setModificandoId(i.id);
@@ -1243,6 +1248,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
+        pacchetto_kit: pacchettoKit.trim() || null,
+        taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
         quota_venditore: totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito),
         file_iscrizione: pathIscrizione,
@@ -1397,6 +1404,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               </div>
             </div>
           </div>
+          <Field label="Pacchetto/Kit">
+            <input style={inputStyle} value={pacchettoKit} onChange={(e) => setPacchettoKit(e.target.value)} />
+          </Field>
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
@@ -1500,6 +1510,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               </Field>
             </>
           )}
+
+          <Field label="Taglia divisa">
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", ...fontBody, fontSize: 14, color: NAVY }}>
+              {["XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((taglia) => (
+                <label key={taglia} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                  <input type="radio" name="tagliaDivisa" checked={tagliaDivisa === taglia} onChange={() => setTagliaDivisa(taglia)} />
+                  {taglia}
+                </label>
+              ))}
+            </div>
+          </Field>
 
           <Field label="Modulo iscrizione (PDF)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
@@ -1616,6 +1637,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                         <div style={{ marginBottom: 6 }}>
                           <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
                         </div>
+                      )}
+                      {i.pacchetto_kit && (
+                        <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
+                      )}
+                      {i.taglia_divisa && (
+                        <div style={{ marginBottom: 10 }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
                       )}
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                         <div style={{ marginBottom: 10 }}>
@@ -1880,6 +1907,12 @@ function VistaMaster({ param }) {
                   <div style={{ marginBottom: 6 }}>
                     <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
                   </div>
+                )}
+                {i.pacchetto_kit && (
+                  <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
+                )}
+                {i.taglia_divisa && (
+                  <div style={{ marginBottom: 10 }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
                 )}
                 {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                   <div style={{ marginBottom: 10 }}>
