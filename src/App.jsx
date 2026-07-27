@@ -1593,11 +1593,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   )}
                 </div>
                 {mostraGestione && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}>
-                      <input type="checkbox" checked={!!i.ricontattato} onChange={() => toggleRicontattato(i)} style={{ width: 20, height: 20, cursor: "pointer" }} />
+                  <div
+                    onClick={() => toggleRicontattato(i)}
+                    style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, cursor: "pointer" }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: NAVY }}>
+                      <input type="checkbox" checked={!!i.ricontattato} readOnly style={{ width: 20, height: 20, pointerEvents: "none" }} />
                       Ricontattato
-                    </label>
+                    </div>
                     <div style={{ display: "flex", gap: 6 }}>
                       <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
                       <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
@@ -1697,24 +1700,26 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                       const colore = aPosto ? "#2E7D32" : "#C0392B";
                       return (
                         <div
+                          onClick={() => toggleIncassato(i)}
                           style={{
                             marginTop: 8,
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "space-between",
-                            padding: "10px 14px",
+                            padding: "12px 14px",
                             background: aPosto ? "#E8F5E9" : "#FDECEC",
                             border: `1px solid ${colore}`,
                             borderRadius: 8,
+                            cursor: "pointer",
                           }}
                         >
                           <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: colore }}>
                             DA INCASSARE {daIncassare} €
                           </div>
-                          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12, color: colore }}>
-                            <input type="checkbox" checked={!!i.incassato} onChange={() => toggleIncassato(i)} style={{ width: 22, height: 22, cursor: "pointer" }} />
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
+                            <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
                             incassato
-                          </label>
+                          </div>
                         </div>
                       );
                     })()}
