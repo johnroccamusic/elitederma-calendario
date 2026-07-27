@@ -207,7 +207,8 @@ function dataOggiStr() {
 }
 // totale effettivo di una quota (acconto/precorso) salvata su un iscritto, interessi compresi
 function totQuota(i, prefisso) {
-  return round2((i[`${prefisso}_totale`] || 0) + (i[`${prefisso}_interessi`] || 0));
+  const interessi = i[`${prefisso}_metodo`] === "Rate" ? (i[`${prefisso}_interessi`] || 0) : 0;
+  return round2((i[`${prefisso}_totale`] || 0) + interessi);
 }
 // totale da pagare per le modelle: usa il prezzo speciale se impostato, altrimenti n. modelle × 60€
 function modelleTotaleDi(i) {
@@ -1416,7 +1417,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             totaleBloccato={false}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
-            onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v }))}
+            onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
             onInteressi={(v) => setPagAcconto((prev) => ({ ...prev, interessi: v }))}
             onTotaleConInteressi={(v) =>
               setPagAcconto((prev) => {
@@ -1431,7 +1432,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
             onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, true))}
-            onMetodo={(v) => setPagPrecorso((prev) => ({ ...prev, metodo: v }))}
+            onMetodo={(v) => setPagPrecorso((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
             onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
           />
           <BloccoQuota
@@ -1465,11 +1466,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 <Field label="Totale pagato con rate">
                   <input
                     style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
-                    value={
-                      parseNum(pagAcconto.interessi) > 0 || parseNum(pagPrecorso.interessi) > 0
-                        ? (parseNum(pagAcconto.totale) + parseNum(pagAcconto.interessi) + parseNum(pagPrecorso.totale) + parseNum(pagPrecorso.interessi) + parseNum(pagSaldo.totale)).toFixed(2)
-                        : ""
-                    }
+                    value={(() => {
+                      const intAcconto = pagAcconto.metodo === "Rate" ? parseNum(pagAcconto.interessi) : 0;
+                      const intPrecorso = pagPrecorso.metodo === "Rate" ? parseNum(pagPrecorso.interessi) : 0;
+                      if (intAcconto <= 0 && intPrecorso <= 0) return "";
+                      return (parseNum(pagAcconto.totale) + intAcconto + parseNum(pagPrecorso.totale) + intPrecorso + parseNum(pagSaldo.totale)).toFixed(2);
+                    })()}
                     disabled
                   />
                 </Field>
