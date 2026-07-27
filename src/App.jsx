@@ -1425,16 +1425,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                     <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                    {mostraGestione && (
-                      <span
-                        onClick={(e) => { e.stopPropagation(); toggleRicontattato(i); }}
-                        title={i.ricontattato ? "Ricontattato" : "Non ancora ricontattato — clicca per segnare"}
-                        style={{ display: "inline-flex", flexDirection: "column", gap: 2, cursor: "pointer", padding: "2px 4px" }}
-                      >
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B" }} />
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0" }} />
-                      </span>
-                    )}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
                   {mostraGestione && (
@@ -1457,6 +1447,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     </div>
                   )}
                 </div>
+                {mostraGestione && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}>
+                      <input type="checkbox" checked={!!i.ricontattato} onChange={() => toggleRicontattato(i)} style={{ width: 20, height: 20, cursor: "pointer" }} />
+                      Ricontattato
+                    </label>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
+                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
+                    </div>
+                  </div>
+                )}
                 {mostraGestione && spostaIscrittoId === i.id && (
                   <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
                     <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome} {i.cognome}:</div>
