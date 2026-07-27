@@ -198,11 +198,6 @@ function dataOggiStr() {
 function totQuota(i, prefisso) {
   return round2((i[`${prefisso}_totale`] || 0) + (i[`${prefisso}_interessi`] || 0));
 }
-// totale da pagare per le modelle: usa il prezzo speciale se impostato, altrimenti n. modelle × 60€
-function modelleTotaleDi(i) {
-  if (i.prezzo_speciale_modelle != null) return i.prezzo_speciale_modelle;
-  return round2((i.numero_modelle || 0) * 60);
-}
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
 function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo }) {
@@ -1107,7 +1102,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const [accordiCommerciali, setAccordiCommerciali] = useState("");
   const [richiedeModelle, setRichiedeModelle] = useState("");
   const [numeroModelle, setNumeroModelle] = useState("");
-  const [prezzoSpecialeModelle, setPrezzoSpecialeModelle] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
@@ -1151,7 +1145,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
-    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTotalePattuito("");
+    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setTotalePattuito("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
 
@@ -1185,7 +1179,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     setAccordiCommerciali(i.accordi_commerciali || "");
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
-    setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
     setModificandoId(i.id);
@@ -1231,7 +1224,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         accordi_commerciali: accordiCommerciali.trim() || null,
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
-        prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
         quota_venditore: totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito),
         file_iscrizione: pathIscrizione,
@@ -1409,26 +1401,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               })
             }
           />
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG }}>
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 100px" }}>
-                <Field label="Imponibile">
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.imponibile) + parseNum(pagPrecorso.imponibile) + parseNum(pagSaldo.imponibile)).toFixed(2)} disabled />
-                </Field>
-              </div>
-              <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale pagato netto">
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale)).toFixed(2)} disabled />
-                </Field>
-              </div>
-              <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale pagato con rate">
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.totale) + parseNum(pagAcconto.interessi) + parseNum(pagPrecorso.totale) + parseNum(pagPrecorso.interessi) + parseNum(pagSaldo.totale)).toFixed(2)} disabled />
-                </Field>
-              </div>
-            </div>
-          </div>
+          <BloccoQuota
+            titolo="Totale pagato"
+            soloLettura
+            valori={{
+              imponibile: (parseNum(pagAcconto.imponibile) + parseNum(pagPrecorso.imponibile) + parseNum(pagSaldo.imponibile)).toFixed(2),
+              totale: (parseNum(pagAcconto.totale) + parseNum(pagAcconto.interessi) + parseNum(pagPrecorso.totale) + parseNum(pagPrecorso.interessi) + parseNum(pagSaldo.totale)).toFixed(2),
+            }}
+          />
           <Field label="Accordi commerciali">
             <input style={inputStyle} value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value)} />
           </Field>
@@ -1444,33 +1424,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
           </Field>
 
           {richiedeModelle === "si" && (
-            <>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Quante modelle">
-                    <input type="number" min="0" style={inputStyle} value={numeroModelle} onChange={(e) => setNumeroModelle(e.target.value)} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Da pagare per modelle">
-                    <input
-                      style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
-                      value={
-                        prezzoSpecialeModelle !== ""
-                          ? parseNum(prezzoSpecialeModelle).toFixed(2)
-                          : numeroModelle === ""
-                          ? ""
-                          : (parseNum(numeroModelle) * 60).toFixed(2)
-                      }
-                      disabled
-                    />
-                  </Field>
-                </div>
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Quante modelle">
+                  <input type="number" min="0" style={inputStyle} value={numeroModelle} onChange={(e) => setNumeroModelle(e.target.value)} />
+                </Field>
               </div>
-              <Field label="Prezzo speciale modelle (opzionale — se compilato sostituisce il calcolo automatico)">
-                <input style={inputStyle} inputMode="decimal" value={prezzoSpecialeModelle} onChange={(e) => setPrezzoSpecialeModelle(e.target.value)} />
-              </Field>
-            </>
+              <div style={{ flex: 1 }}>
+                <Field label="Da pagare per modelle">
+                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={numeroModelle === "" ? "" : (parseNum(numeroModelle) * 60).toFixed(2)} disabled />
+                </Field>
+              </div>
+            </div>
           )}
 
           <Field label="Modulo iscrizione (PDF)">
@@ -1588,15 +1553,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                       {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {totQuota(i, "precorso")} € tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
                       {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                        <div style={{ gridColumn: "1 / -1" }}>
-                          <b style={{ color: NAVY }}>Totale pagato netto:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — <b style={{ color: NAVY }}>con rate:</b> {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €
-                        </div>
+                        <div><b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} € tot.</div>
                       )}
                       {i.richiede_modelle !== null && i.richiede_modelle !== undefined && (
                         <div><b style={{ color: NAVY }}>Richiede modelle:</b> {i.richiede_modelle ? "Sì" : "No"}</div>
                       )}
                       {i.richiede_modelle && i.numero_modelle != null && (
-                        <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+                        <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} × 60 € = {round2(i.numero_modelle * 60)} €</div>
                       )}
                       {i.accordi_commerciali && <div style={{ gridColumn: "1 / -1" }}><b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}</div>}
                       {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
@@ -1611,7 +1574,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                       )}
                     </div>
                     {(i.saldo_totale != null || i.numero_modelle != null) && (() => {
-                      const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+                      const daIncassare = round2((i.saldo_totale || 0) + (i.numero_modelle || 0) * 60);
                       const aPosto = i.incassato || daIncassare === 0;
                       const colore = aPosto ? "#2E7D32" : "#C0392B";
                       return (
@@ -1693,13 +1656,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {totQuota(i, "precorso")} € tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
                   {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                   {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                    <div style={{ fontWeight: 700 }}>Totale pagato netto: {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — con rate: {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €</div>
+                    <div style={{ fontWeight: 700 }}>Totale pagato: {round2((i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0))} € imp. → {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} € tot.</div>
                   )}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
-                  {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>}
+                  {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} × 60 € = {round2(i.numero_modelle * 60)} €</div>}
                   {(i.saldo_totale != null || i.numero_modelle != null) && (
                     <div style={{ fontWeight: 700 }}>
-                      Da incassare: {round2((i.saldo_totale || 0) + modelleTotaleDi(i))} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
+                      Da incassare: {round2((i.saldo_totale || 0) + (i.numero_modelle || 0) * 60)} € — {i.incassato ? "INCASSATO" : "NON INCASSATO"}
                     </div>
                   )}
                   {i.accordi_commerciali && <div>Accordi commerciali: {i.accordi_commerciali}</div>}
@@ -1708,8 +1671,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               ))}
               {listaIscritti.length > 0 && (
                 <div style={{ marginTop: 20, paddingTop: 12, borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
-                  <div>Totale generale classe netto: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0), 0))} € — con rate: {round2(listaIscritti.reduce((s, i) => s + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0), 0))} €</div>
-                  <div style={{ marginTop: 6 }}>Totale ancora da incassare: {round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + modelleTotaleDi(i)), 0))} €</div>
+                  <div>Totale generale classe: {round2(listaIscritti.reduce((s, i) => s + (i.acconto_imponibile || 0) + (i.precorso_imponibile || 0) + (i.saldo_imponibile || 0), 0))} € imp. → {round2(listaIscritti.reduce((s, i) => s + totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0), 0))} € tot.</div>
+                  <div style={{ marginTop: 6 }}>Totale ancora da incassare: {round2(listaIscritti.reduce((s, i) => s + (i.incassato ? 0 : (i.saldo_totale || 0) + (i.numero_modelle || 0) * 60), 0))} €</div>
                 </div>
               )}
             </div>
