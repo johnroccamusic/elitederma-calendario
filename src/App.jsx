@@ -10,8 +10,8 @@ const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 
 const NAVY = "#0E1B33";
 const CREAM_BORDER = "#E8E3D6";
-const BG = "#FAF8F3";
-const BG_CHIARO = "#FAF8F3"; // per i riquadri interni alle schede
+const BG = "#EFE9DC";
+const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
 const MUTED = "#8B8FA3";
 
 const fontDisplay = { fontFamily: "'Quicksand',sans-serif", fontWeight: 500 };
