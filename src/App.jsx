@@ -1141,7 +1141,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   function apriGestioneClasse() {
     if (mostraGestione) { setMostraGestione(false); return; }
     if (adminSbloccato) { setMostraGestione(true); return; }
-    const codice = window.prompt("Codice amministratore per aprire la gestione classe:");
+    const codice = window.prompt("Codice amministratore per aprire la contabilità classe:");
     if (codice === null) return;
     if (ADMIN_CODE && codice === ADMIN_CODE) {
       sessionStorage.setItem("edc_admin_ok", "1");
@@ -1352,7 +1352,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         {vista === "lista" ? (
           <div style={{ display: "flex", gap: 8 }}>
             <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
-              {mostraGestione ? "Esci da gestione classe" : "Gestione classe"}
+              {mostraGestione ? "Esci da contabilità classe" : "Contabilità classe"}
             </Button>
             {!mostraGestione && (
               <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
@@ -1367,7 +1367,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
       {vista === "lista" && mostraGestione && (
         <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "center", textTransform: "uppercase", letterSpacing: 1, marginBottom: 18 }}>
-          Gestione classe
+          Contabilità classe
         </div>
       )}
 
@@ -1376,18 +1376,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
           <div style={hStyle}>{modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
-              <Field label="Nome"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} /></Field>
+              <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
             <div style={{ flex: 1 }}>
-              <Field label="Cognome"><input style={inputStyle} value={cognome} onChange={(e) => setCognome(e.target.value)} /></Field>
+              <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
           </div>
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
-              <Field label="Tutor"><input style={inputStyle} value={tutor} onChange={(e) => setTutor(e.target.value)} /></Field>
+              <Field label="Tutor"><input value={tutor} onChange={(e) => setTutor(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
             <div style={{ flex: 1 }}>
-              <Field label="Numero di telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
+              <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
           </div>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
@@ -1405,7 +1405,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             </div>
           </div>
           <Field label="Pacchetto/Kit">
-            <input style={inputStyle} value={pacchettoKit} onChange={(e) => setPacchettoKit(e.target.value)} />
+            <input value={pacchettoKit} onChange={(e) => setPacchettoKit(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
           </Field>
           <BloccoQuota
             titolo="Quota acconto"
@@ -1468,7 +1468,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             </div>
           </div>
           <Field label="Accordi commerciali">
-            <input style={inputStyle} value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value)} />
+            <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
           </Field>
           <Field label="Richiede modelle a pagamento?">
             <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
@@ -1540,7 +1540,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             )}
             <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
           </Field>
-          <Field label="Note (opzionale)"><input style={inputStyle} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <Field label="Note (opzionale)"><input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
 
           <div style={{ display: "flex", gap: 10 }}>
             <Button onClick={salvaIscritto} disabled={caricando}>
@@ -1611,10 +1611,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div style={{ marginTop: 6 }}>
                     <input
                       type="text"
-                      defaultValue={i.note_ricontatto || ""}
+                      defaultValue={(i.note_ricontatto || "").toUpperCase()}
                       placeholder="Note dopo il ricontatto"
-                      onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value)}
-                      style={{ ...inputStyle, fontSize: 13 }}
+                      onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
+                      style={{ ...inputStyle, fontSize: 13, textTransform: "uppercase" }}
                     />
                   </div>
                 )}
