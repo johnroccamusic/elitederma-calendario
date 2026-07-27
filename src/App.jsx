@@ -1411,8 +1411,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             titolo="Quota acconto"
             valori={pagAcconto}
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
-            imponibileBloccato={pagAcconto.metodo === "Rate"}
-            totaleBloccato={pagAcconto.metodo === "Rate"}
+            imponibileBloccato
+            totaleBloccato={false}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
             onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v }))}
