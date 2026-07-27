@@ -1463,7 +1463,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               </div>
               <div style={{ flex: "1 1 100px" }}>
                 <Field label="Totale pagato con rate">
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.totale) + parseNum(pagAcconto.interessi) + parseNum(pagPrecorso.totale) + parseNum(pagPrecorso.interessi) + parseNum(pagSaldo.totale)).toFixed(2)} disabled />
+                  <input
+                    style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
+                    value={
+                      parseNum(pagAcconto.interessi) > 0 || parseNum(pagPrecorso.interessi) > 0
+                        ? (parseNum(pagAcconto.totale) + parseNum(pagAcconto.interessi) + parseNum(pagPrecorso.totale) + parseNum(pagPrecorso.interessi) + parseNum(pagSaldo.totale)).toFixed(2)
+                        : ""
+                    }
+                    disabled
+                  />
                 </Field>
               </div>
             </div>
@@ -1645,11 +1653,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                           <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
                         </div>
                       )}
-                      {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                        <div style={{ marginBottom: 10 }}>
-                          <b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — <b style={{ color: NAVY }}>totale con interessi:</b> {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €
-                        </div>
-                      )}
+                      {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (() => {
+                        const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
+                        const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
+                        return (
+                          <div style={{ marginBottom: 10 }}>
+                            <b style={{ color: NAVY }}>Totale pagato:</b> {netto} €{conRate !== netto && <> — <b style={{ color: NAVY }}>totale con interessi:</b> {conRate} €</>}
+                          </div>
+                        );
+                      })()}
 
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                         <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -1795,7 +1807,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   {i.precorso_totale != null && <div>Pre corso: {i.precorso_imponibile} € imp. → {totQuota(i, "precorso")} € tot. ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
                   {i.saldo_totale != null && <div>Da avere al corso: {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
                   {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                    <div style={{ fontWeight: 700 }}>Totale pagato netto: {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — con rate: {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €</div>
+                    {(() => {
+                      const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
+                      const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
+                      return <div style={{ fontWeight: 700 }}>Totale pagato: {netto} €{conRate !== netto && ` — con rate: ${conRate} €`}</div>;
+                    })()}
                   )}
                   {i.richiede_modelle !== null && i.richiede_modelle !== undefined && <div>Richiede modelle: {i.richiede_modelle ? "Sì" : "No"}</div>}
                   {i.richiede_modelle && i.numero_modelle != null && <div>Modelle da pagare: {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>}
@@ -1926,11 +1942,15 @@ function VistaMaster({ param }) {
                     <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
                   </div>
                 )}
-                {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                  <div style={{ marginBottom: 10 }}>
-                    <b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — <b style={{ color: NAVY }}>totale con interessi:</b> {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €
-                  </div>
-                )}
+                {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (() => {
+                  const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
+                  const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
+                  return (
+                    <div style={{ marginBottom: 10 }}>
+                      <b style={{ color: NAVY }}>Totale pagato:</b> {netto} €{conRate !== netto && <> — <b style={{ color: NAVY }}>totale con interessi:</b> {conRate} €</>}
+                    </div>
+                  );
+                })()}
                 {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                   <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
