@@ -10,7 +10,7 @@ const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 
 const NAVY = "#0E1B33";
 const CREAM_BORDER = "#E8E3D6";
-const BG = "#FAF8F3";
+const BG = "#EFE9DC";
 const MUTED = "#8B8FA3";
 
 const fontDisplay = { fontFamily: "'Quicksand',sans-serif", fontWeight: 500 };
@@ -1071,7 +1071,7 @@ function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBac
             onClick={() => onApriData(cd)}
             style={{ ...cardStyle, cursor: "pointer", padding: "16px 20px", marginBottom: 10 }}
           >
-            <div style={{ ...fontBody, fontSize: 15, color: NAVY, fontWeight: 500, marginBottom: 3 }}>{i.nome} {i.cognome}</div>
+            <div style={{ ...fontBody, fontSize: 15, color: NAVY, fontWeight: 500, marginBottom: 3 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, display: "flex", alignItems: "center", gap: 7 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
               {corso?.nome || "?"} · {loc?.nome || "?"} · {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
@@ -1320,7 +1320,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
   async function eseguiSpostamento(iscritto, cdTarget, corsoTarget, locTarget) {
     const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
-    if (!window.confirm(`Spostare ${iscritto.nome} ${iscritto.cognome} su ${corsoTarget?.nome || "?"} · ${locTarget?.nome || "?"} · ${etichetta}?`)) return;
+    if (!window.confirm(`Spostare ${iscritto.nome.toUpperCase()} ${iscritto.cognome.toUpperCase()} su ${corsoTarget?.nome || "?"} · ${locTarget?.nome || "?"} · ${etichetta}?`)) return;
     const { error } = await supabase.from("iscritti").update({ corso_data_id: cdTarget.id }).eq("id", iscritto.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setSpostaIscrittoId(null);
@@ -1567,7 +1567,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome} {i.cognome}</span>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                     {i.telefono && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· {i.telefono}</span>}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
@@ -1620,7 +1620,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 )}
                 {mostraGestione && spostaIscrittoId === i.id && (
                   <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
-                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome} {i.cognome}:</div>
+                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:</div>
                     <SelettoreSpostamento
                       corsi={corsi}
                       location={location}
@@ -1787,7 +1787,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               {listaIscritti.length === 0 && <div>Nessun iscritto.</div>}
               {listaIscritti.map((i, idx) => (
                 <div key={i.id} style={{ marginBottom: 14, paddingBottom: 10, borderBottom: "1px solid #ccc" }}>
-                  <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome} {i.cognome}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14 }}>{idx + 1}. {i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
                   {i.tutor && <div>Tutor: {i.tutor}</div>}
                   {i.telefono && <div>Telefono: {i.telefono}</div>}
                   {i.acconto_totale != null && <div>Acconto: {i.acconto_imponibile} € imp. → {totQuota(i, "acconto")} € tot. ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
@@ -1893,7 +1893,7 @@ function VistaMaster({ param }) {
             <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
               <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 2, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 6 }}>
                 <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
-                <span>{i.nome} {i.cognome}</span>
+                <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                 {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                 {i.telefono && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· {i.telefono}</span>}
               </div>
