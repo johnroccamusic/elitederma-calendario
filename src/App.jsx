@@ -1218,9 +1218,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     setVista("lista");
   }
 
-  async function salvaIscritto() {
-    if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return; }
-    if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return; }
+  // salva i dati correnti del form sul database. Restituisce true se riuscito.
+  // Non naviga da nessuna parte: la usano sia il pulsante "Salva"/"Aggiungi"
+  // sia il salvataggio automatico quando si esce da un campo.
+  async function persistiIscritto() {
+    if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
+    if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
     setCaricando(true);
     try {
       const originale = modificandoId ? iscritti.find((x) => x.id === modificandoId) : null;
@@ -1258,24 +1261,43 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
       };
-      let error;
+      let error, nuovoId;
       if (modificandoId) {
         ({ error } = await supabase.from("iscritti").update(payload).eq("id", modificandoId));
       } else {
         payload.corso_data_id = corsoData.id;
-        ({ error } = await supabase.from("iscritti").insert(payload));
+        const ins = await supabase.from("iscritti").insert(payload).select("id").single();
+        error = ins.error;
+        nuovoId = ins.data?.id;
       }
-      if (error) { setMsg("Errore: " + error.message); return; }
-      setMsg(modificandoId ? "Iscritto aggiornato." : "Iscritto aggiunto.");
-      resetCampi();
-      setModificandoId(null);
-      setVista("lista");
+      if (error) { setMsg("Errore: " + error.message); return false; }
+      if (nuovoId) setModificandoId(nuovoId); // da qui in poi i campi successivi si autosalvano sullo stesso iscritto
       ricarica();
+      return true;
     } catch (e) {
       setMsg("Errore nel caricamento allegati: " + e.message);
+      return false;
     } finally {
       setCaricando(false);
     }
+  }
+
+  // salvataggio automatico: usato quando si esce da un campo (onBlur) o si
+  // cambia un metodo/radio, solo se si sta già modificando un iscritto esistente
+  async function autosalva() {
+    if (!modificandoId) return; // un iscritto nuovo va prima creato col pulsante
+    if (!nome.trim() || !cognome.trim()) return; // non salvare stati incompleti
+    const ok = await persistiIscritto();
+    if (ok) setMsg("Salvato.");
+  }
+
+  async function salvaIscritto() {
+    const ok = await persistiIscritto();
+    if (!ok) return;
+    setMsg(modificandoId ? "Iscritto aggiornato." : "Iscritto aggiunto.");
+    resetCampi();
+    setModificandoId(null);
+    setVista("lista");
   }
 
   async function elimina(id) {
@@ -1374,8 +1396,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
       )}
 
       {vista === "form" && (
-        <div style={cardStyle}>
+        <div style={cardStyle} onBlur={() => { if (modificandoId) autosalva(); }}>
           <div style={hStyle}>{modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+          {modificandoId && (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
+              Le modifiche si salvano da sole appena esci da un campo — non serve premere alcun pulsante per ogni singola modifica.
+            </div>
+          )}
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
               <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
@@ -1555,7 +1582,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
           <div style={{ display: "flex", gap: 10 }}>
             <Button onClick={salvaIscritto} disabled={caricando}>
-              {caricando ? "Caricamento…" : modificandoId ? "Salva modifiche" : "Aggiungi iscritto"}
+              {caricando ? "Caricamento…" : modificandoId ? "Fatto, torna alla lista" : "Aggiungi iscritto"}
             </Button>
             <Button variant="ghost" onClick={annullaForm}>Annulla</Button>
           </div>
