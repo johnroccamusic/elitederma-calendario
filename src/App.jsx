@@ -1636,16 +1636,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <>
                     <div style={{ marginTop: 8, padding: "12px 14px", background: BG, borderRadius: 8, ...fontBody, fontSize: 13, color: MUTED }}>
 
+                      {i.pacchetto_kit && (
+                        <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
+                      )}
                       {i.totale_pattuito != null && (
                         <div style={{ marginBottom: 6 }}>
                           <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
                         </div>
-                      )}
-                      {i.pacchetto_kit && (
-                        <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
-                      )}
-                      {i.taglia_divisa && (
-                        <div style={{ marginBottom: 10 }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
                       )}
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                         <div style={{ marginBottom: 10 }}>
@@ -1671,6 +1668,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                             <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
                           )}
                         </div>
+                      )}
+                      {i.taglia_divisa && (
+                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
                       )}
 
                       {i.accordi_commerciali && (
@@ -1908,16 +1908,13 @@ function VistaMaster({ param }) {
               {i.note_ricontatto && <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontStyle: "italic" }}>"{i.note_ricontatto}"</div>}
 
               <div style={{ marginTop: 8, padding: "12px 14px", background: BG, borderRadius: 8, fontSize: 13, color: MUTED }}>
+                {i.pacchetto_kit && (
+                  <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
+                )}
                 {i.totale_pattuito != null && (
                   <div style={{ marginBottom: 6 }}>
                     <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
                   </div>
-                )}
-                {i.pacchetto_kit && (
-                  <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
-                )}
-                {i.taglia_divisa && (
-                  <div style={{ marginBottom: 10 }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
                 )}
                 {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                   <div style={{ marginBottom: 10 }}>
@@ -1941,6 +1938,9 @@ function VistaMaster({ param }) {
                       <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
                     )}
                   </div>
+                )}
+                {i.taglia_divisa && (
+                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
                 )}
                 {i.accordi_commerciali && (
                   <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
