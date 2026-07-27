@@ -1417,12 +1417,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
       {vista === "lista" && (
         <>
-          <div style={cardStyle}>
-            <div style={hStyle}>Iscritti ({listaIscritti.length})</div>
-            {listaIscritti.length === 0 && <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>}
-            {listaIscritti.map((i, idx) => (
-              <div key={i.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <div style={{ ...hStyle, marginBottom: 12 }}>Iscritti ({listaIscritti.length})</div>
+          {listaIscritti.length === 0 && (
+            <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>
+          )}
+          {listaIscritti.map((i, idx) => (
+            <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per modificare i dati dell'iscritto"
@@ -1494,6 +1495,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <>
                     <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 8, padding: "10px 12px", background: BG, borderRadius: 8, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
                       {i.telefono && <div><b style={{ color: NAVY }}>Telefono:</b> {i.telefono}</div>}
+                      {i.totale_pattuito != null && <div><b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} € {i.quota_venditore != null && `(quota venditore: ${i.quota_venditore} €)`}</div>}
                       {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {i.acconto_imponibile} € imp. → {i.acconto_totale} € tot. ({i.acconto_metodo || "?"})</div>}
                       {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {i.precorso_imponibile} € imp. → {i.precorso_totale} € tot. ({i.precorso_metodo || "?"})</div>}
                       {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_imponibile} € imp. → {i.saldo_totale} € tot. ({i.saldo_metodo || "?"})</div>}
@@ -1514,7 +1516,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                           {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
                         </div>
                       )}
-                      {!i.tutor && !i.telefono && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
+                      {!i.tutor && !i.telefono && i.totale_pattuito == null && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
                         <div style={{ gridColumn: "1 / -1" }}>Nessun dato di vendita registrato per questo iscritto.</div>
                       )}
                     </div>
@@ -1549,7 +1551,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 )}
               </div>
             ))}
-          </div>
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
           {mostraGestione ? (
