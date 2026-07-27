@@ -1224,6 +1224,27 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   async function persistiIscritto() {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
+
+    const metodiMancanti = [];
+    if (pagAcconto.totale !== "" && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
+    if (pagPrecorso.totale !== "" && !pagPrecorso.metodo) metodiMancanti.push("quota pre corso");
+    if (pagSaldo.totale !== "" && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
+
+    const altriMancanti = [];
+    if (totalePattuito === "") altriMancanti.push("totale pattuito");
+    if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
+    if (!tutor.trim()) altriMancanti.push("tutor");
+    if (!telefono.trim()) altriMancanti.push("numero di telefono");
+    if (!tagliaDivisa) altriMancanti.push("taglia divisa");
+
+    if (metodiMancanti.length > 0 || altriMancanti.length > 0) {
+      const parti = [];
+      if (metodiMancanti.length > 0) parti.push(`manca metodo di pagamento ${metodiMancanti.join(", oppure ")}`);
+      altriMancanti.forEach((campo) => parti.push(`manca ${campo}`));
+      setMsg("Impossibile salvare: " + parti.join(". ") + ".");
+      return false;
+    }
+
     setCaricando(true);
     try {
       const originale = modificandoId ? iscritti.find((x) => x.id === modificandoId) : null;
