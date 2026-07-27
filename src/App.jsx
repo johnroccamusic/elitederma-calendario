@@ -1265,6 +1265,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
+  async function creaLinkMaster() {
+    const url = `${window.location.origin}${window.location.pathname}?master=${corsoData.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setMsg("Link copiato: " + url);
+    } catch (e) {
+      setMsg("Copia questo link: " + url);
+    }
+  }
+
   async function toggleIncassato(i) {
     const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -1585,21 +1595,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                     <div style={{ marginTop: 8, padding: "12px 14px", background: BG, borderRadius: 8, ...fontBody, fontSize: 13, color: MUTED }}>
 
                       {i.totale_pattuito != null && (
-                        <div style={{ marginBottom: 10 }}>
+                        <div style={{ marginBottom: 6 }}>
                           <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
+                        </div>
+                      )}
+                      {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+                        <div style={{ marginBottom: 10 }}>
+                          <b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — <b style={{ color: NAVY }}>totale con interessi:</b> {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €
                         </div>
                       )}
 
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                        <div style={{ marginBottom: 10, paddingTop: i.totale_pattuito != null ? 10 : 0, borderTop: i.totale_pattuito != null ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 16px" }}>
-                            {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Acconto:</b> {totQuota(i, "acconto")} € ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
-                            {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pre corso:</b> {totQuota(i, "precorso")} € ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
-                            {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Da avere al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
-                          </div>
-                          <div style={{ marginTop: 6 }}>
-                            <b style={{ color: NAVY }}>Totale pagato netto:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — <b style={{ color: NAVY }}>con rate:</b> {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Pagato in acconto:</b> {totQuota(i, "acconto")} € ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
+                            {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pagato pre corso:</b> {totQuota(i, "precorso")} € ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
+                            {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Importo da pagare al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
                           </div>
                         </div>
                       )}
@@ -1669,7 +1681,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
           {mostraGestione ? (
             <div style={cardStyle}>
-              <Button onClick={() => window.print()} style={{ width: "100%" }}>Stampa elenco classe</Button>
+              <Button onClick={() => window.print()} style={{ width: "100%", marginBottom: 8 }}>Stampa elenco classe</Button>
+              <Button variant="ghost" onClick={creaLinkMaster} style={{ width: "100%" }}>Crea link per master</Button>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
+                Genera un link di sola lettura da mandare al/alla master: potrà vedere nome, telefono e importo da incassare di ogni allievo, senza poter modificare nulla né accedere al resto dell'app.
+              </div>
             </div>
           ) : (
             <div style={cardStyle}>
@@ -1745,7 +1761,159 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 }
 
 // ---------- App principale ----------
+// ---------- Vista master: pagina pubblica di sola lettura per richiedere i pagamenti ----------
+function VistaMaster({ corsoDataId }) {
+  const [dati, setDati] = useState(null);
+  const [errore, setErrore] = useState(false);
+
+  useEffect(() => {
+    async function carica() {
+      const { data: cd, error: e1 } = await supabase.from("corsi_date").select("*").eq("id", corsoDataId).single();
+      if (e1 || !cd) { setErrore(true); return; }
+      const [{ data: corso }, { data: loc }, { data: iscritti }] = await Promise.all([
+        supabase.from("corsi").select("*").eq("id", cd.corso_id).single(),
+        supabase.from("location").select("*").eq("id", cd.location_id).single(),
+        supabase.from("iscritti").select("*").eq("corso_data_id", corsoDataId).order("ts"),
+      ]);
+      setDati({ cd, corso, loc, iscritti: iscritti || [] });
+    }
+    carica();
+  }, [corsoDataId]);
+
+  if (errore) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, padding: 20, textAlign: "center" }}>
+        Link non valido o corso non trovato.
+      </div>
+    );
+  }
+  if (!dati) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
+        Caricamento…
+      </div>
+    );
+  }
+
+  const { cd, corso, loc, iscritti } = dati;
+
+  return (
+    <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome || "?"} · {loc?.nome || "?"}</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
+          {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — richiesta pagamenti
+        </div>
+
+        {iscritti.length === 0 && <div style={{ color: MUTED }}>Nessun iscritto.</div>}
+
+        {iscritti.map((i, idx) => {
+          const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+          const aPosto = i.incassato || daIncassare === 0;
+          const colore = aPosto ? "#2E7D32" : "#C0392B";
+          return (
+            <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
+              <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 2, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 6 }}>
+                <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
+                <span>{i.nome} {i.cognome}</span>
+                {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                {i.telefono && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· {i.telefono}</span>}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 4 }}>
+                <span style={{ fontSize: 13, color: NAVY }}>Ricontattato: {i.ricontattato ? "Sì" : "No"}</span>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <span style={{ width: 12, height: 12, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
+                  <span style={{ width: 12, height: 12, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
+                </div>
+              </div>
+              {i.note_ricontatto && <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontStyle: "italic" }}>"{i.note_ricontatto}"</div>}
+
+              <div style={{ marginTop: 8, padding: "12px 14px", background: BG, borderRadius: 8, fontSize: 13, color: MUTED }}>
+                {i.totale_pattuito != null && (
+                  <div style={{ marginBottom: 6 }}>
+                    <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
+                  </div>
+                )}
+                {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+                  <div style={{ marginBottom: 10 }}>
+                    <b style={{ color: NAVY }}>Totale pagato:</b> {round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0))} € — <b style={{ color: NAVY }}>totale con interessi:</b> {round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0))} €
+                  </div>
+                )}
+                {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Pagato in acconto:</b> {totQuota(i, "acconto")} € ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
+                      {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pagato pre corso:</b> {totQuota(i, "precorso")} € ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
+                      {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Importo da pagare al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
+                    </div>
+                  </div>
+                )}
+                {i.richiede_modelle && (
+                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Modelle</div>
+                    {i.numero_modelle != null && (
+                      <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+                    )}
+                  </div>
+                )}
+                {i.accordi_commerciali && (
+                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}
+                  </div>
+                )}
+                {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
+                  <div style={{ paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Allegati</div>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                      {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
+                      {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
+                      {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
+                    </div>
+                  </div>
+                )}
+                {i.note && (
+                  <div style={{ paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <b style={{ color: NAVY }}>Note:</b> {i.note}
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: "10px 14px",
+                  background: aPosto ? "#E8F5E9" : "#FDECEC",
+                  border: `1px solid ${colore}`,
+                  borderRadius: 8,
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: colore,
+                }}
+              >
+                {aPosto ? "SALDATO" : `DA INCASSARE ${daIncassare} €`}
+              </div>
+            </div>
+          );
+        })}
+
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
+          Pagina di sola lettura — Elitederma Academy
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
+  // e salto del tutto login/home/resto dell'app
+  const idMaster = new URLSearchParams(window.location.search).get("master");
+  if (idMaster) {
+    return <VistaMaster corsoDataId={idMaster} />;
+  }
+
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
   const [view, setView] = useState("home");
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
