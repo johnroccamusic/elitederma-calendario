@@ -11,6 +11,7 @@ const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 const NAVY = "#0E1B33";
 const CREAM_BORDER = "#E8E3D6";
 const BG = "#EFE9DC";
+const BG_CHIARO = "#FAF8F3"; // per i riquadri interni alle schede, più chiaro dello sfondo pagina
 const MUTED = "#8B8FA3";
 
 const fontDisplay = { fontFamily: "'Quicksand',sans-serif", fontWeight: 500 };
@@ -1447,7 +1448,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               })
             }
           />
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG }}>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG_CHIARO }}>
             <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 100px" }}>
@@ -1619,7 +1620,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   </div>
                 )}
                 {mostraGestione && spostaIscrittoId === i.id && (
-                  <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG }}>
+                  <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
                     <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:</div>
                     <SelettoreSpostamento
                       corsi={corsi}
@@ -1634,7 +1635,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 )}
                 {mostraGestione && (
                   <>
-                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG, borderRadius: 8, ...fontBody, fontSize: 13, color: MUTED }}>
+                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 13, color: MUTED }}>
 
                       {i.pacchetto_kit && (
                         <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
@@ -1907,7 +1908,7 @@ function VistaMaster({ param }) {
               </div>
               {i.note_ricontatto && <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontStyle: "italic" }}>"{i.note_ricontatto}"</div>}
 
-              <div style={{ marginTop: 8, padding: "12px 14px", background: BG, borderRadius: 8, fontSize: 13, color: MUTED }}>
+              <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, fontSize: 13, color: MUTED }}>
                 {i.pacchetto_kit && (
                   <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
                 )}
