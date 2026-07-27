@@ -200,7 +200,8 @@ function totQuota(i, prefisso) {
 }
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
-function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, soloLettura, opzioniMetodo }) {
+function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo }) {
+  const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
       <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
@@ -208,10 +209,10 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
         <div style={{ flex: "1 1 90px" }}>
           <Field label="Imponibile">
             <input
-              style={{ ...inputStyle, background: soloLettura ? "#EFEFEF" : "#fff", color: soloLettura ? MUTED : NAVY }}
+              style={{ ...inputStyle, background: soloLettura || imponibileBloccato ? "#EFEFEF" : "#fff", color: soloLettura || imponibileBloccato ? MUTED : NAVY }}
               inputMode="decimal"
               value={valori.imponibile}
-              disabled={soloLettura}
+              disabled={soloLettura || imponibileBloccato}
               onChange={(e) => onImponibile && onImponibile(e.target.value)}
             />
           </Field>
@@ -222,12 +223,12 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
           </Field>
         </div>
         <div style={{ flex: "1 1 90px" }}>
-          <Field label="Totale">
+          <Field label={titolo === "Quota acconto" && valori.metodo === "Rate" ? "Totale (senza interessi)" : "Totale"}>
             <input
-              style={{ ...inputStyle, background: soloLettura ? "#EFEFEF" : "#fff", color: soloLettura ? MUTED : NAVY }}
+              style={{ ...inputStyle, background: soloLettura || totaleBloccato ? "#EFEFEF" : "#fff", color: soloLettura || totaleBloccato ? MUTED : NAVY }}
               inputMode="decimal"
               value={valori.totale}
-              disabled={soloLettura}
+              disabled={soloLettura || totaleBloccato}
               onChange={(e) => onTotale && onTotale(e.target.value)}
             />
           </Field>
@@ -244,20 +245,35 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
         </div>
       )}
       {onMetodo && valori.metodo === "Rate" && (
-        <div style={{ marginTop: 10 }}>
-          <Field label="Interessi (si sommano al totale di questa quota)">
-            <input
-              style={inputStyle}
-              inputMode="decimal"
-              value={valori.interessi || ""}
-              onChange={(e) => onInteressi && onInteressi(e.target.value)}
-            />
-          </Field>
-          {valori.interessi !== "" && valori.interessi != null && (
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
-              Totale con interessi: {round2(parseNum(valori.totale) + parseNum(valori.interessi)).toFixed(2)} €
-            </div>
-          )}
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <div style={{ flex: 1 }}>
+            <Field label="Interessi">
+              <input
+                style={inputStyle}
+                inputMode="decimal"
+                value={valori.interessi || ""}
+                onChange={(e) => onInteressi && onInteressi(e.target.value)}
+              />
+            </Field>
+          </div>
+          <div style={{ flex: 1 }}>
+            <Field label="Totale incluso interessi">
+              {onTotaleConInteressi ? (
+                <input
+                  style={inputStyle}
+                  inputMode="decimal"
+                  value={valori.totale === "" && (valori.interessi || "") === "" ? "" : totaleConInteressi.toFixed(2)}
+                  onChange={(e) => onTotaleConInteressi(e.target.value)}
+                />
+              ) : (
+                <input
+                  style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
+                  value={valori.totale === "" && (valori.interessi || "") === "" ? "" : totaleConInteressi.toFixed(2)}
+                  disabled
+                />
+              )}
+            </Field>
+          </div>
         </div>
       )}
     </div>
@@ -1349,10 +1365,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             titolo="Quota acconto"
             valori={pagAcconto}
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
+            imponibileBloccato={pagAcconto.metodo === "Rate"}
+            totaleBloccato={pagAcconto.metodo === "Rate"}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
             onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v }))}
             onInteressi={(v) => setPagAcconto((prev) => ({ ...prev, interessi: v }))}
+            onTotaleConInteressi={(v) =>
+              setPagAcconto((prev) => {
+                const nettoNuovo = round2(parseNum(v) - parseNum(prev.interessi));
+                return conTotaleAggiornato(prev, String(nettoNuovo), true);
+              })
+            }
           />
           <BloccoQuota
             titolo="Quota pre corso"
