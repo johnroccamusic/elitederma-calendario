@@ -563,7 +563,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Impostazioni" onBack={onBack} />
+      <TopBar title="Setting" onBack={onBack} />
 
       <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
         <Button onClick={() => setShowCorsoModal(true)}>Aggiungi corso</Button>
@@ -2507,10 +2507,10 @@ export default function App() {
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
+          <Button onClick={() => setView("impostazioni")} style={{ width: "100%", marginBottom: 20 }}>Setting</Button>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
-          <CardHome title="Crea data/location" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
-          <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
+          <CardHome title="Archivio corsi passati" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
 
           <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
             DATE IN<br />PROGRAMMAZIONE
