@@ -729,7 +729,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                           <RigaEliminabile
                             label={
                               <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                                <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
+                                <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
                                 {corso?.nome || "?"} — {dataEtichetta}
                               </span>
                             }
@@ -744,7 +744,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                           style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "5px 4px", cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 420 }}
                         >
                           <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
+                            <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
                             <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome || "?"}</b>
                             <span>— {dataEtichetta}</span>
                           </span>
