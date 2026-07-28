@@ -1112,7 +1112,6 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   // trasformo il mese selezionato in un intervallo primo/ultimo giorno per il confronto
   let meseInizio = null, meseFine = null;
