@@ -619,11 +619,11 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
 
       <div style={cardStyle}>
         <div style={hStyle}>Aggiungi location</div>
-        <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. I "posti massimi sede" sono il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
+        <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
         <Field label="Città">
           <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
         </Field>
-        <Field label="Posti massimi sede (opzionale — se vuoto, nessun tetto)">
+        <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
           <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
         </Field>
         <Button onClick={aggiungiLocation}>Aggiungi location</Button>
@@ -637,7 +637,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
           <div key={l.id}>
             <RigaEliminabile
               label={l.nome.toUpperCase()}
-              dettaglio={l.posti_max != null ? `posti massimi sede: ${l.posti_max}` : "nessun tetto sui posti"}
+              dettaglio={l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti"}
               onModifica={() => apriModificaLocation(l)}
               onDelete={() => eliminaLocation(l.id)}
             />
@@ -646,7 +646,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
                 <Field label="Nome città">
                   <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
                 </Field>
-                <Field label="Posti massimi sede (opzionale — se vuoto, nessun tetto)">
+                <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
                   <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
                 </Field>
                 <div style={{ display: "flex", gap: 8 }}>
