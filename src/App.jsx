@@ -1605,6 +1605,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     const altriMancanti = [];
     if (strict) {
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
+      if (pagAcconto.totale === "") altriMancanti.push("quota acconto");
       if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
       if (!tutor.trim()) altriMancanti.push("tutor");
       if (!telefono.trim()) altriMancanti.push("numero di telefono");
