@@ -84,7 +84,7 @@ function siglaCitta(nome) {
 }
 // etichetta breve per le barre del calendario: nome corso (max 10 caratteri) + sigla città
 function etichettaBarra(corso, loc) {
-  const nome = (corso?.nome || "").slice(0, 10);
+  const nome = (corso?.nome || "").toUpperCase().slice(0, 10);
   return `${nome} ${siglaCitta(loc?.nome)}`;
 }
 
@@ -363,7 +363,7 @@ function Gate({ onOk }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }) {
+function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, onBack }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -371,11 +371,13 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState("");
+  const [masterSel, setMasterSel] = useState("");
   const [valoreDate, setValoreDate] = useState({ inizio: null, fine: null });
   const [postiData, setPostiData] = useState("");
   const [msg, setMsg] = useState("");
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
+  const [showMasterModal, setShowMasterModal] = useState(false);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
   const [modNomeCorso, setModNomeCorso] = useState("");
@@ -386,10 +388,15 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
   const [modNomeLoc, setModNomeLoc] = useState("");
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
 
+  const [masterInModifica, setMasterInModifica] = useState(null);
+  const [modNomeMaster, setModNomeMaster] = useState("");
+  const [nomeMaster, setNomeMaster] = useState("");
+
   const [dataInModifica, setDataInModifica] = useState(null);
   const [modDataInizio, setModDataInizio] = useState("");
   const [modDataFine, setModDataFine] = useState("");
   const [modPostiData, setModPostiData] = useState("");
+  const [modMasterSel, setModMasterSel] = useState("");
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
@@ -414,17 +421,24 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
     setMsg("Data eliminata.");
     ricarica();
   }
+  async function eliminaMaster(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("master").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Master eliminata.");
+    ricarica();
+  }
 
   function apriModificaCorso(c) {
     setCorsoInModifica(c.id);
-    setModNomeCorso(c.nome);
+    setModNomeCorso(c.nome.toUpperCase());
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
   }
   async function salvaModificaCorso(id) {
     if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
     const { error } = await supabase.from("corsi").update({
-      nome: modNomeCorso.trim(),
+      nome: modNomeCorso.trim().toUpperCase(),
       colore: modColoreCorso,
       posti_max: Number(modPostiCorso) || 10,
     }).eq("id", id);
@@ -436,7 +450,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
 
   function apriModificaLocation(l) {
     setLocInModifica(l.id);
-    setModNomeLoc(l.nome);
+    setModNomeLoc(l.nome.toUpperCase());
     setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
   }
   async function salvaModificaLocation(id) {
@@ -451,10 +465,24 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
     ricarica();
   }
 
+  function apriModificaMaster(m) {
+    setMasterInModifica(m.id);
+    setModNomeMaster(m.nome.toUpperCase());
+  }
+  async function salvaModificaMaster(id) {
+    if (!modNomeMaster.trim()) { setMsg("Il nome non può essere vuoto."); return; }
+    const { error } = await supabase.from("master").update({ nome: modNomeMaster.trim().toUpperCase() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMasterInModifica(null);
+    setMsg("Master aggiornata.");
+    ricarica();
+  }
+
   function apriModificaData(cd) {
     setDataInModifica(cd.id);
     setModDataInizio(cd.data_inizio);
     setModDataFine(cd.data_fine);
+    setModMasterSel(cd.master_id || "");
     const corsoCd = corsi.find((c) => c.id === cd.corso_id);
     const locCd = location.find((l) => l.id === cd.location_id);
     setModPostiData(String(postiMaxEffettivi(cd, corsoCd, locCd)));
@@ -478,6 +506,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
       data_inizio: modDataInizio,
       data_fine: fine,
       posti_max: modPostiData ? Number(modPostiData) : null,
+      master_id: modMasterSel || null,
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setDataInModifica(null);
@@ -491,7 +520,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
       setMsg("Questo colore è già usato da un altro corso: scegline un altro.");
       return;
     }
-    const { error } = await supabase.from("corsi").insert({ nome: nomeCorso.trim(), colore, posti_max: Number(postiMax) || 10 });
+    const { error } = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 });
     if (error) { setMsg("Errore: " + error.message); return; }
     setNomeCorso(""); setMsg("Corso aggiunto.");
     ricarica();
@@ -517,9 +546,18 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
       data_inizio: valoreDate.inizio,
       data_fine: fine,
       posti_max: postiData ? Number(postiData) : null,
+      master_id: masterSel || null,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setValoreDate({ inizio: null, fine: null }); setPostiData(""); setMsg("Data aggiunta al calendario.");
+    setValoreDate({ inizio: null, fine: null }); setPostiData(""); setMasterSel(""); setMsg("Data aggiunta al calendario.");
+    ricarica();
+  }
+
+  async function aggiungiMaster() {
+    if (!nomeMaster.trim()) return;
+    const { error } = await supabase.from("master").insert({ nome: nomeMaster.trim().toUpperCase() });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNomeMaster(""); setMsg("Master aggiunta.");
     ricarica();
   }
 
@@ -527,9 +565,10 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Impostazioni" onBack={onBack} />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
         <Button onClick={() => setShowCorsoModal(true)}>Aggiungi corso</Button>
         <Button onClick={() => setShowLocModal(true)}>Aggiungi location</Button>
+        <Button onClick={() => setShowMasterModal(true)}>Aggiungi Master</Button>
       </div>
 
       <div style={cardStyle}>
@@ -538,17 +577,23 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
         <Field label="Corso">
           <select style={inputStyle} value={corsoSel} onChange={(e) => setCorsoSel(e.target.value)}>
             <option value="">Seleziona corso</option>
-            {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
           </select>
         </Field>
         <Field label="Città">
           <select style={inputStyle} value={locSel} onChange={(e) => setLocSel(e.target.value)}>
             <option value="">Seleziona città</option>
-            {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+            {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
           </select>
         </Field>
         <Field label="Date">
           <SelettoreCalendario corsi={corsi} location={location} corsiDate={corsiDate} valore={valoreDate} onCambia={setValoreDate} />
+        </Field>
+        <Field label="Master (opzionale)">
+          <select style={inputStyle} value={masterSel} onChange={(e) => setMasterSel(e.target.value)}>
+            <option value="">Nessuna</option>
+            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+          </select>
         </Field>
         <Field label="Posti (opzionale)">
           <input type="number" min="1" style={inputStyle} value={postiData} onChange={(e) => setPostiData(e.target.value)} placeholder="usa il default del corso" />
@@ -564,6 +609,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
           location={location}
           corsiDate={corsiDate.filter((cd) => cd.data_fine >= dataOggiStr())}
           iscritti={iscritti}
+          master={master}
           onDelete={eliminaData}
           onEdit={apriModificaData}
           idInModifica={dataInModifica}
@@ -582,6 +628,12 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
                   </Field>
                 </div>
               </div>
+              <Field label="Master (opzionale)">
+                <select style={inputStyle} value={modMasterSel} onChange={(e) => setModMasterSel(e.target.value)}>
+                  <option value="">Nessuna</option>
+                  {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                </select>
+              </Field>
               <Field label="Posti in classe">
                 <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
                   <button
@@ -720,6 +772,42 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
         </Modal>
       )}
+
+      {showMasterModal && (
+        <Modal title="Master" onClose={() => setShowMasterModal(false)}>
+          <div style={hStyle}>Aggiungi Master</div>
+          <div style={subStyle}>Nomi assegnabili a una specifica data/edizione di un corso.</div>
+          <Field label="Nome">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeMaster} onChange={(e) => setNomeMaster(e.target.value.toUpperCase())} placeholder="es. MARIA ROSSI" />
+          </Field>
+          <Button onClick={aggiungiMaster}>Aggiungi Master</Button>
+
+          <div style={{ ...hStyle, marginTop: 24 }}>Master esistenti</div>
+          <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare.</div>
+          {master.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master ancora.</div>}
+          {master.map((m) => (
+            <div key={m.id}>
+              <RigaEliminabile
+                label={m.nome.toUpperCase()}
+                onModifica={() => apriModificaMaster(m)}
+                onDelete={() => eliminaMaster(m.id)}
+              />
+              {masterInModifica === m.id && (
+                <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <Field label="Nome">
+                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeMaster} onChange={(e) => setModNomeMaster(e.target.value.toUpperCase())} />
+                  </Field>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button onClick={() => salvaModificaMaster(m.id)}>Salva</Button>
+                    <Button variant="ghost" onClick={() => setMasterInModifica(null)}>Annulla</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -793,9 +881,10 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriData, onDelete, onEdit, idInModifica, renderModifica }) {
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
 
   const perCitta = {};
   corsiDate.forEach((cd) => {
@@ -840,7 +929,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                             label={
                               <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
                                 <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                                {corso?.nome || "?"} — {dataEtichetta}
+                                {corso?.nome?.toUpperCase() || "?"} — {dataEtichetta}
                               </span>
                             }
                             dettaglio={(() => {
@@ -848,7 +937,8 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                               const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
                               const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
                               const liberi = Math.max(0, max - occupati);
-                              return `${liberi} post${liberi === 1 ? "o" : "i"} liberi su ${max}`;
+                              const masterNome = cd.master_id ? masterById[cd.master_id]?.nome?.toUpperCase() : null;
+                              return `${liberi} post${liberi === 1 ? "o" : "i"} liberi su ${max}${masterNome ? ` · Master: ${masterNome}` : ""}`;
                             })()}
                             onModifica={onEdit ? () => onEdit(cd) : undefined}
                             onDelete={() => onDelete(cd.id)}
@@ -863,7 +953,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                         >
                           <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
                             <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                            <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome || "?"}</b>
+                            <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome?.toUpperCase() || "?"}</b>
                             <span>— {dataEtichetta}</span>
                           </span>
                           {iscritti && (() => {
@@ -915,7 +1005,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
               <div key={gruppo.corso?.id || Math.random()} style={{ marginBottom: 8, paddingLeft: 4 }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 3, display: "flex", alignItems: "center", gap: 7 }}>
                   <span style={{ width: 8, height: 8, borderRadius: "50%", background: gruppo.corso?.colore || NAVY, flexShrink: 0 }} />
-                  {gruppo.corso?.nome || "?"}
+                  {gruppo.corso?.nome?.toUpperCase() || "?"}
                 </div>
                 {gruppo.date
                   .slice()
@@ -1006,7 +1096,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                   <div
                     key={ev.id}
                     onClick={() => onApriData(ev)}
-                    title={`${corsoById[ev.corso_id]?.nome} · ${locById[ev.location_id]?.nome}`}
+                    title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
                     style={{
                       position: "absolute",
                       top: ev.lane * LANE_H,
@@ -1160,7 +1250,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
                 return (
                   <div
                     key={ev.id}
-                    title={`${corsoById[ev.corso_id]?.nome} · ${locById[ev.location_id]?.nome}`}
+                    title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
                     style={{
                       position: "absolute",
                       top: ev.lane * barH,
@@ -1249,7 +1339,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
           <Field label="Città">
             <select style={inputStyle} value={citta} onChange={(e) => { setCitta(e.target.value); setTutti(false); }}>
               <option value="">Tutte</option>
-              {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
             </select>
           </Field>
         </div>
@@ -1257,7 +1347,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
           <Field label="Corso">
             <select style={inputStyle} value={corso} onChange={(e) => { setCorso(e.target.value); setTutti(false); }}>
               <option value="">Tutti</option>
-              {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
             </select>
           </Field>
         </div>
@@ -1281,7 +1371,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
           <div key={key} style={cardStyle}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: corsoById[first.corso_id]?.colore }} />
-              <div style={hStyle}>{corsoById[first.corso_id]?.nome} · {locById[first.location_id]?.nome}</div>
+              <div style={hStyle}>{corsoById[first.corso_id]?.nome?.toUpperCase()} · {locById[first.location_id]?.nome?.toUpperCase()}</div>
             </div>
             {date.sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)).map((cd) => (
               <div
@@ -1346,7 +1436,7 @@ function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBac
             <div style={{ ...fontBody, fontSize: 15, color: NAVY, fontWeight: 500, marginBottom: 3 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, display: "flex", alignItems: "center", gap: 7 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: corso?.colore || NAVY, flexShrink: 0 }} />
-              {corso?.nome || "?"} · {loc?.nome || "?"} · {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+              {corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"} · {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
             </div>
           </div>
         );
@@ -1645,7 +1735,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title={`${corso?.nome || ""} · ${loc?.nome || ""}`} onBack={onBack} />
+      <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
         <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
           {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
@@ -2182,7 +2272,7 @@ function VistaMaster({ param }) {
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
-        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome || "?"} · {loc?.nome || "?"}</div>
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
           {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — richiesta pagamenti
         </div>
@@ -2321,6 +2411,7 @@ export default function App() {
   const [location, setLocation] = useState([]);
   const [corsiDate, setCorsiDate] = useState([]);
   const [iscritti, setIscritti] = useState([]);
+  const [master, setMaster] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -2330,16 +2421,18 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i] = await Promise.all([
+    const [c, l, cd, i, m] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
       supabase.from("iscritti").select("*").order("ts"),
+      supabase.from("master").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
     setCorsiDate(cd.data || []);
     setIscritti(i.data || []);
+    setMaster(m.data || []);
   }
 
   async function caricaIniziale() {
@@ -2413,7 +2506,7 @@ export default function App() {
                 variant={filtroCorsoHome ? "primary" : "ghost"}
                 onClick={() => { setApriFiltroCorsoHome((v) => !v); setApriFiltroCittaHome(false); }}
               >
-                {filtroCorsoHome ? corsi.find((c) => c.id === filtroCorsoHome)?.nome : "Filtra per corso"}
+                {filtroCorsoHome ? corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase() : "Filtra per corso"}
               </Button>
               {apriFiltroCorsoHome && (
                 <select
@@ -2424,7 +2517,7 @@ export default function App() {
                   onBlur={() => setApriFiltroCorsoHome(false)}
                 >
                   <option value="">Tutti i corsi</option>
-                  {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
                 </select>
               )}
             </div>
@@ -2433,7 +2526,7 @@ export default function App() {
                 variant={filtroCittaHome ? "primary" : "ghost"}
                 onClick={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); }}
               >
-                {filtroCittaHome ? location.find((l) => l.id === filtroCittaHome)?.nome : "Filtra per città"}
+                {filtroCittaHome ? location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase() : "Filtra per città"}
               </Button>
               {apriFiltroCittaHome && (
                 <select
@@ -2444,7 +2537,7 @@ export default function App() {
                   onBlur={() => setApriFiltroCittaHome(false)}
                 >
                   <option value="">Tutte le città</option>
-                  {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                  {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
                 </select>
               )}
             </div>
@@ -2489,7 +2582,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} ricarica={fetchDati} onBack={() => setView("home")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "calendario" && (
