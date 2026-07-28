@@ -455,7 +455,21 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
     setDataInModifica(cd.id);
     setModDataInizio(cd.data_inizio);
     setModDataFine(cd.data_fine);
-    setModPostiData(cd.posti_max != null ? String(cd.posti_max) : "");
+    const corsoCd = corsi.find((c) => c.id === cd.corso_id);
+    const locCd = location.find((l) => l.id === cd.location_id);
+    setModPostiData(String(postiMaxEffettivi(cd, corsoCd, locCd)));
+  }
+  function cambiaModPostiData(delta) {
+    const locCd = location.find((l) => l.id === corsiDate.find((cd) => cd.id === dataInModifica)?.location_id);
+    const iscrittiCount = iscritti.filter((i) => i.corso_data_id === dataInModifica).length;
+    setModPostiData((v) => {
+      const nuovo = Math.max(iscrittiCount, (Number(v) || 0) + delta);
+      if (delta > 0 && locCd?.posti_max != null && nuovo > locCd.posti_max) {
+        setMsg(`Attenzione: superati i posti disponibili per la sede (max ${locCd.posti_max} a ${locCd.nome}).`);
+        return v;
+      }
+      return String(nuovo);
+    });
   }
   async function salvaModificaData(id) {
     if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
@@ -568,8 +582,29 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
                 </Field>
               </div>
             </div>
-            <Field label="Posti (opzionale)">
-              <input type="number" min="1" style={inputStyle} value={modPostiData} onChange={(e) => setModPostiData(e.target.value)} placeholder="usa il default del corso" />
+            <Field label="Posti in classe">
+              <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                <button
+                  type="button"
+                  onClick={() => cambiaModPostiData(-1)}
+                  disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
+                  style={{
+                    width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
+                    cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
+                    opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
+                  }}
+                >
+                  −
+                </button>
+                <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
+                <button
+                  type="button"
+                  onClick={() => cambiaModPostiData(1)}
+                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+                >
+                  +
+                </button>
+              </div>
             </Field>
             <div style={{ display: "flex", gap: 8 }}>
               <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
@@ -1606,31 +1641,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     ricarica();
   }
 
-  const [postiLocali, setPostiLocali] = useState(max);
-  useEffect(() => { setPostiLocali(max); }, [corsoData.id, max]);
-
-  function cambiaPostiLocali(delta) {
-    setPostiLocali((p) => {
-      const nuovo = Math.max(listaIscritti.length, p + delta);
-      if (delta > 0 && loc?.posti_max != null && nuovo > loc.posti_max) {
-        setMsg(`Attenzione: superati i posti disponibili per la sede (max ${loc.posti_max} a ${loc.nome}).`);
-        return p;
-      }
-      return nuovo;
-    });
-  }
-
-  async function confermaPosti() {
-    if (loc?.posti_max != null && postiLocali > loc.posti_max) {
-      setMsg(`Attenzione: superati i posti disponibili per la sede (max ${loc.posti_max} a ${loc.nome}).`);
-      return;
-    }
-    const { error } = await supabase.from("corsi_date").update({ posti_max: postiLocali }).eq("id", corsoData.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    await ricarica();
-    setMsg("Posti aggiornati.");
-  }
-
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={`${corso?.nome || ""} · ${loc?.nome || ""}`} onBack={onBack} />
@@ -2036,7 +2046,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
             ))}
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
-          {mostraGestione ? (
+          {mostraGestione && (
             <div style={cardStyle}>
               <Button onClick={() => window.print()} style={{ width: "100%", marginBottom: 8 }}>Stampa elenco classe</Button>
               <Button variant="ghost" onClick={generaLinkMaster} style={{ width: "100%" }}>Crea link per master</Button>
@@ -2053,32 +2063,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
               )}
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
                 Genera un link di sola lettura da mandare al/alla master: potrà vedere tutti i dati e gli allegati di ogni allievo, senza poter modificare nulla né accedere al resto dell'app.
-              </div>
-            </div>
-          ) : (
-            <div style={cardStyle}>
-              <div style={hStyle}>Posti in classe</div>
-              <div style={subStyle}>Aumenta o riduci il numero massimo di posti per questa specifica data.</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  onClick={() => cambiaPostiLocali(-1)}
-                  disabled={postiLocali <= listaIscritti.length}
-                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20, cursor: postiLocali <= listaIscritti.length ? "default" : "pointer", opacity: postiLocali <= listaIscritti.length ? 0.35 : 1 }}
-                >
-                  −
-                </button>
-                <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{postiLocali}</div>
-                <button
-                  type="button"
-                  onClick={() => cambiaPostiLocali(1)}
-                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
-                >
-                  +
-                </button>
-                <Button onClick={confermaPosti} disabled={postiLocali === max} style={{ marginLeft: 6 }}>
-                  Conferma
-                </Button>
               </div>
             </div>
           )}
@@ -2413,7 +2397,6 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
-          <CardHome title="Cerca corso" sub="Per città, data o corso" onClick={() => setView("cerca")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Crea data/location" sub="Corsi, location e nuove date" onClick={() => setView("impostazioni")} />
           <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
