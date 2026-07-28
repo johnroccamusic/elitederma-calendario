@@ -1852,10 +1852,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per modificare i dati dell'iscritto"
-                    style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", alignItems: "baseline", gap: 8, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8, minWidth: 0 }}
                   >
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                    <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                     {i.telefono && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· {i.telefono}</span>}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
