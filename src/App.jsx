@@ -205,6 +205,16 @@ function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+// corsi in cima a tutte le liste, in quest'ordine; gli altri corsi seguono in ordine alfabetico
+const CORSI_IN_CIMA = ["BASE PMU", "BASE MICRO"];
+function ordinaCorsi(lista) {
+  return [...(lista || [])].sort((a, b) => {
+    const ia = CORSI_IN_CIMA.indexOf((a.nome || "").trim().toUpperCase());
+    const ib = CORSI_IN_CIMA.indexOf((b.nome || "").trim().toUpperCase());
+    if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    return (a.nome || "").localeCompare(b.nome || "");
+  });
+}
 // totale effettivo di una quota (acconto/precorso) salvata su un iscritto, interessi compresi
 function totQuota(i, prefisso) {
   const interessi = i[`${prefisso}_metodo`] === "Rate" ? (i[`${prefisso}_interessi`] || 0) : 0;
@@ -2335,7 +2345,7 @@ export default function App() {
       supabase.from("corsi_date").select("*").order("data_inizio"),
       supabase.from("iscritti").select("*").order("ts"),
     ]);
-    setCorsi(c.data || []);
+    setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
     setCorsiDate(cd.data || []);
     setIscritti(i.data || []);
@@ -2448,6 +2458,14 @@ export default function App() {
                 </select>
               )}
             </div>
+            {(filtroCorsoHome || filtroCittaHome) && (
+              <Button
+                variant="ghost"
+                onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
+              >
+                Cancella filtri
+              </Button>
+            )}
           </div>
 
           <DateRaggruppatePerCitta
