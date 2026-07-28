@@ -1747,8 +1747,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     ricarica();
   }
 
+  const msgErrore = msg && (msg.startsWith("Errore") || msg.startsWith("Impossibile salvare")) ? msg : null;
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      {msgErrore && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2000 }}>
+          <div style={{ ...cardStyle, maxWidth: 360, width: "100%", marginBottom: 0, textAlign: "center" }}>
+            <div style={{ ...fontBody, fontSize: 15, color: NAVY, marginBottom: 18 }}>{msgErrore}</div>
+            <Button onClick={() => setMsg("")} style={{ width: "100%" }}>OK</Button>
+          </div>
+        </div>
+      )}
       <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
         <div>
@@ -1973,7 +1983,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             </Button>
             <Button variant="ghost" onClick={annullaForm}>Annulla</Button>
           </div>
-          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+          {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
         </div>
       )}
 
@@ -2156,7 +2166,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
                 )}
               </div>
             ))}
-          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+          {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
           {mostraGestione && (
             <div style={cardStyle}>
