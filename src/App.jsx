@@ -14,8 +14,8 @@ const BG = "#EFE9DC";
 const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
 const MUTED = "#8B8FA3";
 
-const fontDisplay = { fontFamily: "'Quicksand',sans-serif", fontWeight: 500 };
-const fontBody = { fontFamily: "'Jost',sans-serif" };
+const fontDisplay = { fontFamily: "'Roboto',sans-serif", fontWeight: 500 };
+const fontBody = { fontFamily: "'Roboto',sans-serif" };
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const GIORNI = ["L","M","M","G","V","S","D"];
@@ -2176,7 +2176,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
           {mostraGestione && (
             <div
               className="stampa-classe"
-              style={{ position: "absolute", left: "-9999px", top: 0, width: 700, background: "#fff", padding: 24, fontFamily: "'Jost',sans-serif", color: "#000" }}
+              style={{ position: "absolute", left: "-9999px", top: 0, width: 700, background: "#fff", padding: 24, fontFamily: "'Roboto',sans-serif", color: "#000" }}
             >
               <div style={{ textAlign: "center", fontWeight: 700, fontSize: 18, marginBottom: 24, textTransform: "uppercase" }}>
                 Contabilità corso {corso?.nome} {loc?.nome} {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} – ${fmtData(corsoData.data_fine)}`}
@@ -2514,7 +2514,7 @@ export default function App() {
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Archivio corsi passati" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
 
-          <div style={{ fontFamily: "'Poppins',sans-serif", fontWeight: 700, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
+          <div style={{ fontFamily: "'Roboto',sans-serif", fontWeight: 700, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
             DATE IN<br />PROGRAMMAZIONE
           </div>
 
