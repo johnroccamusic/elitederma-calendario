@@ -205,12 +205,17 @@ function dataOggiStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
-// corsi in cima a tutte le liste, in quest'ordine; gli altri corsi seguono in ordine alfabetico
-const CORSI_IN_CIMA = ["BASE PMU", "BASE MICRO"];
+// corsi in cima a tutte le liste, in quest'ordine (riconosciuti dalle parole chiave, non dall'ordine esatto delle parole nel nome); gli altri seguono in ordine alfabetico
+function prioritaCorso(nome) {
+  const n = (nome || "").trim().toUpperCase();
+  if (n.includes("PMU") && n.includes("BASE")) return 0;
+  if (n.includes("MICRO") && n.includes("BASE")) return 1;
+  return -1;
+}
 function ordinaCorsi(lista) {
   return [...(lista || [])].sort((a, b) => {
-    const ia = CORSI_IN_CIMA.indexOf((a.nome || "").trim().toUpperCase());
-    const ib = CORSI_IN_CIMA.indexOf((b.nome || "").trim().toUpperCase());
+    const ia = prioritaCorso(a.nome);
+    const ib = prioritaCorso(b.nome);
     if (ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     return (a.nome || "").localeCompare(b.nome || "");
   });
