@@ -2518,7 +2518,7 @@ export default function App() {
             DATE IN<br />PROGRAMMAZIONE
           </div>
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 18 }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 28 }}>
             <div style={{ position: "relative" }}>
               <Button
                 variant={filtroCorsoHome ? "primary" : "ghost"}
