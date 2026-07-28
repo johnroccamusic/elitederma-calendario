@@ -949,19 +949,26 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                         <div
                           key={cd.id}
                           onClick={() => onApriData?.(cd)}
-                          style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "5px 4px", cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 420 }}
+                          style={{ padding: "5px 4px", cursor: onApriData ? "pointer" : "default", maxWidth: 420 }}
                         >
-                          <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                            <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                            <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome?.toUpperCase() || "?"}</b>
-                            <span>— {dataEtichetta}</span>
-                          </span>
-                          {iscritti && (() => {
-                            const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-                            const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
-                            const liberi = Math.max(0, max - occupati);
-                            return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
-                          })()}
+                          <div style={{ ...fontBody, fontSize: 13, color: MUTED, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                              <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                              <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome?.toUpperCase() || "?"}</b>
+                              <span>— {dataEtichetta}</span>
+                            </span>
+                            {iscritti && (() => {
+                              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+                              const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                              const liberi = Math.max(0, max - occupati);
+                              return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
+                            })()}
+                          </div>
+                          {cd.master_id && (
+                            <div style={{ ...fontBody, fontSize: 11, color: MUTED, opacity: 0.75, paddingLeft: 20 }}>
+                              Master: {masterById[cd.master_id]?.nome?.toUpperCase() || "?"}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1463,7 +1470,7 @@ function AllegatoLink({ percorso, etichetta }) {
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica, onBack }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, ricarica, onBack }) {
   const [vista, setVista] = useState("lista"); // 'lista' | 'form'
   const [modificandoId, setModificandoId] = useState(null); // id dell'iscritto in modifica, null se è una nuova iscrizione
 
@@ -1737,8 +1744,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
-        <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
-          {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
+        <div>
+          <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
+            {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
+          </div>
+          {corsoData.master_id && (
+            <div style={{ ...fontBody, color: MUTED, fontSize: 13 }}>
+              Master: {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
+            </div>
+          )}
         </div>
         {vista === "lista" ? (
           <div style={{ display: "flex", gap: 8 }}>
@@ -2415,8 +2429,10 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
+  const [filtroMasterHome, setFiltroMasterHome] = useState("");
   const [apriFiltroCorsoHome, setApriFiltroCorsoHome] = useState(false);
   const [apriFiltroCittaHome, setApriFiltroCittaHome] = useState(false);
+  const [apriFiltroMasterHome, setApriFiltroMasterHome] = useState(false);
 
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
@@ -2541,10 +2557,30 @@ export default function App() {
                 </select>
               )}
             </div>
-            {(filtroCorsoHome || filtroCittaHome) && (
+            <div style={{ position: "relative" }}>
+              <Button
+                variant={filtroMasterHome ? "primary" : "ghost"}
+                onClick={() => { setApriFiltroMasterHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
+              >
+                {filtroMasterHome ? master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase() : "Filtra per master"}
+              </Button>
+              {apriFiltroMasterHome && (
+                <select
+                  autoFocus
+                  style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                  value={filtroMasterHome}
+                  onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
+                  onBlur={() => setApriFiltroMasterHome(false)}
+                >
+                  <option value="">Tutte le master</option>
+                  {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                </select>
+              )}
+            </div>
+            {(filtroCorsoHome || filtroCittaHome || filtroMasterHome) && (
               <Button
                 variant="ghost"
-                onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
+                onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
               >
                 Cancella filtri
               </Button>
@@ -2557,9 +2593,11 @@ export default function App() {
             corsiDate={corsiDate.filter((cd) =>
               cd.data_fine >= dataOggiStr() &&
               (!filtroCorsoHome || cd.corso_id === filtroCorsoHome) &&
-              (!filtroCittaHome || cd.location_id === filtroCittaHome)
+              (!filtroCittaHome || cd.location_id === filtroCittaHome) &&
+              (!filtroMasterHome || cd.master_id === filtroMasterHome)
             )}
             iscritti={iscritti}
+            master={master}
             onApriData={apriData}
           />
         </div>
@@ -2576,6 +2614,7 @@ export default function App() {
             location={location}
             corsiDate={corsiDate.filter((cd) => cd.data_fine < dataOggiStr())}
             iscritti={iscritti}
+            master={master}
             onApriData={apriData}
           />
         </div>
@@ -2604,6 +2643,7 @@ export default function App() {
           location={location}
           corsiDate={corsiDate}
           iscritti={iscritti}
+          master={master}
           ricarica={fetchDati}
           onBack={() => setView("home")}
         />
