@@ -566,52 +566,53 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
           iscritti={iscritti}
           onDelete={eliminaData}
           onEdit={apriModificaData}
+          idInModifica={dataInModifica}
+          renderModifica={() => (
+            <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Data inizio">
+                    <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Data fine">
+                    <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
+                  </Field>
+                </div>
+              </div>
+              <Field label="Posti in classe">
+                <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                  <button
+                    type="button"
+                    onClick={() => cambiaModPostiData(-1)}
+                    disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
+                    style={{
+                      width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
+                      cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
+                      opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
+                    }}
+                  >
+                    −
+                  </button>
+                  <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
+                  <button
+                    type="button"
+                    onClick={() => cambiaModPostiData(1)}
+                    style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+                  >
+                    +
+                  </button>
+                </div>
+              </Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
+                <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
+              </div>
+            </div>
+          )}
         />
-        {dataInModifica && (
-          <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
-            <div style={{ display: "flex", gap: 14 }}>
-              <div style={{ flex: 1 }}>
-                <Field label="Data inizio">
-                  <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
-                </Field>
-              </div>
-              <div style={{ flex: 1 }}>
-                <Field label="Data fine">
-                  <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
-                </Field>
-              </div>
-            </div>
-            <Field label="Posti in classe">
-              <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-                <button
-                  type="button"
-                  onClick={() => cambiaModPostiData(-1)}
-                  disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
-                  style={{
-                    width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
-                    cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
-                    opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
-                  }}
-                >
-                  −
-                </button>
-                <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
-                <button
-                  type="button"
-                  onClick={() => cambiaModPostiData(1)}
-                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
-                >
-                  +
-                </button>
-              </div>
-            </Field>
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
-              <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
-            </div>
-          </div>
-        )}
       </div>
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
@@ -792,7 +793,7 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriData, onDelete, onEdit }) {
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriData, onDelete, onEdit, idInModifica, renderModifica }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -852,6 +853,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                             onModifica={onEdit ? () => onEdit(cd) : undefined}
                             onDelete={() => onDelete(cd.id)}
                           />
+                          {idInModifica === cd.id && renderModifica && renderModifica(cd)}
                         </div>
                       ) : (
                         <div
