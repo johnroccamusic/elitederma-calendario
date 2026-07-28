@@ -348,7 +348,7 @@ function Gate({ onOk }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
+function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -527,6 +527,7 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
           corsi={corsi}
           location={location}
           corsiDate={corsiDate.filter((cd) => cd.data_fine >= dataOggiStr())}
+          iscritti={iscritti}
           onDelete={eliminaData}
           onEdit={apriModificaData}
         />
@@ -756,6 +757,13 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                                 {corso?.nome || "?"} — {dataEtichetta}
                               </span>
                             }
+                            dettaglio={(() => {
+                              if (!iscritti) return null;
+                              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+                              const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                              const liberi = Math.max(0, max - occupati);
+                              return `${liberi} post${liberi === 1 ? "o" : "i"} liberi su ${max}`;
+                            })()}
                             onModifica={onEdit ? () => onEdit(cd) : undefined}
                             onDelete={() => onDelete(cd.id)}
                           />
@@ -2386,7 +2394,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} ricarica={fetchDati} onBack={() => setView("home")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "calendario" && (
