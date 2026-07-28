@@ -352,6 +352,19 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
   const [postiData, setPostiData] = useState("");
   const [msg, setMsg] = useState("");
 
+  const [corsoInModifica, setCorsoInModifica] = useState(null);
+  const [modNomeCorso, setModNomeCorso] = useState("");
+  const [modColoreCorso, setModColoreCorso] = useState("");
+  const [modPostiCorso, setModPostiCorso] = useState("");
+
+  const [locInModifica, setLocInModifica] = useState(null);
+  const [modNomeLoc, setModNomeLoc] = useState("");
+
+  const [dataInModifica, setDataInModifica] = useState(null);
+  const [modDataInizio, setModDataInizio] = useState("");
+  const [modDataFine, setModDataFine] = useState("");
+  const [modPostiData, setModPostiData] = useState("");
+
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
   async function eliminaCorso(id) {
@@ -376,6 +389,58 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
     ricarica();
   }
 
+  function apriModificaCorso(c) {
+    setCorsoInModifica(c.id);
+    setModNomeCorso(c.nome);
+    setModColoreCorso(c.colore);
+    setModPostiCorso(String(c.posti_max));
+  }
+  async function salvaModificaCorso(id) {
+    if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
+    const { error } = await supabase.from("corsi").update({
+      nome: modNomeCorso.trim(),
+      colore: modColoreCorso,
+      posti_max: Number(modPostiCorso) || 10,
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setCorsoInModifica(null);
+    setMsg("Corso aggiornato.");
+    ricarica();
+  }
+
+  function apriModificaLocation(l) {
+    setLocInModifica(l.id);
+    setModNomeLoc(l.nome);
+  }
+  async function salvaModificaLocation(id) {
+    if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
+    const { error } = await supabase.from("location").update({ nome: modNomeLoc.trim().toUpperCase() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setLocInModifica(null);
+    setMsg("Città aggiornata.");
+    ricarica();
+  }
+
+  function apriModificaData(cd) {
+    setDataInModifica(cd.id);
+    setModDataInizio(cd.data_inizio);
+    setModDataFine(cd.data_fine);
+    setModPostiData(cd.posti_max != null ? String(cd.posti_max) : "");
+  }
+  async function salvaModificaData(id) {
+    if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
+    const fine = modDataFine || modDataInizio;
+    const { error } = await supabase.from("corsi_date").update({
+      data_inizio: modDataInizio,
+      data_fine: fine,
+      posti_max: modPostiData ? Number(modPostiData) : null,
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setDataInModifica(null);
+    setMsg("Data aggiornata.");
+    ricarica();
+  }
+
   async function aggiungiCorso() {
     if (!nomeCorso.trim()) return;
     if (coloriUsati.includes(colore.toLowerCase())) {
@@ -390,7 +455,7 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 
   async function aggiungiLocation() {
     if (!nomeLoc.trim()) return;
-    const { error } = await supabase.from("location").insert({ nome: nomeLoc.trim() });
+    const { error } = await supabase.from("location").insert({ nome: nomeLoc.trim().toUpperCase() });
     if (error) { setMsg("Errore: " + error.message); return; }
     setNomeLoc(""); setMsg("Location aggiunta.");
     ricarica();
@@ -440,7 +505,7 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
         <div style={hStyle}>Nuova location</div>
         <div style={subStyle}>Aggiungi una città in cui si terranno i corsi.</div>
         <Field label="Città">
-          <input style={inputStyle} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value)} placeholder="es. Milano" />
+          <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. Milano" />
         </Field>
         <Button onClick={aggiungiLocation}>Aggiungi location</Button>
       </div>
@@ -471,31 +536,97 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 
       <div style={cardStyle}>
         <div style={hStyle}>Corsi esistenti</div>
-        <div style={subStyle}>Clicca il cestino per eliminare un corso (rimuove anche le sue date e i relativi iscritti).</div>
+        <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le sue date e i relativi iscritti).</div>
         {corsi.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso ancora.</div>}
         {corsi.map((c) => (
-          <RigaEliminabile
-            key={c.id}
-            label={<span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />{c.nome}</span>}
-            dettaglio={`posti default: ${c.posti_max}`}
-            onDelete={() => eliminaCorso(c.id)}
-          />
+          <div key={c.id}>
+            <RigaEliminabile
+              label={<span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />{c.nome}</span>}
+              dettaglio={`posti default: ${c.posti_max}`}
+              onModifica={() => apriModificaCorso(c)}
+              onDelete={() => eliminaCorso(c.id)}
+            />
+            {corsoInModifica === c.id && (
+              <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <Field label="Nome corso">
+                  <input style={inputStyle} value={modNomeCorso} onChange={(e) => setModNomeCorso(e.target.value)} />
+                </Field>
+                <div style={{ display: "flex", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Colore">
+                      <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+                    </Field>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Posti massimi">
+                      <input type="number" min="1" style={inputStyle} value={modPostiCorso} onChange={(e) => setModPostiCorso(e.target.value)} />
+                    </Field>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={() => salvaModificaCorso(c.id)}>Salva</Button>
+                  <Button variant="ghost" onClick={() => setCorsoInModifica(null)}>Annulla</Button>
+                </div>
+              </div>
+            )}
+          </div>
         ))}
       </div>
 
       <div style={cardStyle}>
         <div style={hStyle}>Città esistenti</div>
-        <div style={subStyle}>Clicca il cestino per eliminare una città (rimuove anche le date collegate a quella città).</div>
+        <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
         {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora.</div>}
         {location.map((l) => (
-          <RigaEliminabile key={l.id} label={l.nome} onDelete={() => eliminaLocation(l.id)} />
+          <div key={l.id}>
+            <RigaEliminabile
+              label={l.nome.toUpperCase()}
+              onModifica={() => apriModificaLocation(l)}
+              onDelete={() => eliminaLocation(l.id)}
+            />
+            {locInModifica === l.id && (
+              <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <Field label="Nome città">
+                  <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
+                </Field>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
+                  <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
+                </div>
+              </div>
+            )}
+          </div>
         ))}
       </div>
 
       <div style={cardStyle}>
         <div style={hStyle}>Date esistenti</div>
-        <div style={subStyle}>Tutte le edizioni create finora, divise per città e corso. Clicca il cestino per eliminarne una (rimuove anche i suoi iscritti).</div>
-        <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} onDelete={eliminaData} />
+        <div style={subStyle}>Tutte le edizioni create finora, divise per città e corso. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
+        <DateRaggruppatePerCitta corsi={corsi} location={location} corsiDate={corsiDate} onDelete={eliminaData} onEdit={apriModificaData} />
+        {dataInModifica && (
+          <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Data inizio">
+                  <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Data fine">
+                  <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
+                </Field>
+              </div>
+            </div>
+            <Field label="Posti (opzionale)">
+              <input type="number" min="1" style={inputStyle} value={modPostiData} onChange={(e) => setModPostiData(e.target.value)} placeholder="usa il default del corso" />
+            </Field>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
+              <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
@@ -507,32 +638,46 @@ const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, 
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
 
-function RigaEliminabile({ label, dettaglio, onDelete }) {
+function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div>
         <div style={{ ...fontBody, fontSize: 14, color: NAVY }}>{label}</div>
         {dettaglio && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{dettaglio}</div>}
       </div>
-      <button
-        onClick={onDelete}
-        title="Elimina"
-        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex", alignItems: "center" }}
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-          <path d="M10 11v6" /><path d="M14 11v6" />
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-        </svg>
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {onModifica && (
+          <button
+            onClick={onModifica}
+            title="Modifica"
+            style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex", alignItems: "center" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          title="Elimina"
+          style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex", alignItems: "center" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+            <path d="M10 11v6" /><path d="M14 11v6" />
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriData, onDelete }) {
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriData, onDelete, onEdit }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -582,6 +727,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                                 {corso?.nome || "?"} — {dataEtichetta}
                               </span>
                             }
+                            onModifica={onEdit ? () => onEdit(cd) : undefined}
                             onDelete={() => onDelete(cd.id)}
                           />
                         </div>
