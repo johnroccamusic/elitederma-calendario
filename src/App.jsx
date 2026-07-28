@@ -1922,7 +1922,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                 )}
                 {mostraGestione && (
                   <>
-                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 13, color: MUTED }}>
+                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 15, color: MUTED }}>
 
                       {i.pacchetto_kit && (
                         <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
@@ -1944,7 +1944,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                         <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Pagato in acconto:</b> {totQuota(i, "acconto")} € ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
                             {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pagato pre corso:</b> {totQuota(i, "precorso")} € ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
@@ -1955,7 +1955,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
                       {i.richiede_modelle && (
                         <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Modelle</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Modelle</div>
                           {i.numero_modelle != null && (
                             <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
                           )}
@@ -1973,7 +1973,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
 
                       {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
                         <div style={{ paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Allegati</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Allegati</div>
                           <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                             {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
                             {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
@@ -2005,10 +2005,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
                             cursor: "pointer",
                           }}
                         >
-                          <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: colore }}>
+                          <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: colore }}>
                             DA INCASSARE {daIncassare} €
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 14, color: colore }}>
                             <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
                             incassato
                           </div>
