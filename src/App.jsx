@@ -2507,7 +2507,9 @@ export default function App() {
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
-          <Button onClick={() => setView("impostazioni")} style={{ width: "100%", marginBottom: 20 }}>Setting</Button>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+            <Button onClick={() => setView("impostazioni")}>Setting</Button>
+          </div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Archivio corsi passati" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
