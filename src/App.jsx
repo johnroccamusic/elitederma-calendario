@@ -1598,9 +1598,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
 
     const metodiMancanti = [];
-    if (pagAcconto.totale !== "" && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
-    if (pagPrecorso.totale !== "" && !pagPrecorso.metodo) metodiMancanti.push("quota pre corso");
-    if (pagSaldo.totale !== "" && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
+    if (pagAcconto.totale !== "" && parseNum(pagAcconto.totale) !== 0 && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
+    if (pagPrecorso.totale !== "" && parseNum(pagPrecorso.totale) !== 0 && !pagPrecorso.metodo) metodiMancanti.push("quota pre corso");
+    if (pagSaldo.totale !== "" && parseNum(pagSaldo.totale) !== 0 && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
 
     const altriMancanti = [];
     if (strict) {
@@ -1828,7 +1828,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             titolo="Quota acconto"
             valori={pagAcconto}
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
-            imponibileBloccato
             totaleBloccato={false}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
             onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
