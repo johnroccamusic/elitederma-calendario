@@ -359,6 +359,8 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
   const [valoreDate, setValoreDate] = useState({ inizio: null, fine: null });
   const [postiData, setPostiData] = useState("");
   const [msg, setMsg] = useState("");
+  const [showCorsoModal, setShowCorsoModal] = useState(false);
+  const [showLocModal, setShowLocModal] = useState(false);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
   const [modNomeCorso, setModNomeCorso] = useState("");
@@ -496,6 +498,11 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Impostazioni" onBack={onBack} />
 
+      <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+        <Button onClick={() => setShowCorsoModal(true)}>Aggiungi corso</Button>
+        <Button onClick={() => setShowLocModal(true)}>Aggiungi location</Button>
+      </div>
+
       <div style={cardStyle}>
         <div style={hStyle}>Aggiungi data</div>
         <div style={subStyle}>Crea una nuova edizione: corso + città + giorno.</div>
@@ -557,109 +564,111 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
         )}
       </div>
 
-      <div style={cardStyle}>
-        <div style={hStyle}>Aggiungi corso</div>
-        <div style={subStyle}>Nome, colore univoco per il calendario, posti massimi di default.</div>
-        <Field label="Nome corso">
-          <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeCorso} onChange={(e) => setNomeCorso(e.target.value.toUpperCase())} placeholder="es. MICROBLADING" />
-        </Field>
-        <div style={{ display: "flex", gap: 14 }}>
-          <div style={{ flex: 1 }}>
-            <Field label="Colore">
-              <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
-            </Field>
-          </div>
-          <div style={{ flex: 1 }}>
-            <Field label="Posti massimi">
-              <input type="number" min="1" style={inputStyle} value={postiMax} onChange={(e) => setPostiMax(e.target.value)} />
-            </Field>
-          </div>
-        </div>
-        <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
-      </div>
-
-      <div style={cardStyle}>
-        <div style={hStyle}>Corsi esistenti</div>
-        <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le sue date e i relativi iscritti).</div>
-        {corsi.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso ancora.</div>}
-        {corsi.map((c) => (
-          <div key={c.id}>
-            <RigaEliminabile
-              label={<span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />{c.nome.toUpperCase()}</span>}
-              dettaglio={`posti default: ${c.posti_max}`}
-              onModifica={() => apriModificaCorso(c)}
-              onDelete={() => eliminaCorso(c.id)}
-            />
-            {corsoInModifica === c.id && (
-              <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <Field label="Nome corso">
-                  <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCorso} onChange={(e) => setModNomeCorso(e.target.value.toUpperCase())} />
-                </Field>
-                <div style={{ display: "flex", gap: 14 }}>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Colore">
-                      <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
-                    </Field>
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <Field label="Posti massimi">
-                      <input type="number" min="1" style={inputStyle} value={modPostiCorso} onChange={(e) => setModPostiCorso(e.target.value)} />
-                    </Field>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Button onClick={() => salvaModificaCorso(c.id)}>Salva</Button>
-                  <Button variant="ghost" onClick={() => setCorsoInModifica(null)}>Annulla</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div style={cardStyle}>
-        <div style={hStyle}>Aggiungi location</div>
-        <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
-        <Field label="Città">
-          <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
-        </Field>
-        <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
-          <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
-        </Field>
-        <Button onClick={aggiungiLocation}>Aggiungi location</Button>
-      </div>
-
-      <div style={cardStyle}>
-        <div style={hStyle}>Città esistenti</div>
-        <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
-        {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora.</div>}
-        {location.map((l) => (
-          <div key={l.id}>
-            <RigaEliminabile
-              label={l.nome.toUpperCase()}
-              dettaglio={l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti"}
-              onModifica={() => apriModificaLocation(l)}
-              onDelete={() => eliminaLocation(l.id)}
-            />
-            {locInModifica === l.id && (
-              <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <Field label="Nome città">
-                  <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
-                </Field>
-                <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
-                  <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
-                </Field>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
-                  <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
+
+      {showCorsoModal && (
+        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)}>
+          <div style={hStyle}>Aggiungi corso</div>
+          <div style={subStyle}>Nome, colore univoco per il calendario, posti massimi di default.</div>
+          <Field label="Nome corso">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeCorso} onChange={(e) => setNomeCorso(e.target.value.toUpperCase())} placeholder="es. MICROBLADING" />
+          </Field>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Colore">
+                <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Posti massimi">
+                <input type="number" min="1" style={inputStyle} value={postiMax} onChange={(e) => setPostiMax(e.target.value)} />
+              </Field>
+            </div>
+          </div>
+          <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
+
+          <div style={{ ...hStyle, marginTop: 24 }}>Corsi esistenti</div>
+          <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le sue date e i relativi iscritti).</div>
+          {corsi.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso ancora.</div>}
+          {corsi.map((c) => (
+            <div key={c.id}>
+              <RigaEliminabile
+                label={<span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />{c.nome.toUpperCase()}</span>}
+                dettaglio={`posti default: ${c.posti_max}`}
+                onModifica={() => apriModificaCorso(c)}
+                onDelete={() => eliminaCorso(c.id)}
+              />
+              {corsoInModifica === c.id && (
+                <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <Field label="Nome corso">
+                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCorso} onChange={(e) => setModNomeCorso(e.target.value.toUpperCase())} />
+                  </Field>
+                  <div style={{ display: "flex", gap: 14 }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Colore">
+                        <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Posti massimi">
+                        <input type="number" min="1" style={inputStyle} value={modPostiCorso} onChange={(e) => setModPostiCorso(e.target.value)} />
+                      </Field>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button onClick={() => salvaModificaCorso(c.id)}>Salva</Button>
+                    <Button variant="ghost" onClick={() => setCorsoInModifica(null)}>Annulla</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+        </Modal>
+      )}
+
+      {showLocModal && (
+        <Modal title="Location" onClose={() => setShowLocModal(false)}>
+          <div style={hStyle}>Aggiungi location</div>
+          <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
+          <Field label="Città">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
+          </Field>
+          <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
+            <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
+          </Field>
+          <Button onClick={aggiungiLocation}>Aggiungi location</Button>
+
+          <div style={{ ...hStyle, marginTop: 24 }}>Città esistenti</div>
+          <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
+          {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora.</div>}
+          {location.map((l) => (
+            <div key={l.id}>
+              <RigaEliminabile
+                label={l.nome.toUpperCase()}
+                dettaglio={l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti"}
+                onModifica={() => apriModificaLocation(l)}
+                onDelete={() => eliminaLocation(l.id)}
+              />
+              {locInModifica === l.id && (
+                <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <Field label="Nome città">
+                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
+                  </Field>
+                  <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
+                    <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
+                  </Field>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
+                    <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+        </Modal>
+      )}
     </div>
   );
 }
@@ -667,6 +676,32 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, ricarica, onBack }
 const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18 };
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
+
+function Modal({ title, onClose, children }) {
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}
+      onClick={onClose}
+    >
+      <div
+        style={{ ...cardStyle, maxWidth: 560, width: "100%", height: "fit-content", marginBottom: 0 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ ...hStyle, margin: 0 }}>{title}</div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4 }}
+            aria-label="Chiudi"
+          >
+            ×
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
   return (
