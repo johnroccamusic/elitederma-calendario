@@ -215,6 +215,13 @@ function modelleTotaleDi(i) {
   if (i.prezzo_speciale_modelle != null) return i.prezzo_speciale_modelle;
   return round2((i.numero_modelle || 0) * 60);
 }
+// posti massimi effettivi di un'edizione: il numero scelto per la data (o, in mancanza,
+// quello di default del corso) non può mai superare il tetto massimo della sede
+function postiMaxEffettivi(cd, corso, loc) {
+  const base = cd?.posti_max ?? corso?.posti_max ?? 0;
+  if (loc?.posti_max != null) return Math.min(base, loc.posti_max);
+  return base;
+}
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
 function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo }) {
@@ -346,6 +353,7 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
   const [nomeLoc, setNomeLoc] = useState("");
+  const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState("");
   const [valoreDate, setValoreDate] = useState({ inizio: null, fine: null });
@@ -359,6 +367,7 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeLoc, setModNomeLoc] = useState("");
+  const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
 
   const [dataInModifica, setDataInModifica] = useState(null);
   const [modDataInizio, setModDataInizio] = useState("");
@@ -411,10 +420,14 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
   function apriModificaLocation(l) {
     setLocInModifica(l.id);
     setModNomeLoc(l.nome);
+    setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
-    const { error } = await supabase.from("location").update({ nome: modNomeLoc.trim().toUpperCase() }).eq("id", id);
+    const { error } = await supabase.from("location").update({
+      nome: modNomeLoc.trim().toUpperCase(),
+      posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
+    }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
     setMsg("Città aggiornata.");
@@ -455,9 +468,12 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 
   async function aggiungiLocation() {
     if (!nomeLoc.trim()) return;
-    const { error } = await supabase.from("location").insert({ nome: nomeLoc.trim().toUpperCase() });
+    const { error } = await supabase.from("location").insert({
+      nome: nomeLoc.trim().toUpperCase(),
+      posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
+    });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeLoc(""); setMsg("Location aggiunta.");
+    setNomeLoc(""); setPostiMaxLoc(""); setMsg("Location aggiunta.");
     ricarica();
   }
 
@@ -602,9 +618,12 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
 
       <div style={cardStyle}>
         <div style={hStyle}>Aggiungi location</div>
-        <div style={subStyle}>Aggiungi una città in cui si terranno i corsi.</div>
+        <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. I "posti massimi sede" sono il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
         <Field label="Città">
           <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
+        </Field>
+        <Field label="Posti massimi sede (opzionale — se vuoto, nessun tetto)">
+          <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
         </Field>
         <Button onClick={aggiungiLocation}>Aggiungi location</Button>
       </div>
@@ -617,6 +636,7 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
           <div key={l.id}>
             <RigaEliminabile
               label={l.nome.toUpperCase()}
+              dettaglio={l.posti_max != null ? `posti massimi sede: ${l.posti_max}` : "nessun tetto sui posti"}
               onModifica={() => apriModificaLocation(l)}
               onDelete={() => eliminaLocation(l.id)}
             />
@@ -624,6 +644,9 @@ function Impostazioni({ corsi, location, corsiDate, ricarica, onBack }) {
               <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <Field label="Nome città">
                   <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
+                </Field>
+                <Field label="Posti massimi sede (opzionale — se vuoto, nessun tetto)">
+                  <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
                 </Field>
                 <div style={{ display: "flex", gap: 8 }}>
                   <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
@@ -749,7 +772,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, onApriD
                             <span>— {dataEtichetta}</span>
                           </span>
                           {iscritti && (() => {
-                            const max = cd.posti_max ?? corso?.posti_max ?? 0;
+                            const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
                             const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
                             const liberi = Math.max(0, max - occupati);
                             return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
@@ -803,7 +826,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
                   .slice()
                   .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
                   .map((cd) => {
-                    const max = cd.posti_max ?? gruppo.corso?.posti_max ?? 0;
+                    const max = postiMaxEffettivi(cd, gruppo.corso, locById[cd.location_id]);
                     const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
                     const liberi = Math.max(0, max - occupati);
                     const pieno = liberi <= 0;
@@ -1089,6 +1112,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   // trasformo il mese selezionato in un intervallo primo/ultimo giorno per il confronto
   let meseInizio = null, meseFine = null;
@@ -1117,7 +1141,7 @@ function CercaCorso({ corsi, location, corsiDate, iscritti, onApriData, onBack }
   });
 
   function postiLiberi(cd) {
-    const max = cd.posti_max ?? corsoById[cd.corso_id]?.posti_max ?? 0;
+    const max = postiMaxEffettivi(cd, corsoById[cd.corso_id], locById[cd.location_id]);
     const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
     return Math.max(0, max - occupati);
   }
@@ -1289,7 +1313,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
-  const max = corsoData.posti_max ?? corso?.posti_max ?? 0;
+  const max = postiMaxEffettivi(corsoData, corso, loc);
   const liberi = Math.max(0, max - listaIscritti.length);
 
   function apriGestioneClasse() {
@@ -1529,10 +1553,21 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, ricarica,
   useEffect(() => { setPostiLocali(max); }, [corsoData.id, max]);
 
   function cambiaPostiLocali(delta) {
-    setPostiLocali((p) => Math.max(listaIscritti.length, p + delta));
+    setPostiLocali((p) => {
+      const nuovo = Math.max(listaIscritti.length, p + delta);
+      if (delta > 0 && loc?.posti_max != null && nuovo > loc.posti_max) {
+        setMsg(`Attenzione: superati i posti disponibili per la sede (max ${loc.posti_max} a ${loc.nome}).`);
+        return p;
+      }
+      return nuovo;
+    });
   }
 
   async function confermaPosti() {
+    if (loc?.posti_max != null && postiLocali > loc.posti_max) {
+      setMsg(`Attenzione: superati i posti disponibili per la sede (max ${loc.posti_max} a ${loc.nome}).`);
+      return;
+    }
     const { error } = await supabase.from("corsi_date").update({ posti_max: postiLocali }).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     await ricarica();
