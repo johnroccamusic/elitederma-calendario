@@ -2321,6 +2321,10 @@ export default function App() {
   const [corsiDate, setCorsiDate] = useState([]);
   const [iscritti, setIscritti] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
+  const [filtroCittaHome, setFiltroCittaHome] = useState("");
+  const [apriFiltroCorsoHome, setApriFiltroCorsoHome] = useState(false);
+  const [apriFiltroCittaHome, setApriFiltroCittaHome] = useState(false);
 
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
@@ -2402,10 +2406,58 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
             DATE IN<br />PROGRAMMAZIONE
           </div>
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 18 }}>
+            <div style={{ position: "relative" }}>
+              <Button
+                variant={filtroCorsoHome ? "primary" : "ghost"}
+                onClick={() => { setApriFiltroCorsoHome((v) => !v); setApriFiltroCittaHome(false); }}
+              >
+                {filtroCorsoHome ? corsi.find((c) => c.id === filtroCorsoHome)?.nome : "Filtra per corso"}
+              </Button>
+              {apriFiltroCorsoHome && (
+                <select
+                  autoFocus
+                  style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                  value={filtroCorsoHome}
+                  onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
+                  onBlur={() => setApriFiltroCorsoHome(false)}
+                >
+                  <option value="">Tutti i corsi</option>
+                  {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              )}
+            </div>
+            <div style={{ position: "relative" }}>
+              <Button
+                variant={filtroCittaHome ? "primary" : "ghost"}
+                onClick={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); }}
+              >
+                {filtroCittaHome ? location.find((l) => l.id === filtroCittaHome)?.nome : "Filtra per città"}
+              </Button>
+              {apriFiltroCittaHome && (
+                <select
+                  autoFocus
+                  style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                  value={filtroCittaHome}
+                  onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
+                  onBlur={() => setApriFiltroCittaHome(false)}
+                >
+                  <option value="">Tutte le città</option>
+                  {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+
           <DateRaggruppatePerCitta
             corsi={corsi}
             location={location}
-            corsiDate={corsiDate.filter((cd) => cd.data_fine >= dataOggiStr())}
+            corsiDate={corsiDate.filter((cd) =>
+              cd.data_fine >= dataOggiStr() &&
+              (!filtroCorsoHome || cd.corso_id === filtroCorsoHome) &&
+              (!filtroCittaHome || cd.location_id === filtroCittaHome)
+            )}
             iscritti={iscritti}
             onApriData={apriData}
           />
