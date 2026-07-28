@@ -13,6 +13,7 @@ const CREAM_BORDER = "#E8E3D6";
 const BG = "#EFE9DC";
 const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
 const MUTED = "#8B8FA3";
+const GRAFITE = "#54585F";
 
 const fontDisplay = { fontFamily: "'Roboto',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
@@ -2053,14 +2054,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
                 )}
                 {mostraGestione && (
                   <>
-                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 15, color: MUTED }}>
+                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 15, color: NAVY }}>
 
                       {i.pacchetto_kit && (
-                        <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
+                        <div style={{ marginBottom: 6 }}><span style={{ color: GRAFITE }}>Pacchetto/Kit:</span> <b style={{ color: NAVY }}>{i.pacchetto_kit}</b></div>
                       )}
                       {i.totale_pattuito != null && (
                         <div style={{ marginBottom: 6 }}>
-                          <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
+                          <span style={{ color: GRAFITE }}>Totale pattuito:</span> <b style={{ color: NAVY }}>{i.totale_pattuito} €</b>{i.quota_venditore != null && <> — <span style={{ color: GRAFITE }}>quota venditore:</span> <b style={{ color: NAVY }}>{i.quota_venditore} €</b></>}
                         </div>
                       )}
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (() => {
@@ -2068,7 +2069,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
                         const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
                         return (
                           <div style={{ marginBottom: 10 }}>
-                            <b style={{ color: NAVY }}>Totale pagato:</b> {netto} €{conRate !== netto && <> — <b style={{ color: NAVY }}>totale con interessi:</b> {conRate} €</>}
+                            <span style={{ color: GRAFITE }}>Totale pagato:</span> <b style={{ color: NAVY }}>{netto} €</b>{conRate !== netto && <> — <span style={{ color: GRAFITE }}>totale con interessi:</span> <b style={{ color: NAVY }}>{conRate} €</b></>}
                           </div>
                         );
                       })()}
@@ -2077,9 +2078,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
                         <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Pagato in acconto:</b> {totQuota(i, "acconto")} € ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
-                            {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pagato pre corso:</b> {totQuota(i, "precorso")} € ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
-                            {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Importo da pagare al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
+                            {i.acconto_totale != null && <div><span style={{ color: GRAFITE }}>Pagato in acconto:</span> <b style={{ color: NAVY }}>{totQuota(i, "acconto")} €</b> ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
+                            {i.precorso_totale != null && <div><span style={{ color: GRAFITE }}>Pagato pre corso:</span> <b style={{ color: NAVY }}>{totQuota(i, "precorso")} €</b> ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
+                            {i.saldo_totale != null && <div><span style={{ color: GRAFITE }}>Importo da pagare al corso:</span> <b style={{ color: NAVY }}>{i.saldo_totale} €</b> ({i.saldo_metodo || "?"})</div>}
                           </div>
                         </div>
                       )}
@@ -2088,17 +2089,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
                         <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Modelle</div>
                           {i.numero_modelle != null && (
-                            <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+                            <div><span style={{ color: GRAFITE }}>Modelle da pagare:</span> <b style={{ color: NAVY }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €</b>{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
                           )}
                         </div>
                       )}
                       {i.taglia_divisa && (
-                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
+                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}><span style={{ color: GRAFITE }}>Taglia divisa:</span> <b style={{ color: NAVY }}>{i.taglia_divisa}</b></div>
                       )}
 
                       {i.accordi_commerciali && (
                         <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}
+                          <span style={{ color: GRAFITE }}>Accordi commerciali:</span> <b style={{ color: NAVY }}>{i.accordi_commerciali}</b>
                         </div>
                       )}
 
