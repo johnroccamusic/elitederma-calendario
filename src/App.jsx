@@ -1589,7 +1589,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   // salva i dati correnti del form sul database. Restituisce true se riuscito.
   // Non naviga da nessuna parte: la usano sia il pulsante "Salva"/"Aggiungi"
   // sia il salvataggio automatico quando si esce da un campo.
-  async function persistiIscritto() {
+  // "strict" richiede tutti i campi anagrafici/vendita compilati: si applica
+  // solo quando si crea un nuovo iscritto, mai quando se ne modifica uno già
+  // esistente, altrimenti un campo mancante da prima (es. taglia divisa mai
+  // compilata) bloccherebbe in silenzio ogni futuro salvataggio automatico.
+  async function persistiIscritto(strict = !modificandoId) {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
 
@@ -1599,11 +1603,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     if (pagSaldo.totale !== "" && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
 
     const altriMancanti = [];
-    if (totalePattuito === "") altriMancanti.push("totale pattuito");
-    if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
-    if (!tutor.trim()) altriMancanti.push("tutor");
-    if (!telefono.trim()) altriMancanti.push("numero di telefono");
-    if (!tagliaDivisa) altriMancanti.push("taglia divisa");
+    if (strict) {
+      if (totalePattuito === "") altriMancanti.push("totale pattuito");
+      if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
+      if (!tutor.trim()) altriMancanti.push("tutor");
+      if (!telefono.trim()) altriMancanti.push("numero di telefono");
+      if (!tagliaDivisa) altriMancanti.push("taglia divisa");
+    }
 
     if (metodiMancanti.length > 0 || altriMancanti.length > 0) {
       const parti = [];
