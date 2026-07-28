@@ -905,8 +905,8 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
 
   return (
     <div>
-      {cittaOrdinate.map((c) => (
-        <div key={c.nome} style={{ marginBottom: 18 }}>
+      {cittaOrdinate.map((c, idx) => (
+        <div key={c.nome} style={{ marginBottom: 18, paddingTop: idx > 0 ? 16 : 0, borderTop: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
           <div style={{ ...fontDisplay, fontSize: 18, color: NAVY, marginBottom: 8, letterSpacing: 0.5 }}>{c.nome.toUpperCase()}</div>
           {Object.keys(c.mesi)
             .sort()
