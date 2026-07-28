@@ -1878,17 +1878,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <div style={{ flex: "1 1 100px" }}>
-                <Field label="Imponibile">
+                <Field label="Totale senza Iva">
                   <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.imponibile) + parseNum(pagPrecorso.imponibile) + parseNum(pagSaldo.imponibile)).toFixed(2)} disabled />
                 </Field>
               </div>
               <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale pagato netto">
+                <Field label="Totale con Iva">
                   <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale)).toFixed(2)} disabled />
                 </Field>
               </div>
               <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale pagato con rate">
+                <Field label="Totale con interessi">
                   <input
                     style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
                     value={(() => {
