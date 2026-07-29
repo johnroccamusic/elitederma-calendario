@@ -32,6 +32,14 @@ function fmtDataCompatta(inizio, fine) {
   if (mi === mf) return `${gi}–${gf} ${MESI_ABBR[mi - 1]}`;
   return `${gi} ${MESI_ABBR[mi - 1]}–${gf} ${MESI_ABBR[mf - 1]}`;
 }
+// come fmtDataCompatta ma su due righe (numeri sopra, mese sotto) per le tabelle strette
+function fmtDataStack(inizio, fine) {
+  const [, mi, gi] = inizio.split("-").map(Number);
+  const [, mf, gf] = fine.split("-").map(Number);
+  if (inizio === fine) return { sopra: String(gi), sotto: MESI_ABBR[mi - 1] };
+  if (mi === mf) return { sopra: `${gi}–${gf}`, sotto: MESI_ABBR[mi - 1] };
+  return { sopra: `${gi} ${MESI_ABBR[mi - 1]}`, sotto: `${gf} ${MESI_ABBR[mf - 1]}` };
+}
 const GIORNI = ["L","M","M","G","V","S","D"];
 
 function fmtData(d) {
@@ -456,10 +464,33 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
+  const [filtroCorso, setFiltroCorso] = useState("");
+  const [filtroCitta, setFiltroCitta] = useState("");
+  const [filtroMaster, setFiltroMaster] = useState("");
+  const [filtroAssistente, setFiltroAssistente] = useState("");
+  const [filtroLeva, setFiltroLeva] = useState("");
+  const [apriFiltro, setApriFiltro] = useState(""); // quale tendina filtro è aperta, "" = nessuna
+
+  const filtriAttivi = filtroCorso || filtroCitta || filtroMaster || filtroAssistente || filtroLeva;
+
   const righe = corsiDate
     .filter((cd) => cd.data_fine >= dataOggiStr())
+    .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
+    .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
+    .filter((cd) => !filtroMaster || cd.master_id === filtroMaster)
+    .filter((cd) => !filtroAssistente || cd.assistente_id === filtroAssistente)
+    .filter((cd) => !filtroLeva || cd.leva_id === filtroLeva)
     .slice()
     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+
+  const gruppiMese = {};
+  righe.forEach((cd) => {
+    const [anno, mese] = cd.data_inizio.split("-");
+    const chiave = `${anno}-${mese}`;
+    if (!gruppiMese[chiave]) gruppiMese[chiave] = { etichetta: `${MESI[parseInt(mese, 10) - 1]} ${anno}`, righe: [] };
+    gruppiMese[chiave].righe.push(cd);
+  });
+  const chiaviMese = Object.keys(gruppiMese).sort();
 
   async function salvaCampo(id, campo, valore) {
     const { error } = await supabase.from("corsi_date").update({ [campo]: valore }).eq("id", id);
@@ -491,62 +522,96 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     }
   }
 
-  const celStyle = { padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
-  const campoStyle = { ...fontBody, fontSize: 12, padding: "6px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", minWidth: 100, background: "#fff" };
-  const semaforo = (attivo, onLabel, offLabel, onClick) => (
+  const bordoV = `1px solid ${CREAM_BORDER}`;
+  const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
+  const campoStyle = { ...fontBody, fontSize: 12, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", background: "#fff" };
+  const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
       style={{
-        ...fontBody, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer",
-        border: `1px solid ${attivo ? "#2E7D32" : "#C0392B"}`, borderRadius: 8, padding: "6px 10px",
+        ...fontBody, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        border: `1px solid ${attivo ? "#2E7D32" : "#C0392B"}`, borderRadius: 7,
+        padding: size === "piccolo" ? "4px 9px" : "5px 10px",
         background: attivo ? "#E8F5E9" : "#FDECEC", color: attivo ? "#2E7D32" : "#C0392B",
       }}
     >
-      {attivo ? onLabel : offLabel}
+      {attivo ? "SI" : "NO"}
     </button>
   );
 
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Assegnazione Master" onBack={onBack} />
-      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
-        Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
+  const COLONNE = [
+    { larghezza: 54 }, { larghezza: 100 }, { larghezza: 70 }, { larghezza: 60 },
+    { larghezza: 100 }, { larghezza: 90 }, { larghezza: 100 }, { larghezza: 90 },
+    { larghezza: 170 }, { larghezza: 100 }, { larghezza: 100 },
+  ];
+
+  function filtroDropdown(chiave, etichetta, valore, setValore, opzioni) {
+    return (
+      <div style={{ position: "relative" }}>
+        <Button
+          variant={valore ? "primary" : "ghost"}
+          onClick={() => setApriFiltro(apriFiltro === chiave ? "" : chiave)}
+        >
+          {valore ? opzioni.find((o) => o.id === valore)?.nome?.toUpperCase() : etichetta}
+        </Button>
+        {apriFiltro === chiave && (
+          <select
+            autoFocus
+            style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+            value={valore}
+            onChange={(e) => { setValore(e.target.value); setApriFiltro(""); }}
+            onBlur={() => setApriFiltro("")}
+          >
+            <option value="">Tutti</option>
+            {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+          </select>
+        )}
       </div>
-      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+    );
+  }
+
+  function tabellaMese(righeMese) {
+    return (
+      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginBottom: 28 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
+          <colgroup>{COLONNE.map((c, i) => <col key={i} style={{ width: c.larghezza }} />)}</colgroup>
           <thead>
             <tr>
               <th style={thStyle}>Data</th>
               <th style={thStyle}>Corso</th>
               <th style={thStyle}>Città</th>
-              <th style={thStyle}>Sede confermata</th>
+              <th style={thStyle}>Sede conf.</th>
               <th style={thStyle}>Master</th>
               <th style={thStyle}>Note</th>
               <th style={thStyle}>Assistenti</th>
               <th style={thStyle}>Leve</th>
               <th style={thStyle}>Viaggio</th>
               <th style={thStyle}>Alloggio</th>
-              <th style={thStyle}>Note viaggio</th>
+              <th style={{ ...thStyle, borderRight: "none" }}>Note viaggio</th>
             </tr>
           </thead>
           <tbody>
-            {righe.map((cd) => {
+            {righeMese.map((cd) => {
               const corso = corsoById[cd.corso_id];
               const loc = locById[cd.location_id];
               const nBiglietti = (cd.viaggio_file || []).length;
+              const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
               return (
                 <tr key={cd.id}>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700, whiteSpace: "nowrap" }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, textAlign: "center" }}>
+                    <div>{sopra}</div>
+                    <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
+                  </td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, fontWeight: 700 }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
                       {corso?.nome?.toUpperCase() || "?"}
                     </span>
                   </td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                  <td style={celStyle}>
-                    {semaforo(cd.sede_confermata, "CONFERMATA", "DA PRENOTARE", () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata))}
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                  <td style={{ ...celStyle, textAlign: "center" }}>
+                    {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
                   </td>
                   <td style={celStyle}>
                     <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
@@ -570,16 +635,18 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                     </select>
                   </td>
                   <td style={celStyle}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 160 }}>
-                      {semaforo(cd.viaggio_prenotato, "PRENOTATO", "DA PRENOTARE", () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato))}
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <label style={{ ...fontBody, fontSize: 11, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "5px 8px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
+                        <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ fontSize: 10, padding: "4px 7px" }}>Copia biglietti</Button>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <label style={{ ...fontBody, fontSize: 10, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 7px", cursor: "pointer", whiteSpace: "nowrap" }}>
                           + file
                           <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
                         </label>
-                        {nBiglietti > 0 && <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{nBiglietti} file</span>}
+                        {nBiglietti > 0 && <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>{nBiglietti} file</span>}
                       </div>
-                      <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ fontSize: 11, padding: "5px 8px" }}>Copia biglietti</Button>
                     </div>
                   </td>
                   <td style={celStyle}>
@@ -588,18 +655,52 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                       {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                     </select>
                   </td>
-                  <td style={celStyle}>
+                  <td style={{ ...celStyle, borderRight: "none" }}>
                     <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
                   </td>
                 </tr>
               );
             })}
-            {righe.length === 0 && (
-              <tr><td colSpan={11} style={{ ...celStyle, ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna data in programmazione.</td></tr>
-            )}
           </tbody>
         </table>
       </div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Assegnazione Master" onBack={onBack} />
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+        Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
+        {filtroDropdown("corso", "Filtra per corso", filtroCorso, setFiltroCorso, corsi)}
+        {filtroDropdown("citta", "Filtra per città", filtroCitta, setFiltroCitta, location)}
+        {filtroDropdown("master", "Filtra per master", filtroMaster, setFiltroMaster, master)}
+        {filtroDropdown("assistente", "Filtra per assistente", filtroAssistente, setFiltroAssistente, assistente)}
+        {filtroDropdown("leva", "Filtra per leva", filtroLeva, setFiltroLeva, leva)}
+        {filtriAttivi && (
+          <Button
+            variant="ghost"
+            onClick={() => { setFiltroCorso(""); setFiltroCitta(""); setFiltroMaster(""); setFiltroAssistente(""); setFiltroLeva(""); setApriFiltro(""); }}
+          >
+            Cancella filtri
+          </Button>
+        )}
+      </div>
+
+      {chiaviMese.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Nessuna data in programmazione.</div>
+      )}
+      {chiaviMese.map((chiave) => (
+        <div key={chiave}>
+          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 800, color: NAVY, textAlign: "left", marginBottom: 10 }}>
+            {gruppiMese[chiave].etichetta.toUpperCase()}
+          </div>
+          {tabellaMese(gruppiMese[chiave].righe)}
+        </div>
+      ))}
     </div>
   );
 }
