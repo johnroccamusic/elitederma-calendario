@@ -859,6 +859,29 @@ function Statistiche({ onBack, onApriVenditori }) {
 function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
   const [da, setDa] = useState("");
   const [a, setA] = useState("");
+  const [periodoSel, setPeriodoSel] = useState("");
+
+  // primo e ultimo giorno del mese "oggi + offsetMesi" (0 = mese corrente, -1 = mese scorso)
+  function rangeMese(offsetMesi) {
+    const oggi = new Date();
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() + offsetMesi, 1);
+    const fine = new Date(oggi.getFullYear(), oggi.getMonth() + offsetMesi + 1, 0);
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return { inizio: fmt(inizio), fine: fmt(fine) };
+  }
+  function selezionaPeriodo(valore) {
+    setPeriodoSel(valore);
+    if (valore === "corrente") {
+      const { inizio, fine } = rangeMese(0);
+      setDa(inizio); setA(fine);
+    } else if (valore === "scorso") {
+      const { inizio, fine } = rangeMese(-1);
+      setDa(inizio); setA(fine);
+    }
+  }
+  function cancellaFiltri() {
+    setDa(""); setA(""); setPeriodoSel("");
+  }
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -920,14 +943,21 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
       </div>
 
       <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap" }}>
+        <Field label="Periodo rapido">
+          <select style={inputStyle} value={periodoSel} onChange={(e) => selezionaPeriodo(e.target.value)}>
+            <option value="">Scegli un periodo…</option>
+            <option value="corrente">Mese corrente</option>
+            <option value="scorso">Mese scorso</option>
+          </select>
+        </Field>
         <Field label="Da">
-          <input type="date" style={inputStyle} value={da} onChange={(e) => setDa(e.target.value)} />
+          <input type="date" style={inputStyle} value={da} onChange={(e) => { setDa(e.target.value); setPeriodoSel(""); }} />
         </Field>
         <Field label="A">
-          <input type="date" style={inputStyle} value={a} onChange={(e) => setA(e.target.value)} />
+          <input type="date" style={inputStyle} value={a} onChange={(e) => { setA(e.target.value); setPeriodoSel(""); }} />
         </Field>
-        {(da || a) && (
-          <Button variant="ghost" onClick={() => { setDa(""); setA(""); }}>Cancella filtro</Button>
+        {(da || a || periodoSel) && (
+          <Button variant="ghost" onClick={cancellaFiltri}>Cancella filtri</Button>
         )}
       </div>
 
