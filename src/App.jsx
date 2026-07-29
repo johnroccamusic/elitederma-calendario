@@ -23,6 +23,15 @@ const fontDisplay = { fontFamily: "'Roboto',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+const MESI_ABBR = ["GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC"];
+// data compatta per le liste: "11 OTT", "11–16 OTT", "29 SET–4 OTT"
+function fmtDataCompatta(inizio, fine) {
+  const [, mi, gi] = inizio.split("-").map(Number);
+  const [, mf, gf] = fine.split("-").map(Number);
+  if (inizio === fine) return `${gi} ${MESI_ABBR[mi - 1]}`;
+  if (mi === mf) return `${gi}–${gf} ${MESI_ABBR[mi - 1]}`;
+  return `${gi} ${MESI_ABBR[mi - 1]}–${gf} ${MESI_ABBR[mf - 1]}`;
+}
 const GIORNI = ["L","M","M","G","V","S","D"];
 
 function fmtData(d) {
@@ -982,15 +991,15 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
   return (
     <div>
       {cittaOrdinate.map((c, idx) => (
-        <div key={c.nome} style={{ marginBottom: 18, paddingTop: idx > 0 ? 16 : 0, borderTop: idx > 0 ? `2px solid ${MUTED}` : "none" }}>
-          <div style={{ ...fontDisplay, fontSize: 18, color: NAVY, marginBottom: 8, letterSpacing: 0.5 }}>{c.nome.toUpperCase()}</div>
+        <div key={c.nome} style={{ marginBottom: 24, paddingTop: idx > 0 ? 20 : 0, borderTop: idx > 0 ? `2px solid ${MUTED}` : "none" }}>
+          <div style={{ ...fontDisplay, fontSize: 34, fontWeight: 800, color: NAVY, marginBottom: 14 }}>{c.nome.toUpperCase()}</div>
           {Object.keys(c.mesi)
             .sort()
             .map((chiaveMese) => {
               const gruppoMese = c.mesi[chiaveMese];
               return (
-                <div key={chiaveMese} style={{ marginBottom: 10 }}>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 1 }}>
+                <div key={chiaveMese} style={{ marginBottom: 14 }}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}` }}>
                     {gruppoMese.etichetta}
                   </div>
                   {gruppoMese.voci
@@ -1025,20 +1034,24 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                         <div
                           key={cd.id}
                           onClick={() => onApriData?.(cd)}
-                          style={{ padding: "5px 4px", cursor: onApriData ? "pointer" : "default", maxWidth: 420 }}
+                          style={{ padding: "9px 4px", cursor: onApriData ? "pointer" : "default" }}
                         >
-                          <div style={{ ...fontBody, fontSize: 13, color: MUTED, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                              <span style={{ width: 13, height: 13, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                              <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome?.toUpperCase() || "?"}</b>
-                              <span>— {dataEtichetta}</span>
+                          <div style={{ ...fontBody, fontSize: 15, color: NAVY, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: "1 1 auto" }}>
+                              <span style={{ width: 14, height: 14, borderRadius: 4, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                              <b style={{ color: NAVY, fontWeight: 700 }}>{corso?.nome?.toUpperCase() || "?"}</b>
                             </span>
-                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ flexShrink: 0 }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                               {iscritti && (() => {
                                 const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
                                 const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
                                 const liberi = Math.max(0, max - occupati);
-                                return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
+                                return (
+                                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, padding: "5px 10px", whiteSpace: "nowrap" }}>
+                                    {liberi} POST{liberi === 1 ? "O" : "I"}
+                                  </span>
+                                );
                               })()}
                               {onDelete && (
                                 <button
