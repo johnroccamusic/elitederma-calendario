@@ -448,7 +448,7 @@ function Gate({ onOk }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, onBack }) {
+function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -463,6 +463,9 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [showMasterModal, setShowMasterModal] = useState(false);
+  const [showHotelModal, setShowHotelModal] = useState(false);
+  const [showAssistenteModal, setShowAssistenteModal] = useState(false);
+  const [showLevaModal, setShowLevaModal] = useState(false);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
   const [modNomeCorso, setModNomeCorso] = useState("");
@@ -472,10 +475,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeLoc, setModNomeLoc] = useState("");
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
-
-  const [masterInModifica, setMasterInModifica] = useState(null);
-  const [modNomeMaster, setModNomeMaster] = useState("");
-  const [nomeMaster, setNomeMaster] = useState("");
 
   const [dataInModifica, setDataInModifica] = useState(null);
   const [modDataInizio, setModDataInizio] = useState("");
@@ -506,14 +505,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
     setMsg("Data eliminata.");
     ricarica();
   }
-  async function eliminaMaster(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const { error } = await supabase.from("master").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setMsg("Master eliminata.");
-    ricarica();
-  }
-
   function apriModificaCorso(c) {
     setCorsoInModifica(c.id);
     setModNomeCorso(c.nome.toUpperCase());
@@ -547,19 +538,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
     setMsg("Città aggiornata.");
-    ricarica();
-  }
-
-  function apriModificaMaster(m) {
-    setMasterInModifica(m.id);
-    setModNomeMaster(m.nome.toUpperCase());
-  }
-  async function salvaModificaMaster(id) {
-    if (!modNomeMaster.trim()) { setMsg("Il nome non può essere vuoto."); return; }
-    const { error } = await supabase.from("master").update({ nome: modNomeMaster.trim().toUpperCase() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setMasterInModifica(null);
-    setMsg("Master aggiornata.");
     ricarica();
   }
 
@@ -638,14 +616,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
     ricarica();
   }
 
-  async function aggiungiMaster() {
-    if (!nomeMaster.trim()) return;
-    const { error } = await supabase.from("master").insert({ nome: nomeMaster.trim().toUpperCase() });
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeMaster(""); setMsg("Master aggiunta.");
-    ricarica();
-  }
-
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Setting" onBack={onBack} />
@@ -654,6 +624,9 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
         <Button onClick={() => setShowCorsoModal(true)}>Aggiungi corso</Button>
         <Button onClick={() => setShowLocModal(true)}>Aggiungi location</Button>
         <Button onClick={() => setShowMasterModal(true)}>Aggiungi Master</Button>
+        <Button onClick={() => setShowHotelModal(true)}>Aggiungi Hotel</Button>
+        <Button onClick={() => setShowAssistenteModal(true)}>Aggiungi Assistente</Button>
+        <Button onClick={() => setShowLevaModal(true)}>Aggiungi Leva</Button>
       </div>
 
       <div style={cardStyle}>
@@ -860,37 +833,42 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, ricarica, 
 
       {showMasterModal && (
         <Modal title="Master" onClose={() => setShowMasterModal(false)}>
-          <div style={hStyle}>Aggiungi Master</div>
-          <div style={subStyle}>Nomi assegnabili a una specifica data/edizione di un corso.</div>
-          <Field label="Nome">
-            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeMaster} onChange={(e) => setNomeMaster(e.target.value.toUpperCase())} placeholder="es. MARIA ROSSI" />
-          </Field>
-          <Button onClick={aggiungiMaster}>Aggiungi Master</Button>
+          <div style={{ ...subStyle, marginTop: -4 }}>Nomi assegnabili a una specifica data/edizione di un corso.</div>
+          <GestioneListaSemplice
+            nomeSingolare="Master" nomeArticolo="una" tabella="master"
+            elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            placeholder="es. MARIA ROSSI"
+          />
+        </Modal>
+      )}
 
-          <div style={{ ...hStyle, marginTop: 24 }}>Master esistenti</div>
-          <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare.</div>
-          {master.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master ancora.</div>}
-          {master.map((m) => (
-            <div key={m.id}>
-              <RigaEliminabile
-                label={m.nome.toUpperCase()}
-                onModifica={() => apriModificaMaster(m)}
-                onDelete={() => eliminaMaster(m.id)}
-              />
-              {masterInModifica === m.id && (
-                <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <Field label="Nome">
-                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeMaster} onChange={(e) => setModNomeMaster(e.target.value.toUpperCase())} />
-                  </Field>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button onClick={() => salvaModificaMaster(m.id)}>Salva</Button>
-                    <Button variant="ghost" onClick={() => setMasterInModifica(null)}>Annulla</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+      {showHotelModal && (
+        <Modal title="Hotel" onClose={() => setShowHotelModal(false)}>
+          <GestioneListaSemplice
+            nomeSingolare="Hotel" nomeArticolo="un" tabella="hotel"
+            elementi={hotel} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            placeholder="es. HOTEL ROMA"
+          />
+        </Modal>
+      )}
+
+      {showAssistenteModal && (
+        <Modal title="Assistente" onClose={() => setShowAssistenteModal(false)}>
+          <GestioneListaSemplice
+            nomeSingolare="Assistente" nomeArticolo="un" tabella="assistente"
+            elementi={assistente} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            placeholder="es. MARIA ROSSI"
+          />
+        </Modal>
+      )}
+
+      {showLevaModal && (
+        <Modal title="Leva" onClose={() => setShowLevaModal(false)}>
+          <GestioneListaSemplice
+            nomeSingolare="Leva" nomeArticolo="una" tabella="leva"
+            elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            placeholder="es. LEVA 1"
+          />
         </Modal>
       )}
     </div>
@@ -924,6 +902,76 @@ function Modal({ title, onClose, children }) {
         {children}
       </div>
     </div>
+  );
+}
+
+// gestione CRUD di una semplice tabella "nome" (master, hotel, assistente, leva):
+// aggiungi, elenco esistenti con modifica/elimina. Va dentro un <Modal>.
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder }) {
+  const [nome, setNome] = useState("");
+  const [inModifica, setInModifica] = useState(null);
+  const [modNome, setModNome] = useState("");
+
+  async function aggiungi() {
+    if (!nome.trim()) return;
+    const { error } = await supabase.from(tabella).insert({ nome: nome.trim().toUpperCase() });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNome(""); setMsg(`${nomeSingolare} aggiunt${nomeArticolo === "un" ? "o" : "a"}.`);
+    ricarica();
+  }
+  async function elimina(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from(tabella).delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg(`${nomeSingolare} eliminat${nomeArticolo === "un" ? "o" : "a"}.`);
+    ricarica();
+  }
+  function apriModifica(el) {
+    setInModifica(el.id);
+    setModNome(el.nome.toUpperCase());
+  }
+  async function salvaModifica(id) {
+    if (!modNome.trim()) { setMsg("Il nome non può essere vuoto."); return; }
+    const { error } = await supabase.from(tabella).update({ nome: modNome.trim().toUpperCase() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setInModifica(null);
+    setMsg(`${nomeSingolare} aggiornat${nomeArticolo === "un" ? "o" : "a"}.`);
+    ricarica();
+  }
+
+  return (
+    <>
+      <div style={hStyle}>Aggiungi {nomeSingolare}</div>
+      <Field label="Nome">
+        <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} placeholder={placeholder} />
+      </Field>
+      <Button onClick={aggiungi}>Aggiungi {nomeSingolare}</Button>
+
+      <div style={{ ...hStyle, marginTop: 24 }}>{nomeSingolare} esistenti</div>
+      <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare.</div>
+      {elementi.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun{nomeArticolo === "un" ? "o" : "a"} {nomeSingolare.toLowerCase()} ancora.</div>}
+      {elementi.map((el) => (
+        <div key={el.id}>
+          <RigaEliminabile
+            label={el.nome.toUpperCase()}
+            onModifica={() => apriModifica(el)}
+            onDelete={() => elimina(el.id)}
+          />
+          {inModifica === el.id && (
+            <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <Field label="Nome">
+                <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNome} onChange={(e) => setModNome(e.target.value.toUpperCase())} />
+              </Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button onClick={() => salvaModifica(el.id)}>Salva</Button>
+                <Button variant="ghost" onClick={() => setInModifica(null)}>Annulla</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+    </>
   );
 }
 
@@ -2619,6 +2667,9 @@ export default function App() {
   const [corsiDate, setCorsiDate] = useState([]);
   const [iscritti, setIscritti] = useState([]);
   const [master, setMaster] = useState([]);
+  const [hotel, setHotel] = useState([]);
+  const [assistente, setAssistente] = useState([]);
+  const [leva, setLeva] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -2630,18 +2681,24 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
       supabase.from("iscritti").select("*").order("ts"),
       supabase.from("master").select("*").order("nome"),
+      supabase.from("hotel").select("*").order("nome"),
+      supabase.from("assistente").select("*").order("nome"),
+      supabase.from("leva").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
     setCorsiDate(cd.data || []);
     setIscritti(i.data || []);
     setMaster(m.data || []);
+    setHotel(h.data || []);
+    setAssistente(a.data || []);
+    setLeva(lv.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -2827,7 +2884,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} ricarica={fetchDati} onBack={() => setView("home")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "calendario" && (
