@@ -577,6 +577,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     await salvaCampo(cd.id, "viaggio_file", [...(cd.viaggio_file || []), ...nuovi]);
   }
 
+  async function cancellaBiglietti(cd) {
+    const n = (cd.viaggio_file || []).length;
+    if (n === 0) return;
+    if (!window.confirm(`Vuoi cancellare ${n === 1 ? "il file caricato" : `i ${n} file caricati`}?`)) return;
+    await salvaCampo(cd.id, "viaggio_file", []);
+    window.alert("Eseguito.");
+  }
+
   async function copiaBiglietti(cd) {
     const file = cd.viaggio_file || [];
     if (file.length === 0) { window.alert("Non ci sono biglietti."); return; }
@@ -769,7 +777,15 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                         +
                         <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
                       </label>
-                      {nBiglietti > 0 && <span style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap" }}>{nBiglietti} file</span>}
+                      {nBiglietti > 0 && (
+                        <span
+                          onClick={() => cancellaBiglietti(cd)}
+                          title="Clicca per cancellare i file caricati"
+                          style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
+                        >
+                          {nBiglietti} file
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td style={celStyle}>
