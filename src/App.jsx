@@ -1343,12 +1343,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
                   </Field>
                 </div>
               </div>
-              <Field label="Master (opzionale)">
-                <select style={inputStyle} value={modMasterSel} onChange={(e) => setModMasterSel(e.target.value)}>
-                  <option value="">Nessuna</option>
-                  {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-                </select>
-              </Field>
               <Field label="Posti in classe">
                 <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
                   <button
@@ -1967,7 +1961,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                       background: corsoById[ev.corso_id]?.colore || NAVY,
                       borderRadius: 4,
                       color: "#fff",
-                      fontSize: 11,
+                      fontSize: 8,
                       fontWeight: 500,
                       ...fontBody,
                       display: "flex",
