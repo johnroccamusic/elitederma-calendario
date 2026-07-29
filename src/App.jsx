@@ -564,7 +564,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 8, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
-  const campoStyle = { ...fontBody, fontSize: 11, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", boxSizing: "border-box", background: "#fff" };
+  const campoStyle = { ...fontBody, fontSize: 10, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", boxSizing: "border-box", background: "#fff" };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
