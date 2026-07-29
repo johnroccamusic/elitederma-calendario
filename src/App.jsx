@@ -870,24 +870,42 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
     return true;
   });
 
-  const perVenditore = {};
+  // toglie gli accenti per riconoscere come lo stesso venditore "MAURE" e
+  // "MAURÉ" (o qualunque altra variante con/senza accento dello stesso nome)
+  function senzaAccenti(s) {
+    return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  }
+
+  const perVenditore = {}; // chiave senza accenti -> { totale, perCorso, varianti: {nome scritto: quante volte} }
   const totaliCorso = {};
   filtrati.forEach((i) => {
     const cd = cdById[i.corso_data_id];
     const corsoNome = cd ? (corsoById[cd.corso_id]?.nome?.toUpperCase() || "?") : "?";
-    const venditore = (i.tutor || "").trim().toUpperCase() || "NON SPECIFICATO";
-    if (!perVenditore[venditore]) perVenditore[venditore] = { totale: 0, perCorso: {} };
-    perVenditore[venditore].totale += 1;
-    perVenditore[venditore].perCorso[corsoNome] = (perVenditore[venditore].perCorso[corsoNome] || 0) + 1;
+    const scritto = (i.tutor || "").trim().toUpperCase() || "NON SPECIFICATO";
+    const chiave = senzaAccenti(scritto);
+    if (!perVenditore[chiave]) perVenditore[chiave] = { totale: 0, perCorso: {}, varianti: {} };
+    perVenditore[chiave].totale += 1;
+    perVenditore[chiave].perCorso[corsoNome] = (perVenditore[chiave].perCorso[corsoNome] || 0) + 1;
+    perVenditore[chiave].varianti[scritto] = (perVenditore[chiave].varianti[scritto] || 0) + 1;
     totaliCorso[corsoNome] = (totaliCorso[corsoNome] || 0) + 1;
   });
 
   // colonne dei corsi ordinate dal più venduto al meno venduto
   const colonneCorsi = Object.keys(totaliCorso).sort((x, y) => totaliCorso[y] - totaliCorso[x]);
+  // nome da mostrare per ogni venditore: se tra le varianti scritte ce n'è
+  // una con l'accento la si preferisce sempre (la più frequente tra quelle
+  // accentate), altrimenti la variante scritta più frequente
+  function nomeDaMostrare(varianti) {
+    const voci = Object.entries(varianti);
+    const conAccento = voci.filter(([nome]) => nome !== senzaAccenti(nome));
+    const scelta = conAccento.length > 0 ? conAccento : voci;
+    scelta.sort((x, y) => y[1] - x[1]);
+    return scelta[0][0];
+  }
   // venditori in ordine alfabetico: man mano che ne compaiono di nuovi si
   // inseriscono al posto giusto da soli, senza bisogno di toccare il codice
   const righeVenditori = Object.entries(perVenditore)
-    .map(([nome, dati]) => ({ nome, ...dati }))
+    .map(([, dati]) => ({ nome: nomeDaMostrare(dati.varianti), totale: dati.totale, perCorso: dati.perCorso }))
     .sort((x, y) => x.nome.localeCompare(y.nome));
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
