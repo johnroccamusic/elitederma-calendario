@@ -206,6 +206,8 @@ const ETICHETTE_MODULO_PDF = {
   accontoMetodo: "acconto pagato a mezzo",
   accontoImporto: "di euro",
   tagliaDivisa: "taglia divisa",
+  scelteModelle: "scelta delle modelle",
+  tipoCorso: "tipo di corso scelto",
 };
 
 // legge il testo di un file PDF (senza OCR: il modulo ha testo selezionabile)
@@ -1759,6 +1761,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
       if (dati.tagliaDivisa && !tagliaDivisa) {
         const taglia = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
         if (taglia) setTagliaDivisa(taglia);
+      }
+
+      if (dati.tipoCorso && !pacchettoKit.trim()) setPacchettoKit(dati.tipoCorso.toUpperCase());
+
+      if (dati.scelteModelle && richiedeModelle === "") {
+        const testoModelle = dati.scelteModelle.toLowerCase();
+        if (testoModelle.includes("cercherò io") || testoModelle.includes("cerchero io")) setRichiedeModelle("no");
       }
 
       if ((dati.accontoMetodo || dati.accontoImporto) && pagAcconto.totale === "") {
