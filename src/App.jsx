@@ -844,6 +844,107 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   );
 }
 
+// ---------- Statistiche ----------
+function Statistiche({ onBack, onApriVenditori }) {
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Statistiche" onBack={onBack} />
+      <CardHome title="Statistica venditori" sub="Iscrizioni fatte da ciascun venditore, per corso" onClick={onApriVenditori} />
+    </div>
+  );
+}
+
+// quante iscrizioni ha fatto ciascun venditore (campo "Tutor" nella scheda
+// iscritto), nel periodo scelto, con il dettaglio corso per corso
+function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
+  const [da, setDa] = useState("");
+  const [a, setA] = useState("");
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+
+  const filtrati = iscritti.filter((i) => {
+    if (!i.ts) return false;
+    if (da && i.ts < da) return false;
+    if (a && i.ts > `${a}T23:59:59.999`) return false;
+    return true;
+  });
+
+  const perVenditore = {};
+  const totaliCorso = {};
+  filtrati.forEach((i) => {
+    const cd = cdById[i.corso_data_id];
+    const corsoNome = cd ? (corsoById[cd.corso_id]?.nome?.toUpperCase() || "?") : "?";
+    const venditore = (i.tutor || "").trim().toUpperCase() || "NON SPECIFICATO";
+    if (!perVenditore[venditore]) perVenditore[venditore] = { totale: 0, perCorso: {} };
+    perVenditore[venditore].totale += 1;
+    perVenditore[venditore].perCorso[corsoNome] = (perVenditore[venditore].perCorso[corsoNome] || 0) + 1;
+    totaliCorso[corsoNome] = (totaliCorso[corsoNome] || 0) + 1;
+  });
+
+  // colonne dei corsi ordinate dal più venduto al meno venduto
+  const colonneCorsi = Object.keys(totaliCorso).sort((x, y) => totaliCorso[y] - totaliCorso[x]);
+  // venditori in ordine alfabetico: man mano che ne compaiono di nuovi si
+  // inseriscono al posto giusto da soli, senza bisogno di toccare il codice
+  const righeVenditori = Object.entries(perVenditore)
+    .map(([nome, dati]) => ({ nome, ...dati }))
+    .sort((x, y) => x.nome.localeCompare(y.nome));
+
+  const bordoV = `1px solid ${CREAM_BORDER}`;
+  const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV, whiteSpace: "nowrap" };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Statistica venditori" onBack={onBack} />
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+        Numero di iscrizioni registrate per ciascun venditore (campo "Tutor" nella scheda iscritto), nel periodo scelto.
+      </div>
+
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap" }}>
+        <Field label="Da">
+          <input type="date" style={inputStyle} value={da} onChange={(e) => setDa(e.target.value)} />
+        </Field>
+        <Field label="A">
+          <input type="date" style={inputStyle} value={a} onChange={(e) => setA(e.target.value)} />
+        </Field>
+        {(da || a) && (
+          <Button variant="ghost" onClick={() => { setDa(""); setA(""); }}>Cancella filtro</Button>
+        )}
+      </div>
+
+      {righeVenditori.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna iscrizione trovata nel periodo scelto.</div>
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Venditore</th>
+                <th style={thStyle}>Totale</th>
+                {colonneCorsi.map((c) => <th key={c} style={thStyle}>{c} {totaliCorso[c]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {righeVenditori.map((r) => (
+                <tr key={r.nome}>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>{r.nome}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700 }}>{r.totale}</td>
+                  {colonneCorsi.map((c) => (
+                    <td key={c} style={{ ...celStyle, ...fontBody, fontSize: 13, color: r.perCorso[c] ? NAVY : MUTED, textAlign: "center" }}>
+                      {r.perCorso[c] || 0}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Impostazioni ----------
 function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster }) {
   const [nomeCorso, setNomeCorso] = useState("");
@@ -3440,8 +3541,9 @@ export default function App() {
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20 }}>
             <Button onClick={() => setView("impostazioni")}>Setting</Button>
+            <Button onClick={() => setView("statistiche")}>Statistiche</Button>
           </div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
@@ -3558,6 +3660,14 @@ export default function App() {
 
       {view === "impostazioni" && (
         <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} />
+      )}
+
+      {view === "statistiche" && (
+        <Statistiche onBack={() => setView("home")} onApriVenditori={() => setView("statisticavenditori")} />
+      )}
+
+      {view === "statisticavenditori" && (
+        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} onBack={() => setView("statistiche")} />
       )}
 
       {view === "assegnazionemaster" && (
