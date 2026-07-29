@@ -1937,7 +1937,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                 </div>
               ))}
             </div>
-            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0 }}>
+            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: LANE_H, gap: 4 }}>
               {eventiConLane.map((ev) => {
                 const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
@@ -1953,10 +1953,10 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                     onPointerDown={evidenziata && onDragBarra ? (e) => onDragBarra(e, "sposta") : undefined}
                     title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
                     style={{
-                      position: "absolute",
-                      top: ev.lane * LANE_H,
-                      left: `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(colSpan / 7) * 100}% - 4px)`,
+                      position: "relative",
+                      gridColumn: `${colStart + 1} / span ${colSpan}`,
+                      gridRow: ev.lane + 1,
+                      alignSelf: "center",
                       height: LANE_H - 4,
                       background: corsoById[ev.corso_id]?.colore || NAVY,
                       borderRadius: 4,
@@ -2263,7 +2263,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
                 );
               })}
             </div>
-            <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, pointerEvents: "none", display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: barH, gap: 3 }}>
               {eventiConLane.map((ev) => {
                 const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
@@ -2275,10 +2275,9 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
                     key={ev.id}
                     title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
                     style={{
-                      position: "absolute",
-                      top: ev.lane * barH,
-                      left: `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(colSpan / 7) * 100}% - 4px)`,
+                      gridColumn: `${colStart + 1} / span ${colSpan}`,
+                      gridRow: ev.lane + 1,
+                      alignSelf: "center",
                       height: barH - 3,
                       background: corsoById[ev.corso_id]?.colore || NAVY,
                       borderRadius: 3,
