@@ -1593,15 +1593,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   // solo quando si crea un nuovo iscritto, mai quando se ne modifica uno già
   // esistente, altrimenti un campo mancante da prima (es. taglia divisa mai
   // compilata) bloccherebbe in silenzio ogni futuro salvataggio automatico.
-  // "silenzioso" (usato dal salvataggio automatico su blur) evita di mostrare
-  // il popup di errore quando manca ancora qualcosa: mentre si sta compilando
-  // il form campo per campo è normale che per un attimo manchi il metodo di
-  // pagamento appena scelto il totale. Il salvataggio riprova ad ogni blur
-  // successivo finché tutto non è a posto. Il popup resta invece per il
-  // salvataggio esplicito ("Fatto, torna alla lista"/"Aggiungi iscritto").
-  async function persistiIscritto(strict = !modificandoId, silenzioso = false) {
-    if (!nome.trim() || !cognome.trim()) { if (!silenzioso) setMsg("Inserisci nome e cognome."); return false; }
-    if (!modificandoId && liberi <= 0) { if (!silenzioso) setMsg("Nessun posto disponibile su questa data."); return false; }
+  async function persistiIscritto(strict = !modificandoId) {
+    if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
+    if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
 
     const metodiMancanti = [];
     if (pagAcconto.totale !== "" && parseNum(pagAcconto.totale) !== 0 && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
@@ -1619,12 +1613,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     }
 
     if (metodiMancanti.length > 0 || altriMancanti.length > 0) {
-      if (!silenzioso) {
-        const parti = [];
-        if (metodiMancanti.length > 0) parti.push(`manca metodo di pagamento ${metodiMancanti.join(", oppure ")}`);
-        altriMancanti.forEach((campo) => parti.push(`manca ${campo}`));
-        setMsg("Impossibile salvare: " + parti.join(". ") + ".");
-      }
+      const parti = [];
+      if (metodiMancanti.length > 0) parti.push(`manca metodo di pagamento ${metodiMancanti.join(", oppure ")}`);
+      altriMancanti.forEach((campo) => parti.push(`manca ${campo}`));
+      setMsg("Impossibile salvare: " + parti.join(". ") + ".");
       return false;
     }
 
@@ -1691,7 +1683,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   async function autosalva() {
     if (!modificandoId) return; // un iscritto nuovo va prima creato col pulsante
     if (!nome.trim() || !cognome.trim()) return; // non salvare stati incompleti
-    const ok = await persistiIscritto(false, true);
+    const ok = await persistiIscritto();
     if (ok) setMsg("Salvato.");
   }
 
