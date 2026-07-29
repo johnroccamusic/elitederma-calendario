@@ -573,15 +573,16 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     }
   }
 
+  const fontScheda = { fontFamily: "'Sofia Sans Extra Condensed',sans-serif" };
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 8, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
-  const campoStyle = { ...fontBody, fontSize: 10, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", boxSizing: "border-box", background: "#fff" };
+  const thStyle = { ...celStyle, ...fontScheda, fontSize: 8, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
+  const campoStyle = { ...fontScheda, fontSize: 10, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", boxSizing: "border-box", background: "#fff" };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
       style={{
-        ...fontBody, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        ...fontScheda, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
         border: `1px solid ${attivo ? "#2E7D32" : "#C0392B"}`, borderRadius: 7,
         padding: size === "piccolo" ? "4px 9px" : "5px 10px",
         background: attivo ? "#E8F5E9" : "#FDECEC", color: attivo ? "#2E7D32" : "#C0392B",
@@ -633,6 +634,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
       <div style={{ position: "relative" }}>
         <Button
           variant={valore ? "primary" : "ghost"}
+          style={fontScheda}
           onClick={() => setApriFiltro(apriFiltro === chiave ? "" : chiave)}
         >
           {valore ? opzioni.find((o) => o.id === valore)?.nome?.toUpperCase() : etichetta}
@@ -640,7 +642,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
         {apriFiltro === chiave && (
           <select
             autoFocus
-            style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+            style={{ ...inputStyle, ...fontScheda, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
             value={valore}
             onChange={(e) => { setValore(e.target.value); setApriFiltro(""); }}
             onBlur={() => setApriFiltro("")}
@@ -681,17 +683,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
               const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
               return (
                 <tr key={cd.id}>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, textAlign: "center" }}>
+                  <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, textAlign: "center" }}>
                     <div>{sopra}</div>
                     <div style={{ fontSize: 8, color: MUTED }}>{sotto}</div>
                   </td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, fontWeight: 700 }}>
+                  <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, fontWeight: 700 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
                       {corso?.nome?.toUpperCase() || "?"}
                     </span>
                   </td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                  <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
                   <td style={{ ...celStyle, textAlign: "center" }}>
                     {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
                   </td>
@@ -713,12 +715,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                   <td style={celStyle}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
                       {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
-                      <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ fontSize: 8, padding: "4px 6px" }}>Copia</Button>
-                      <label style={{ ...fontBody, fontSize: 8, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ ...fontScheda, fontSize: 8, padding: "4px 6px" }}>Copia</Button>
+                      <label style={{ ...fontScheda, fontSize: 8, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap" }}>
                         +
                         <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
                       </label>
-                      {nBiglietti > 0 && <span style={{ ...fontBody, fontSize: 8, color: MUTED, whiteSpace: "nowrap" }}>{nBiglietti} file</span>}
+                      {nBiglietti > 0 && <span style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap" }}>{nBiglietti} file</span>}
                     </div>
                   </td>
                   <td style={celStyle}>
@@ -742,7 +744,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Assegnazione Master" onBack={onBack} />
-      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+      <div style={{ ...fontScheda, fontSize: 13, color: MUTED, marginBottom: 18 }}>
         Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
       </div>
 
@@ -753,10 +755,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
           padding: "10px 12px", marginBottom: 24, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center",
         }}
       >
-        <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Corsi assegnati:</span>
-        {masterConteggi.length === 0 && <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>nessuno ancora</span>}
+        <span style={{ ...fontScheda, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Corsi assegnati:</span>
+        {masterConteggi.length === 0 && <span style={{ ...fontScheda, fontSize: 13, color: MUTED }}>nessuno ancora</span>}
         {masterConteggi.map((m) => (
-          <span key={m.nome} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 8, padding: "4px 10px", whiteSpace: "nowrap" }}>
+          <span key={m.nome} style={{ ...fontScheda, fontSize: 13, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 8, padding: "4px 10px", whiteSpace: "nowrap" }}>
             {m.nome.toUpperCase()} {m.n}
           </span>
         ))}
@@ -779,11 +781,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
       </div>
 
       {chiaviMese.length === 0 && (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Nessuna data in programmazione.</div>
+        <div style={{ ...fontScheda, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Nessuna data in programmazione.</div>
       )}
       {chiaviMese.map((chiave) => (
         <div key={chiave}>
-          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 800, color: NAVY, textAlign: "left", marginBottom: 10 }}>
+          <div style={{ ...fontScheda, fontSize: 20, fontWeight: 800, color: NAVY, textAlign: "left", marginBottom: 10 }}>
             {gruppiMese[chiave].etichetta.toUpperCase()}
           </div>
           {tabellaMese(gruppiMese[chiave].righe)}
