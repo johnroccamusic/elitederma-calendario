@@ -1617,7 +1617,12 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                           <div style={{ ...fontBody, fontSize: 15, color: NAVY, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                             <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: "1 1 auto" }}>
                               <span style={{ width: 14, height: 14, borderRadius: 4, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                              <b style={{ color: NAVY, fontWeight: 700 }}>{corso?.nome?.toUpperCase() || "?"}</b>
+                              <b style={{ color: NAVY, fontWeight: 700, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</b>
+                              {cd.master_id && (
+                                <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  · {masterById[cd.master_id]?.nome?.toUpperCase() || "?"}
+                                </span>
+                              )}
                             </span>
                             <span style={{ flexShrink: 0 }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
                             <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
@@ -1655,11 +1660,6 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                               </button>
                             </span>
                           </div>
-                          {cd.master_id && (
-                            <div style={{ ...fontBody, fontSize: 11, color: MUTED, opacity: 0.75, paddingLeft: 20 }}>
-                              Master: {masterById[cd.master_id]?.nome?.toUpperCase() || "?"}
-                            </div>
-                          )}
                           {idInModifica === cd.id && renderModifica && renderModifica(cd)}
                         </div>
                       ) : (
