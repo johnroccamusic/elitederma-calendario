@@ -1646,10 +1646,14 @@ const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
 const HEADER_H = 26; // spazio per il numero del giorno
 
 // un singolo mese: titolo + griglia con le barre degli eventi
-// idEvidenziato/overrideInizio/overrideFine/onDragBarra/onDragMuovi/onDragFine/refEvidenziato
-// sono opzionali: servono solo quando questo mese è usato dentro CalendarioModifica
-// per rendere trascinabile/ridimensionabile la barra dell'edizione in modifica
-function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, onDragMuovi, onDragFine, refEvidenziato }) {
+// idEvidenziato/overrideInizio/overrideFine/onDragBarra/refEvidenziato sono
+// opzionali: servono solo quando questo mese è usato dentro CalendarioModifica
+// per rendere trascinabile/ridimensionabile la barra dell'edizione in modifica.
+// Il trascinamento vero e proprio (move/up) è gestito dal contenitore stabile
+// in CalendarioModifica, non da questa barra: se lo spostamento la fa
+// comparire in una settimana diversa, React distrugge e ricrea il suo nodo
+// DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato }) {
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
@@ -1704,9 +1708,6 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                     ref={evidenziata ? refEvidenziato : null}
                     onClick={() => onApriData(ev)}
                     onPointerDown={evidenziata && onDragBarra ? (e) => onDragBarra(e, "sposta") : undefined}
-                    onPointerMove={evidenziata ? onDragMuovi : undefined}
-                    onPointerUp={evidenziata ? onDragFine : undefined}
-                    onPointerCancel={evidenziata ? onDragFine : undefined}
                     title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
                     style={{
                       position: "absolute",
@@ -1736,9 +1737,6 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                     {evidenziata && onDragBarra && (
                       <div
                         onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "inizio"); }}
-                        onPointerMove={onDragMuovi}
-                        onPointerUp={onDragFine}
-                        onPointerCancel={onDragFine}
                         style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none" }}
                       />
                     )}
@@ -1748,9 +1746,6 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                     {evidenziata && onDragBarra && (
                       <div
                         onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "fine"); }}
-                        onPointerMove={onDragMuovi}
-                        onPointerUp={onDragFine}
-                        onPointerCancel={onDragFine}
                         style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none" }}
                       />
                     )}
@@ -1827,12 +1822,25 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
     refEvidenziato.current?.scrollIntoView({ block: "center" });
   }, []);
 
-  // stato del trascinamento in corso (dita/mouse), non fa mai re-render da solo:
-  // ogni movimento aggiorna valore.inizio/fine tramite onCambia, che è ciò che
-  // fa effettivamente ridisegnare la barra nella nuova posizione.
-  // il giorno "sotto" il dito/mouse viene letto direttamente dal calendario
-  // (cella con data-data), non calcolato dallo spostamento in pixel: così si
-  // può trascinare liberamente su qualunque settimana, anche più in basso,
+  // posizione mostrata a schermo mentre si trascina: vive SOLO in questo
+  // componente (non nel genitore Impostazioni) proprio per evitare di
+  // ridisegnare a ogni giorno attraversato l'intera pagina Impostazioni
+  // (con tutta la lunga lista "Date esistenti"), che causava una latenza
+  // pesante durante il trascinamento. Il genitore (onCambia, che salva
+  // anche nei campi Data inizio/fine) viene aggiornato una sola volta,
+  // al rilascio del mouse/dito.
+  const [posizione, setPosizione] = useState(valore);
+  const trascinandoRef = React.useRef(false);
+  useEffect(() => {
+    if (!trascinandoRef.current) setPosizione(valore);
+  }, [valore.inizio, valore.fine]);
+
+  const contenitoreRef = React.useRef(null);
+
+  // stato del trascinamento in corso (dita/mouse). il giorno "sotto" il
+  // dito/mouse viene letto direttamente dal calendario (cella con
+  // data-data), non calcolato dallo spostamento in pixel: così si può
+  // trascinare liberamente su qualunque settimana, anche più in basso,
   // senza dover passare per tutti i giorni intermedi
   const dragRef = React.useRef(null);
 
@@ -1844,41 +1852,82 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
     return null;
   }
 
+  function calcolaPosizione(d, giornoSotto) {
+    const deltaGiorni = differenzaGiorni(d.giornoAggancio, giornoSotto);
+    if (d.modo === "sposta") {
+      return { inizio: addGiorni(d.origInizio, deltaGiorni), fine: addGiorni(d.origFine, deltaGiorni) };
+    } else if (d.modo === "inizio") {
+      let nuovoInizio = addGiorni(d.origInizio, deltaGiorni);
+      if (nuovoInizio > d.origFine) nuovoInizio = d.origFine;
+      return { inizio: nuovoInizio, fine: d.origFine };
+    } else {
+      let nuovaFine = addGiorni(d.origFine, deltaGiorni);
+      if (nuovaFine < d.origInizio) nuovaFine = d.origInizio;
+      return { inizio: d.origInizio, fine: nuovaFine };
+    }
+  }
+
+  // avvicinandosi al bordo superiore/inferiore del riquadro (che ha
+  // un'altezza limitata e scorre al suo interno) lo fa scorrere da solo,
+  // altrimenti trascinare verso una settimana fuori dalla vista attuale
+  // farebbe uscire il dito/mouse dal calendario e il trascinamento si
+  // fermerebbe senza poter raggiungere quella settimana
+  function autoScroll(clientY) {
+    const box = contenitoreRef.current;
+    if (!box) return;
+    const r = box.getBoundingClientRect();
+    const margine = 36;
+    if (clientY < r.top + margine) box.scrollTop -= 14;
+    else if (clientY > r.bottom - margine) box.scrollTop += 14;
+  }
+
   function iniziaDrag(e, modo) {
     e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const giornoAggancio = trovaGiornoSotto(e.clientX, e.clientY) || valore.inizio;
+    // la cattura del puntore va impostata sul CONTENITORE stabile (che non
+    // sparisce mai durante il trascinamento), non sulla barra: spostando il
+    // corso su un'altra settimana la barra cambia riga e React distrugge e
+    // ricrea quel nodo del DOM, il che fa perdere la cattura impostata su di
+    // essa e blocca il trascinamento a metà (il bug segnalato dall'utente)
+    contenitoreRef.current?.setPointerCapture(e.pointerId);
+    trascinandoRef.current = true;
+    const giornoAggancio = trovaGiornoSotto(e.clientX, e.clientY) || posizione.inizio;
     dragRef.current = {
       modo, pointerId: e.pointerId,
-      origInizio: valore.inizio, origFine: valore.fine || valore.inizio,
+      origInizio: posizione.inizio, origFine: posizione.fine || posizione.inizio,
       giornoAggancio, ultimoGiorno: giornoAggancio,
     };
   }
   function muoviDrag(e) {
     const d = dragRef.current;
     if (!d || e.pointerId !== d.pointerId) return;
+    autoScroll(e.clientY);
     const giornoSotto = trovaGiornoSotto(e.clientX, e.clientY);
     if (!giornoSotto || giornoSotto === d.ultimoGiorno) return;
     d.ultimoGiorno = giornoSotto;
-    const deltaGiorni = differenzaGiorni(d.giornoAggancio, giornoSotto);
-    if (d.modo === "sposta") {
-      onCambia({ inizio: addGiorni(d.origInizio, deltaGiorni), fine: addGiorni(d.origFine, deltaGiorni) });
-    } else if (d.modo === "inizio") {
-      let nuovoInizio = addGiorni(d.origInizio, deltaGiorni);
-      if (nuovoInizio > d.origFine) nuovoInizio = d.origFine;
-      onCambia({ inizio: nuovoInizio, fine: d.origFine });
-    } else if (d.modo === "fine") {
-      let nuovaFine = addGiorni(d.origFine, deltaGiorni);
-      if (nuovaFine < d.origInizio) nuovaFine = d.origInizio;
-      onCambia({ inizio: d.origInizio, fine: nuovaFine });
-    }
+    setPosizione(calcolaPosizione(d, giornoSotto));
   }
-  function fineDrag() {
+  function fineDrag(e) {
+    const d = dragRef.current;
+    if (!d) return;
     dragRef.current = null;
+    trascinandoRef.current = false;
+    // ricalcola la posizione finale direttamente dalle coordinate del
+    // rilascio, invece di fidarsi dell'ultimo "muoviDrag" arrivato: così
+    // il corso si posiziona sempre esattamente dove viene rilasciato
+    const giornoSotto = trovaGiornoSotto(e.clientX, e.clientY) || d.ultimoGiorno;
+    const finale = calcolaPosizione(d, giornoSotto);
+    setPosizione(finale);
+    onCambia(finale);
   }
 
   return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "14px 16px", maxHeight: 480, overflowY: "auto" }}>
+    <div
+      ref={contenitoreRef}
+      onPointerMove={muoviDrag}
+      onPointerUp={fineDrag}
+      onPointerCancel={fineDrag}
+      style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "14px 16px", maxHeight: 480, overflowY: "auto" }}
+    >
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
         Trascina la barra evidenziata (con il bordo bianco) per spostare il corso su altre date, oppure trascina i suoi due bordi per accorciarla o allungarla.
       </div>
@@ -1890,8 +1939,8 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
           corsoById={corsoById} locById={locById}
           onApriData={() => {}}
           idEvidenziato={cdId}
-          overrideInizio={valore.inizio} overrideFine={valore.fine}
-          onDragBarra={iniziaDrag} onDragMuovi={muoviDrag} onDragFine={fineDrag}
+          overrideInizio={posizione.inizio} overrideFine={posizione.fine}
+          onDragBarra={iniziaDrag}
           refEvidenziato={refEvidenziato}
         />
       ))}
