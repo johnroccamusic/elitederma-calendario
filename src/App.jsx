@@ -83,6 +83,13 @@ function generaSettimane(anno, mese) {
 function dateStrFor(anno, mese, d) {
   return `${anno}-${String(mese + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
+// somma (o sottrae, se n è negativo) n giorni a una data "yyyy-mm-dd"
+function addGiorni(dataStr, n) {
+  const [y, m, d] = dataStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
 // assegna una "corsia" (lane) a ciascun evento di una riga evitando sovrapposizioni
 function assegnaLane(eventiRiga) {
   const lanes = [];
@@ -573,7 +580,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     }
   }
 
-  const fontScheda = { fontFamily: "'Sofia Sans Extra Condensed',sans-serif" };
+  const fontScheda = { fontFamily: "'Sofia Sans Condensed',sans-serif" };
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
   const thStyle = { ...celStyle, ...fontScheda, fontSize: 8, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
@@ -1023,6 +1030,16 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
           renderModifica={() => (
             <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
               <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
+              <div style={{ marginBottom: 14 }}>
+                <CalendarioModifica
+                  corsi={corsi}
+                  location={location}
+                  corsiDate={corsiDate}
+                  cdId={dataInModifica}
+                  valore={{ inizio: modDataInizio, fine: modDataFine }}
+                  onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
+                />
+              </div>
               <div style={{ display: "flex", gap: 14 }}>
                 <div style={{ flex: 1 }}>
                   <Field label="Data inizio">
@@ -1587,12 +1604,21 @@ const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
 const HEADER_H = 26; // spazio per il numero del giorno
 
 // un singolo mese: titolo + griglia con le barre degli eventi
-function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corsoById, locById }) {
+// idEvidenziato/overrideInizio/overrideFine/onDragBarra/onDragMuovi/onDragFine/refEvidenziato
+// sono opzionali: servono solo quando questo mese è usato dentro CalendarioModifica
+// per rendere trascinabile/ridimensionabile la barra dell'edizione in modifica
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, onDragMuovi, onDragFine, refEvidenziato }) {
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
 
-  const eventiMese = corsiDate.filter(
+  // durante il trascinamento, l'edizione evidenziata viene posizionata usando
+  // le date "in corso di modifica" invece di quelle salvate sul database
+  const corsiDateEff = (idEvidenziato && overrideInizio)
+    ? corsiDate.map((cd) => cd.id === idEvidenziato ? { ...cd, data_inizio: overrideInizio, data_fine: overrideFine || overrideInizio } : cd)
+    : corsiDate;
+
+  const eventiMese = corsiDateEff.filter(
     (cd) => cd.data_inizio <= dateStr(giorniMese) && cd.data_fine >= dateStr(1)
   );
 
@@ -1624,14 +1650,21 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
             </div>
             <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0 }}>
               {eventiConLane.map((ev) => {
+                const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
-                const colStart = startIdx >= 0 ? startIdx : 0;
+                const colStart = startIdx >= 0 ? startIdx : primoIdxValido;
                 const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
                 const colSpan = endIdx - colStart + 1;
+                const evidenziata = ev.id === idEvidenziato;
                 return (
                   <div
                     key={ev.id}
+                    ref={evidenziata ? refEvidenziato : null}
                     onClick={() => onApriData(ev)}
+                    onPointerDown={evidenziata && onDragBarra ? (e) => onDragBarra(e, "sposta") : undefined}
+                    onPointerMove={evidenziata ? onDragMuovi : undefined}
+                    onPointerUp={evidenziata ? onDragFine : undefined}
+                    onPointerCancel={evidenziata ? onDragFine : undefined}
                     title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
                     style={{
                       position: "absolute",
@@ -1651,10 +1684,34 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                       overflow: "hidden",
                       whiteSpace: "nowrap",
                       textOverflow: "ellipsis",
-                      cursor: "pointer",
+                      cursor: evidenziata ? "grab" : "pointer",
+                      touchAction: evidenziata ? "none" : undefined,
+                      userSelect: evidenziata ? "none" : undefined,
+                      boxShadow: evidenziata ? "0 0 0 2px #fff, 0 0 0 4px " + NAVY : "none",
+                      zIndex: evidenziata ? 5 : 1,
                     }}
                   >
-                    {etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id])}
+                    {evidenziata && onDragBarra && (
+                      <div
+                        onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "inizio"); }}
+                        onPointerMove={onDragMuovi}
+                        onPointerUp={onDragFine}
+                        onPointerCancel={onDragFine}
+                        style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none" }}
+                      />
+                    )}
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id])}
+                    </span>
+                    {evidenziata && onDragBarra && (
+                      <div
+                        onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "fine"); }}
+                        onPointerMove={onDragMuovi}
+                        onPointerUp={onDragFine}
+                        onPointerCancel={onDragFine}
+                        style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none" }}
+                      />
+                    )}
                   </div>
                 );
               })}
@@ -1700,6 +1757,89 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack }) {
         <div key={`${anno}-${mese}`} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
           <MeseGriglia anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} onApriData={onApriData} corsoById={corsoById} locById={locById} />
         </div>
+      ))}
+    </div>
+  );
+}
+
+// ---------- Calendario trascinabile (per modificare una data esistente) ----------
+// mostra tutto il calendario, scorribile, con le barre colorate di tutti i
+// corsi: quella dell'edizione in modifica si può trascinare per spostarla su
+// altre date, oppure allungare/accorciare trascinandone i bordi
+function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const oggi = new Date();
+  const mesi = useMemo(() => {
+    const arr = [];
+    for (let i = -6; i <= 12; i++) {
+      const d = new Date(oggi.getFullYear(), oggi.getMonth() + i, 1);
+      arr.push({ anno: d.getFullYear(), mese: d.getMonth() });
+    }
+    return arr;
+  }, []);
+
+  const refEvidenziato = React.useRef(null);
+  useEffect(() => {
+    refEvidenziato.current?.scrollIntoView({ block: "center" });
+  }, []);
+
+  // stato del trascinamento in corso (dita/mouse), non fa mai re-render da solo:
+  // ogni movimento aggiorna valore.inizio/fine tramite onCambia, che è ciò che
+  // fa effettivamente ridisegnare la barra nella nuova posizione
+  const dragRef = React.useRef(null);
+
+  function iniziaDrag(e, modo) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const overlay = e.currentTarget.parentElement;
+    const colWidthPx = (overlay?.getBoundingClientRect().width || 280) / 7;
+    dragRef.current = {
+      modo, pointerId: e.pointerId, startX: e.clientX, colWidthPx,
+      origInizio: valore.inizio, origFine: valore.fine || valore.inizio,
+      ultimoDelta: 0,
+    };
+  }
+  function muoviDrag(e) {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    const deltaGiorni = Math.round((e.clientX - d.startX) / d.colWidthPx);
+    if (deltaGiorni === d.ultimoDelta) return;
+    d.ultimoDelta = deltaGiorni;
+    if (d.modo === "sposta") {
+      onCambia({ inizio: addGiorni(d.origInizio, deltaGiorni), fine: addGiorni(d.origFine, deltaGiorni) });
+    } else if (d.modo === "inizio") {
+      let nuovoInizio = addGiorni(d.origInizio, deltaGiorni);
+      if (nuovoInizio > d.origFine) nuovoInizio = d.origFine;
+      onCambia({ inizio: nuovoInizio, fine: d.origFine });
+    } else if (d.modo === "fine") {
+      let nuovaFine = addGiorni(d.origFine, deltaGiorni);
+      if (nuovaFine < d.origInizio) nuovaFine = d.origInizio;
+      onCambia({ inizio: d.origInizio, fine: nuovaFine });
+    }
+  }
+  function fineDrag() {
+    dragRef.current = null;
+  }
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "14px 16px", maxHeight: 480, overflowY: "auto" }}>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
+        Trascina la barra evidenziata (con il bordo bianco) per spostare il corso su altre date, oppure trascina i suoi due bordi per accorciarla o allungarla.
+      </div>
+      {mesi.map(({ anno, mese }) => (
+        <MeseGriglia
+          key={`${anno}-${mese}`}
+          anno={anno} mese={mese}
+          corsi={corsi} location={location} corsiDate={corsiDate}
+          corsoById={corsoById} locById={locById}
+          onApriData={() => {}}
+          idEvidenziato={cdId}
+          overrideInizio={valore.inizio} overrideFine={valore.fine}
+          onDragBarra={iniziaDrag} onDragMuovi={muoviDrag} onDragFine={fineDrag}
+          refEvidenziato={refEvidenziato}
+        />
       ))}
     </div>
   );
@@ -1779,8 +1919,9 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
             </div>
             <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, pointerEvents: "none" }}>
               {eventiConLane.map((ev) => {
+                const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
-                const colStart = startIdx >= 0 ? startIdx : 0;
+                const colStart = startIdx >= 0 ? startIdx : primoIdxValido;
                 const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
                 const colSpan = endIdx - colStart + 1;
                 return (
