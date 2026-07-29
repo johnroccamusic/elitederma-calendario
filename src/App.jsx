@@ -605,23 +605,25 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     const righeVisibili = elenco.length > 0 ? elenco : [null];
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        <button
-          onClick={() => aggiungiRigaElenco(cd, campo)}
-          title="Aggiungi una riga"
-          style={{
-            width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center",
-            border: `1px solid ${NAVY}`, borderRadius: 4, background: "#fff", color: NAVY,
-            fontSize: 12, fontWeight: 700, lineHeight: 1, cursor: "pointer", padding: 0,
-          }}
-        >
-          +
-        </button>
-        {righeVisibili.map((id, idx) => (
-          <select key={idx} style={campoStyle} value={id || ""} onChange={(e) => modificaRigaElenco(cd, campo, idx, e.target.value)}>
-            <option value="">—</option>
-            {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
-          </select>
-        ))}
+        {righeVisibili.map((id, idx) => {
+          const sceltiAltrove = elenco.filter((_, i) => i !== idx);
+          const opzioniDisponibili = opzioni.filter((o) => o.id === id || !sceltiAltrove.includes(o.id));
+          return (
+            <select
+              key={idx}
+              style={campoStyle}
+              value={id || ""}
+              onChange={(e) => {
+                if (e.target.value === "__aggiungi__") { aggiungiRigaElenco(cd, campo); return; }
+                modificaRigaElenco(cd, campo, idx, e.target.value);
+              }}
+            >
+              <option value="">—</option>
+              {opzioniDisponibili.map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+              <option value="__aggiungi__">+ Aggiungi</option>
+            </select>
+          );
+        })}
       </div>
     );
   }
