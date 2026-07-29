@@ -501,7 +501,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     .filter((cd) => !filtroAssistente || cd.assistente_id === filtroAssistente)
     .filter((cd) => !filtroLeva || cd.leva_id === filtroLeva)
     .slice()
-    .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+    .sort((a, b) =>
+      a.data_inizio.localeCompare(b.data_inizio)
+      || (corsoById[a.corso_id]?.nome || "").localeCompare(corsoById[b.corso_id]?.nome || "")
+      || (locById[a.location_id]?.nome || "").localeCompare(locById[b.location_id]?.nome || "")
+      || a.id.localeCompare(b.id)
+    );
 
   const gruppiMese = {};
   righe.forEach((cd) => {
@@ -511,6 +516,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     gruppiMese[chiave].righe.push(cd);
   });
   const chiaviMese = Object.keys(gruppiMese).sort();
+
+  // quanti corsi (tra le edizioni future, indipendentemente dai filtri attivi)
+  // ha già ricevuto ciascuna master, per la barra riassuntiva in alto
+  const conteggioMaster = {};
+  corsiDate.filter((cd) => cd.data_fine >= dataOggiStr() && cd.master_id).forEach((cd) => {
+    conteggioMaster[cd.master_id] = (conteggioMaster[cd.master_id] || 0) + 1;
+  });
+  const masterConteggi = Object.entries(conteggioMaster)
+    .map(([id, n]) => ({ nome: master.find((m) => m.id === id)?.nome, n }))
+    .filter((x) => x.nome)
+    .sort((a, b) => b.n - a.n);
 
   async function salvaCampo(id, campo, valore) {
     const { error } = await supabase.from("corsi_date").update({ [campo]: valore }).eq("id", id);
@@ -548,7 +564,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
-  const campoStyle = { ...fontBody, fontSize: 12, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", background: "#fff" };
+  const campoStyle = { ...fontBody, fontSize: 14, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", background: "#fff" };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
@@ -566,7 +582,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const COLONNE = [
     { larghezza: 54 }, { larghezza: 100 }, { larghezza: 70 }, { larghezza: 60 },
     { larghezza: 100 }, { larghezza: 90 }, { larghezza: 100 }, { larghezza: 90 },
-    { larghezza: 170 }, { larghezza: 100 }, { larghezza: 100 },
+    { larghezza: 128 }, { larghezza: 100 }, { larghezza: 100 },
   ];
 
   function filtroDropdown(chiave, etichetta, valore, setValore, opzioni) {
@@ -604,7 +620,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
               <th style={thStyle}>Data</th>
               <th style={thStyle}>Corso</th>
               <th style={thStyle}>Città</th>
-              <th style={thStyle}>Sede conf.</th>
+              <th style={thStyle}>Sede OK?</th>
               <th style={thStyle}>Master</th>
               <th style={thStyle}>Note</th>
               <th style={thStyle}>Assistenti</th>
@@ -695,6 +711,22 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
       <TopBar title="Assegnazione Master" onBack={onBack} />
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
         Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
+      </div>
+
+      <div
+        style={{
+          position: "sticky", top: 0, zIndex: 20, background: "#fff",
+          borderTop: `2px solid ${NAVY}`, borderBottom: `1px solid ${CREAM_BORDER}`,
+          padding: "10px 12px", marginBottom: 24, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center",
+        }}
+      >
+        <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Corsi assegnati:</span>
+        {masterConteggi.length === 0 && <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>nessuno ancora</span>}
+        {masterConteggi.map((m) => (
+          <span key={m.nome} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 8, padding: "4px 10px", whiteSpace: "nowrap" }}>
+            {m.nome.toUpperCase()} {m.n}
+          </span>
+        ))}
       </div>
 
       <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
