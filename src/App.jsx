@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -190,6 +194,56 @@ function quotaVenditoreDi(totalePattuito) {
   const base = parseNum(totalePattuito) * 0.07;
   if (base <= 50) return 50;
   return Math.ceil(base / 5) * 5;
+}
+
+// etichette del modulo di iscrizione PDF (pagina 6, layout fisso a due colonne:
+// etichetta a sinistra, valore a destra sulla stessa riga) mappate ai campi del form
+const ETICHETTE_MODULO_PDF = {
+  tutor: "tutor con cui hai parlato",
+  nome: "nome",
+  cognome: "cognome",
+  telefono: "telefono",
+  accontoMetodo: "acconto pagato a mezzo",
+  accontoImporto: "di euro",
+  tagliaDivisa: "taglia divisa",
+};
+
+// legge il testo di un file PDF (senza OCR: il modulo ha testo selezionabile)
+// e ne estrae i campi noti confrontando etichetta/valore riga per riga.
+// Restituisce null se non trova nessuna etichetta attesa in nessuna pagina provata.
+async function estraiDatiModuloPdf(file) {
+  const buffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  const paginePossibili = [6, 5, 7].filter((n) => n <= pdf.numPages);
+
+  for (const numPagina of paginePossibili) {
+    const page = await pdf.getPage(numPagina);
+    const content = await page.getTextContent();
+
+    const righe = [];
+    for (const item of content.items) {
+      const testo = item.str.trim();
+      if (!testo) continue;
+      const y = item.transform[5];
+      const x = item.transform[4];
+      let riga = righe.find((r) => Math.abs(r.y - y) < 2);
+      if (!riga) { riga = { y, celle: [] }; righe.push(riga); }
+      riga.celle.push({ x, testo });
+    }
+
+    const risultato = {};
+    for (const riga of righe) {
+      riga.celle.sort((a, b) => a.x - b.x);
+      const etichetta = riga.celle[0]?.testo.replace(/:\s*$/, "").trim().toLowerCase();
+      const valore = riga.celle.slice(1).map((c) => c.testo).join(" ").trim();
+      if (!etichetta || !valore) continue;
+      for (const [chiave, etichettaAttesa] of Object.entries(ETICHETTE_MODULO_PDF)) {
+        if (etichetta === etichettaAttesa) risultato[chiave] = valore;
+      }
+    }
+    if (Object.keys(risultato).length > 0) return risultato;
+  }
+  return null;
 }
 // data odierna in formato "YYYY-MM-DD", per confrontare con data_inizio/data_fine
 // trasforma un testo in una forma leggibile per l'URL: "Microblading Base" → "microblading-base"
@@ -1687,6 +1741,41 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     if (ok) setMsg("Salvato.");
   }
 
+  // legge il modulo di iscrizione PDF appena caricato e compila da solo tutor,
+  // nome, cognome, telefono, metodo/importo dell'acconto e taglia divisa —
+  // solo nei campi ancora vuoti, per non sovrascrivere dati già inseriti a mano
+  async function gestisciFileModulo(file) {
+    setFileIscrizione(file);
+    if (!file || file.type !== "application/pdf") return;
+    try {
+      const dati = await estraiDatiModuloPdf(file);
+      if (!dati) { setMsg("Non ho trovato i dati attesi nel modulo PDF: da compilare a mano."); return; }
+
+      if (dati.tutor && !tutor.trim()) setTutor(dati.tutor.toUpperCase());
+      if (dati.nome && !nome.trim()) setNome(dati.nome.toUpperCase());
+      if (dati.cognome && !cognome.trim()) setCognome(dati.cognome.toUpperCase());
+      if (dati.telefono && !telefono.trim()) setTelefono(dati.telefono.toUpperCase());
+
+      if (dati.tagliaDivisa && !tagliaDivisa) {
+        const taglia = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
+        if (taglia) setTagliaDivisa(taglia);
+      }
+
+      if ((dati.accontoMetodo || dati.accontoImporto) && pagAcconto.totale === "") {
+        const metodo = ["Sito", "Bonifico", "Pos", "Contanti", "Rate"].find((m) => m.toLowerCase() === (dati.accontoMetodo || "").toLowerCase());
+        setPagAcconto((prev) => {
+          let next = metodo ? { ...prev, metodo } : prev;
+          if (dati.accontoImporto) next = conTotaleAggiornato(next, dati.accontoImporto.replace(",", "."), true);
+          return next;
+        });
+      }
+
+      setMsg("Dati letti dal modulo PDF e inseriti nel form: controllali prima di salvare.");
+    } catch (e) {
+      setMsg("Errore nella lettura del modulo PDF: " + e.message);
+    }
+  }
+
   async function salvaIscritto() {
     const ok = await persistiIscritto();
     if (!ok) return;
@@ -1962,7 +2051,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
-            <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFileIscrizione(e.target.files?.[0] || null)} />
+            <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia vengono letti e inseriti automaticamente nei campi ancora vuoti.</div>
           </Field>
           <Field label="Screen acconto (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
