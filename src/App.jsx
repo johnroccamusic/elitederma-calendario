@@ -40,6 +40,26 @@ function fmtDataStack(inizio, fine) {
   if (mi === mf) return { sopra: `${gi}–${gf}`, sotto: MESI_ABBR[mi - 1] };
   return { sopra: `${gi} ${MESI_ABBR[mi - 1]}`, sotto: `${gf} ${MESI_ABBR[mf - 1]}` };
 }
+
+// data compatta per i link pubblici (es. "13-14sett2026"): niente spazi né
+// caratteri strani, solo numeri/lettere, per un link pulito da leggere/mandare
+const MESI_LINK = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "sett", "ott", "nov", "dic"];
+function slugData(inizio, fine) {
+  const [anno, mi, gi] = inizio.split("-").map(Number);
+  const [, mf, gf] = fine.split("-").map(Number);
+  if (inizio === fine) return `${gi}${MESI_LINK[mi - 1]}${anno}`;
+  if (mi === mf) return `${gi}-${gf}${MESI_LINK[mi - 1]}${anno}`;
+  return `${gi}${MESI_LINK[mi - 1]}-${gf}${MESI_LINK[mf - 1]}${anno}`;
+}
+// legge indietro il formato di slugData: restituisce {giorno,mese,anno} del
+// primo giorno, o null se non riconosciuto
+function leggiSlugData(testo) {
+  const m = (testo || "").match(/^(\d{1,2})(?:-(\d{1,2}))?(gen|feb|mar|apr|mag|giu|lug|ago|sett|ott|nov|dic)(\d{4})$/);
+  if (m) return { giorno: parseInt(m[1], 10), mese: MESI_LINK.indexOf(m[3]) + 1, anno: parseInt(m[4], 10) };
+  const m2 = (testo || "").match(/^(\d{1,2})(gen|feb|mar|apr|mag|giu|lug|ago|sett|ott|nov|dic)-\d{1,2}(?:gen|feb|mar|apr|mag|giu|lug|ago|sett|ott|nov|dic)(\d{4})$/);
+  if (m2) return { giorno: parseInt(m2[1], 10), mese: MESI_LINK.indexOf(m2[2]) + 1, anno: parseInt(m2[3], 10) };
+  return null;
+}
 const GIORNI = ["L","M","M","G","V","S","D"];
 
 function fmtData(d) {
@@ -513,7 +533,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   async function copiaBiglietti(cd) {
     const file = cd.viaggio_file || [];
     if (file.length === 0) { window.alert("Non ci sono biglietti."); return; }
-    const url = `${window.location.origin}${window.location.pathname}?biglietti=${cd.id}`;
+    const corso = corsoById[cd.corso_id];
+    const loc = locById[cd.location_id];
+    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), slugData(cd.data_inizio, cd.data_fine)].filter(Boolean).join("/");
+    const url = `${window.location.origin}${window.location.pathname}?biglietti=${leggibile}`;
     try {
       await navigator.clipboard.writeText(url);
       window.alert("Link copiato.");
@@ -2911,22 +2934,39 @@ function VistaMaster({ param }) {
 }
 
 // pagina pubblica di sola lettura con i biglietti di viaggio caricati per una data
-function VistaBiglietti({ corsoDataId }) {
+function VistaBiglietti({ param }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
 
   useEffect(() => {
     async function carica() {
-      const { data: cd } = await supabase.from("corsi_date").select("*").eq("id", corsoDataId).maybeSingle();
-      if (!cd) { setErrore(true); return; }
+      const parti = decodeURIComponent(param || "").split("/");
+      const [slugCorso, slugCitta, slugDataParte] = parti;
+      const dataInfo = leggiSlugData(slugDataParte);
+      if (!slugCorso || !slugCitta || !dataInfo) { setErrore(true); return; }
+      const dataIso = `${dataInfo.anno}-${String(dataInfo.mese).padStart(2, "0")}-${String(dataInfo.giorno).padStart(2, "0")}`;
+
       const [{ data: corsi }, { data: location }] = await Promise.all([
-        supabase.from("corsi").select("*").eq("id", cd.corso_id),
-        supabase.from("location").select("*").eq("id", cd.location_id),
+        supabase.from("corsi").select("*"),
+        supabase.from("location").select("*"),
       ]);
-      setDati({ cd, corso: corsi?.[0], loc: location?.[0] });
+      const corso = (corsi || []).find((c) => slugify(c.nome) === slugCorso);
+      const loc = (location || []).find((l) => slugify(l.nome) === slugCitta);
+      if (!corso || !loc) { setErrore(true); return; }
+
+      const { data: cd } = await supabase
+        .from("corsi_date")
+        .select("*")
+        .eq("corso_id", corso.id)
+        .eq("location_id", loc.id)
+        .eq("data_inizio", dataIso)
+        .maybeSingle();
+      if (!cd) { setErrore(true); return; }
+
+      setDati({ cd, corso, loc });
     }
     carica();
-  }, [corsoDataId]);
+  }, [param]);
 
   if (errore) {
     return (
@@ -2978,7 +3018,7 @@ export default function App() {
   }
   const paramBiglietti = new URLSearchParams(window.location.search).get("biglietti");
   if (paramBiglietti) {
-    return <VistaBiglietti corsoDataId={paramBiglietti} />;
+    return <VistaBiglietti param={paramBiglietti} />;
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
