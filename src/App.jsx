@@ -999,7 +999,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                     .map((cd) => {
                       const corso = corsoById[cd.corso_id];
                       const dataEtichetta = cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`;
-                      return onDelete ? (
+                      return onEdit ? (
                         <div key={cd.id} style={{ paddingLeft: 4 }}>
                           <RigaEliminabile
                             label={
@@ -1033,12 +1033,28 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                               <b style={{ color: NAVY, fontWeight: 500 }}>{corso?.nome?.toUpperCase() || "?"}</b>
                               <span>— {dataEtichetta}</span>
                             </span>
-                            {iscritti && (() => {
-                              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-                              const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
-                              const liberi = Math.max(0, max - occupati);
-                              return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
-                            })()}
+                            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              {iscritti && (() => {
+                                const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+                                const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                                const liberi = Math.max(0, max - occupati);
+                                return <span>{liberi} post{liberi === 1 ? "o" : "i"}</span>;
+                              })()}
+                              {onDelete && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }}
+                                  title="Elimina"
+                                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                    <path d="M10 11v6" /><path d="M14 11v6" />
+                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                                  </svg>
+                                </button>
+                              )}
+                            </span>
                           </div>
                           {cd.master_id && (
                             <div style={{ ...fontBody, fontSize: 11, color: MUTED, opacity: 0.75, paddingLeft: 20 }}>
@@ -2588,6 +2604,16 @@ export default function App() {
     setMaster(m.data || []);
   }
 
+  async function eliminaDataArchiviata(id) {
+    const cd = corsiDate.find((x) => x.id === id);
+    const numIscritti = iscritti.filter((i) => i.corso_data_id === id).length;
+    const etichetta = cd ? (cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`) : "";
+    if (!window.confirm(`Stai per cancellare definitivamente una data GIÀ CONCLUSA (${etichetta}) insieme a ${numIscritti} iscritt${numIscritti === 1 ? "o" : "i"} e a tutti i loro dati di pagamento. L'operazione non è reversibile. Continuare?`)) return;
+    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    fetchDati();
+  }
+
   async function caricaIniziale() {
     setLoading(true);
     await fetchDati();
@@ -2746,7 +2772,7 @@ export default function App() {
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
           <TopBar title="Archivio corsi" onBack={() => setView("home")} />
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
-            Corsi con data già conclusa, completi dei dati registrati.
+            Corsi con data già conclusa, completi dei dati registrati. Il cestino cancella definitivamente la data e tutti i suoi iscritti.
           </div>
           <DateRaggruppatePerCitta
             corsi={corsi}
@@ -2755,6 +2781,7 @@ export default function App() {
             iscritti={iscritti}
             master={master}
             onApriData={apriData}
+            onDelete={eliminaDataArchiviata}
           />
         </div>
       )}
