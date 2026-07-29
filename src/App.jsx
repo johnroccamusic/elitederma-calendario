@@ -498,8 +498,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
     .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
     .filter((cd) => !filtroMaster || cd.master_id === filtroMaster)
-    .filter((cd) => !filtroAssistente || cd.assistente_id === filtroAssistente)
-    .filter((cd) => !filtroLeva || cd.leva_id === filtroLeva)
+    .filter((cd) => !filtroAssistente || (cd.assistente_ids || []).includes(filtroAssistente))
+    .filter((cd) => !filtroLeva || (cd.leva_ids || []).includes(filtroLeva))
     .slice()
     .sort((a, b) =>
       a.data_inizio.localeCompare(b.data_inizio)
@@ -532,6 +532,18 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     const { error } = await supabase.from("corsi_date").update({ [campo]: valore }).eq("id", id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
+  }
+
+  // aggiunge una riga vuota all'elenco (assistente_ids / leva_ids)
+  function aggiungiRigaElenco(cd, campo) {
+    salvaCampo(cd.id, campo, [...(cd[campo] || []), null]);
+  }
+  // aggiorna la riga "idx" dell'elenco: selezionare "—" (valore vuoto) rimuove quella riga
+  function modificaRigaElenco(cd, campo, idx, valore) {
+    const elenco = [...(cd[campo] || [])];
+    if (!valore) elenco.splice(idx, 1);
+    else elenco[idx] = valore;
+    salvaCampo(cd.id, campo, elenco);
   }
 
   async function caricaBiglietti(cd, fileList) {
@@ -584,6 +596,35 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     { larghezza: 100 }, { larghezza: 90 }, { larghezza: 100 }, { larghezza: 90 },
     { larghezza: 150 }, { larghezza: 100 }, { larghezza: 100 },
   ];
+
+  // elenco di tendine per un campo "array" (assistente_ids/leva_ids): un
+  // quadratino "+" in alto aggiunge una riga, selezionare "—" su una riga
+  // già esistente la rimuove
+  function elencoModificabile(cd, campo, opzioni) {
+    const elenco = cd[campo] || [];
+    const righeVisibili = elenco.length > 0 ? elenco : [null];
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <button
+          onClick={() => aggiungiRigaElenco(cd, campo)}
+          title="Aggiungi una riga"
+          style={{
+            width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center",
+            border: `1px solid ${NAVY}`, borderRadius: 4, background: "#fff", color: NAVY,
+            fontSize: 12, fontWeight: 700, lineHeight: 1, cursor: "pointer", padding: 0,
+          }}
+        >
+          +
+        </button>
+        {righeVisibili.map((id, idx) => (
+          <select key={idx} style={campoStyle} value={id || ""} onChange={(e) => modificaRigaElenco(cd, campo, idx, e.target.value)}>
+            <option value="">—</option>
+            {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+          </select>
+        ))}
+      </div>
+    );
+  }
 
   function filtroDropdown(chiave, etichetta, valore, setValore, opzioni) {
     return (
@@ -662,16 +703,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                     <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
                   </td>
                   <td style={celStyle}>
-                    <select style={campoStyle} value={cd.assistente_id || ""} onChange={(e) => salvaCampo(cd.id, "assistente_id", e.target.value || null)}>
-                      <option value="">—</option>
-                      {assistente.map((a) => <option key={a.id} value={a.id}>{a.nome.toUpperCase()}</option>)}
-                    </select>
+                    {elencoModificabile(cd, "assistente_ids", assistente)}
                   </td>
                   <td style={celStyle}>
-                    <select style={campoStyle} value={cd.leva_id || ""} onChange={(e) => salvaCampo(cd.id, "leva_id", e.target.value || null)}>
-                      <option value="">—</option>
-                      {leva.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-                    </select>
+                    {elencoModificabile(cd, "leva_ids", leva)}
                   </td>
                   <td style={celStyle}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
