@@ -451,83 +451,13 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
   );
 }
 
-// tiene traccia SOLO dell'ultima modifica fatta in una pagina, per poterla
-// annullare (tornare al valore precedente) o ripetere (rifarla). Ogni
-// pagina con inserimento dati crea la propria istanza con useCronologia()
-// e la passa a TopBar, che mostra i due pulsanti quando c'è qualcosa da
-// annullare/ripetere.
-function useCronologia() {
-  const [ultima, setUltima] = useState(null);
-  const [annullata, setAnnullata] = useState(null);
-  const [inCorso, setInCorso] = useState(false);
-
-  function registra(azione) {
-    setUltima(azione);
-    setAnnullata(null); // una nuova modifica invalida il "ripeti" di prima
-  }
-  async function annulla() {
-    if (!ultima) return;
-    setInCorso(true);
-    try {
-      await ultima.annulla();
-      setAnnullata(ultima);
-      setUltima(null);
-    } finally {
-      setInCorso(false);
-    }
-  }
-  async function ripeti() {
-    if (!annullata) return;
-    setInCorso(true);
-    try {
-      await annullata.ripeti();
-      setUltima(annullata);
-      setAnnullata(null);
-    } finally {
-      setInCorso(false);
-    }
-  }
-  return { puoiAnnullare: !!ultima, puoiRipetere: !!annullata, etichettaAnnulla: ultima?.etichetta, etichettaRipeti: annullata?.etichetta, inCorso, registra, annulla, ripeti };
-}
-
-function BottoniCronologia({ cronologia }) {
-  const btnStyle = (attivo) => ({
-    border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 8, background: "#fff",
-    cursor: attivo ? "pointer" : "default", fontSize: 16, color: attivo ? NAVY : MUTED,
-    opacity: attivo ? 1 : 0.5, padding: "4px 9px", lineHeight: 1,
-  });
+function TopBar({ title, onBack }) {
   return (
-    <div style={{ display: "flex", gap: 6 }}>
-      <button
-        onClick={cronologia.annulla}
-        disabled={!cronologia.puoiAnnullare || cronologia.inCorso}
-        title={cronologia.puoiAnnullare ? `Annulla: ${cronologia.etichettaAnnulla}` : "Niente da annullare"}
-        style={btnStyle(cronologia.puoiAnnullare)}
-      >
-        ↶
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
+      <button onClick={onBack} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", fontSize: 20, color: NAVY }}>
+        &larr;
       </button>
-      <button
-        onClick={cronologia.ripeti}
-        disabled={!cronologia.puoiRipetere || cronologia.inCorso}
-        title={cronologia.puoiRipetere ? `Ripeti: ${cronologia.etichettaRipeti}` : "Niente da ripetere"}
-        style={btnStyle(cronologia.puoiRipetere)}
-      >
-        ↷
-      </button>
-    </div>
-  );
-}
-
-function TopBar({ title, onBack, cronologia }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 22 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <button onClick={onBack} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", fontSize: 20, color: NAVY }}>
-          &larr;
-        </button>
-        <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{title}</div>
-      </div>
-      {cronologia && <BottoniCronologia cronologia={cronologia} />}
+      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{title}</div>
     </div>
   );
 }
@@ -572,7 +502,6 @@ function Gate({ onOk }) {
 function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assistente, leva, ricarica, onBack }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const cronologia = useCronologia();
 
   const [filtroCorso, setFiltroCorso] = useState("");
   const [filtroCitta, setFiltroCitta] = useState("");
@@ -618,36 +547,22 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     .filter((x) => x.nome)
     .sort((a, b) => b.n - a.n);
 
-  // esegue l'update senza toccare la cronologia annulla/ripeti: usata sia dal
-  // salvataggio normale (che registra l'azione) sia da annulla/ripeti stessi
-  // (che non devono creare una nuova voce di cronologia)
-  async function eseguiCampo(id, campo, valore) {
+  async function salvaCampo(id, campo, valore) {
     const { error } = await supabase.from("corsi_date").update({ [campo]: valore }).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return false; }
+    if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
-    return true;
-  }
-  async function salvaCampo(cd, campo, valore, etichetta) {
-    const precedente = cd[campo];
-    const ok = await eseguiCampo(cd.id, campo, valore);
-    if (!ok) return;
-    cronologia.registra({
-      etichetta,
-      annulla: () => eseguiCampo(cd.id, campo, precedente),
-      ripeti: () => eseguiCampo(cd.id, campo, valore),
-    });
   }
 
   // aggiunge una riga vuota all'elenco (assistente_ids / leva_ids)
-  function aggiungiRigaElenco(cd, campo, etichetta) {
-    salvaCampo(cd, campo, [...(cd[campo] || []), null], etichetta);
+  function aggiungiRigaElenco(cd, campo) {
+    salvaCampo(cd.id, campo, [...(cd[campo] || []), null]);
   }
   // aggiorna la riga "idx" dell'elenco: selezionare "—" (valore vuoto) rimuove quella riga
-  function modificaRigaElenco(cd, campo, idx, valore, etichetta) {
+  function modificaRigaElenco(cd, campo, idx, valore) {
     const elenco = [...(cd[campo] || [])];
     if (!valore) elenco.splice(idx, 1);
     else elenco[idx] = valore;
-    salvaCampo(cd, campo, elenco, etichetta);
+    salvaCampo(cd.id, campo, elenco);
   }
 
   async function caricaBiglietti(cd, fileList) {
@@ -659,7 +574,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
       nuovi.push(percorso);
     }
     if (nuovi.length === 0) return;
-    await salvaCampo(cd, "viaggio_file", [...(cd.viaggio_file || []), ...nuovi], "Caricamento biglietti");
+    await salvaCampo(cd.id, "viaggio_file", [...(cd.viaggio_file || []), ...nuovi]);
   }
 
   async function copiaBiglietti(cd) {
@@ -734,7 +649,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   // elenco di tendine per un campo "array" (assistente_ids/leva_ids): un
   // quadratino "+" in alto aggiunge una riga, selezionare "—" su una riga
   // già esistente la rimuove
-  function elencoModificabile(cd, campo, opzioni, etichetta) {
+  function elencoModificabile(cd, campo, opzioni) {
     const elenco = cd[campo] || [];
     const righeVisibili = elenco.length > 0 ? elenco : [null];
     return (
@@ -748,8 +663,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
               style={campoStyle}
               value={id || ""}
               onChange={(e) => {
-                if (e.target.value === "__aggiungi__") { aggiungiRigaElenco(cd, campo, etichetta); return; }
-                modificaRigaElenco(cd, campo, idx, e.target.value, etichetta);
+                if (e.target.value === "__aggiungi__") { aggiungiRigaElenco(cd, campo); return; }
+                modificaRigaElenco(cd, campo, idx, e.target.value);
               }}
             >
               <option value="">—</option>
@@ -829,26 +744,26 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                   </td>
                   <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
                   <td style={{ ...celStyle, textAlign: "center" }}>
-                    {semaforo(cd.sede_confermata, () => salvaCampo(cd, "sede_confermata", !cd.sede_confermata, "Sede OK?"), "piccolo")}
+                    {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
                   </td>
                   <td style={celStyle}>
-                    <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd, "master_id", e.target.value || null, "Master")}>
+                    <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
                       <option value="">—</option>
                       {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
                     </select>
                   </td>
                   <td style={celStyle}>
-                    <input key={cd.note || ""} style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd, "note", e.target.value || null, "Note"); }} />
+                    <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
                   </td>
                   <td style={celStyle}>
-                    {elencoModificabile(cd, "assistente_ids", assistente, "Assistenti")}
+                    {elencoModificabile(cd, "assistente_ids", assistente)}
                   </td>
                   <td style={celStyle}>
-                    {elencoModificabile(cd, "leva_ids", leva, "Leve")}
+                    {elencoModificabile(cd, "leva_ids", leva)}
                   </td>
                   <td style={celStyle}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
-                      {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd, "viaggio_prenotato", !cd.viaggio_prenotato, "Viaggio"), "piccolo")}
+                      {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
                       <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ ...fontScheda, fontSize: 8, padding: "4px 6px" }}>Copia</Button>
                       <label style={{ ...fontScheda, fontSize: 8, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap" }}>
                         +
@@ -858,13 +773,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                     </div>
                   </td>
                   <td style={celStyle}>
-                    <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd, "alloggio_id", e.target.value || null, "Alloggio")}>
+                    <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
                       <option value="">—</option>
                       {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                     </select>
                   </td>
                   <td style={{ ...celStyle, borderRight: "none" }}>
-                    <input key={cd.note_viaggio || ""} style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd, "note_viaggio", e.target.value || null, "Note viaggio"); }} />
+                    <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
                   </td>
                 </tr>
               );
@@ -877,7 +792,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Assegnazione Master" onBack={onBack} cronologia={cronologia} />
+      <TopBar title="Assegnazione Master" onBack={onBack} />
       <div style={{ ...fontScheda, fontSize: 13, color: MUTED, marginBottom: 18 }}>
         Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
       </div>
@@ -931,7 +846,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 
 // ---------- Impostazioni ----------
 function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster }) {
-  const cronologia = useCronologia();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -967,51 +881,26 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
-  // helper generici: eseguono la mutazione senza toccare la cronologia
-  // annulla/ripeti (che viene registrata solo dal chiamante, con il "prima"
-  // e il "dopo" giusti); annulla/ripeti stessi richiamano questi helper
-  async function eseguiUpdate(tabella, id, campi) {
-    const { error } = await supabase.from(tabella).update(campi).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
-  async function eseguiInsert(tabella, riga) {
-    const { error } = await supabase.from(tabella).insert(riga);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
-  async function eseguiDelete(tabella, id) {
-    const { error } = await supabase.from(tabella).delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
-
   async function eliminaCorso(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const precedente = corsi.find((c) => c.id === id);
-    const ok = await eseguiDelete("corsi", id);
-    if (!ok) return;
+    const { error } = await supabase.from("corsi").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("Corso eliminato.");
-    if (precedente) cronologia.registra({ etichetta: "Eliminazione corso", annulla: () => eseguiInsert("corsi", precedente), ripeti: () => eseguiDelete("corsi", id) });
+    ricarica();
   }
   async function eliminaLocation(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const precedente = location.find((l) => l.id === id);
-    const ok = await eseguiDelete("location", id);
-    if (!ok) return;
+    const { error } = await supabase.from("location").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("Città eliminata.");
-    if (precedente) cronologia.registra({ etichetta: "Eliminazione città", annulla: () => eseguiInsert("location", precedente), ripeti: () => eseguiDelete("location", id) });
+    ricarica();
   }
   async function eliminaData(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const precedente = corsiDate.find((cd) => cd.id === id);
-    const ok = await eseguiDelete("corsi_date", id);
-    if (!ok) return;
+    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("Data eliminata.");
-    if (precedente) cronologia.registra({ etichetta: "Eliminazione data", annulla: () => eseguiInsert("corsi_date", precedente), ripeti: () => eseguiDelete("corsi_date", id) });
+    ricarica();
   }
   function apriModificaCorso(c) {
     setCorsoInModifica(c.id);
@@ -1021,16 +910,15 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   }
   async function salvaModificaCorso(id) {
     if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
-    const precedente = corsi.find((c) => c.id === id);
-    const nuovi = { nome: modNomeCorso.trim().toUpperCase(), colore: modColoreCorso, posti_max: Number(modPostiCorso) || 10 };
-    const ok = await eseguiUpdate("corsi", id, nuovi);
-    if (!ok) return;
+    const { error } = await supabase.from("corsi").update({
+      nome: modNomeCorso.trim().toUpperCase(),
+      colore: modColoreCorso,
+      posti_max: Number(modPostiCorso) || 10,
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setCorsoInModifica(null);
     setMsg("Corso aggiornato.");
-    if (precedente) {
-      const vecchi = { nome: precedente.nome, colore: precedente.colore, posti_max: precedente.posti_max };
-      cronologia.registra({ etichetta: "Modifica corso", annulla: () => eseguiUpdate("corsi", id, vecchi), ripeti: () => eseguiUpdate("corsi", id, nuovi) });
-    }
+    ricarica();
   }
 
   function apriModificaLocation(l) {
@@ -1040,16 +928,14 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
-    const precedente = location.find((l) => l.id === id);
-    const nuovi = { nome: modNomeLoc.trim().toUpperCase(), posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc) };
-    const ok = await eseguiUpdate("location", id, nuovi);
-    if (!ok) return;
+    const { error } = await supabase.from("location").update({
+      nome: modNomeLoc.trim().toUpperCase(),
+      posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
     setMsg("Città aggiornata.");
-    if (precedente) {
-      const vecchi = { nome: precedente.nome, posti_max: precedente.posti_max };
-      cronologia.registra({ etichetta: "Modifica città", annulla: () => eseguiUpdate("location", id, vecchi), ripeti: () => eseguiUpdate("location", id, nuovi) });
-    }
+    ricarica();
   }
 
   function apriModificaData(cd) {
@@ -1075,22 +961,17 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   }
   async function salvaModificaData(id) {
     if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
-    const precedente = corsiDate.find((cd) => cd.id === id);
     const fine = modDataFine || modDataInizio;
-    const nuovi = {
+    const { error } = await supabase.from("corsi_date").update({
       data_inizio: modDataInizio,
       data_fine: fine,
       posti_max: modPostiData ? Number(modPostiData) : null,
       master_id: modMasterSel || null,
-    };
-    const ok = await eseguiUpdate("corsi_date", id, nuovi);
-    if (!ok) return;
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setDataInModifica(null);
     setMsg("Data aggiornata.");
-    if (precedente) {
-      const vecchi = { data_inizio: precedente.data_inizio, data_fine: precedente.data_fine, posti_max: precedente.posti_max, master_id: precedente.master_id };
-      cronologia.registra({ etichetta: "Modifica data", annulla: () => eseguiUpdate("corsi_date", id, vecchi), ripeti: () => eseguiUpdate("corsi_date", id, nuovi) });
-    }
+    ricarica();
   }
 
   async function aggiungiCorso() {
@@ -1099,45 +980,42 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       setMsg("Questo colore è già usato da un altro corso: scegline un altro.");
       return;
     }
-    const riga = { nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 };
-    const { data, error } = await supabase.from("corsi").insert(riga).select().single();
+    const { error } = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 });
     if (error) { setMsg("Errore: " + error.message); return; }
     setNomeCorso(""); setMsg("Corso aggiunto.");
     ricarica();
-    cronologia.registra({ etichetta: "Aggiunta corso", annulla: () => eseguiDelete("corsi", data.id), ripeti: () => eseguiInsert("corsi", data) });
   }
 
   async function aggiungiLocation() {
     if (!nomeLoc.trim()) return;
-    const riga = { nome: nomeLoc.trim().toUpperCase(), posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc) };
-    const { data, error } = await supabase.from("location").insert(riga).select().single();
+    const { error } = await supabase.from("location").insert({
+      nome: nomeLoc.trim().toUpperCase(),
+      posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
+    });
     if (error) { setMsg("Errore: " + error.message); return; }
     setNomeLoc(""); setPostiMaxLoc(""); setMsg("Location aggiunta.");
     ricarica();
-    cronologia.registra({ etichetta: "Aggiunta città", annulla: () => eseguiDelete("location", data.id), ripeti: () => eseguiInsert("location", data) });
   }
 
   async function aggiungiData() {
     if (!corsoSel || !locSel || !valoreDate.inizio) { setMsg("Seleziona corso, città e almeno un giorno sul calendario."); return; }
     const fine = valoreDate.fine || valoreDate.inizio;
-    const riga = {
+    const { error } = await supabase.from("corsi_date").insert({
       corso_id: corsoSel,
       location_id: locSel,
       data_inizio: valoreDate.inizio,
       data_fine: fine,
       posti_max: postiData ? Number(postiData) : null,
       master_id: masterSel || null,
-    };
-    const { data, error } = await supabase.from("corsi_date").insert(riga).select().single();
+    });
     if (error) { setMsg("Errore: " + error.message); return; }
     setValoreDate({ inizio: null, fine: null }); setPostiData(""); setMasterSel(""); setMsg("Data aggiunta al calendario.");
     ricarica();
-    cronologia.registra({ etichetta: "Aggiunta data", annulla: () => eseguiDelete("corsi_date", data.id), ripeti: () => eseguiInsert("corsi_date", data) });
   }
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Setting" onBack={onBack} cronologia={cronologia} />
+      <TopBar title="Setting" onBack={onBack} />
 
       <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
         <Button onClick={() => setShowCorsoModal(true)}>Aggiungi corso</Button>
@@ -1258,7 +1136,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
 
       {showCorsoModal && (
-        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)} cronologia={cronologia}>
+        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)}>
           <div style={hStyle}>Aggiungi corso</div>
           <div style={subStyle}>Nome, colore univoco per il calendario, posti massimi di default.</div>
           <Field label="Nome corso">
@@ -1319,7 +1197,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       )}
 
       {showLocModal && (
-        <Modal title="Location" onClose={() => setShowLocModal(false)} cronologia={cronologia}>
+        <Modal title="Location" onClose={() => setShowLocModal(false)}>
           <div style={hStyle}>Aggiungi location</div>
           <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
           <Field label="Città">
@@ -1362,41 +1240,41 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       )}
 
       {showMasterModal && (
-        <Modal title="Master" onClose={() => setShowMasterModal(false)} cronologia={cronologia}>
+        <Modal title="Master" onClose={() => setShowMasterModal(false)}>
           <div style={{ ...subStyle, marginTop: -4 }}>Nomi assegnabili a una specifica data/edizione di un corso.</div>
           <GestioneListaSemplice
             nomeSingolare="Master" nomeArticolo="una" tabella="master"
-            elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg} cronologia={cronologia}
+            elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
           />
         </Modal>
       )}
 
       {showHotelModal && (
-        <Modal title="Hotel" onClose={() => setShowHotelModal(false)} cronologia={cronologia}>
+        <Modal title="Hotel" onClose={() => setShowHotelModal(false)}>
           <GestioneListaSemplice
             nomeSingolare="Hotel" nomeArticolo="un" tabella="hotel"
-            elementi={hotel} ricarica={ricarica} msg={msg} setMsg={setMsg} cronologia={cronologia}
+            elementi={hotel} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. HOTEL ROMA"
           />
         </Modal>
       )}
 
       {showAssistenteModal && (
-        <Modal title="Assistente" onClose={() => setShowAssistenteModal(false)} cronologia={cronologia}>
+        <Modal title="Assistente" onClose={() => setShowAssistenteModal(false)}>
           <GestioneListaSemplice
             nomeSingolare="Assistente" nomeArticolo="un" tabella="assistente"
-            elementi={assistente} ricarica={ricarica} msg={msg} setMsg={setMsg} cronologia={cronologia}
+            elementi={assistente} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
           />
         </Modal>
       )}
 
       {showLevaModal && (
-        <Modal title="Leva" onClose={() => setShowLevaModal(false)} cronologia={cronologia}>
+        <Modal title="Leva" onClose={() => setShowLevaModal(false)}>
           <GestioneListaSemplice
             nomeSingolare="Leva" nomeArticolo="una" tabella="leva"
-            elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg} cronologia={cronologia}
+            elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. LEVA 1"
           />
         </Modal>
@@ -1409,7 +1287,7 @@ const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, 
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
 
-function Modal({ title, onClose, children, cronologia }) {
+function Modal({ title, onClose, children }) {
   return (
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}
@@ -1421,16 +1299,13 @@ function Modal({ title, onClose, children, cronologia }) {
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div style={{ ...hStyle, margin: 0 }}>{title}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {cronologia && <BottoniCronologia cronologia={cronologia} />}
-            <button
-              onClick={onClose}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4 }}
-              aria-label="Chiudi"
-            >
-              ×
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4 }}
+            aria-label="Chiudi"
+          >
+            ×
+          </button>
         </div>
         {children}
       </div>
@@ -1440,46 +1315,24 @@ function Modal({ title, onClose, children, cronologia }) {
 
 // gestione CRUD di una semplice tabella "nome" (master, hotel, assistente, leva):
 // aggiungi, elenco esistenti con modifica/elimina. Va dentro un <Modal>.
-function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, cronologia }) {
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder }) {
   const [nome, setNome] = useState("");
   const [inModifica, setInModifica] = useState(null);
   const [modNome, setModNome] = useState("");
 
-  async function eseguiUpdate(id, campi) {
-    const { error } = await supabase.from(tabella).update(campi).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
-  async function eseguiInsert(riga) {
-    const { error } = await supabase.from(tabella).insert(riga);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
-  async function eseguiDelete(id) {
-    const { error } = await supabase.from(tabella).delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
-
   async function aggiungi() {
     if (!nome.trim()) return;
-    const riga = { nome: nome.trim().toUpperCase() };
-    const { data, error } = await supabase.from(tabella).insert(riga).select().single();
+    const { error } = await supabase.from(tabella).insert({ nome: nome.trim().toUpperCase() });
     if (error) { setMsg("Errore: " + error.message); return; }
     setNome(""); setMsg(`${nomeSingolare} aggiunt${nomeArticolo === "un" ? "o" : "a"}.`);
     ricarica();
-    cronologia?.registra({ etichetta: `Aggiunta ${nomeSingolare.toLowerCase()}`, annulla: () => eseguiDelete(data.id), ripeti: () => eseguiInsert(data) });
   }
   async function elimina(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const precedente = elementi.find((el) => el.id === id);
-    const ok = await eseguiDelete(id);
-    if (!ok) return;
+    const { error } = await supabase.from(tabella).delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setMsg(`${nomeSingolare} eliminat${nomeArticolo === "un" ? "o" : "a"}.`);
-    if (precedente) cronologia?.registra({ etichetta: `Eliminazione ${nomeSingolare.toLowerCase()}`, annulla: () => eseguiInsert(precedente), ripeti: () => eseguiDelete(id) });
+    ricarica();
   }
   function apriModifica(el) {
     setInModifica(el.id);
@@ -1487,13 +1340,11 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   }
   async function salvaModifica(id) {
     if (!modNome.trim()) { setMsg("Il nome non può essere vuoto."); return; }
-    const precedente = elementi.find((el) => el.id === id);
-    const nuovi = { nome: modNome.trim().toUpperCase() };
-    const ok = await eseguiUpdate(id, nuovi);
-    if (!ok) return;
+    const { error } = await supabase.from(tabella).update({ nome: modNome.trim().toUpperCase() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setInModifica(null);
     setMsg(`${nomeSingolare} aggiornat${nomeArticolo === "un" ? "o" : "a"}.`);
-    if (precedente) cronologia?.registra({ etichetta: `Modifica ${nomeSingolare.toLowerCase()}`, annulla: () => eseguiUpdate(id, { nome: precedente.nome }), ripeti: () => eseguiUpdate(id, nuovi) });
+    ricarica();
   }
 
   return (
@@ -2393,7 +2244,6 @@ function AllegatoLink({ percorso, etichetta }) {
 }
 
 function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, ricarica, onBack }) {
-  const cronologia = useCronologia();
   const [vista, setVista] = useState("lista"); // 'lista' | 'form'
   const [modificandoId, setModificandoId] = useState(null); // id dell'iscritto in modifica, null se è una nuova iscrizione
 
@@ -2584,46 +2434,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
         ({ error } = await supabase.from("iscritti").update(payload).eq("id", modificandoId));
       } else {
         payload.corso_data_id = corsoData.id;
-        const ins = await supabase.from("iscritti").insert(payload).select().single();
+        const ins = await supabase.from("iscritti").insert(payload).select("id").single();
         error = ins.error;
         nuovoId = ins.data?.id;
       }
       if (error) { setMsg("Errore: " + error.message); return false; }
       if (nuovoId) setModificandoId(nuovoId); // da qui in poi i campi successivi si autosalvano sullo stesso iscritto
       ricarica();
-      if (modificandoId && originale) {
-        cronologia.registra({
-          etichetta: "Modifica iscritto",
-          annulla: async () => {
-            const { error } = await supabase.from("iscritti").update(originale).eq("id", modificandoId);
-            if (error) { setMsg("Errore: " + error.message); return false; }
-            ricarica();
-            return true;
-          },
-          ripeti: async () => {
-            const { error } = await supabase.from("iscritti").update(payload).eq("id", modificandoId);
-            if (error) { setMsg("Errore: " + error.message); return false; }
-            ricarica();
-            return true;
-          },
-        });
-      } else if (nuovoId) {
-        cronologia.registra({
-          etichetta: "Nuovo iscritto",
-          annulla: async () => {
-            const { error } = await supabase.from("iscritti").delete().eq("id", nuovoId);
-            if (error) { setMsg("Errore: " + error.message); return false; }
-            ricarica();
-            return true;
-          },
-          ripeti: async () => {
-            const { error } = await supabase.from("iscritti").insert({ ...payload, id: nuovoId });
-            if (error) { setMsg("Errore: " + error.message); return false; }
-            ricarica();
-            return true;
-          },
-        });
-      }
       return true;
     } catch (e) {
       setMsg("Errore nel caricamento allegati: " + e.message);
@@ -2697,27 +2514,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
 
   async function elimina(id) {
     if (!window.confirm("Sei sicuro di voler cancellare in modo definitivo l'allievo?")) return;
-    const precedente = iscritti.find((x) => x.id === id);
     const { error } = await supabase.from("iscritti").delete().eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
-    if (precedente) {
-      cronologia.registra({
-        etichetta: "Eliminazione iscritto",
-        annulla: async () => {
-          const { error } = await supabase.from("iscritti").insert(precedente);
-          if (error) { setMsg("Errore: " + error.message); return false; }
-          ricarica();
-          return true;
-        },
-        ripeti: async () => {
-          const { error } = await supabase.from("iscritti").delete().eq("id", id);
-          if (error) { setMsg("Errore: " + error.message); return false; }
-          ricarica();
-          return true;
-        },
-      });
-    }
   }
 
   function generaLinkMaster() {
@@ -2737,45 +2536,32 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     }
   }
 
-  async function eseguiCampoIscritto(id, campi, etichetta) {
-    const { error } = await supabase.from("iscritti").update(campi).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return false; }
-    ricarica();
-    return true;
-  }
   async function toggleIncassato(i) {
-    const ok = await eseguiCampoIscritto(i.id, { incassato: !i.incassato });
-    if (!ok) return;
-    cronologia.registra({ etichetta: "Incassato", annulla: () => eseguiCampoIscritto(i.id, { incassato: i.incassato }), ripeti: () => eseguiCampoIscritto(i.id, { incassato: !i.incassato }) });
+    const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
   }
 
   async function toggleRicontattato(i) {
-    const ok = await eseguiCampoIscritto(i.id, { ricontattato: !i.ricontattato });
-    if (!ok) return;
-    cronologia.registra({ etichetta: "Ricontattato", annulla: () => eseguiCampoIscritto(i.id, { ricontattato: i.ricontattato }), ripeti: () => eseguiCampoIscritto(i.id, { ricontattato: !i.ricontattato }) });
+    const { error } = await supabase.from("iscritti").update({ ricontattato: !i.ricontattato }).eq("id", i.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
   }
 
   async function salvaNotaRicontatto(id, valore) {
-    const precedente = iscritti.find((x) => x.id === id);
-    const nuovo = valore.trim() || null;
-    const ok = await eseguiCampoIscritto(id, { note_ricontatto: nuovo });
-    if (!ok) return;
-    if (precedente) cronologia.registra({ etichetta: "Nota ricontatto", annulla: () => eseguiCampoIscritto(id, { note_ricontatto: precedente.note_ricontatto }), ripeti: () => eseguiCampoIscritto(id, { note_ricontatto: nuovo }) });
+    const { error } = await supabase.from("iscritti").update({ note_ricontatto: valore.trim() || null }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
   }
 
   async function eseguiSpostamento(iscritto, cdTarget, corsoTarget, locTarget) {
     const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
     if (!window.confirm(`Spostare ${iscritto.nome.toUpperCase()} ${iscritto.cognome.toUpperCase()} su ${corsoTarget?.nome || "?"} · ${locTarget?.nome || "?"} · ${etichetta}?`)) return;
-    const corsoDataOriginale = iscritto.corso_data_id;
-    const ok = await eseguiCampoIscritto(iscritto.id, { corso_data_id: cdTarget.id });
-    if (!ok) return;
+    const { error } = await supabase.from("iscritti").update({ corso_data_id: cdTarget.id }).eq("id", iscritto.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     setSpostaIscrittoId(null);
     setMsg("Iscritto spostato.");
-    cronologia.registra({
-      etichetta: "Spostamento iscritto",
-      annulla: () => eseguiCampoIscritto(iscritto.id, { corso_data_id: corsoDataOriginale }),
-      ripeti: () => eseguiCampoIscritto(iscritto.id, { corso_data_id: cdTarget.id }),
-    });
+    ricarica();
   }
 
   const msgErrore = msg && (msg.startsWith("Errore") || msg.startsWith("Impossibile salvare")) ? msg : null;
@@ -2790,7 +2576,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
           </div>
         </div>
       )}
-      <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} cronologia={cronologia} />
+      <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
         <div>
           <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
