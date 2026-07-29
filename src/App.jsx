@@ -208,6 +208,7 @@ const ETICHETTE_MODULO_PDF = {
   tagliaDivisa: "taglia divisa",
   scelteModelle: "scelta delle modelle",
   tipoCorso: "tipo di corso scelto",
+  tipoPagamentoSaldo: "tipo di pagamento del saldo",
 };
 
 // legge il testo di un file PDF (senza OCR: il modulo ha testo selezionabile)
@@ -222,22 +223,40 @@ async function estraiDatiModuloPdf(file) {
     const page = await pdf.getPage(numPagina);
     const content = await page.getTextContent();
 
-    const righe = [];
-    for (const item of content.items) {
-      const testo = item.str.trim();
-      if (!testo) continue;
-      const y = item.transform[5];
-      const x = item.transform[4];
-      let riga = righe.find((r) => Math.abs(r.y - y) < 2);
-      if (!riga) { riga = { y, celle: [] }; righe.push(riga); }
-      riga.celle.push({ x, testo });
-    }
+    const items = content.items
+      .map((it) => ({ testo: it.str.trim(), x: it.transform[4], y: it.transform[5] }))
+      .filter((it) => it.testo);
+    if (items.length === 0) continue;
+
+    // le etichette sono ancorate alla colonna più a sinistra; i valori (anche
+    // su più righe, es. un testo lungo che va a capo) stanno più a destra,
+    // in una fascia verticale delimitata dal punto medio con l'etichetta
+    // precedente/successiva — non necessariamente dalla riga esatta
+    // dell'etichetta, perché un valore su più righe può iniziare più in alto.
+    const xMin = Math.min(...items.map((it) => it.x));
+    const etichetteItems = items.filter((it) => Math.abs(it.x - xMin) < 5).sort((a, b) => b.y - a.y);
+
+    const scarti = [];
+    for (let i = 1; i < etichetteItems.length; i++) scarti.push(etichetteItems[i - 1].y - etichetteItems[i].y);
+    scarti.sort((a, b) => a - b);
+    const scartoMediano = scarti.length ? scarti[Math.floor(scarti.length / 2)] : 20;
 
     const risultato = {};
-    for (const riga of righe) {
-      riga.celle.sort((a, b) => a.x - b.x);
-      const etichetta = riga.celle[0]?.testo.replace(/:\s*$/, "").trim().toLowerCase();
-      const valore = riga.celle.slice(1).map((c) => c.testo).join(" ").trim();
+    for (let i = 0; i < etichetteItems.length; i++) {
+      const corrente = etichetteItems[i];
+      const precedente = etichetteItems[i - 1];
+      const successiva = etichetteItems[i + 1];
+      const yMax = precedente ? (precedente.y + corrente.y) / 2 : corrente.y + scartoMediano / 2;
+      const yMin = successiva ? (corrente.y + successiva.y) / 2 : -Infinity;
+
+      const valore = items
+        .filter((it) => it !== corrente && it.x > xMin + 5 && it.y <= yMax && it.y > yMin)
+        .sort((a, b) => b.y - a.y)
+        .map((it) => it.testo)
+        .join(" ")
+        .trim();
+
+      const etichetta = corrente.testo.replace(/:\s*$/, "").trim().toLowerCase();
       if (!etichetta || !valore) continue;
       for (const [chiave, etichettaAttesa] of Object.entries(ETICHETTE_MODULO_PDF)) {
         if (etichetta === etichettaAttesa) risultato[chiave] = valore;
@@ -1765,6 +1784,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
 
       if (dati.tipoCorso && !pacchettoKit.trim()) setPacchettoKit(dati.tipoCorso.toUpperCase());
 
+      if (dati.tipoPagamentoSaldo && !accordiCommerciali.trim()) setAccordiCommerciali(dati.tipoPagamentoSaldo.toUpperCase());
+
       if (dati.scelteModelle && richiedeModelle === "") {
         const testoModelle = dati.scelteModelle.toLowerCase();
         if (testoModelle.includes("cercherò io") || testoModelle.includes("cerchero io")) setRichiedeModelle("no");
@@ -2061,7 +2082,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
             <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia vengono letti e inseriti automaticamente nei campi ancora vuoti.</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia/pacchetto/modelle/accordi commerciali vengono letti e inseriti automaticamente nei campi ancora vuoti.</div>
           </Field>
           <Field label="Screen acconto (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
