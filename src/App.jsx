@@ -22,6 +22,12 @@ const GRAFITE = "#54585F";
 const fontDisplay = { fontFamily: "'Roboto',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
 
+// larghezze di default delle colonne della tabella "Assegnazione Master"
+// (l'utente può trascinarle: la scelta resta salvata in localStorage)
+const LARGHEZZE_COLONNE_DEFAULT = [54, 100, 70, 60, 100, 90, 100, 90, 150, 100, 100];
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Assistenti", "Leve", "Viaggio", "Alloggio", "Note viaggio"];
+
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_ABBR = ["GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC"];
 // data compatta per le liste: "11 OTT", "11–16 OTT", "29 SET–4 OTT"
@@ -599,11 +605,40 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     </button>
   );
 
-  const COLONNE = [
-    { larghezza: 54 }, { larghezza: 100 }, { larghezza: 70 }, { larghezza: 60 },
-    { larghezza: 100 }, { larghezza: 90 }, { larghezza: 100 }, { larghezza: 90 },
-    { larghezza: 150 }, { larghezza: 100 }, { larghezza: 100 },
-  ];
+  // larghezza delle colonne della tabella: trascinabile con il mouse (come
+  // in Excel) afferrando la giunzione tra due colonne nell'intestazione;
+  // resta salvata per sempre in questo browser (localStorage)
+  const larghezzeSalvate = (() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_COLONNE) || "null");
+      if (Array.isArray(v) && v.length === LARGHEZZE_COLONNE_DEFAULT.length) return v;
+    } catch { /* localStorage non disponibile: usa i default */ }
+    return LARGHEZZE_COLONNE_DEFAULT;
+  })();
+  const [larghezze, setLarghezze] = useState(larghezzeSalvate);
+  const COLONNE = larghezze.map((larghezza) => ({ larghezza }));
+  const larghezzaTabella = larghezze.reduce((a, b) => a + b, 0);
+
+  const ridimensionamentoRef = React.useRef(null);
+  function iniziaRidimensionamento(e, indice) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ridimensionamentoRef.current = { indice, pointerId: e.pointerId, startX: e.clientX, startWidth: larghezze[indice] };
+  }
+  function muoviRidimensionamento(e) {
+    const r = ridimensionamentoRef.current;
+    if (!r || e.pointerId !== r.pointerId) return;
+    const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
+    setLarghezze((precedenti) => precedenti.map((l, i) => (i === r.indice ? nuovaLarghezza : l)));
+  }
+  function fineRidimensionamento() {
+    if (!ridimensionamentoRef.current) return;
+    ridimensionamentoRef.current = null;
+    setLarghezze((attuali) => {
+      try { localStorage.setItem(CHIAVE_LARGHEZZE_COLONNE, JSON.stringify(attuali)); } catch { /* ignora */ }
+      return attuali;
+    });
+  }
 
   // elenco di tendine per un campo "array" (assistente_ids/leva_ids): un
   // quadratino "+" in alto aggiunge una riga, selezionare "—" su una riga
@@ -665,21 +700,22 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   function tabellaMese(righeMese) {
     return (
       <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginBottom: 28 }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
+        <table style={{ borderCollapse: "collapse", width: larghezzaTabella, tableLayout: "fixed" }}>
           <colgroup>{COLONNE.map((c, i) => <col key={i} style={{ width: c.larghezza }} />)}</colgroup>
           <thead>
             <tr>
-              <th style={thStyle}>Data</th>
-              <th style={thStyle}>Corso</th>
-              <th style={thStyle}>Città</th>
-              <th style={thStyle}>Sede OK?</th>
-              <th style={thStyle}>Master</th>
-              <th style={thStyle}>Note</th>
-              <th style={thStyle}>Assistenti</th>
-              <th style={thStyle}>Leve</th>
-              <th style={thStyle}>Viaggio</th>
-              <th style={thStyle}>Alloggio</th>
-              <th style={{ ...thStyle, borderRight: "none" }}>Note viaggio</th>
+              {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
+                <th key={i} style={{ ...thStyle, position: "relative", borderRight: i === ETICHETTE_COLONNE_MASTER.length - 1 ? "none" : bordoV }}>
+                  {etichetta}
+                  <div
+                    onPointerDown={(e) => iniziaRidimensionamento(e, i)}
+                    onPointerMove={muoviRidimensionamento}
+                    onPointerUp={fineRidimensionamento}
+                    onPointerCancel={fineRidimensionamento}
+                    style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+                  />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
