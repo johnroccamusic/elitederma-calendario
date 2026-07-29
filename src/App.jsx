@@ -992,14 +992,14 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
     <div>
       {cittaOrdinate.map((c, idx) => (
         <div key={c.nome} style={{ marginBottom: 24, paddingTop: idx > 0 ? 20 : 0, borderTop: idx > 0 ? `2px solid ${MUTED}` : "none" }}>
-          <div style={{ ...fontDisplay, fontSize: 34, fontWeight: 800, color: NAVY, marginBottom: 14 }}>{c.nome.toUpperCase()}</div>
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 14, textAlign: "center" }}>{c.nome.toUpperCase()}</div>
           {Object.keys(c.mesi)
             .sort()
             .map((chiaveMese) => {
               const gruppoMese = c.mesi[chiaveMese];
               return (
                 <div key={chiaveMese} style={{ marginBottom: 14 }}>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
                     {gruppoMese.etichetta}
                   </div>
                   {gruppoMese.voci
