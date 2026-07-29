@@ -823,7 +823,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
         <span style={{ ...fontScheda, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Corsi assegnati:</span>
         {masterConteggi.length === 0 && <span style={{ ...fontScheda, fontSize: 13, color: MUTED }}>nessuno ancora</span>}
         {masterConteggi.map((m) => (
-          <span key={m.nome} style={{ ...fontScheda, fontSize: 13, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 8, padding: "4px 10px", whiteSpace: "nowrap" }}>
+          <span key={m.nome} style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 8, padding: "4px 10px", whiteSpace: "nowrap" }}>
             {m.nome.toUpperCase()} {m.n}
           </span>
         ))}
