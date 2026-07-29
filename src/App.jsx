@@ -1022,6 +1022,13 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   const [modNomeLoc, setModNomeLoc] = useState("");
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
 
+  const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
+  const [filtroCittaDate, setFiltroCittaDate] = useState("");
+  const [filtroMasterDate, setFiltroMasterDate] = useState("");
+  const [apriFiltroCorsoDate, setApriFiltroCorsoDate] = useState(false);
+  const [apriFiltroCittaDate, setApriFiltroCittaDate] = useState(false);
+  const [apriFiltroMasterDate, setApriFiltroMasterDate] = useState(false);
+
   const [dataInModifica, setDataInModifica] = useState(null);
   const [modDataInizio, setModDataInizio] = useState("");
   const [modDataFine, setModDataFine] = useState("");
@@ -1207,12 +1214,89 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       </div>
 
       <div style={cardStyle}>
-        <div style={hStyle}>Date esistenti</div>
+        <div style={{ ...hStyle, textAlign: "center" }}>PANNELLO DI GESTIONE DATE</div>
         <div style={subStyle}>Solo le edizioni future, divise per città e corso. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ position: "relative" }}>
+            <Button
+              variant={filtroCorsoDate ? "primary" : "ghost"}
+              onClick={() => { setApriFiltroCorsoDate((v) => !v); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+            >
+              {filtroCorsoDate ? corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase() : "Filtra per corso"}
+            </Button>
+            {apriFiltroCorsoDate && (
+              <select
+                autoFocus
+                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                value={filtroCorsoDate}
+                onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
+                onBlur={() => setApriFiltroCorsoDate(false)}
+              >
+                <option value="">Tutti i corsi</option>
+                {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
+              </select>
+            )}
+          </div>
+          <div style={{ position: "relative" }}>
+            <Button
+              variant={filtroCittaDate ? "primary" : "ghost"}
+              onClick={() => { setApriFiltroCittaDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroMasterDate(false); }}
+            >
+              {filtroCittaDate ? location.find((l) => l.id === filtroCittaDate)?.nome.toUpperCase() : "Filtra per città"}
+            </Button>
+            {apriFiltroCittaDate && (
+              <select
+                autoFocus
+                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                value={filtroCittaDate}
+                onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
+                onBlur={() => setApriFiltroCittaDate(false)}
+              >
+                <option value="">Tutte le città</option>
+                {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+              </select>
+            )}
+          </div>
+          <div style={{ position: "relative" }}>
+            <Button
+              variant={filtroMasterDate ? "primary" : "ghost"}
+              onClick={() => { setApriFiltroMasterDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); }}
+            >
+              {filtroMasterDate ? master.find((m) => m.id === filtroMasterDate)?.nome.toUpperCase() : "Filtra per master"}
+            </Button>
+            {apriFiltroMasterDate && (
+              <select
+                autoFocus
+                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                value={filtroMasterDate}
+                onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
+                onBlur={() => setApriFiltroMasterDate(false)}
+              >
+                <option value="">Tutte le master</option>
+                {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+              </select>
+            )}
+          </div>
+          {(filtroCorsoDate || filtroCittaDate || filtroMasterDate) && (
+            <Button
+              variant="ghost"
+              onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+            >
+              Cancella filtri
+            </Button>
+          )}
+        </div>
+
         <DateRaggruppatePerCitta
           corsi={corsi}
           location={location}
-          corsiDate={corsiDate.filter((cd) => cd.data_fine >= dataOggiStr())}
+          corsiDate={corsiDate.filter((cd) =>
+            cd.data_fine >= dataOggiStr() &&
+            (!filtroCorsoDate || cd.corso_id === filtroCorsoDate) &&
+            (!filtroCittaDate || cd.location_id === filtroCittaDate) &&
+            (!filtroMasterDate || cd.master_id === filtroMasterDate)
+          )}
           iscritti={iscritti}
           master={master}
           onDelete={eliminaData}
