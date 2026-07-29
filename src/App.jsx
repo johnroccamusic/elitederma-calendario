@@ -67,6 +67,8 @@ function leggiSlugData(testo) {
   return null;
 }
 const GIORNI = ["L","M","M","G","V","S","D"];
+const COLORE_SABATO = "#EAF3FB"; // celeste tenuissimo, indice 5 = S
+const COLORE_DOMENICA = "#FBEAEA"; // rosso tenuissimo, indice 6 = D
 
 function fmtData(d) {
   const [y, m, day] = d.split("-");
@@ -1932,7 +1934,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
           <div key={wi} style={{ position: "relative", marginBottom: 4 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
               {settimana.map((d, i) => (
-                <div key={i} data-data={d ? dateStr(d) : undefined} style={{ border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8, height: rowHeight, background: d ? "#fff" : "transparent", boxSizing: "border-box" }}>
+                <div key={i} data-data={d ? dateStr(d) : undefined} style={{ border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8, height: rowHeight, background: !d ? "transparent" : i === 5 ? COLORE_SABATO : i === 6 ? COLORE_DOMENICA : "#fff", boxSizing: "border-box" }}>
                   {d && <div style={{ ...fontBody, fontSize: 12, color: NAVY, padding: "4px 6px" }}>{d}</div>}
                 </div>
               ))}
@@ -2252,7 +2254,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, valore, onCambia }) {
                     style={{
                       height: rowHeight,
                       borderRadius: 6,
-                      background: selezionato ? "#D9E6F5" : "#fff",
+                      background: selezionato ? "#D9E6F5" : i === 5 ? COLORE_SABATO : i === 6 ? COLORE_DOMENICA : "#fff",
                       border: `1px solid ${selezionato ? "#7FA8D9" : CREAM_BORDER}`,
                       cursor: "pointer",
                       boxSizing: "border-box",
