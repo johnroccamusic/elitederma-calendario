@@ -96,6 +96,12 @@ function addGiorni(dataStr, n) {
   dt.setUTCDate(dt.getUTCDate() + n);
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
+// numero di giorni tra due date "yyyy-mm-dd" (dataB - dataA)
+function differenzaGiorni(dataA, dataB) {
+  const [ya, ma, da] = dataA.split("-").map(Number);
+  const [yb, mb, db] = dataB.split("-").map(Number);
+  return Math.round((Date.UTC(yb, mb - 1, db) - Date.UTC(ya, ma - 1, da)) / 86400000);
+}
 // assegna una "corsia" (lane) a ciascun evento di una riga evitando sovrapposizioni
 function assegnaLane(eventiRiga) {
   const lanes = [];
@@ -1679,7 +1685,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
           <div key={wi} style={{ position: "relative", marginBottom: 4 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
               {settimana.map((d, i) => (
-                <div key={i} style={{ border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8, height: rowHeight, background: d ? "#fff" : "transparent", boxSizing: "border-box" }}>
+                <div key={i} data-data={d ? dateStr(d) : undefined} style={{ border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8, height: rowHeight, background: d ? "#fff" : "transparent", boxSizing: "border-box" }}>
                   {d && <div style={{ ...fontBody, fontSize: 12, color: NAVY, padding: "4px 6px" }}>{d}</div>}
                 </div>
               ))}
@@ -1823,26 +1829,38 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
 
   // stato del trascinamento in corso (dita/mouse), non fa mai re-render da solo:
   // ogni movimento aggiorna valore.inizio/fine tramite onCambia, che è ciò che
-  // fa effettivamente ridisegnare la barra nella nuova posizione
+  // fa effettivamente ridisegnare la barra nella nuova posizione.
+  // il giorno "sotto" il dito/mouse viene letto direttamente dal calendario
+  // (cella con data-data), non calcolato dallo spostamento in pixel: così si
+  // può trascinare liberamente su qualunque settimana, anche più in basso,
+  // senza dover passare per tutti i giorni intermedi
   const dragRef = React.useRef(null);
+
+  function trovaGiornoSotto(clientX, clientY) {
+    const pila = document.elementsFromPoint(clientX, clientY);
+    for (const el of pila) {
+      if (el.hasAttribute && el.hasAttribute("data-data")) return el.getAttribute("data-data");
+    }
+    return null;
+  }
 
   function iniziaDrag(e, modo) {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    const overlay = e.currentTarget.parentElement;
-    const colWidthPx = (overlay?.getBoundingClientRect().width || 280) / 7;
+    const giornoAggancio = trovaGiornoSotto(e.clientX, e.clientY) || valore.inizio;
     dragRef.current = {
-      modo, pointerId: e.pointerId, startX: e.clientX, colWidthPx,
+      modo, pointerId: e.pointerId,
       origInizio: valore.inizio, origFine: valore.fine || valore.inizio,
-      ultimoDelta: 0,
+      giornoAggancio, ultimoGiorno: giornoAggancio,
     };
   }
   function muoviDrag(e) {
     const d = dragRef.current;
     if (!d || e.pointerId !== d.pointerId) return;
-    const deltaGiorni = Math.round((e.clientX - d.startX) / d.colWidthPx);
-    if (deltaGiorni === d.ultimoDelta) return;
-    d.ultimoDelta = deltaGiorni;
+    const giornoSotto = trovaGiornoSotto(e.clientX, e.clientY);
+    if (!giornoSotto || giornoSotto === d.ultimoGiorno) return;
+    d.ultimoGiorno = giornoSotto;
+    const deltaGiorni = differenzaGiorni(d.giornoAggancio, giornoSotto);
     if (d.modo === "sposta") {
       onCambia({ inizio: addGiorni(d.origInizio, deltaGiorni), fine: addGiorni(d.origFine, deltaGiorni) });
     } else if (d.modo === "inizio") {
