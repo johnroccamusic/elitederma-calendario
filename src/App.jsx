@@ -563,13 +563,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 10, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
-  const campoStyle = { ...fontBody, fontSize: 7, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", background: "#fff" };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 8, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
+  const campoStyle = { ...fontBody, fontSize: 11, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", boxSizing: "border-box", background: "#fff" };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
       style={{
-        ...fontBody, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        ...fontBody, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
         border: `1px solid ${attivo ? "#2E7D32" : "#C0392B"}`, borderRadius: 7,
         padding: size === "piccolo" ? "4px 9px" : "5px 10px",
         background: attivo ? "#E8F5E9" : "#FDECEC", color: attivo ? "#2E7D32" : "#C0392B",
@@ -582,7 +582,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const COLONNE = [
     { larghezza: 54 }, { larghezza: 100 }, { larghezza: 70 }, { larghezza: 60 },
     { larghezza: 100 }, { larghezza: 90 }, { larghezza: 100 }, { larghezza: 90 },
-    { larghezza: 128 }, { larghezza: 100 }, { larghezza: 100 },
+    { larghezza: 150 }, { larghezza: 100 }, { larghezza: 100 },
   ];
 
   function filtroDropdown(chiave, etichetta, valore, setValore, opzioni) {
@@ -638,17 +638,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
               const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
               return (
                 <tr key={cd.id}>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, textAlign: "center" }}>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, textAlign: "center" }}>
                     <div>{sopra}</div>
-                    <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
+                    <div style={{ fontSize: 8, color: MUTED }}>{sotto}</div>
                   </td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY, fontWeight: 700 }}>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, fontWeight: 700 }}>
                     <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
                       {corso?.nome?.toUpperCase() || "?"}
                     </span>
                   </td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 12, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
                   <td style={{ ...celStyle, textAlign: "center" }}>
                     {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
                   </td>
@@ -674,18 +674,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                     </select>
                   </td>
                   <td style={celStyle}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
-                        <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ fontSize: 10, padding: "4px 7px" }}>Copia biglietti</Button>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <label style={{ ...fontBody, fontSize: 10, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 7px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                          + file
-                          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
-                        </label>
-                        {nBiglietti > 0 && <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>{nBiglietti} file</span>}
-                      </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
+                      {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
+                      <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ fontSize: 8, padding: "4px 6px" }}>Copia</Button>
+                      <label style={{ ...fontBody, fontSize: 8, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                        +
+                        <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
+                      </label>
+                      {nBiglietti > 0 && <span style={{ ...fontBody, fontSize: 8, color: MUTED, whiteSpace: "nowrap" }}>{nBiglietti} file</span>}
                     </div>
                   </td>
                   <td style={celStyle}>
@@ -750,7 +746,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
       )}
       {chiaviMese.map((chiave) => (
         <div key={chiave}>
-          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 800, color: NAVY, textAlign: "left", marginBottom: 10 }}>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 800, color: NAVY, textAlign: "left", marginBottom: 10 }}>
             {gruppiMese[chiave].etichetta.toUpperCase()}
           </div>
           {tabellaMese(gruppiMese[chiave].righe)}
