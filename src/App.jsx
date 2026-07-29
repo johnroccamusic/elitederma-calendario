@@ -447,8 +447,165 @@ function Gate({ onOk }) {
   }
 }
 
+// ---------- Assegnazione Master ----------
+// tabella orizzontale con una riga per ogni data futura: sede confermata,
+// master/assistenti/leve/alloggio assegnabili da tendina, note libere e
+// gestione biglietti di viaggio (stato prenotazione, upload file, link da
+// copiare e mandare alla master).
+function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assistente, leva, ricarica, onBack }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const righe = corsiDate
+    .filter((cd) => cd.data_fine >= dataOggiStr())
+    .slice()
+    .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+
+  async function salvaCampo(id, campo, valore) {
+    const { error } = await supabase.from("corsi_date").update({ [campo]: valore }).eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  async function caricaBiglietti(cd, fileList) {
+    const nuovi = [];
+    for (const file of Array.from(fileList || [])) {
+      const percorso = `${cd.id}/biglietto-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
+      if (error) { window.alert("Errore caricamento: " + error.message); return; }
+      nuovi.push(percorso);
+    }
+    if (nuovi.length === 0) return;
+    await salvaCampo(cd.id, "viaggio_file", [...(cd.viaggio_file || []), ...nuovi]);
+  }
+
+  async function copiaBiglietti(cd) {
+    const file = cd.viaggio_file || [];
+    if (file.length === 0) { window.alert("Non ci sono biglietti."); return; }
+    const url = `${window.location.origin}${window.location.pathname}?biglietti=${cd.id}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      window.alert("Link copiato.");
+    } catch (e) {
+      window.alert("Impossibile copiare automaticamente. Link: " + url);
+    }
+  }
+
+  const celStyle = { padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, verticalAlign: "middle" };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
+  const campoStyle = { ...fontBody, fontSize: 12, padding: "6px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", minWidth: 100, background: "#fff" };
+  const semaforo = (attivo, onLabel, offLabel, onClick) => (
+    <button
+      onClick={onClick}
+      style={{
+        ...fontBody, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", cursor: "pointer",
+        border: `1px solid ${attivo ? "#2E7D32" : "#C0392B"}`, borderRadius: 8, padding: "6px 10px",
+        background: attivo ? "#E8F5E9" : "#FDECEC", color: attivo ? "#2E7D32" : "#C0392B",
+      }}
+    >
+      {attivo ? onLabel : offLabel}
+    </button>
+  );
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Assegnazione Master" onBack={onBack} />
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+        Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
+      </div>
+      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Data</th>
+              <th style={thStyle}>Corso</th>
+              <th style={thStyle}>Città</th>
+              <th style={thStyle}>Sede confermata</th>
+              <th style={thStyle}>Master</th>
+              <th style={thStyle}>Note</th>
+              <th style={thStyle}>Assistenti</th>
+              <th style={thStyle}>Leve</th>
+              <th style={thStyle}>Viaggio</th>
+              <th style={thStyle}>Alloggio</th>
+              <th style={thStyle}>Note viaggio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {righe.map((cd) => {
+              const corso = corsoById[cd.corso_id];
+              const loc = locById[cd.location_id];
+              const nBiglietti = (cd.viaggio_file || []).length;
+              return (
+                <tr key={cd.id}>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                      {corso?.nome?.toUpperCase() || "?"}
+                    </span>
+                  </td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                  <td style={celStyle}>
+                    {semaforo(cd.sede_confermata, "CONFERMATA", "DA PRENOTARE", () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata))}
+                  </td>
+                  <td style={celStyle}>
+                    <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
+                      <option value="">—</option>
+                      {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                    </select>
+                  </td>
+                  <td style={celStyle}>
+                    <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
+                  </td>
+                  <td style={celStyle}>
+                    <select style={campoStyle} value={cd.assistente_id || ""} onChange={(e) => salvaCampo(cd.id, "assistente_id", e.target.value || null)}>
+                      <option value="">—</option>
+                      {assistente.map((a) => <option key={a.id} value={a.id}>{a.nome.toUpperCase()}</option>)}
+                    </select>
+                  </td>
+                  <td style={celStyle}>
+                    <select style={campoStyle} value={cd.leva_id || ""} onChange={(e) => salvaCampo(cd.id, "leva_id", e.target.value || null)}>
+                      <option value="">—</option>
+                      {leva.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+                    </select>
+                  </td>
+                  <td style={celStyle}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 160 }}>
+                      {semaforo(cd.viaggio_prenotato, "PRENOTATO", "DA PRENOTARE", () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato))}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <label style={{ ...fontBody, fontSize: 11, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "5px 8px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                          + file
+                          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
+                        </label>
+                        {nBiglietti > 0 && <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{nBiglietti} file</span>}
+                      </div>
+                      <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ fontSize: 11, padding: "5px 8px" }}>Copia biglietti</Button>
+                    </div>
+                  </td>
+                  <td style={celStyle}>
+                    <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
+                      <option value="">—</option>
+                      {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
+                    </select>
+                  </td>
+                  <td style={celStyle}>
+                    <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
+                  </td>
+                </tr>
+              );
+            })}
+            {righe.length === 0 && (
+              <tr><td colSpan={11} style={{ ...celStyle, ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna data in programmazione.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack }) {
+function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -627,6 +784,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
         <Button onClick={() => setShowHotelModal(true)}>Aggiungi Hotel</Button>
         <Button onClick={() => setShowAssistenteModal(true)}>Aggiungi Assistente</Button>
         <Button onClick={() => setShowLevaModal(true)}>Aggiungi Leva</Button>
+        <Button variant="ghost" onClick={onApriAssegnazioneMaster}>Assegnazione Master</Button>
       </div>
 
       <div style={cardStyle}>
@@ -2651,12 +2809,75 @@ function VistaMaster({ param }) {
   );
 }
 
+// pagina pubblica di sola lettura con i biglietti di viaggio caricati per una data
+function VistaBiglietti({ corsoDataId }) {
+  const [dati, setDati] = useState(null);
+  const [errore, setErrore] = useState(false);
+
+  useEffect(() => {
+    async function carica() {
+      const { data: cd } = await supabase.from("corsi_date").select("*").eq("id", corsoDataId).maybeSingle();
+      if (!cd) { setErrore(true); return; }
+      const [{ data: corsi }, { data: location }] = await Promise.all([
+        supabase.from("corsi").select("*").eq("id", cd.corso_id),
+        supabase.from("location").select("*").eq("id", cd.location_id),
+      ]);
+      setDati({ cd, corso: corsi?.[0], loc: location?.[0] });
+    }
+    carica();
+  }, [corsoDataId]);
+
+  if (errore) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, padding: 20, textAlign: "center" }}>
+        Link non valido o data non trovata.
+      </div>
+    );
+  }
+  if (!dati) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
+        Caricamento…
+      </div>
+    );
+  }
+
+  const { cd, corso, loc } = dati;
+  const file = cd.viaggio_file || [];
+
+  return (
+    <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "40px 20px" }}>
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
+          {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — biglietti di viaggio
+        </div>
+
+        {file.length === 0 && <div style={{ color: MUTED }}>Nessun biglietto caricato.</div>}
+        {file.map((percorso, idx) => (
+          <div key={percorso} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
+            <AllegatoLink percorso={percorso} etichetta={`Biglietto ${idx + 1} — apri il file`} />
+          </div>
+        ))}
+
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
+          Pagina di sola lettura — Elitederma Academy
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
   const paramMaster = new URLSearchParams(window.location.search).get("master");
   if (paramMaster) {
     return <VistaMaster param={paramMaster} />;
+  }
+  const paramBiglietti = new URLSearchParams(window.location.search).get("biglietti");
+  if (paramBiglietti) {
+    return <VistaBiglietti corsoDataId={paramBiglietti} />;
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
@@ -2884,7 +3105,11 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} />
+      )}
+
+      {view === "assegnazionemaster" && (
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "calendario" && (
