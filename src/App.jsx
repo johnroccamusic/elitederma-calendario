@@ -67,7 +67,7 @@ function leggiSlugData(testo) {
   return null;
 }
 const GIORNI = ["L","M","M","G","V","S","D"];
-const COLORE_SABATO = "#EAF3FB"; // celeste tenuissimo, indice 5 = S
+const COLORE_SABATO = "#F4F9FD"; // celeste tenuissimo, indice 5 = S
 const COLORE_DOMENICA = "#FBEAEA"; // rosso tenuissimo, indice 6 = D
 
 function fmtData(d) {
