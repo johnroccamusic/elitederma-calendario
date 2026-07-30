@@ -184,7 +184,7 @@ function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
 // mostra, sopra ogni singolo giorno che attraversa in questa riga, il
 // numero di frazione "giorno/totale" (es. 3/6); il nome del corso resta
 // visibile solo all'inizio del segmento
-function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset }) {
+function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun }) {
   if (giorniTotali <= 1) {
     return (
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: `0 ${inset}px`, height: "100%", display: "flex", alignItems: "center", boxSizing: "border-box" }}>
@@ -192,6 +192,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
       </span>
     );
   }
+  const ultimo = indiciGiorno.length - 1;
   return (
     // stesso numero di colonne E STESSO gap della griglia dei giorni sotto:
     // solo così ogni numero di frazione combacia esattamente con il giorno
@@ -203,15 +204,18 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
     // colonne dei giorni, applicato a ogni cella: così la frazione si trova
     // sempre alla stessa distanza dal proprio giorno, sia che sia una cella
     // centrale sia che sia l'ultima (dove la barra può finire dritta o a
-    // punta di freccia).
+    // punta di freccia). Quando il lato è tagliato a punta (continuaPrima/
+    // continuaDopo), si aggiunge il "coneRun" (la stessa distanza usata dal
+    // clip-path per tagliare l'angolo): così testo e numero restano nella
+    // parte dritta della barra, senza entrare nel cono della freccia.
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${indiciGiorno.length},1fr)`, gap, width: "100%", height: "100%", boxSizing: "border-box" }}>
       {indiciGiorno.map((indice, i) => (
         <div
           key={i}
           style={{
             display: "flex", alignItems: "center", justifyContent: i === 0 ? "space-between" : "flex-end", gap: 3, minWidth: 0, overflow: "hidden",
-            paddingLeft: i === 0 ? inset : 0,
-            paddingRight: gap,
+            paddingLeft: i === 0 ? inset + (continuaPrima ? coneRun : 0) : 0,
+            paddingRight: gap + (i === ultimo && continuaDopo ? coneRun : 0),
             boxSizing: "border-box",
           }}
         >
@@ -2115,6 +2119,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc),
                           giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 4, inset: 6,
+                          continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2,
                         })}
                       </div>
                     </div>
@@ -2584,6 +2589,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc),
                           giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
+                          continuaPrima, continuaDopo, coneRun: (barH - 5) / 2,
                         })}
                       </div>
                     </div>
