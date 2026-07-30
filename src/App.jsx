@@ -1316,6 +1316,8 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
                   cdId={dataInModifica}
                   valore={{ inizio: modDataInizio, fine: modDataFine }}
                   onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
+                  ricarica={ricarica}
+                  onDataEliminata={(id) => { if (id === dataInModifica) setDataInModifica(null); }}
                 />
               </div>
               <div style={{ display: "flex", gap: 14 }}>
@@ -2167,9 +2169,28 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack, ricarica }
 // mostra tutto il calendario, scorribile, con le barre colorate di tutti i
 // corsi: quella dell'edizione in modifica si può trascinare per spostarla su
 // altre date, oppure allungare/accorciare trascinandone i bordi
-function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia }) {
+function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia, ricarica, onDataEliminata }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  // stessa possibilità di aggiungere/eliminare cliccando direttamente sul
+  // calendario disponibile nell'altro Calendario e in "Aggiungi data"
+  const [popupNuovo, setPopupNuovo] = useState(null);
+  const [popupElimina, setPopupElimina] = useState(null);
+  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine }) {
+    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setPopupNuovo(null);
+    ricarica();
+  }
+  async function eliminaEsistente(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setPopupElimina(null);
+    ricarica();
+    onDataEliminata?.(id);
+  }
 
   const oggi = new Date();
   const mesi = useMemo(() => {
@@ -2306,8 +2327,16 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
           overrideInizio={posizione.inizio} overrideFine={posizione.fine}
           onDragBarra={iniziaDrag}
           refEvidenziato={refEvidenziato}
+          onClickGiornoVuoto={setPopupNuovo}
+          onDoppioClickEvento={setPopupElimina}
         />
       ))}
+      {popupNuovo && (
+        <PopupNuovaData corsi={corsi} location={location} dataClic={popupNuovo} onSalva={salvaNuovo} onChiudi={() => setPopupNuovo(null)} />
+      )}
+      {popupElimina && (
+        <PopupEliminaData evento={popupElimina} corsoById={corsoById} locById={locById} onElimina={eliminaEsistente} onChiudi={() => setPopupElimina(null)} />
+      )}
     </div>
   );
 }
