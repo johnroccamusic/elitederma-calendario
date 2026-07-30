@@ -145,6 +145,18 @@ function siglaCitta(nome) {
   const s = SIGLE_CITTA[nome.trim().toLowerCase()];
   return s || nome.trim().slice(0, 2).toUpperCase();
 }
+// versione molto chiara (circa 28% di intensità) di un colore esadecimale,
+// mescolandolo con il bianco: usata per la parte "vuota" dell'indicatore di
+// capienza sulle barre del calendario. Restituisce un colore SOLIDO (non
+// trasparente) così resta identico su qualunque sfondo ci sia dietro
+function coloreTenue(hex, intensita = 0.28) {
+  const cifre = (hex || "").replace("#", "").match(/.{1,2}/g);
+  if (!cifre || cifre.length < 3) return hex;
+  const [r, g, b] = cifre.map((h) => parseInt(h, 16));
+  const mescola = (c) => Math.round(c * intensita + 255 * (1 - intensita));
+  return `rgb(${mescola(r)}, ${mescola(g)}, ${mescola(b)})`;
+}
+
 // etichetta breve per le barre del calendario: nome corso (max 10 caratteri) + sigla città
 function etichettaBarra(corso, loc) {
   const nome = (corso?.nome || "").toUpperCase().slice(0, 10);
@@ -1265,7 +1277,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
         <div style={hStyle}>Aggiungi data</div>
         <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca due volte un corso già esistente per eliminarlo.</div>
         <SelettoreCalendario
-          corsi={corsi} location={location} corsiDate={corsiDate}
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           onClickGiorno={setPopupNuovaData}
           onDoppioClickEvento={setPopupEliminaData}
         />
@@ -1374,6 +1386,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
                   corsi={corsi}
                   location={location}
                   corsiDate={corsiDate}
+                  iscritti={iscritti}
                   cdId={dataInModifica}
                   valore={{ inizio: modDataInizio, fine: modDataFine }}
                   onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
@@ -1946,7 +1959,7 @@ const HEADER_H = 26; // spazio per il numero del giorno
 // in CalendarioModifica, non da questa barra: se lo spostamento la fa
 // comparire in una settimana diversa, React distrugge e ricrea il suo nodo
 // DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
-function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento }) {
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento }) {
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
@@ -2031,13 +2044,21 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                 });
                 const continuaPrima = startIdx < 0;
                 const continuaDopo = ev.data_fine > fineRiga;
+                const corso = corsoById[ev.corso_id];
+                const loc = locById[ev.location_id];
+                const coloreCorso = corso?.colore || NAVY;
+                const capienza = postiMaxEffettivi(ev, corso, loc);
+                const numeroAllievi = iscritti ? iscritti.filter((i) => i.corso_data_id === ev.id).length : 0;
+                const occupancy = iscritti && capienza > 0
+                  ? Math.min(100, Math.max(0, (numeroAllievi / capienza) * 100))
+                  : null;
                 return (
                   <div
                     key={ev.id}
                     ref={evidenziata ? refEvidenziato : null}
                     onClick={() => gestisciClickBarra(ev)}
                     onPointerDown={evidenziata && onDragBarra ? (e) => onDragBarra(e, "sposta") : undefined}
-                    title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
+                    title={`${corso?.nome?.toUpperCase()} · ${loc?.nome?.toUpperCase()}${occupancy != null ? ` · ${numeroAllievi}/${capienza}` : ""}`}
                     style={{
                       position: "relative",
                       pointerEvents: "auto",
@@ -2045,7 +2066,9 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                       gridRow: ev.lane + 1,
                       alignSelf: "center",
                       height: LANE_H - 4,
-                      background: corsoById[ev.corso_id]?.colore || NAVY,
+                      background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
+                      borderTop: `1px solid ${coloreCorso}`,
+                      borderBottom: `1px solid ${coloreCorso}`,
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       color: "#fff",
@@ -2062,16 +2085,27 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                       zIndex: evidenziata ? 5 : 1,
                     }}
                   >
+                    {occupancy != null && (
+                      <div
+                        style={{
+                          position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
+                          background: coloreCorso, borderTop: `1px solid ${coloreCorso}`,
+                          boxSizing: "border-box", pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
+                        }}
+                      />
+                    )}
                     {evidenziata && onDragBarra && (
                       <div
                         onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "inizio"); }}
                         style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none", zIndex: 1 }}
                       />
                     )}
-                    {contenutoBarraCalendario({
-                      etichetta: etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id]),
-                      giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 4, inset: 6,
-                    })}
+                    <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+                      {contenutoBarraCalendario({
+                        etichetta: etichettaBarra(corso, loc),
+                        giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 4, inset: 6,
+                      })}
+                    </div>
                     {evidenziata && onDragBarra && (
                       <div
                         onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "fine"); }}
@@ -2164,7 +2198,7 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
   );
 }
 
-function Calendario({ corsi, location, corsiDate, onApriData, onBack, ricarica }) {
+function Calendario({ corsi, location, corsiDate, iscritti, onApriData, onBack, ricarica }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -2214,7 +2248,7 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack, ricarica }
       {mesi.map(({ anno, mese }) => (
         <div key={`${anno}-${mese}`} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
           <MeseGriglia
-            anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate}
+            anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
             onApriData={onApriData} corsoById={corsoById} locById={locById}
             onClickGiornoVuoto={setPopupNuovo}
             onDoppioClickEvento={setPopupElimina}
@@ -2236,7 +2270,7 @@ function Calendario({ corsi, location, corsiDate, onApriData, onBack, ricarica }
 // mostra tutto il calendario, scorribile, con le barre colorate di tutti i
 // corsi: quella dell'edizione in modifica si può trascinare per spostarla su
 // altre date, oppure allungare/accorciare trascinandone i bordi
-function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia, ricarica, onDataEliminata }) {
+function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore, onCambia, ricarica, onDataEliminata }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -2387,7 +2421,7 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
         <MeseGriglia
           key={`${anno}-${mese}`}
           anno={anno} mese={mese}
-          corsi={corsi} location={location} corsiDate={corsiDate}
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsoById={corsoById} locById={locById}
           onApriData={() => {}}
           idEvidenziato={cdId}
@@ -2409,7 +2443,7 @@ function CalendarioModifica({ corsi, location, corsiDate, cdId, valore, onCambia
 }
 
 // ---------- Selettore date dal calendario (per Aggiungi data) ----------
-function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDoppioClickEvento }) {
+function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGiorno, onDoppioClickEvento }) {
   const [mese, setMese] = useState(new Date().getMonth());
   const [anno, setAnno] = useState(new Date().getFullYear());
 
@@ -2478,18 +2512,29 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                 });
                 const continuaPrima = startIdx < 0;
                 const continuaDopo = ev.data_fine > fineRiga;
+                const corso = corsoById[ev.corso_id];
+                const loc = locById[ev.location_id];
+                const coloreCorso = corso?.colore || NAVY;
+                const capienza = postiMaxEffettivi(ev, corso, loc);
+                const numeroAllievi = iscritti ? iscritti.filter((i) => i.corso_data_id === ev.id).length : 0;
+                const occupancy = iscritti && capienza > 0
+                  ? Math.min(100, Math.max(0, (numeroAllievi / capienza) * 100))
+                  : null;
                 return (
                   <div
                     key={ev.id}
                     onDoubleClick={() => onDoppioClickEvento(ev)}
-                    title={`${corsoById[ev.corso_id]?.nome?.toUpperCase()} · ${locById[ev.location_id]?.nome?.toUpperCase()}`}
+                    title={`${corso?.nome?.toUpperCase()} · ${loc?.nome?.toUpperCase()}${occupancy != null ? ` · ${numeroAllievi}/${capienza}` : ""}`}
                     style={{
+                      position: "relative",
                       pointerEvents: "auto",
                       gridColumn: `${colStart + 1} / span ${colSpan}`,
                       gridRow: ev.lane + 1,
                       alignSelf: "center",
                       height: barH - 3,
-                      background: corsoById[ev.corso_id]?.colore || NAVY,
+                      background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
+                      borderTop: `1px solid ${coloreCorso}`,
+                      borderBottom: `1px solid ${coloreCorso}`,
                       borderRadius: 3,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, barH - 3),
                       color: "#fff",
@@ -2502,10 +2547,21 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                       cursor: "pointer",
                     }}
                   >
-                    {contenutoBarraCalendario({
-                      etichetta: etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id]),
-                      giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
-                    })}
+                    {occupancy != null && (
+                      <div
+                        style={{
+                          position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
+                          background: coloreCorso, borderTop: `1px solid ${coloreCorso}`,
+                          boxSizing: "border-box", pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
+                        }}
+                      />
+                    )}
+                    <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+                      {contenutoBarraCalendario({
+                        etichetta: etichettaBarra(corso, loc),
+                        giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
+                      })}
+                    </div>
                   </div>
                 );
               })}
@@ -4026,7 +4082,7 @@ export default function App() {
       )}
 
       {view === "calendario" && (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} onApriData={apriData} onBack={() => setView("home")} ricarica={fetchDati} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} onBack={() => setView("home")} ricarica={fetchDati} />
       )}
 
       {view === "cerca" && (
