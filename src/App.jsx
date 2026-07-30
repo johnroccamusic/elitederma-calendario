@@ -214,7 +214,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
           )}
           {indice != null && (
-            <span style={{ fontSize: fontSizeBadge, background: "transparent", border: "1px solid rgba(255,255,255,0.85)", borderRadius: 4, padding: "0 4px", flexShrink: 0, fontWeight: 400 }}>
+            <span style={{ fontSize: fontSizeBadge, background: "transparent", border: `1px solid ${GRAFITE}`, color: GRAFITE, borderRadius: 4, padding: "0 4px", flexShrink: 0, fontWeight: 400 }}>
               {indice}/{giorniTotali}
             </span>
           )}
@@ -2071,7 +2071,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       borderBottom: `1px solid ${coloreCorso}`,
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
-                      color: "#fff",
+                      color: "#000",
                       fontSize: 8,
                       fontWeight: 500,
                       ...fontBody,
@@ -2537,7 +2537,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                       borderBottom: `1px solid ${coloreCorso}`,
                       borderRadius: 3,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, barH - 3),
-                      color: "#fff",
+                      color: "#000",
                       fontSize: 9,
                       fontWeight: 500,
                       ...fontBody,
