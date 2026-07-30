@@ -151,12 +151,28 @@ function etichettaBarra(corso, loc) {
   return `${nome} ${siglaCitta(loc?.nome)}`;
 }
 
+// se il corso prosegue nella riga precedente/successiva (spezzato dal
+// cambio di settimana), taglia gli angoli della barra a 45° dal lato
+// interessato: la barra stessa diventa la punta di una freccia che indica
+// da/verso dove prosegue, invece di un simbolo scritto dentro
+function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
+  if (!continuaPrima && !continuaDopo) return undefined;
+  const h = altezzaPx / 2;
+  const punti = [];
+  punti.push(continuaPrima ? `${h}px 0` : "0 0");
+  punti.push(continuaDopo ? `calc(100% - ${h}px) 0` : "100% 0");
+  if (continuaDopo) punti.push("100% 50%");
+  punti.push(continuaDopo ? `calc(100% - ${h}px) 100%` : "100% 100%");
+  punti.push(continuaPrima ? `${h}px 100%` : "0 100%");
+  if (continuaPrima) punti.push("0 50%");
+  return `polygon(${punti.join(", ")})`;
+}
+
 // contenuto di una barra evento nel calendario: per un corso di più giorni
 // mostra, sopra ogni singolo giorno che attraversa in questa riga, il
-// numero di frazione "giorno/totale" (es. 3/6), il nome del corso solo
-// all'inizio del segmento, e una freccina se il corso prosegue nella riga
-// precedente/successiva (spezzato dal cambio di settimana)
-function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, continuaPrima, continuaDopo, fontSizeBadge, gap, inset }) {
+// numero di frazione "giorno/totale" (es. 3/6); il nome del corso resta
+// visibile solo all'inizio del segmento
+function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset }) {
   if (giorniTotali <= 1) {
     return (
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: `0 ${inset}px`, height: "100%", display: "flex", alignItems: "center", boxSizing: "border-box" }}>
@@ -183,17 +199,13 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, conti
           }}
         >
           {i === 0 && (
-            <span style={{ display: "flex", alignItems: "center", gap: 2, overflow: "hidden", whiteSpace: "nowrap", minWidth: 0 }}>
-              {continuaPrima && <span style={{ fontWeight: 700 }}>&lt;</span>}
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
-            </span>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
           )}
           {indice != null && (
             <span style={{ fontSize: fontSizeBadge, background: "transparent", border: "1px solid rgba(255,255,255,0.85)", borderRadius: 4, padding: "0 4px", flexShrink: 0, fontWeight: 400 }}>
               {indice}/{giorniTotali}
             </span>
           )}
-          {i === indiciGiorno.length - 1 && continuaDopo && <span style={{ fontWeight: 700, flexShrink: 0 }}>&gt;</span>}
         </div>
       ))}
     </div>
@@ -2035,6 +2047,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                       height: LANE_H - 4,
                       background: corsoById[ev.corso_id]?.colore || NAVY,
                       borderRadius: 4,
+                      clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       color: "#fff",
                       fontSize: 8,
                       fontWeight: 500,
@@ -2057,7 +2070,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                     )}
                     {contenutoBarraCalendario({
                       etichetta: etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id]),
-                      giorniTotali, indiciGiorno, continuaPrima, continuaDopo, fontSizeBadge: 7, gap: 4, inset: 6,
+                      giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 4, inset: 6,
                     })}
                     {evidenziata && onDragBarra && (
                       <div
@@ -2478,6 +2491,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                       height: barH - 3,
                       background: corsoById[ev.corso_id]?.colore || NAVY,
                       borderRadius: 3,
+                      clipPath: clipPathBarra(continuaPrima, continuaDopo, barH - 3),
                       color: "#fff",
                       fontSize: 9,
                       fontWeight: 500,
@@ -2490,7 +2504,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                   >
                     {contenutoBarraCalendario({
                       etichetta: etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id]),
-                      giorniTotali, indiciGiorno, continuaPrima, continuaDopo, fontSizeBadge: 7, gap: 3, inset: 4,
+                      giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
                     })}
                   </div>
                 );
