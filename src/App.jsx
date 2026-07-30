@@ -151,6 +151,37 @@ function etichettaBarra(corso, loc) {
   return `${nome} ${siglaCitta(loc?.nome)}`;
 }
 
+// contenuto di una barra evento nel calendario: per un corso di più giorni
+// mostra, sopra ogni singolo giorno che attraversa in questa riga, il
+// numero di frazione "giorno/totale" (es. 3/6), il nome del corso solo
+// all'inizio del segmento, e una freccina se il corso prosegue nella riga
+// precedente/successiva (spezzato dal cambio di settimana)
+function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, continuaPrima, continuaDopo, fontSizeBadge }) {
+  if (giorniTotali <= 1) {
+    return <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>;
+  }
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${indiciGiorno.length},1fr)`, width: "100%", height: "100%" }}>
+      {indiciGiorno.map((indice, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: i === 0 ? "space-between" : "flex-end", gap: 3, minWidth: 0, overflow: "hidden" }}>
+          {i === 0 && (
+            <span style={{ display: "flex", alignItems: "center", gap: 2, overflow: "hidden", whiteSpace: "nowrap", minWidth: 0 }}>
+              {continuaPrima && <span style={{ fontWeight: 700 }}>‹</span>}
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
+            </span>
+          )}
+          {indice != null && (
+            <span style={{ fontSize: fontSizeBadge, background: "rgba(255,255,255,0.3)", border: "1px solid rgba(255,255,255,0.6)", borderRadius: 4, padding: "0 4px", flexShrink: 0 }}>
+              {indice}/{giorniTotali}
+            </span>
+          )}
+          {i === indiciGiorno.length - 1 && continuaDopo && <span style={{ fontWeight: 700, flexShrink: 0 }}>›</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ---------- Card / pulsanti base ----------
 function CardHome({ title, sub, onClick }) {
   return (
@@ -1963,6 +1994,13 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                 const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
                 const colSpan = endIdx - colStart + 1;
                 const evidenziata = ev.id === idEvidenziato;
+                const giorniTotali = differenzaGiorni(ev.data_inizio, ev.data_fine) + 1;
+                const indiciGiorno = Array.from({ length: colSpan }, (_, i) => {
+                  const g = settimana[colStart + i];
+                  return g ? differenzaGiorni(ev.data_inizio, dateStr(g)) + 1 : null;
+                });
+                const continuaPrima = startIdx < 0;
+                const continuaDopo = ev.data_fine > fineRiga;
                 return (
                   <div
                     key={ev.id}
@@ -1983,9 +2021,6 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                       fontSize: 8,
                       fontWeight: 500,
                       ...fontBody,
-                      display: "flex",
-                      alignItems: "center",
-                      padding: "0 6px",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
                       textOverflow: "ellipsis",
@@ -1999,16 +2034,19 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, onApriData, corso
                     {evidenziata && onDragBarra && (
                       <div
                         onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "inizio"); }}
-                        style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none" }}
+                        style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none", zIndex: 1 }}
                       />
                     )}
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id])}
-                    </span>
+                    <div style={{ padding: "0 6px", height: "100%" }}>
+                      {contenutoBarraCalendario({
+                        etichetta: etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id]),
+                        giorniTotali, indiciGiorno, continuaPrima, continuaDopo, fontSizeBadge: 7,
+                      })}
+                    </div>
                     {evidenziata && onDragBarra && (
                       <div
                         onPointerDown={(e) => { e.stopPropagation(); onDragBarra(e, "fine"); }}
-                        style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none" }}
+                        style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 10, cursor: "ew-resize", touchAction: "none", zIndex: 1 }}
                       />
                     )}
                   </div>
@@ -2404,6 +2442,13 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                 const colStart = startIdx >= 0 ? startIdx : primoIdxValido;
                 const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
                 const colSpan = endIdx - colStart + 1;
+                const giorniTotali = differenzaGiorni(ev.data_inizio, ev.data_fine) + 1;
+                const indiciGiorno = Array.from({ length: colSpan }, (_, i) => {
+                  const g = settimana[colStart + i];
+                  return g ? differenzaGiorni(ev.data_inizio, dateStr(g)) + 1 : null;
+                });
+                const continuaPrima = startIdx < 0;
+                const continuaDopo = ev.data_fine > fineRiga;
                 return (
                   <div
                     key={ev.id}
@@ -2421,8 +2466,6 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                       fontSize: 9,
                       fontWeight: 500,
                       ...fontBody,
-                      display: "flex",
-                      alignItems: "center",
                       padding: "0 4px",
                       overflow: "hidden",
                       whiteSpace: "nowrap",
@@ -2430,7 +2473,10 @@ function SelettoreCalendario({ corsi, location, corsiDate, onClickGiorno, onDopp
                       cursor: "pointer",
                     }}
                   >
-                    {etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id])}
+                    {contenutoBarraCalendario({
+                      etichetta: etichettaBarra(corsoById[ev.corso_id], locById[ev.location_id]),
+                      giorniTotali, indiciGiorno, continuaPrima, continuaDopo, fontSizeBadge: 7,
+                    })}
                   </div>
                 );
               })}
