@@ -4453,7 +4453,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                    {i.telefono && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· {i.telefono}</span>}
+                    {i.telefono && (
+                      <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>
+                        · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                      </span>
+                    )}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
                   {mostraGestione && (
@@ -4849,7 +4853,11 @@ function VistaMaster({ param }) {
                 <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                 <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                 {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                {i.telefono && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· {i.telefono}</span>}
+                {i.telefono && (
+                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>
+                    · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                  </span>
+                )}
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 4 }}>
