@@ -4469,10 +4469,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                     {i.telefono && (
-                      <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12 }}>
                         · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
                         <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
-                          <IconaWhatsapp size={20} />
+                          <IconaWhatsapp size={22} />
                         </a>
                       </span>
                     )}
@@ -4872,10 +4872,10 @@ function VistaMaster({ param }) {
                 <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                 {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                 {i.telefono && (
-                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12 }}>
                     · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
                     <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
-                      <IconaWhatsapp size={20} />
+                      <IconaWhatsapp size={22} />
                     </a>
                   </span>
                 )}
