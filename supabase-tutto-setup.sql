@@ -1,17 +1,17 @@
 -- =========================================================
--- ELITEDERMA CALENDARIO CORSI — Setup completo (tutte le migrazioni)
+-- ELITEDERMA CALENDARIO CORSI - Setup completo (tutte le migrazioni)
 -- Incolla TUTTO questo file nell'SQL Editor di Supabase e premi RUN.
 --
--- È scritto per essere sicuro da eseguire in qualunque momento: ogni
--- pezzo controlla prima se esiste già (tabelle, colonne, policy, bucket)
--- e se sì lo salta, quindi puoi lanciarlo anche se il tuo database ha
--- già alcune di queste modifiche — non duplica né rompe nulla.
+-- E scritto per essere sicuro da eseguire in qualunque momento: ogni
+-- pezzo controlla prima se esiste gia (tabelle, colonne, policy, bucket)
+-- e se si lo salta, quindi puoi lanciarlo anche se il tuo database ha
+-- gia alcune di queste modifiche - non duplica ne rompe nulla.
 --
 -- Nota: alcune colonne di "iscritti" e di "corsi_date" (i dettagli di
 -- vendita/pagamento dell'iscritto, le date come "data_inizio"/"data_fine")
 -- sono state aggiunte in passato direttamente dal pannello Supabase,
 -- senza passare da un file .sql: qui sono comunque incluse dove note con
--- certezza, così il file resta utilizzabile anche per ricreare il
+-- certezza, cosi il file resta utilizzabile anche per ricreare il
 -- database da zero, non solo per aggiornare quello attuale.
 -- =========================================================
 
@@ -129,7 +129,7 @@ alter table public.corsi_date add column if not exists note_viaggio text;
 
 
 -- ---------------------------------------------------------
--- 5) Più assistenti e più leve per data (elenchi, non un solo id)
+-- 5) Piu assistenti e piu leve per data (elenchi, non un solo id)
 -- ---------------------------------------------------------
 alter table public.corsi_date add column if not exists assistente_ids uuid[] not null default '{}';
 alter table public.corsi_date add column if not exists leva_ids uuid[] not null default '{}';
@@ -141,7 +141,7 @@ update public.corsi_date set leva_ids = array[leva_id]
 
 
 -- ---------------------------------------------------------
--- 5b) Date con inizio/fine (corsi di più giorni) + campi vendita/pagamento
+-- 5b) Date con inizio/fine (corsi di piu giorni) + campi vendita/pagamento
 -- di un iscritto (modulo completo di iscrizione)
 -- ---------------------------------------------------------
 alter table public.corsi_date add column if not exists data_inizio date;
