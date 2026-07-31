@@ -4028,9 +4028,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
               {mostraGestione ? "Esci da contabilità classe" : "Contabilità classe"}
             </Button>
-            <Button variant="ghost" onClick={stampaDiplomi} disabled={generandoDiplomi}>
-              {generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"}
-            </Button>
+            {mostraGestione && (
+              <Button variant="ghost" onClick={stampaDiplomi} disabled={generandoDiplomi}>
+                {generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"}
+              </Button>
+            )}
             {!mostraGestione && (
               <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
                 {liberi <= 0 ? "Completo" : "Iscrivi"}
