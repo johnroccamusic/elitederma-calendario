@@ -1968,6 +1968,12 @@ const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, 
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
 
+// scala usata per renderizzare il diploma di riferimento su canvas
+// (pdf.js): serve a convertire i pixel del canvas in punti PDF, così la
+// dimensione dei testi di prova in anteprima può essere ricalcolata alla
+// stessa proporzione con cui verranno disegnati nel PDF vero (in punti)
+const SCALA_ANTEPRIMA_DIPLOMA = 1.4;
+
 const CONFIG_DIPLOMI_DEFAULT = {
   id: null,
   font_allievo_path: null, font_data_path: null, font_firma_path: null,
@@ -1995,6 +2001,7 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
   const [msg, setMsg] = useState("");
   const [fileRiferimentoNuovo, setFileRiferimentoNuovo] = useState(null);
   const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
+  const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
   const [elementoTrascinato, setElementoTrascinato] = useState(null);
   const canvasRef = React.useRef(null);
   const contenitoreRef = React.useRef(null);
@@ -2082,7 +2089,7 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
         }
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
         const page = await pdf.getPage(1);
-        const viewport = page.getViewport({ scale: 1.4 });
+        const viewport = page.getViewport({ scale: SCALA_ANTEPRIMA_DIPLOMA });
         const canvas = canvasRef.current;
         if (!canvas || annullato) return;
         canvas.width = viewport.width;
@@ -2115,6 +2122,33 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
     carica(config.font_data_path, "diplomaFontData");
     carica(config.font_firma_path, "diplomaFontFirma");
   }, [config.font_allievo_path, config.font_data_path, config.font_firma_path]);
+
+  // il contenitore dell'anteprima è mostrato a "width: 100%" fino a un
+  // massimo di dimensioniCanvas.width: su schermi stretti (o se il
+  // diploma è più largo dello spazio disponibile) viene quindi compresso
+  // rispetto alle sue dimensioni native. Senza tenerne conto, un testo di
+  // prova a fontSize fisso in px apparirebbe qui più grande, in
+  // proporzione al diploma, di quanto sarà nel PDF stampato (dove la
+  // stessa dimensione è in punti, sulla pagina a grandezza reale) —
+  // misurando la larghezza REALMENTE visualizzata si può riscalare il
+  // testo di prova in proporzione, così l'anteprima corrisponde davvero
+  useEffect(() => {
+    if (!fileRiferimentoNuovo && !config.diploma_riferimento_path) return;
+    const el = contenitoreRef.current;
+    if (!el) return;
+    const osservatore = new ResizeObserver((voci) => {
+      for (const voce of voci) setLarghezzaMostrata(voce.contentRect.width);
+    });
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, [fileRiferimentoNuovo, config.diploma_riferimento_path]);
+
+  // fattore che converte i punti PDF (l'unità di misura di
+  // "..._font_size", quella usata davvero nella stampa) in pixel CSS alla
+  // scala con cui il diploma di riferimento è mostrato in questo momento
+  const scalaAnteprimaTesto = (dimensioniCanvas && larghezzaMostrata)
+    ? larghezzaMostrata / (dimensioniCanvas.width / SCALA_ANTEPRIMA_DIPLOMA)
+    : 1;
 
   function iniziaDrag(e, chiave) {
     e.preventDefault();
@@ -2223,7 +2257,7 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
               >
                 <span
                   style={{
-                    fontSize: config[`${chiave}_font_size`],
+                    fontSize: config[`${chiave}_font_size`] * scalaAnteprimaTesto,
                     color: config[`${chiave}_colore`],
                     fontFamily: config[campoFont] ? famigliaFont : undefined,
                     whiteSpace: "nowrap",
