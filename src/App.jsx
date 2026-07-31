@@ -104,6 +104,12 @@ function fmtData(d) {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 }
+// data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
+// ultime iscrizioni per giorno di inserimento)
+function fmtDataLunga(dataStr) {
+  const [anno, mese, giorno] = dataStr.split("-").map(Number);
+  return `${giorno} ${MESI[mese - 1].toLowerCase()} ${anno}`;
+}
 
 // genera la griglia di un mese come array di settimane (7 celle, null=padding)
 function generaSettimane(anno, mese) {
@@ -1066,11 +1072,90 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 }
 
 // ---------- Statistiche ----------
-function Statistiche({ onBack, onApriVenditori }) {
+function Statistiche({ onBack, onApriVenditori, onApriUltimeIscrizioni }) {
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Statistiche" onBack={onBack} />
       <CardHome title="Statistica venditori" sub="Iscrizioni fatte da ciascun venditore, per corso" onClick={onApriVenditori} />
+      <CardHome title="Ultime iscrizioni" sub="Elenco delle iscrizioni più recenti, per giorno di inserimento" onClick={onApriUltimeIscrizioni} />
+    </div>
+  );
+}
+
+// elenco delle iscrizioni più recenti, raggruppate per giorno di
+// inserimento (campo "ts" dell'iscritto), più recenti in cima
+function UltimeIscrizioni({ corsi, location, corsiDate, iscritti }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+
+  const ordinate = iscritti
+    .filter((i) => i.ts)
+    .slice()
+    .sort((a, b) => b.ts.localeCompare(a.ts));
+
+  const gruppi = {};
+  ordinate.forEach((i) => {
+    const chiave = i.ts.slice(0, 10); // "YYYY-MM-DD"
+    if (!gruppi[chiave]) gruppi[chiave] = [];
+    gruppi[chiave].push(i);
+  });
+  const chiaviData = Object.keys(gruppi).sort((a, b) => b.localeCompare(a));
+
+  const bordoV = `1px solid ${CREAM_BORDER}`;
+  const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
+
+  return (
+    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
+      <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: NAVY, textAlign: "center", marginBottom: 30 }}>
+        ULTIME ISCRIZIONI
+      </div>
+
+      {chiaviData.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna iscrizione ancora.</div>
+      )}
+
+      {chiaviData.map((data) => (
+        <div key={data} style={{ marginBottom: 28 }}>
+          <div style={{ ...fontBody, fontSize: 15, fontWeight: 600, color: NAVY, textAlign: "center", marginBottom: 12 }}>
+            {fmtDataLunga(data)}
+          </div>
+          <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+            <table style={{ borderCollapse: "collapse", width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Tutor</th>
+                  <th style={thStyle}>Tipo di corso</th>
+                  <th style={thStyle}>Pacchetto/Kit</th>
+                  <th style={thStyle}>Città</th>
+                  <th style={thStyle}>Data del corso</th>
+                  <th style={{ ...thStyle, borderRight: "none" }}>Importo pattuito</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gruppi[data].map((i) => {
+                  const cd = cdById[i.corso_data_id];
+                  const corso = cd ? corsoById[cd.corso_id] : null;
+                  const loc = cd ? locById[cd.location_id] : null;
+                  return (
+                    <tr key={i.id}>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>{(i.tutor || "—").toUpperCase()}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY }}>{i.pacchetto_kit || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap", borderRight: "none" }}>
+                        {i.totale_pattuito != null ? `${i.totale_pattuito} €` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -4463,11 +4548,19 @@ export default function App() {
       )}
 
       {view === "statistiche" && (
-        <Statistiche onBack={() => setView("home")} onApriVenditori={() => setView("statisticavenditori")} />
+        <Statistiche
+          onBack={() => setView("home")}
+          onApriVenditori={() => setView("statisticavenditori")}
+          onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
+        />
       )}
 
       {view === "statisticavenditori" && (
         <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} onBack={() => setView("statistiche")} />
+      )}
+
+      {view === "ultimeiscrizioni" && (
+        <UltimeIscrizioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} />
       )}
 
       {view === "assegnazionemaster" && (
