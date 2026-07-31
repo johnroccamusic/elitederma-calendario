@@ -1718,8 +1718,45 @@ const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
 
 function Modal({ title, onClose, children }) {
+  const overlayRef = React.useRef(null);
+
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+
+    // su iOS la tastiera che si apre riduce il "visual viewport" ma questo
+    // overlay (position:fixed) resta alto quanto l'intera pagina: la parte
+    // in basso finisce nascosta dietro la tastiera. Restringendo l'altezza
+    // dell'overlay a window.visualViewport.height, lo spazio davvero
+    // visibile combacia con quello occupato, e lo scroll interno può
+    // portare in vista il campo anche quando la tastiera è aperta
+    function aggiornaAltezza() {
+      if (window.visualViewport) overlay.style.height = `${window.visualViewport.height}px`;
+    }
+    aggiornaAltezza();
+    window.visualViewport?.addEventListener("resize", aggiornaAltezza);
+
+    // la tastiera impiega qualche istante ad aprirsi: si attende che
+    // l'animazione finisca prima di centrare il campo appena messo a
+    // fuoco, altrimenti scrollIntoView calcolerebbe la posizione sullo
+    // spazio ancora pieno (tastiera non ancora comparsa)
+    function scrollaCampoInVista(e) {
+      const el = e.target;
+      if (el && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)) {
+        setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 300);
+      }
+    }
+    overlay.addEventListener("focusin", scrollaCampoInVista);
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", aggiornaAltezza);
+      overlay.removeEventListener("focusin", scrollaCampoInVista);
+    };
+  }, []);
+
   return (
     <div
+      ref={overlayRef}
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}
       onClick={onClose}
     >
