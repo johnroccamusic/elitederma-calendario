@@ -4471,8 +4471,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     {i.telefono && (
                       <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 5 }}>
                         · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
-                          <IconaWhatsapp />
+                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
+                          <IconaWhatsapp size={20} />
                         </a>
                       </span>
                     )}
@@ -4874,8 +4874,8 @@ function VistaMaster({ param }) {
                 {i.telefono && (
                   <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 5 }}>
                     · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
-                      <IconaWhatsapp />
+                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
+                      <IconaWhatsapp size={20} />
                     </a>
                   </span>
                 )}
