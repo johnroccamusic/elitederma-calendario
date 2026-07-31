@@ -345,10 +345,14 @@ function Button({ children, onClick, variant = "primary", style = {}, disabled }
   );
 }
 
-function Field({ label, children }) {
+// minLabelHeight: quando più Field stanno affiancati in una riga e le
+// etichette hanno lunghezze diverse (una va a capo su due righe, un'altra
+// no), i campi sotto risultano sfalsati; passandola, tutte le etichette
+// della riga riservano la stessa altezza e i campi tornano allineati
+function Field({ label, children, minLabelHeight }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
       {children}
     </div>
   );
@@ -2973,6 +2977,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   const [pacchettoKit, setPacchettoKit] = useState("");
   const [tagliaDivisa, setTagliaDivisa] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
+  const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
   const [fileScreenAcconto, setFileScreenAcconto] = useState(null);
   const [fileScreenRecap, setFileScreenRecap] = useState(null);
@@ -3016,7 +3021,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
-    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTotalePattuito("");
+    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTagliaDivisa("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -3055,6 +3060,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     setPacchettoKit(i.pacchetto_kit || "");
     setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
+    setQuotaSpeciale(i.quota_speciale != null ? String(i.quota_speciale) : "");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
     setModificandoId(i.id);
     setMsg("");
@@ -3134,7 +3140,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
         pacchetto_kit: pacchettoKit.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
-        quota_venditore: totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito),
+        quota_speciale: quotaSpeciale === "" ? null : parseNum(quotaSpeciale),
+        // se compilata, la quota speciale sostituisce ovunque la quota venditore
+        // calcolata al 7%: è quest'unico campo che viene letto in tutta l'app
+        quota_venditore: quotaSpeciale !== "" ? parseNum(quotaSpeciale) : (totalePattuito === "" ? null : quotaVenditoreDi(totalePattuito)),
         file_iscrizione: pathIscrizione,
         file_screen_acconto: pathAcconto,
         file_screen_recap: pathRecap,
@@ -3347,16 +3356,32 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
-                <Field label="Totale pattuito per la vendita (senza IVA)">
+                <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
                   <input style={inputStyle} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                 </Field>
               </div>
               <div style={{ flex: 1 }}>
-                <Field label="Quota venditore (7%)">
+                <Field label="Quota venditore (7%)" minLabelHeight={34}>
                   <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
                 </Field>
               </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Quota speciale" minLabelHeight={34}>
+                  <input
+                    style={inputStyle}
+                    inputMode="decimal"
+                    placeholder="es. 60.00"
+                    value={quotaSpeciale}
+                    onChange={(e) => setQuotaSpeciale(e.target.value)}
+                  />
+                </Field>
+              </div>
             </div>
+            {quotaSpeciale !== "" && (
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                La quota speciale sostituisce ovunque la quota venditore del 7%.
+              </div>
+            )}
           </div>
           <Field label="Pacchetto/Kit">
             <input value={pacchettoKit} onChange={(e) => setPacchettoKit(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
