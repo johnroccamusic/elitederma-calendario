@@ -3239,22 +3239,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     }
   }
 
-  async function gestisciFileModulo(file) {
+  // il caricamento del file NON legge più i dati in automatico: si limita a
+  // salvare il file scelto. La lettura avviene solo premendo esplicitamente
+  // "Leggi dati dal modulo" (rileggiModuloForzato)
+  function gestisciFileModulo(file) {
     setFileIscrizione(file);
-    if (!file || file.type !== "application/pdf") return;
-    try {
-      const dati = await estraiDatiModuloPdf(file);
-      if (!dati) { setMsg("Non ho trovato i dati attesi nel modulo PDF: da compilare a mano."); return; }
-      applicaDatiModulo(dati, false);
-      setMsg("Dati letti dal modulo PDF e inseriti nel form: controllali prima di salvare.");
-    } catch (e) {
-      // capita con alcuni PDF (bug interno della libreria di lettura, non
-      // recuperabile da qui): il file resta comunque caricato, si tratta
-      // solo della lettura automatica dei campi che non è riuscita, quindi
-      // si tratta come il caso "nessun dato trovato" invece che come un
-      // errore bloccante — si compila tutto a mano, senza impatti
-      setMsg("Non sono riuscito a leggere automaticamente questo modulo PDF: da compilare a mano.");
-    }
   }
 
   // pulsante esplicito "Leggi dati dal modulo": a differenza della lettura
