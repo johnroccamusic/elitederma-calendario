@@ -3171,6 +3171,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista, modificandoId, mostraGestione]);
 
+  // quando si arriva qui già con un iscritto da modificare (es. cliccando
+  // una riga in "Ultime iscrizioni", o tornando con Indietro/Avanti a
+  // questo stato), sottoVistaIniziale imposta solo vista/modificandoId:
+  // senza questo, tutti gli altri campi del form (nome, importi...)
+  // resterebbero ai valori vuoti di default invece dei dati veri
+  // dell'iscritto, facendo sembrare la scheda vuota
+  useEffect(() => {
+    if (sottoVistaIniziale?.modificandoId) {
+      const i = iscritti.find((x) => x.id === sottoVistaIniziale.modificandoId);
+      if (i) apriModificaCompleta(i);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
