@@ -1209,7 +1209,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster }) {
+function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriData }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -1499,6 +1499,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
           )}
           iscritti={iscritti}
           master={master}
+          onApriData={onApriData}
           onDelete={eliminaData}
           onEdit={apriModificaData}
           idInModifica={dataInModifica}
@@ -1933,7 +1934,11 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                       return onEdit ? (
                         <div key={cd.id} style={{ padding: "9px 4px", borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <div style={{ ...fontBody, fontSize: 15, color: NAVY, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                            <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: "1 1 auto" }}>
+                            <span
+                              onClick={onApriData ? () => onApriData(cd) : undefined}
+                              title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
+                              style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: "1 1 auto", cursor: onApriData ? "pointer" : undefined }}
+                            >
                               <span style={{ width: 14, height: 14, borderRadius: 4, background: corso?.colore || NAVY, flexShrink: 0 }} />
                               <b style={{ color: NAVY, fontWeight: 700, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</b>
                               {cd.master_id && (
@@ -4263,7 +4268,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriData={apriData} />
       )}
 
       {view === "statistiche" && (
