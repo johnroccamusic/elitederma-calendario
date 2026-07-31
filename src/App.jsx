@@ -4222,6 +4222,7 @@ export default function App() {
 
   function vaiIndietro() {
     if (pilaIndietro.length === 0) return;
+    window.scrollTo(0, 0); // altrimenti la nuova schermata resta alla posizione di scroll di quella precedente
     const precedente = pilaIndietro[pilaIndietro.length - 1];
     navigazioneStoricoRef.current = true;
     setPilaAvanti((p) => [...p, statoAttualeRef.current]);
@@ -4239,6 +4240,7 @@ export default function App() {
   }
   function vaiAvanti() {
     if (pilaAvanti.length === 0) return;
+    window.scrollTo(0, 0);
     const successivo = pilaAvanti[pilaAvanti.length - 1];
     navigazioneStoricoRef.current = true;
     setPilaIndietro((p) => [...p, statoAttualeRef.current]);
@@ -4322,7 +4324,7 @@ export default function App() {
           Avanti →
         </button>
         <button
-          onClick={() => { setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+          onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
           aria-label="Home"
           title="Home"
           style={{
