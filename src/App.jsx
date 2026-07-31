@@ -4034,6 +4034,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   }
 
   const msgErrore = msg && (msg.startsWith("Errore") || msg.startsWith("Impossibile salvare")) ? msg : null;
+  // un venditore può aprire la scheda di un iscritto già registrato solo
+  // per consultarla: la modifica vera e propria richiede il codice
+  // amministratore (lo stesso condiviso con Setting/Statistiche/
+  // Contabilità classe — adminSbloccato riflette lo sblocco valido per
+  // l'intera sessione, non solo la vista "Contabilità classe" di questa
+  // singola classe)
+  const soloLettura = !!(modificandoId && !adminSbloccato);
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
@@ -4085,13 +4092,19 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       )}
 
       {vista === "form" && (
-        <div style={cardStyle} onBlur={() => { if (modificandoId) autosalva(); }}>
-          <div style={hStyle}>{modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
-          {modificandoId && (
+        <div style={cardStyle} onBlur={() => { if (modificandoId && !soloLettura) autosalva(); }}>
+          <div style={hStyle}>{soloLettura ? "Scheda iscritto" : modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+          {soloLettura ? (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
+              Sola visualizzazione: per modificare i dati serve aprire "Contabilità classe".
+            </div>
+          ) : modificandoId && (
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
               Le modifiche si salvano da sole appena esci da un campo — non serve premere alcun pulsante per ogni singola modifica.
             </div>
           )}
+
+          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
 
           <Field label="Modulo iscrizione (PDF)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
@@ -4099,7 +4112,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             )}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input type="file" accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
-              <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione}>Leggi dati dal modulo</Button>
+              <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione || soloLettura}>Leggi dati dal modulo</Button>
               {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
             </div>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
@@ -4298,11 +4311,19 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           </Field>
           <Field label="Note (opzionale)"><input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
 
+          </fieldset>
+
           <div style={{ display: "flex", gap: 10 }}>
-            <Button onClick={salvaIscritto} disabled={caricando}>
-              {caricando ? "Caricamento…" : modificandoId ? "Fatto, torna alla lista" : "Aggiungi iscritto"}
-            </Button>
-            <Button variant="ghost" onClick={annullaForm}>Annulla</Button>
+            {soloLettura ? (
+              <Button variant="ghost" onClick={annullaForm}>&larr; Torna alla lista</Button>
+            ) : (
+              <>
+                <Button onClick={salvaIscritto} disabled={caricando}>
+                  {caricando ? "Caricamento…" : modificandoId ? "Fatto, torna alla lista" : "Aggiungi iscritto"}
+                </Button>
+                <Button variant="ghost" onClick={annullaForm}>Annulla</Button>
+              </>
+            )}
           </div>
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
         </div>
@@ -4318,7 +4339,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                   <div
-                    style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8, minWidth: 0 }}
+                    onClick={() => apriModificaCompleta(i)}
+                    title="Clicca per vedere i dati dell'iscritto"
+                    style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, cursor: "pointer", display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 8, minWidth: 0 }}
                   >
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
