@@ -266,9 +266,21 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
           }}
         >
           {i === 0 && (
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
+            isMobile ? (
+              <span
+                style={{
+                  display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
+                  flex: "1 1 auto", minWidth: 0, fontSize: 9, lineHeight: 1.1,
+                }}
+              >
+                {etichetta}
+              </span>
+            ) : (
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
+            )
           )}
-          {indice != null && !(isMobile && indice === 1) && (
+          {indice != null && !(isMobile && i === 0) && (
             <span style={{ fontSize: fontSizeBadge, background: "transparent", border: `1px solid ${GRAFITE}`, color: GRAFITE, borderRadius: 4, padding: "0 4px", flexShrink: 0, fontWeight: 400 }}>
               {indice}/{giorniTotali}
             </span>
@@ -2227,7 +2239,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       )}
                       <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                         {contenutoBarraCalendario({
-                          etichetta: etichettaBarra(corso, loc, isMobile && giorniTotali <= 1 ? null : 10),
+                          etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
                           giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 9 : 7, gap: 4, inset: 6,
                           continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2, isMobile,
                         })}
