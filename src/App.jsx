@@ -107,6 +107,21 @@ function fmtData(d) {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 }
+
+// wa.me vuole solo cifre col prefisso internazionale: i numeri qui sono
+// quasi sempre cellulari italiani inseriti senza prefisso, quindi si
+// aggiunge "39" solo se non sembra già averlo (numero internazionale più lungo)
+function numeroWhatsapp(telefono) {
+  const cifre = (telefono || "").replace(/\D/g, "");
+  return cifre.length > 10 ? cifre : `39${cifre}`;
+}
+function IconaWhatsapp({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#25D366">
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.41-1.42a9.87 9.87 0 0 0 4.63 1.18h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.86 9.86 0 0 0 12.04 2zm0 18.11h-.01a8.2 8.2 0 0 1-4.18-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.2 8.2 0 0 1-1.25-4.35c0-4.54 3.7-8.24 8.24-8.24 2.2 0 4.27.86 5.83 2.41a8.18 8.18 0 0 1 2.41 5.83c0 4.54-3.7 8.2-8.25 8.2zm4.52-6.16c-.25-.12-1.47-.72-1.69-.81-.23-.08-.39-.12-.56.13-.17.25-.64.81-.78.97-.14.17-.29.19-.53.06-.25-.12-1.04-.38-1.98-1.22-.73-.65-1.23-1.46-1.37-1.7-.14-.25-.02-.39.11-.51.11-.11.25-.29.37-.43.12-.14.16-.25.25-.41.08-.17.04-.31-.02-.43-.06-.12-.56-1.34-.76-1.84-.2-.48-.41-.42-.56-.42-.14-.01-.31-.01-.48-.01a.92.92 0 0 0-.67.31c-.23.25-.87.85-.87 2.07 0 1.22.89 2.4 1.02 2.57.12.17 1.75 2.67 4.24 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.55.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.06-.1-.23-.16-.48-.28z" />
+    </svg>
+  );
+}
 // data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
 // ultime iscrizioni per giorno di inserimento)
 function fmtDataLunga(dataStr) {
@@ -4454,8 +4469,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                     {i.telefono && (
-                      <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>
+                      <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 5 }}>
                         · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
+                          <IconaWhatsapp />
+                        </a>
                       </span>
                     )}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
@@ -4854,8 +4872,11 @@ function VistaMaster({ param }) {
                 <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                 {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                 {i.telefono && (
-                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>
+                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 5 }}>
                     · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
+                      <IconaWhatsapp />
+                    </a>
                   </span>
                 )}
               </div>
