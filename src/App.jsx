@@ -28,6 +28,16 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 100, 70, 60, 100, 90, 100, 90, 150, 100, 
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Assistenti", "Leve", "Viaggio", "Alloggio", "Note viaggio"];
 
+// una "stagione" va da settembre di un anno ad agosto dell'anno successivo,
+// identificata dall'anno in cui inizia (es. 2026 = Stagione 2026-2027)
+const CHIAVE_STAGIONE_BLOCCATA = "assegnazioneMaster_stagioneBloccata";
+function annoStagioneDaData(dataStr) {
+  const [anno, mese] = dataStr.split("-").map(Number);
+  return mese >= 9 ? anno : anno - 1;
+}
+function stagioneCorrente() { return annoStagioneDaData(dataOggiStr()); }
+function etichettaStagione(annoInizio) { return `Stagione ${annoInizio}-${annoInizio + 1}`; }
+
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_ABBR = ["GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC"];
 // data compatta per le liste: "11 OTT", "11–16 OTT", "29 SET–4 OTT"
@@ -608,10 +618,43 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const [filtroLeva, setFiltroLeva] = useState("");
   const [apriFiltro, setApriFiltro] = useState(""); // quale tendina filtro è aperta, "" = nessuna
 
+  // stagione bloccata (persistita): se assente, la stagione mostrata segue
+  // sempre la data odierna e passa automaticamente a quella nuova a
+  // settembre; "Setta di default" la fissa, "Sblocca" la rimuove
+  const [stagioneBloccata, setStagioneBloccata] = useState(() => {
+    try {
+      const v = localStorage.getItem(CHIAVE_STAGIONE_BLOCCATA);
+      return v ? parseInt(v, 10) : null;
+    } catch { return null; }
+  });
+  // stagione al momento mostrata a schermo: parte dalla bloccata (se c'è)
+  // o da quella corrente, ma può essere cambiata liberamente dalla tendina
+  // per sfogliare le altre stagioni senza per questo bloccarle
+  const [stagioneVista, setStagioneVista] = useState(stagioneBloccata ?? stagioneCorrente());
+
+  const stagioniDisponibili = useMemo(() => {
+    const set = new Set(corsiDate.map((cd) => annoStagioneDaData(cd.data_inizio)));
+    set.add(stagioneCorrente());
+    set.add(stagioneVista);
+    return Array.from(set).sort((a, b) => a - b);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [corsiDate, stagioneVista]);
+
+  function bloccaStagioneDiDefault() {
+    try { localStorage.setItem(CHIAVE_STAGIONE_BLOCCATA, String(stagioneVista)); } catch { /* ignora */ }
+    setStagioneBloccata(stagioneVista);
+  }
+  function sbloccaStagione() {
+    try { localStorage.removeItem(CHIAVE_STAGIONE_BLOCCATA); } catch { /* ignora */ }
+    setStagioneBloccata(null);
+    setStagioneVista(stagioneCorrente());
+  }
+
   const filtriAttivi = filtroCorso || filtroCitta || filtroMaster || filtroAssistente || filtroLeva;
 
   const righe = corsiDate
     .filter((cd) => cd.data_fine >= dataOggiStr())
+    .filter((cd) => annoStagioneDaData(cd.data_inizio) === stagioneVista)
     .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
     .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
     .filter((cd) => !filtroMaster || cd.master_id === filtroMaster)
@@ -634,12 +677,15 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   });
   const chiaviMese = Object.keys(gruppiMese).sort();
 
-  // quanti corsi (tra le edizioni future, indipendentemente dai filtri attivi)
-  // ha già ricevuto ciascuna master, per la barra riassuntiva in alto
+  // quanti corsi (tra le edizioni future della stagione vista, indipendentemente
+  // dagli altri filtri attivi) ha già ricevuto ciascuna master, per la barra
+  // riassuntiva in alto
   const conteggioMaster = {};
-  corsiDate.filter((cd) => cd.data_fine >= dataOggiStr() && cd.master_id).forEach((cd) => {
-    conteggioMaster[cd.master_id] = (conteggioMaster[cd.master_id] || 0) + 1;
-  });
+  corsiDate
+    .filter((cd) => cd.data_fine >= dataOggiStr() && cd.master_id && annoStagioneDaData(cd.data_inizio) === stagioneVista)
+    .forEach((cd) => {
+      conteggioMaster[cd.master_id] = (conteggioMaster[cd.master_id] || 0) + 1;
+    });
   const masterConteggi = Object.entries(conteggioMaster)
     .map(([id, n]) => ({ nome: master.find((m) => m.id === id)?.nome, n }))
     .filter((x) => x.nome)
@@ -907,6 +953,24 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Assegnazione Master" onBack={onBack} />
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 10 }}>
+        <select
+          value={stagioneVista}
+          onChange={(e) => setStagioneVista(parseInt(e.target.value, 10))}
+          style={{ ...inputStyle, ...fontScheda, width: "auto" }}
+        >
+          {stagioniDisponibili.map((anno) => (
+            <option key={anno} value={anno}>{etichettaStagione(anno)}</option>
+          ))}
+        </select>
+        <Button variant="ghost" style={fontScheda} onClick={bloccaStagioneDiDefault}>
+          {stagioneBloccata === stagioneVista ? "Stagione di default ✓" : "Setta di default"}
+        </Button>
+        {stagioneBloccata != null && (
+          <Button variant="ghost" style={fontScheda} onClick={sbloccaStagione}>Sblocca</Button>
+        )}
+      </div>
       <div style={{ ...fontScheda, fontSize: 13, color: MUTED, marginBottom: 18 }}>
         Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
       </div>
