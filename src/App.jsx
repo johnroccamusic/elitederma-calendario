@@ -2440,7 +2440,10 @@ function Calendario({ corsi, location, corsiDate, iscritti, onApriData, onBack, 
       </div>
 
       {mesi.map(({ anno, mese }) => (
-        <div key={`${anno}-${mese}`} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
+        // scrollMarginTop: lo scroll automatico al mese corrente (block:"start")
+        // allineerebbe altrimenti il mese proprio sotto la barra fissa
+        // Indietro/Avanti, nascondendolo parzialmente dietro di essa
+        <div key={`${anno}-${mese}`} style={{ scrollMarginTop: 54 }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
           <MeseGriglia
             anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
             onApriData={onApriData} corsoById={corsoById} locById={locById}
@@ -4127,7 +4130,52 @@ export default function App() {
 
   useEffect(() => { if (ok) caricaIniziale(); }, [ok]);
 
-  // swipe da sinistra a destra su mobile → torna alla home (come i pulsanti "indietro")
+  // cronologia di navigazione tra le schermate (view + eventuale corsoDataAperta
+  // per "scheda"): senza, tornare indietro (swipe o pulsante) riportava sempre
+  // e solo alla home invece che alla schermata da cui si era davvero venuti,
+  // costringendo a ricominciare da capo la ricerca del corso/iscritto
+  const statoAttualeRef = React.useRef({ view, corsoDataAperta });
+  const navigazioneStoricoRef = React.useRef(false); // true mentre Indietro/Avanti stanno applicando un cambiamento (per non registrarlo di nuovo)
+  const [pilaIndietro, setPilaIndietro] = useState([]);
+  const [pilaAvanti, setPilaAvanti] = useState([]);
+
+  useEffect(() => {
+    const precedente = statoAttualeRef.current;
+    if (precedente.view === view && precedente.corsoDataAperta === corsoDataAperta) return;
+    if (navigazioneStoricoRef.current) {
+      navigazioneStoricoRef.current = false;
+    } else {
+      // una navigazione "normale" (click su qualcosa): come nel back/forward
+      // del browser, la pila avanti non ha più senso e va svuotata
+      setPilaIndietro((p) => [...p, precedente]);
+      setPilaAvanti([]);
+    }
+    statoAttualeRef.current = { view, corsoDataAperta };
+  }, [view, corsoDataAperta]);
+
+  function vaiIndietro() {
+    if (pilaIndietro.length === 0) return;
+    const precedente = pilaIndietro[pilaIndietro.length - 1];
+    navigazioneStoricoRef.current = true;
+    setPilaAvanti((p) => [...p, statoAttualeRef.current]);
+    setPilaIndietro((p) => p.slice(0, -1));
+    statoAttualeRef.current = precedente;
+    setView(precedente.view);
+    setCorsoDataAperta(precedente.corsoDataAperta);
+  }
+  function vaiAvanti() {
+    if (pilaAvanti.length === 0) return;
+    const successivo = pilaAvanti[pilaAvanti.length - 1];
+    navigazioneStoricoRef.current = true;
+    setPilaIndietro((p) => [...p, statoAttualeRef.current]);
+    setPilaAvanti((p) => p.slice(0, -1));
+    statoAttualeRef.current = successivo;
+    setView(successivo.view);
+    setCorsoDataAperta(successivo.corsoDataAperta);
+  }
+
+  // swipe da sinistra a destra su mobile → un passo indietro nella cronologia
+  // (come i pulsanti "indietro")
   useEffect(() => {
     let startX = 0, startY = 0, tracking = false;
     function onTouchStart(e) {
@@ -4141,8 +4189,8 @@ export default function App() {
       tracking = false;
       const dx = e.changedTouches[0].clientX - startX;
       const dy = e.changedTouches[0].clientY - startY;
-      if (view !== "home" && dx > 80 && Math.abs(dy) < Math.abs(dx) * 0.6) {
-        setView("home");
+      if (dx > 80 && Math.abs(dy) < Math.abs(dx) * 0.6) {
+        vaiIndietro();
       }
     }
     window.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -4151,7 +4199,7 @@ export default function App() {
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchend", onTouchEnd);
     };
-  }, [view]);
+  }, [pilaIndietro]);
 
   if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={() => setOk(true)} /></div>;
 
@@ -4171,6 +4219,34 @@ export default function App() {
 
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+      <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 2000, display: "flex", gap: 8, pointerEvents: "none" }}>
+        <button
+          onClick={vaiIndietro}
+          disabled={pilaIndietro.length === 0}
+          style={{
+            ...fontBody, pointerEvents: "auto", background: "#000", color: "#fff", border: "none", borderRadius: 8,
+            padding: "8px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+            cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+          }}
+        >
+          ← Indietro
+        </button>
+        <button
+          onClick={vaiAvanti}
+          disabled={pilaAvanti.length === 0}
+          style={{
+            ...fontBody, pointerEvents: "auto", background: "#000", color: "#fff", border: "none", borderRadius: 8,
+            padding: "8px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+            cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+          }}
+        >
+          Avanti →
+        </button>
+      </div>
+      {/* riserva lo spazio occupato dalla barra fissa Indietro/Avanti qui sopra,
+          altrimenti (essendo "position:fixed") coprirebbe l'inizio del
+          contenuto di ogni schermata invece di limitarsi ad affiancarlo */}
+      <div style={{ height: 44 }} />
       {view === "home" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
