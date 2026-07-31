@@ -1418,6 +1418,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   const [modPostiCorso, setModPostiCorso] = useState("");
   const [diplomaCorsoNuovo, setDiplomaCorsoNuovo] = useState(null); // File scelto in "Aggiungi corso", non ancora caricato
   const [diplomaCorsoModifica, setDiplomaCorsoModifica] = useState(null); // File scelto per sostituire il diploma di un corso esistente
+  const [salvandoCorso, setSalvandoCorso] = useState(false);
 
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeLoc, setModNomeLoc] = useState("");
@@ -1476,6 +1477,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   }
   async function salvaModificaCorso(id) {
     if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
+    setSalvandoCorso(true);
     const payload = {
       nome: modNomeCorso.trim().toUpperCase(),
       colore: modColoreCorso,
@@ -1484,14 +1486,15 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
     if (diplomaCorsoModifica) {
       try {
         payload.diploma_template_path = await caricaTemplateDiploma(diplomaCorsoModifica, id);
-      } catch (e) { setMsg("Errore nel caricamento del diploma: " + e.message); return; }
+      } catch (e) { setMsg("Errore nel caricamento del diploma: " + e.message); setSalvandoCorso(false); return; }
     }
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
+    if (error) { setMsg("Errore: " + error.message); setSalvandoCorso(false); return; }
+    await ricarica();
+    setSalvandoCorso(false);
     setCorsoInModifica(null);
     setDiplomaCorsoModifica(null);
     setMsg("Corso aggiornato.");
-    ricarica();
   }
 
   function apriModificaLocation(l) {
@@ -1863,8 +1866,8 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
                     </div>
                   </Field>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <Button onClick={() => salvaModificaCorso(c.id)}>Salva</Button>
-                    <Button variant="ghost" onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); }}>Annulla</Button>
+                    <Button onClick={() => salvaModificaCorso(c.id)} disabled={salvandoCorso}>{salvandoCorso ? "Salvataggio…" : "Salva"}</Button>
+                    <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); }}>Annulla</Button>
                   </div>
                 </div>
               )}
