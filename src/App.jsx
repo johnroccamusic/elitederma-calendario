@@ -3389,6 +3389,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
               Le modifiche si salvano da sole appena esci da un campo — non serve premere alcun pulsante per ogni singola modifica.
             </div>
           )}
+
+          <Field label="Modulo iscrizione (PDF)">
+            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
+              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+            )}
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="file" accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
+              <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione}>Leggi dati dal modulo</Button>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
+              Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia/pacchetto/modelle/accordi commerciali vengono letti e inseriti automaticamente nei campi ancora vuoti. <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
+            </div>
+          </Field>
+
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
               <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
@@ -3558,19 +3572,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
                   {taglia}
                 </label>
               ))}
-            </div>
-          </Field>
-
-          <Field label="Modulo iscrizione (PDF)">
-            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
-              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-            )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
-              <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione}>Leggi dati dal modulo</Button>
-            </div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
-              Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia/pacchetto/modelle/accordi commerciali vengono letti e inseriti automaticamente nei campi ancora vuoti. "Leggi dati dal modulo" li rilegge e sostituisce anche quelli già compilati a mano.
             </div>
           </Field>
           <Field label="Screen acconto (opzionale)">
