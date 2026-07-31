@@ -1084,7 +1084,7 @@ function Statistiche({ onBack, onApriVenditori, onApriUltimeIscrizioni }) {
 
 // elenco delle iscrizioni più recenti, raggruppate per giorno di
 // inserimento (campo "ts" dell'iscritto), più recenti in cima
-function UltimeIscrizioni({ corsi, location, corsiDate, iscritti }) {
+function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -1139,7 +1139,11 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti }) {
                   const corso = cd ? corsoById[cd.corso_id] : null;
                   const loc = cd ? locById[cd.location_id] : null;
                   return (
-                    <tr key={i.id}>
+                    <tr
+                      key={i.id}
+                      onClick={onApriIscritto ? () => onApriIscritto(i) : undefined}
+                      style={{ cursor: onApriIscritto ? "pointer" : undefined }}
+                    >
                       <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>{(i.tutor || "—").toUpperCase()}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY }}>{i.pacchetto_kit || "—"}</td>
@@ -4375,6 +4379,16 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
+  // apre direttamente la pagina di modifica di un iscritto (non solo
+  // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
+  // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
+  function apriIscritto(i) {
+    window.scrollTo(0, 0);
+    setCorsoDataAperta(i.corso_data_id);
+    setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
+    setSchedaKey((k) => k + 1);
+    setView("scheda");
+  }
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
 
   return (
@@ -4560,7 +4574,7 @@ export default function App() {
       )}
 
       {view === "ultimeiscrizioni" && (
-        <UltimeIscrizioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} />
+        <UltimeIscrizioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriIscritto={apriIscritto} />
       )}
 
       {view === "assegnazionemaster" && (
