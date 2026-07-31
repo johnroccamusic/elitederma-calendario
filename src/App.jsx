@@ -4521,7 +4521,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
                         style={impostata
                           ? { padding: "6px 12px", fontSize: 13, background: "#1D4ED8", border: "1px solid #1D4ED8", color: "#fff" }
-                          : { padding: "6px 12px", fontSize: 13, background: "transparent", color: NAVY }
+                          : { padding: "6px 12px", fontSize: 13, background: "#DBEAFE", border: "1px solid #BFDBFE", color: "#1D4ED8" }
                         }
                       >
                         {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
