@@ -7,6 +7,8 @@ import { createClient } from "@supabase/supabase-js";
 // a "fake worker" che prende un percorso di codice meno testato)
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfjsWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -507,6 +509,23 @@ function slugify(testo) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+// "MARIA ROSSI" o "maria rossi" → "Maria Rossi": solo iniziali maiuscole,
+// usato in stampa (mai per come il dato resta salvato nel database)
+function toTitleCase(testo) {
+  return (testo || "")
+    .toLowerCase()
+    .split(/(\s+)/)
+    .map((parola) => (parola ? parola.charAt(0).toUpperCase() + parola.slice(1) : parola))
+    .join("");
+}
+// "#RRGGBB" → {r,g,b} 0-1, il formato richiesto dalla funzione rgb() di pdf-lib
+function hexInRgb01(hex) {
+  const cifre = (hex || "#000000").replace("#", "").match(/.{1,2}/g);
+  if (!cifre || cifre.length < 3) return { r: 0, g: 0, b: 0 };
+  const [r, g, b] = cifre.map((h) => parseInt(h, 16) / 255);
+  return { r, g, b };
 }
 
 function dataOggiStr() {
@@ -1375,7 +1394,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriData }) {
+function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriData }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -1397,6 +1416,8 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   const [modNomeCorso, setModNomeCorso] = useState("");
   const [modColoreCorso, setModColoreCorso] = useState("");
   const [modPostiCorso, setModPostiCorso] = useState("");
+  const [diplomaCorsoNuovo, setDiplomaCorsoNuovo] = useState(null); // File scelto in "Aggiungi corso", non ancora caricato
+  const [diplomaCorsoModifica, setDiplomaCorsoModifica] = useState(null); // File scelto per sostituire il diploma di un corso esistente
 
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeLoc, setModNomeLoc] = useState("");
@@ -1443,16 +1464,32 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
     setModNomeCorso(c.nome.toUpperCase());
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
+    setDiplomaCorsoModifica(null);
+  }
+  // carica il template PDF del diploma di un corso nello storage
+  // "diploma-templates" e restituisce il percorso salvato
+  async function caricaTemplateDiploma(file, corsoId) {
+    const percorso = `${corsoId}/template-${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from("diploma-templates").upload(percorso, file);
+    if (error) throw error;
+    return percorso;
   }
   async function salvaModificaCorso(id) {
     if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
-    const { error } = await supabase.from("corsi").update({
+    const payload = {
       nome: modNomeCorso.trim().toUpperCase(),
       colore: modColoreCorso,
       posti_max: Number(modPostiCorso) || 10,
-    }).eq("id", id);
+    };
+    if (diplomaCorsoModifica) {
+      try {
+        payload.diploma_template_path = await caricaTemplateDiploma(diplomaCorsoModifica, id);
+      } catch (e) { setMsg("Errore nel caricamento del diploma: " + e.message); return; }
+    }
+    const { error } = await supabase.from("corsi").update(payload).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setCorsoInModifica(null);
+    setDiplomaCorsoModifica(null);
     setMsg("Corso aggiornato.");
     ricarica();
   }
@@ -1516,9 +1553,20 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       setMsg("Questo colore è già usato da un altro corso: scegline un altro.");
       return;
     }
-    const { error } = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 });
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeCorso(""); setMsg("Corso aggiunto.");
+    const ins = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 }).select("id").single();
+    if (ins.error) { setMsg("Errore: " + ins.error.message); return; }
+    if (diplomaCorsoNuovo) {
+      try {
+        const percorso = await caricaTemplateDiploma(diplomaCorsoNuovo, ins.data.id);
+        await supabase.from("corsi").update({ diploma_template_path: percorso }).eq("id", ins.data.id);
+      } catch (e) {
+        setMsg("Corso aggiunto, ma errore nel caricamento del diploma: " + e.message);
+        setNomeCorso(""); setDiplomaCorsoNuovo(null);
+        ricarica();
+        return;
+      }
+    }
+    setNomeCorso(""); setDiplomaCorsoNuovo(null); setMsg("Corso aggiunto.");
     ricarica();
   }
 
@@ -1561,6 +1609,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
         <Button onClick={() => setShowAssistenteModal(true)}>Aggiungi Assistente</Button>
         <Button onClick={() => setShowLevaModal(true)}>Aggiungi Leva</Button>
         <Button variant="ghost" onClick={onApriAssegnazioneMaster}>Assegnazione Master</Button>
+        <Button variant="ghost" onClick={onApriFontDiplomi}>Font Diplomi</Button>
       </div>
 
       <div style={cardStyle}>
@@ -1751,6 +1800,12 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
               </Field>
             </div>
           </div>
+          <Field label="Diploma (PDF, opzionale)">
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoNuovo(e.target.files?.[0] || null)} />
+              {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
+            </div>
+          </Field>
           <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
 
           <div style={{ ...hStyle, marginTop: 24 }}>Corsi esistenti</div>
@@ -1759,7 +1814,24 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
           {corsi.map((c) => (
             <div key={c.id}>
               <RigaEliminabile
-                label={<span><span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />{c.nome.toUpperCase()}</span>}
+                label={
+                  <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <span>
+                      <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />
+                      {c.nome.toUpperCase()}
+                    </span>
+                    {c.diploma_template_path ? (
+                      <BadgeFileCaricato />
+                    ) : (
+                      <button
+                        onClick={() => apriModificaCorso(c)}
+                        style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+                      >
+                        Nessun diploma caricato — caricalo qui
+                      </button>
+                    )}
+                  </span>
+                }
                 dettaglio={`posti default: ${c.posti_max}`}
                 onModifica={() => apriModificaCorso(c)}
                 onDelete={() => eliminaCorso(c.id)}
@@ -1781,9 +1853,18 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
                       </Field>
                     </div>
                   </div>
+                  <Field label="Diploma (PDF, opzionale)">
+                    {c.diploma_template_path && !diplomaCorsoModifica && (
+                      <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink bucket="diploma-templates" percorso={c.diploma_template_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                      <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoModifica(e.target.files?.[0] || null)} />
+                      {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
+                    </div>
+                  </Field>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button onClick={() => salvaModificaCorso(c.id)}>Salva</Button>
-                    <Button variant="ghost" onClick={() => setCorsoInModifica(null)}>Annulla</Button>
+                    <Button variant="ghost" onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); }}>Annulla</Button>
                   </div>
                 </div>
               )}
@@ -1883,6 +1964,311 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
 const cardStyle = { background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 22, marginBottom: 18 };
 const hStyle = { ...fontDisplay, fontSize: 20, color: NAVY, margin: "0 0 4px" };
 const subStyle = { ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 };
+
+const CONFIG_DIPLOMI_DEFAULT = {
+  id: null,
+  font_allievo_path: null, font_data_path: null, font_firma_path: null,
+  diploma_riferimento_path: null,
+  nome_pos_x: 50, nome_pos_y: 45, nome_font_size: 24, nome_colore: "#000000", nome_allineamento: "center",
+  data_pos_x: 50, data_pos_y: 65, data_font_size: 16, data_colore: "#000000", data_allineamento: "center",
+  firma_pos_x: 50, firma_pos_y: 80, firma_font_size: 16, firma_colore: "#000000", firma_allineamento: "center",
+};
+// i 3 testi scritti sui diplomi: chiave dei campi in font_diplomi, colore
+// dell'indicatore nell'editor visivo ed etichetta del testo di prova
+// mostrato nell'anteprima trascinabile
+const ELEMENTI_DIPLOMA = [
+  { chiave: "nome", colore: "#2563EB", etichetta: "Nome allievo", testoProva: "Nome Cognome", campoFont: "font_allievo_path", famigliaFont: "diplomaFontNome" },
+  { chiave: "data", colore: "#16A34A", etichetta: "Città e data", testoProva: "Roma, 27/06/2026", campoFont: "font_data_path", famigliaFont: "diplomaFontData" },
+  { chiave: "firma", colore: "#EA580C", etichetta: "Firma master", testoProva: "Nome Master", campoFont: "font_firma_path", famigliaFont: "diplomaFontFirma" },
+];
+
+// pagina globale (non per corso) di impostazioni per la stampa diplomi:
+// i 3 font usati per scrivere su ogni diploma, e la posizione/dimensione/
+// colore/allineamento di nome/città-data/firma — sempre gli stessi su
+// tutti i corsi, calibrati qui trascinando 3 testi di prova sopra
+// l'anteprima di un diploma di riferimento caricato apposta per questo
+function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
+  const [config, setConfig] = useState(fontDiplomi || CONFIG_DIPLOMI_DEFAULT);
+  const [msg, setMsg] = useState("");
+  const [fileRiferimentoNuovo, setFileRiferimentoNuovo] = useState(null);
+  const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
+  const [elementoTrascinato, setElementoTrascinato] = useState(null);
+  const canvasRef = React.useRef(null);
+  const contenitoreRef = React.useRef(null);
+  const dragRef = React.useRef(null);
+
+  useEffect(() => { setConfig(fontDiplomi || CONFIG_DIPLOMI_DEFAULT); }, [fontDiplomi]);
+
+  // aggiorna lo stato locale (per il feedback visivo immediato) e salva su
+  // Supabase: se la riga non esiste ancora la crea, altrimenti la aggiorna
+  async function aggiorna(campi) {
+    const nuovo = { ...config, ...campi };
+    setConfig(nuovo);
+    const payload = { ...nuovo };
+    delete payload.id;
+    delete payload.ts;
+    if (nuovo.id) {
+      const { error } = await supabase.from("font_diplomi").update(payload).eq("id", nuovo.id);
+      if (error) { setMsg("Errore: " + error.message); return; }
+    } else {
+      const { data, error } = await supabase.from("font_diplomi").insert(payload).select("id").single();
+      if (error) { setMsg("Errore: " + error.message); return; }
+      setConfig((c) => ({ ...c, id: data.id }));
+    }
+    ricarica();
+  }
+
+  async function caricaFile(file, bucket, prefisso) {
+    const percorso = `${prefisso}-${Date.now()}-${file.name}`;
+    const { error } = await supabase.storage.from(bucket).upload(percorso, file);
+    if (error) throw error;
+    return percorso;
+  }
+
+  async function gestisciUploadFont(file, campo) {
+    if (!file) return;
+    try {
+      const percorso = await caricaFile(file, "diploma-fonts", campo);
+      await aggiorna({ [campo]: percorso });
+      setMsg("Font caricato.");
+    } catch (e) {
+      setMsg("Errore nel caricamento del font: " + e.message);
+    }
+  }
+
+  async function gestisciUploadRiferimento(file) {
+    if (!file) return;
+    setFileRiferimentoNuovo(file);
+    try {
+      const percorso = await caricaFile(file, "diploma-templates", "riferimento");
+      await aggiorna({ diploma_riferimento_path: percorso });
+    } catch (e) {
+      setMsg("Errore nel caricamento del diploma di riferimento: " + e.message);
+    }
+  }
+
+  // renderizza la prima pagina del diploma di riferimento (il file appena
+  // scelto, se c'è, altrimenti quello già salvato) su un canvas, per poter
+  // posizionare i 3 testi di prova sopra la sua immagine reale
+  useEffect(() => {
+    let annullato = false;
+    async function renderizza() {
+      let buffer;
+      try {
+        if (fileRiferimentoNuovo) {
+          buffer = await fileRiferimentoNuovo.arrayBuffer();
+        } else if (config.diploma_riferimento_path) {
+          const { data } = supabase.storage.from("diploma-templates").getPublicUrl(config.diploma_riferimento_path);
+          const risposta = await fetch(data.publicUrl);
+          buffer = await risposta.arrayBuffer();
+        } else {
+          setDimensioniCanvas(null);
+          return;
+        }
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 1.4 });
+        const canvas = canvasRef.current;
+        if (!canvas || annullato) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        if (!annullato) setDimensioniCanvas({ width: viewport.width, height: viewport.height });
+      } catch (e) {
+        if (!annullato) setMsg("Non sono riuscito a mostrare l'anteprima del diploma di riferimento: " + e.message);
+      }
+    }
+    renderizza();
+    return () => { annullato = true; };
+  }, [fileRiferimentoNuovo, config.diploma_riferimento_path]);
+
+  // carica i 3 font come web-font veri, per vedere in anteprima il testo
+  // di prova esattamente nel font che verrà usato in stampa (se un font
+  // manca o non si carica, l'anteprima usa semplicemente il font di
+  // sistema: non blocca nulla)
+  useEffect(() => {
+    async function carica(percorso, famiglia) {
+      if (!percorso) return;
+      try {
+        const { data } = supabase.storage.from("diploma-fonts").getPublicUrl(percorso);
+        const font = new FontFace(famiglia, `url(${data.publicUrl})`);
+        await font.load();
+        document.fonts.add(font);
+      } catch { /* niente da fare: resta il font di sistema in anteprima */ }
+    }
+    carica(config.font_allievo_path, "diplomaFontNome");
+    carica(config.font_data_path, "diplomaFontData");
+    carica(config.font_firma_path, "diplomaFontFirma");
+  }, [config.font_allievo_path, config.font_data_path, config.font_firma_path]);
+
+  function iniziaDrag(e, chiave) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { chiave, pointerId: e.pointerId };
+    setElementoTrascinato(chiave);
+  }
+  function muoviDrag(e) {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId || !contenitoreRef.current) return;
+    const rect = contenitoreRef.current.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    setConfig((c) => ({ ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
+  }
+  function fineDrag() {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    setElementoTrascinato(null);
+    // durante il trascinamento la posizione è già stata aggiornata (in
+    // tempo reale) nello stato locale da muoviDrag: qui la si salva solo,
+    // rileggendola dallo stato attuale invece di ricalcolarla
+    aggiorna({ [`${d.chiave}_pos_x`]: config[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: config[`${d.chiave}_pos_y`] });
+  }
+
+  const traduzioneAllineamento = { left: "flex-start", center: "center", right: "flex-end" };
+
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Font Diplomi" onBack={onBack} />
+      <div style={subStyle}>
+        Impostazioni globali per la stampa dei diplomi: i 3 font e la posizione di nome, città/data e firma sono
+        uguali per tutti i corsi. Carica qui un diploma di riferimento per vedere dove finiranno i testi e
+        trascinarli nel punto giusto.
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Font</div>
+        <div style={subStyle}>Usati per scrivere i 3 testi su ogni diploma stampato.</div>
+        {[
+          { campo: "font_allievo_path", etichetta: "Font Allievo" },
+          { campo: "font_data_path", etichetta: "Font città e data" },
+          { campo: "font_firma_path", etichetta: "Font firma" },
+        ].map(({ campo, etichetta }) => (
+          <Field key={campo} label={etichetta}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input
+                type="file"
+                accept=".ttf,.otf,font/ttf,font/otf"
+                style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+                onChange={(e) => gestisciUploadFont(e.target.files?.[0] || null, campo)}
+              />
+              {config[campo] ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun font caricato</span>}
+            </div>
+          </Field>
+        ))}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Diploma di riferimento</div>
+        <div style={subStyle}>Un PDF diploma qualsiasi, usato solo per calibrare la posizione: la stessa posizione verrà applicata al template di ciascun corso.</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            type="file"
+            accept="application/pdf"
+            style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+            onChange={(e) => gestisciUploadRiferimento(e.target.files?.[0] || null)}
+          />
+          {(fileRiferimentoNuovo || config.diploma_riferimento_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma di riferimento caricato</span>}
+        </div>
+
+        {(fileRiferimentoNuovo || config.diploma_riferimento_path) && (
+          <div
+            ref={contenitoreRef}
+            style={{ position: "relative", marginTop: 16, width: "100%", maxWidth: dimensioniCanvas?.width || 800, touchAction: "none" }}
+          >
+            {/* il canvas deve esistere nel DOM fin da subito: l'effetto che
+                lo disegna legge canvasRef.current, e se questo contenitore
+                comparisse solo DOPO aver calcolato le dimensioni si
+                creerebbe un cane che si morde la coda (nessuna dimensione
+                finché non si disegna, nessun disegno finché non c'è il
+                canvas) */}
+            <canvas ref={canvasRef} style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}` }} />
+            {ELEMENTI_DIPLOMA.map(({ chiave, colore, testoProva, campoFont, famigliaFont }) => (
+              <div
+                key={chiave}
+                onPointerDown={(e) => iniziaDrag(e, chiave)}
+                onPointerMove={muoviDrag}
+                onPointerUp={fineDrag}
+                onPointerCancel={fineDrag}
+                style={{
+                  position: "absolute",
+                  left: `${config[`${chiave}_pos_x`]}%`,
+                  top: `${config[`${chiave}_pos_y`]}%`,
+                  transform: "translate(-50%, -50%)",
+                  display: "flex",
+                  justifyContent: traduzioneAllineamento[config[`${chiave}_allineamento`]] || "center",
+                  minWidth: 40,
+                  cursor: "grab",
+                  padding: 4,
+                  border: `2px dashed ${colore}`,
+                  borderRadius: 4,
+                  background: elementoTrascinato === chiave ? `${colore}22` : "transparent",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: config[`${chiave}_font_size`],
+                    color: config[`${chiave}_colore`],
+                    fontFamily: config[campoFont] ? famigliaFont : undefined,
+                    whiteSpace: "nowrap",
+                    userSelect: "none",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {testoProva}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(fileRiferimentoNuovo || config.diploma_riferimento_path) && (
+          <div style={{ marginTop: 18, display: "flex", flexDirection: "column", gap: 14 }}>
+            {ELEMENTI_DIPLOMA.map(({ chiave, colore, etichetta }) => (
+              <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: colore, flexShrink: 0 }} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 110 }}>{etichetta}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    onClick={() => aggiorna({ [`${chiave}_font_size`]: Math.max(6, config[`${chiave}_font_size`] - 1) })}
+                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+                  >
+                    −
+                  </button>
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 26, textAlign: "center" }}>{config[`${chiave}_font_size`]}</span>
+                  <button
+                    onClick={() => aggiorna({ [`${chiave}_font_size`]: Math.min(120, config[`${chiave}_font_size`] + 1) })}
+                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+                  >
+                    +
+                  </button>
+                </div>
+                <input
+                  type="color"
+                  value={config[`${chiave}_colore`]}
+                  onChange={(e) => aggiorna({ [`${chiave}_colore`]: e.target.value })}
+                  style={{ width: 36, height: 30, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6 }}
+                />
+                <select
+                  value={config[`${chiave}_allineamento`]}
+                  onChange={(e) => aggiorna({ [`${chiave}_allineamento`]: e.target.value })}
+                  style={{ ...inputStyle, width: "auto" }}
+                >
+                  <option value="left">Sinistra</option>
+                  <option value="center">Centro</option>
+                  <option value="right">Destra</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+    </div>
+  );
+}
 
 function Modal({ title, onClose, children }) {
   const overlayRef = React.useRef(null);
@@ -3112,8 +3498,8 @@ function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBac
 const ADMIN_CODE = import.meta.env.VITE_ADMIN_CODE || "";
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
-function AllegatoLink({ percorso, etichetta }) {
-  const { data } = supabase.storage.from("allegati-iscritti").getPublicUrl(percorso);
+function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
+  const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
   return (
     <a
       href={data.publicUrl}
@@ -3126,7 +3512,7 @@ function AllegatoLink({ percorso, etichetta }) {
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -3161,6 +3547,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
   const [mostraGestione, setMostraGestione] = useState(sottoVistaIniziale?.mostraGestione ?? false);
   const [linkMaster, setLinkMaster] = useState("");
+  const [generandoDiplomi, setGenerandoDiplomi] = useState(false);
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -3202,6 +3589,105 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
       setMostraGestione(true);
     } else {
       window.alert("Codice non corretto.");
+    }
+  }
+
+  // disegna un testo su una pagina pdf-lib, convertendo la posizione da
+  // percentuale (0-100, origine in alto a sinistra, come nell'editor
+  // visivo di "Font Diplomi") a punti pdf (origine in basso a sinistra),
+  // e l'allineamento in un offset orizzontale rispetto al punto ancorato
+  function disegnaTestoDiploma(page, testo, { posX, posY, fontSize, colore, allineamento, font }) {
+    if (!testo) return;
+    const { width, height } = page.getSize();
+    const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);
+    const ancoraX = (posX / 100) * width;
+    const x = allineamento === "left" ? ancoraX : allineamento === "right" ? ancoraX - larghezzaTesto : ancoraX - larghezzaTesto / 2;
+    // approssimazione: la percentuale rappresenta il centro verticale del
+    // testo, non la sua baseline — spostare di metà font size la
+    // avvicina al centro reale senza bisogno di misure di ascent/descent
+    const y = height - (posY / 100) * height - fontSize * 0.35;
+    const { r, g, b } = hexInRgb01(colore);
+    page.drawText(testo, { x, y, size: fontSize, font, color: rgb(r, g, b) });
+  }
+
+  async function stampaDiplomi() {
+    if (!corso?.diploma_template_path) {
+      window.alert('Nessun template diploma collegato a questo corso — impostalo da Impostazioni.');
+      return;
+    }
+    if (listaIscritti.length === 0) {
+      window.alert("Non ci sono iscritti in questa classe.");
+      return;
+    }
+    setGenerandoDiplomi(true);
+    try {
+      const config = fontDiplomi || CONFIG_DIPLOMI_DEFAULT;
+      const masterCorso = corsoData.master_id ? (master || []).find((m) => m.id === corsoData.master_id) : null;
+      const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
+      const testoFirma = masterCorso ? toTitleCase(masterCorso.nome) : "";
+
+      async function scaricaBytes(bucket, percorso) {
+        const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
+        const risposta = await fetch(data.publicUrl);
+        if (!risposta.ok) throw new Error(`impossibile scaricare ${percorso}`);
+        return new Uint8Array(await risposta.arrayBuffer());
+      }
+
+      const templateBytes = await scaricaBytes("diploma-templates", corso.diploma_template_path);
+      const templateDoc = await PDFDocument.load(templateBytes);
+
+      const outputPdf = await PDFDocument.create();
+      outputPdf.registerFontkit(fontkit);
+
+      // per ciascun font: se manca o non si riesce a caricare, ripiego su
+      // Helvetica solo per quell'elemento, senza bloccare la stampa
+      async function embedFontOFallback(percorso) {
+        if (percorso) {
+          try {
+            const bytes = await scaricaBytes("diploma-fonts", percorso);
+            return await outputPdf.embedFont(bytes);
+          } catch { /* ripiego sotto */ }
+        }
+        return await outputPdf.embedFont(StandardFonts.Helvetica);
+      }
+      const fontNome = await embedFontOFallback(config.font_allievo_path);
+      const fontData = await embedFontOFallback(config.font_data_path);
+      const fontFirma = await embedFontOFallback(config.font_firma_path);
+
+      for (const iscritto of listaIscritti) {
+        const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
+        outputPdf.addPage(pagina);
+
+        disegnaTestoDiploma(pagina, toTitleCase(`${iscritto.nome} ${iscritto.cognome}`), {
+          posX: config.nome_pos_x, posY: config.nome_pos_y, fontSize: config.nome_font_size,
+          colore: config.nome_colore, allineamento: config.nome_allineamento, font: fontNome,
+        });
+        disegnaTestoDiploma(pagina, testoData, {
+          posX: config.data_pos_x, posY: config.data_pos_y, fontSize: config.data_font_size,
+          colore: config.data_colore, allineamento: config.data_allineamento, font: fontData,
+        });
+        if (testoFirma) {
+          disegnaTestoDiploma(pagina, testoFirma, {
+            posX: config.firma_pos_x, posY: config.firma_pos_y, fontSize: config.firma_font_size,
+            colore: config.firma_colore, allineamento: config.firma_allineamento, font: fontFirma,
+          });
+        }
+      }
+
+      const bytesFinali = await outputPdf.save();
+      const blob = new Blob([bytesFinali], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `diplomi-${slugify(corso.nome)}-${corsoData.data_fine}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      window.alert("Errore nella generazione dei diplomi: " + e.message);
+    } finally {
+      setGenerandoDiplomi(false);
     }
   }
 
@@ -3523,9 +4009,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
           )}
         </div>
         {vista === "lista" ? (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
               {mostraGestione ? "Esci da contabilità classe" : "Contabilità classe"}
+            </Button>
+            <Button variant="ghost" onClick={stampaDiplomi} disabled={generandoDiplomi}>
+              {generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"}
             </Button>
             {!mostraGestione && (
               <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
@@ -4306,6 +4795,7 @@ export default function App() {
   const [hotel, setHotel] = useState([]);
   const [assistente, setAssistente] = useState([]);
   const [leva, setLeva] = useState([]);
+  const [fontDiplomi, setFontDiplomi] = useState(null); // riga singola di impostazioni globali stampa diplomi, o null se non ancora creata
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -4317,7 +4807,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -4326,6 +4816,7 @@ export default function App() {
       supabase.from("hotel").select("*").order("nome"),
       supabase.from("assistente").select("*").order("nome"),
       supabase.from("leva").select("*").order("nome"),
+      supabase.from("font_diplomi").select("*").limit(1),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -4335,6 +4826,7 @@ export default function App() {
     setHotel(h.data || []);
     setAssistente(a.data || []);
     setLeva(lv.data || []);
+    setFontDiplomi(fd.data?.[0] || null);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -4650,7 +5142,11 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriData={apriData} />
+        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriData={apriData} />
+      )}
+
+      {view === "fontdiplomi" && (
+        <FontDiplomi fontDiplomi={fontDiplomi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "statistiche" && (
@@ -4694,6 +5190,7 @@ export default function App() {
           corsiDate={corsiDate}
           iscritti={iscritti}
           master={master}
+          fontDiplomi={fontDiplomi}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
