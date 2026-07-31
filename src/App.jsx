@@ -1972,9 +1972,9 @@ const CONFIG_DIPLOMI_DEFAULT = {
   id: null,
   font_allievo_path: null, font_data_path: null, font_firma_path: null,
   diploma_riferimento_path: null,
-  nome_pos_x: 50, nome_pos_y: 45, nome_font_size: 24, nome_colore: "#000000", nome_allineamento: "center",
-  data_pos_x: 50, data_pos_y: 65, data_font_size: 16, data_colore: "#000000", data_allineamento: "center",
-  firma_pos_x: 50, firma_pos_y: 80, firma_font_size: 16, firma_colore: "#000000", firma_allineamento: "center",
+  nome_pos_x: 50, nome_pos_y: 45, nome_font_size: 24, nome_colore: "#ffffff", nome_allineamento: "center",
+  data_pos_x: 50, data_pos_y: 65, data_font_size: 16, data_colore: "#ffffff", data_allineamento: "center",
+  firma_pos_x: 50, firma_pos_y: 80, firma_font_size: 16, firma_colore: "#ffffff", firma_allineamento: "center",
 };
 // i 3 testi scritti sui diplomi: chiave dei campi in font_diplomi, colore
 // dell'indicatore nell'editor visivo ed etichetta del testo di prova
@@ -1999,12 +1999,24 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
   const canvasRef = React.useRef(null);
   const contenitoreRef = React.useRef(null);
   const dragRef = React.useRef(null);
+  // una volta che l'utente inizia a modificare qualcosa qui, lo stato
+  // locale diventa l'unica fonte di verità: il ricaricamento dati che
+  // "aggiorna" lancia dopo ogni salvataggio serve al resto dell'app (es.
+  // "Stampa diplomi"), non a questa pagina — se la si lasciasse
+  // risincronizzare da fontDiplomi ad ogni fetch, un fetch avviato da
+  // un'interazione precedente e arrivato in ritardo poteva sovrascrivere
+  // una posizione più recente, dando l'impressione che gli elementi
+  // saltassero a caso mentre li si trascinava
+  const modificatoLocalmenteRef = React.useRef(false);
 
-  useEffect(() => { setConfig(fontDiplomi || CONFIG_DIPLOMI_DEFAULT); }, [fontDiplomi]);
+  useEffect(() => {
+    if (!modificatoLocalmenteRef.current) setConfig(fontDiplomi || CONFIG_DIPLOMI_DEFAULT);
+  }, [fontDiplomi]);
 
   // aggiorna lo stato locale (per il feedback visivo immediato) e salva su
   // Supabase: se la riga non esiste ancora la crea, altrimenti la aggiorna
   async function aggiorna(campi) {
+    modificatoLocalmenteRef.current = true;
     const nuovo = { ...config, ...campi };
     setConfig(nuovo);
     const payload = { ...nuovo };
