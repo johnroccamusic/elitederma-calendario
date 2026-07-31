@@ -307,6 +307,21 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
 }
 
 // ---------- Card / pulsanti base ----------
+// spunta verde ben visibile accanto ai campi di upload file, per confermare
+// a colpo d'occhio che un file (nuovo o già caricato in precedenza) è
+// presente, senza dover leggere la scritta piccola del browser sull'input
+function BadgeFileCaricato() {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#2E7D32", fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="11" fill="#E8F5E9" stroke="#2E7D32" strokeWidth="2" />
+        <path d="M7 12.5l3.2 3.2L17 8.5" stroke="#2E7D32" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      File caricato
+    </span>
+  );
+}
+
 function CardHome({ title, sub, onClick }) {
   return (
     <button
@@ -3531,6 +3546,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input type="file" accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
               <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione}>Leggi dati dal modulo</Button>
+              {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
             </div>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
               <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
@@ -3712,13 +3728,19 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
-            <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
+              {(fileScreenAcconto || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto)) && <BadgeFileCaricato />}
+            </div>
           </Field>
           <Field label="Screen di recap (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
-            <input type="file" accept="image/*,application/pdf" style={inputStyle} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
+              {(fileScreenRecap || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap)) && <BadgeFileCaricato />}
+            </div>
           </Field>
           <Field label="Note (opzionale)"><input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
 
