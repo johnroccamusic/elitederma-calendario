@@ -32,6 +32,7 @@ const fontCondensato = { fontFamily: "'Sofia Sans Condensed',sans-serif" }; // p
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
 const LARGHEZZE_COLONNE_DEFAULT = [54, 100, 70, 60, 100, 90, 100, 90, 150, 100, 100];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
+const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Assistenti", "Leve", "Viaggio", "Alloggio", "Note viaggio"];
 
 // una "stagione" va da settembre di un anno ad agosto dell'anno successivo,
@@ -1171,6 +1172,38 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
   const [a, setA] = useState("");
   const [periodoSel, setPeriodoSel] = useState("");
 
+  // larghezza delle colonne trascinabile con il mouse (come in Assegnazione
+  // Master), qui però le colonne sono una per venditore/corso e cambiano in
+  // base ai filtri: la larghezza è quindi una mappa "chiave colonna" -> px
+  // (chiave = "venditore"/"totale" o il nome del corso stesso) invece che
+  // un array a indice fisso, e resta salvata per sempre in questo browser
+  const [larghezze, setLarghezze] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_VENDITORI) || "{}"); } catch { return {}; }
+  });
+  function larghezzaDi(chiave, larghezzaDefault) {
+    return larghezze[chiave] ?? larghezzaDefault;
+  }
+  const ridimensionamentoRef = React.useRef(null);
+  function iniziaRidimensionamento(e, chiave, larghezzaAttuale) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ridimensionamentoRef.current = { chiave, pointerId: e.pointerId, startX: e.clientX, startWidth: larghezzaAttuale };
+  }
+  function muoviRidimensionamento(e) {
+    const r = ridimensionamentoRef.current;
+    if (!r || e.pointerId !== r.pointerId) return;
+    const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
+    setLarghezze((precedenti) => ({ ...precedenti, [r.chiave]: nuovaLarghezza }));
+  }
+  function fineRidimensionamento() {
+    if (!ridimensionamentoRef.current) return;
+    ridimensionamentoRef.current = null;
+    setLarghezze((attuali) => {
+      try { localStorage.setItem(CHIAVE_LARGHEZZE_VENDITORI, JSON.stringify(attuali)); } catch { /* ignora */ }
+      return attuali;
+    });
+  }
+
   // primo e ultimo giorno del mese "oggi + offsetMesi" (0 = mese corrente, -1 = mese scorso)
   function rangeMese(offsetMesi) {
     const oggi = new Date();
@@ -1273,32 +1306,55 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 
       {righeVenditori.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna iscrizione trovata nel periodo scelto.</div>
-      ) : (
-        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Venditore</th>
-                <th style={thStyle}>Totale</th>
-                {colonneCorsi.map((c) => <th key={c} style={thStyle}>{c} {totaliCorso[c]}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {righeVenditori.map((r) => (
-                <tr key={r.nome}>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>{r.nome}</td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700 }}>{r.totale}</td>
-                  {colonneCorsi.map((c) => (
-                    <td key={c} style={{ ...celStyle, ...fontBody, fontSize: 13, color: r.perCorso[c] ? NAVY : MUTED, textAlign: "center" }}>
-                      {r.perCorso[c] || 0}
-                    </td>
+      ) : (() => {
+        // colonne effettive di questa tabella, con la loro chiave di
+        // ridimensionamento e larghezza (salvata o di default): cambia in
+        // base ai corsi presenti nel periodo filtrato, quindi calcolata qui
+        // invece di un array fisso come in Assegnazione Master
+        const colonne = [
+          { chiave: "venditore", etichetta: "Venditore", larghezzaDefault: 160 },
+          { chiave: "totale", etichetta: "Totale", larghezzaDefault: 90 },
+          ...colonneCorsi.map((c) => ({ chiave: c, etichetta: `${c} ${totaliCorso[c]}`, larghezzaDefault: 110 })),
+        ].map((c) => ({ ...c, larghezza: larghezzaDi(c.chiave, c.larghezzaDefault) }));
+        const larghezzaTabella = colonne.reduce((tot, c) => tot + c.larghezza, 0);
+
+        return (
+          <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+            <table style={{ borderCollapse: "collapse", width: larghezzaTabella, tableLayout: "fixed" }}>
+              <colgroup>{colonne.map((c) => <col key={c.chiave} style={{ width: c.larghezza }} />)}</colgroup>
+              <thead>
+                <tr>
+                  {colonne.map((c, i) => (
+                    <th key={c.chiave} style={{ ...thStyle, position: "relative", borderRight: i === colonne.length - 1 ? "none" : bordoV }}>
+                      {c.etichetta}
+                      <div
+                        onPointerDown={(e) => iniziaRidimensionamento(e, c.chiave, c.larghezza)}
+                        onPointerMove={muoviRidimensionamento}
+                        onPointerUp={fineRidimensionamento}
+                        onPointerCancel={fineRidimensionamento}
+                        style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+                      />
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {righeVenditori.map((r) => (
+                  <tr key={r.nome}>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700 }}>{r.totale}</td>
+                    {colonneCorsi.map((c) => (
+                      <td key={c} style={{ ...celStyle, ...fontBody, fontSize: 13, color: r.perCorso[c] ? NAVY : MUTED, textAlign: "center" }}>
+                        {r.perCorso[c] || 0}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
   );
 }
