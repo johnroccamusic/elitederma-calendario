@@ -4507,17 +4507,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     />
                   </div>
                 )}
-                {mostraGestione && (
-                  <div style={{ marginTop: 8 }}>
-                    <Button
-                      variant={i.diploma_eccezione_id || i.diploma_eccezione_data ? "primary" : "ghost"}
-                      onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
-                      style={{ padding: "6px 12px", fontSize: 13 }}
-                    >
-                      {i.diploma_eccezione_id || i.diploma_eccezione_data ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
-                    </Button>
-                  </div>
-                )}
+                {mostraGestione && (() => {
+                  const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
+                  const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
+                  return (
+                    <div style={{ marginTop: 8 }}>
+                      <Button
+                        variant={impostata ? "primary" : "ghost"}
+                        onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
+                        style={{ padding: "6px 12px", fontSize: 13 }}
+                      >
+                        {impostata
+                          ? `Eccezione diploma impostata${eccezioneAttiva ? `: ${eccezioneAttiva.nome}` : ""}${i.diploma_eccezione_data ? ` · ${fmtData(i.diploma_eccezione_data)}` : ""}`
+                          : "Carica eccezione diploma"}
+                      </Button>
+                    </div>
+                  );
+                })()}
                 {mostraGestione && eccezioneApertaId === i.id && (
                   <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
                     <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>
@@ -4548,7 +4554,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 }}>
                       Il nome dell'allievo e il nome della master restano invariati: cambiano solo il template del diploma e/o la data.
                     </div>
-                    <Button variant="ghost" onClick={() => setEccezioneApertaId(null)}>Chiudi</Button>
+                    <Button onClick={() => setEccezioneApertaId(null)}>Salva</Button>
                   </div>
                 )}
                 {mostraGestione && spostaIscrittoId === i.id && (
