@@ -181,9 +181,13 @@ function coloreTenue(hex, intensita = 0.28) {
   return `rgb(${mescola(r)}, ${mescola(g)}, ${mescola(b)})`;
 }
 
-// etichetta breve per le barre del calendario: nome corso (max 10 caratteri) + sigla città
-function etichettaBarra(corso, loc) {
-  const nome = (corso?.nome || "").toUpperCase().slice(0, 10);
+// etichetta breve per le barre del calendario: nome corso (max maxChar
+// caratteri, di default 10) + sigla città; maxChar=null non tronca affatto
+// (usato da mobile sui corsi di un solo giorno, dove il nome può andare a
+// capo su due righe invece di essere tagliato)
+function etichettaBarra(corso, loc, maxChar = 10) {
+  const nomeIntero = (corso?.nome || "").toUpperCase();
+  const nome = maxChar != null ? nomeIntero.slice(0, maxChar) : nomeIntero;
   return `${nome} ${siglaCitta(loc?.nome)}`;
 }
 
@@ -208,8 +212,26 @@ function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
 // mostra, sopra ogni singolo giorno che attraversa in questa riga, il
 // numero di frazione "giorno/totale" (es. 3/6); il nome del corso resta
 // visibile solo all'inizio del segmento
-function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun }) {
+function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun, isMobile }) {
   if (giorniTotali <= 1) {
+    if (isMobile) {
+      // da cellulare la colonna del giorno è troppo stretta perché il nome
+      // stia su una riga sola anche riducendo il font: meglio andare a capo
+      // su due righe (il nome intero, non troncato) che tagliarlo con "..."
+      return (
+        <div style={{ height: "100%", display: "flex", alignItems: "center", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
+          <span
+            style={{
+              display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
+              fontSize: 9, lineHeight: 1.1,
+            }}
+          >
+            {etichetta}
+          </span>
+        </div>
+      );
+    }
     return (
       <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: `0 ${inset}px`, height: "100%", display: "flex", alignItems: "center", boxSizing: "border-box" }}>
         {etichetta}
@@ -246,7 +268,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
           {i === 0 && (
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
           )}
-          {indice != null && (
+          {indice != null && !(isMobile && indice === 1) && (
             <span style={{ fontSize: fontSizeBadge, background: "transparent", border: `1px solid ${GRAFITE}`, color: GRAFITE, borderRadius: 4, padding: "0 4px", flexShrink: 0, fontWeight: 400 }}>
               {indice}/{giorniTotali}
             </span>
@@ -2035,8 +2057,6 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
 }
 
 
-const GAP_LANE = 4; // spazio verticale tra due corsie di eventi sovrapposti
-
 // un singolo mese: titolo + griglia con le barre degli eventi
 // idEvidenziato/overrideInizio/overrideFine/onDragBarra/refEvidenziato sono
 // opzionali: servono solo quando questo mese è usato dentro CalendarioModifica
@@ -2050,8 +2070,9 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
   // corsia, intestazione del giorno e i relativi font
   const isMobile = useIsMobile();
-  const LANE_H = isMobile ? 30 : 20; // altezza di ogni "corsia" di eventi (px)
-  const HEADER_H = isMobile ? 32 : 26; // spazio per il numero del giorno
+  const LANE_H = isMobile ? 26 : 20; // altezza di ogni "corsia" di eventi (px)
+  const HEADER_H = isMobile ? 20 : 26; // spazio per il numero del giorno
+  const GAP_LANE = isMobile ? 2 : 4; // spazio verticale tra due corsie di eventi sovrapposti
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
@@ -2123,7 +2144,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                     boxSizing: "border-box", cursor: d && onClickGiornoVuoto ? "pointer" : undefined,
                   }}
                 >
-                  {d && <div style={{ ...fontBody, fontSize: isMobile ? 14 : 12, color: NAVY, padding: "4px 6px" }}>{d}</div>}
+                  {d && <div style={{ ...fontBody, fontSize: isMobile ? 13 : 12, color: NAVY, padding: isMobile ? "2px 6px" : "4px 6px" }}>{d}</div>}
                 </div>
               ))}
             </div>
@@ -2174,7 +2195,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       color: "#000",
-                      fontSize: isMobile ? 12 : 8,
+                      fontSize: isMobile ? 10 : 8,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: evidenziata ? "grab" : "pointer",
@@ -2206,9 +2227,9 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       )}
                       <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                         {contenutoBarraCalendario({
-                          etichetta: etichettaBarra(corso, loc),
-                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 10 : 7, gap: 4, inset: 6,
-                          continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2,
+                          etichetta: etichettaBarra(corso, loc, isMobile && giorniTotali <= 1 ? null : 10),
+                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 9 : 7, gap: 4, inset: 6,
+                          continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2, isMobile,
                         })}
                       </div>
                     </div>
