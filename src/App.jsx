@@ -4511,16 +4511,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
                   const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
                   return (
-                    <div style={{ marginTop: 8 }}>
+                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <Button
-                        variant={impostata ? "primary" : "ghost"}
                         onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
-                        style={{ padding: "6px 12px", fontSize: 13 }}
+                        style={impostata
+                          ? { padding: "6px 12px", fontSize: 13, background: "#1D4ED8", border: "1px solid #1D4ED8", color: "#fff" }
+                          : { padding: "6px 12px", fontSize: 13, background: "transparent", color: NAVY }
+                        }
                       >
-                        {impostata
-                          ? `Eccezione diploma impostata${eccezioneAttiva ? `: ${eccezioneAttiva.nome}` : ""}${i.diploma_eccezione_data ? ` · ${fmtData(i.diploma_eccezione_data)}` : ""}`
-                          : "Carica eccezione diploma"}
+                        {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
                       </Button>
+                      {impostata && (
+                        <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+                          {eccezioneAttiva ? eccezioneAttiva.nome : ""}
+                          {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
+                          {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
+                        </span>
+                      )}
                     </div>
                   );
                 })()}
