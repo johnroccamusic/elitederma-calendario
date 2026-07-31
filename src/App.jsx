@@ -605,12 +605,9 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
   );
 }
 
-function TopBar({ title, onBack }) {
+function TopBar({ title }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 22 }}>
-      <button onClick={onBack} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", fontSize: 20, color: NAVY }}>
-        &larr;
-      </button>
+    <div style={{ marginBottom: 22 }}>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{title}</div>
     </div>
   );
@@ -4321,6 +4318,21 @@ export default function App() {
           }}
         >
           Avanti →
+        </button>
+        <button
+          onClick={() => { setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+          aria-label="Home"
+          title="Home"
+          style={{
+            ...fontBody, pointerEvents: "auto", background: "#000", color: "#fff", border: "none", borderRadius: 8,
+            padding: "8px 12px", fontSize: 13, fontWeight: 600, boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
+            cursor: "pointer", display: "flex", alignItems: "center",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+            <polyline points="9 22 9 12 15 12 15 22" />
+          </svg>
         </button>
       </div>
       {/* riserva lo spazio occupato dalla barra fissa Indietro/Avanti qui sopra,
