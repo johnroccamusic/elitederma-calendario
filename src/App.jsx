@@ -4978,21 +4978,23 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
-  // le statistiche usano lo stesso codice amministratore e lo stesso
-  // sblocco (valido per l'intera sessione) già usato per la contabilità
-  // classe: una volta inserito corretto una volta, non viene richiesto di
-  // nuovo altrove nella stessa sessione
-  function apriStatistiche() {
-    if (sessionStorage.getItem("edc_admin_ok") === "1") { setView("statistiche"); return; }
-    const codice = window.prompt("Codice amministratore per accedere alle statistiche:");
+  // Setting e Statistiche usano lo stesso codice amministratore e lo
+  // stesso sblocco (valido per l'intera sessione) già usato per la
+  // contabilità classe: una volta inserito corretto una volta, non viene
+  // richiesto di nuovo altrove nella stessa sessione
+  function apriViewProtetta(nomeView) {
+    if (sessionStorage.getItem("edc_admin_ok") === "1") { setView(nomeView); return; }
+    const codice = window.prompt("Codice amministratore:");
     if (codice === null) return;
     if (ADMIN_CODE && codice === ADMIN_CODE) {
       sessionStorage.setItem("edc_admin_ok", "1");
-      setView("statistiche");
+      setView(nomeView);
     } else {
       window.alert("Codice non corretto.");
     }
   }
+  function apriStatistiche() { apriViewProtetta("statistiche"); }
+  function apriImpostazioni() { apriViewProtetta("impostazioni"); }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -5055,7 +5057,7 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20 }}>
-            <Button onClick={() => setView("impostazioni")}>Setting</Button>
+            <Button onClick={apriImpostazioni}>Setting</Button>
             <Button onClick={apriStatistiche}>Statistiche</Button>
           </div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
