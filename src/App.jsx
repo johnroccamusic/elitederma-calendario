@@ -3221,7 +3221,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
 
       setMsg("Dati letti dal modulo PDF e inseriti nel form: controllali prima di salvare.");
     } catch (e) {
-      setMsg("Errore nella lettura del modulo PDF: " + e.message);
+      // capita con alcuni PDF (bug interno della libreria di lettura, non
+      // recuperabile da qui): il file resta comunque caricato, si tratta
+      // solo della lettura automatica dei campi che non è riuscita, quindi
+      // si tratta come il caso "nessun dato trovato" invece che come un
+      // errore bloccante — si compila tutto a mano, senza impatti
+      setMsg("Non sono riuscito a leggere automaticamente questo modulo PDF: da compilare a mano.");
     }
   }
 
