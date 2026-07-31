@@ -4459,7 +4459,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           )}
           {listaIscritti.map((i, idx) => (
             <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
@@ -4479,18 +4479,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
                   {mostraGestione && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                       <button
                         onClick={() => apriModificaCompleta(i)}
                         title="Modifica"
                         style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                         </svg>
                       </button>
-                      <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "6px 12px", fontSize: 13 }}>
+                      <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "4px 10px", fontSize: 12 }}>
                         Sposta
                       </Button>
                       <button
@@ -4498,7 +4498,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         title="Elimina"
                         style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                           <path d="M10 11v6" /><path d="M14 11v6" />
@@ -4511,7 +4511,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 {mostraGestione && (
                   <div
                     onClick={() => toggleRicontattato(i)}
-                    style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 8, cursor: "pointer" }}
+                    style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, cursor: "pointer" }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: NAVY }}>
                       <input type="checkbox" checked={!!i.ricontattato} readOnly style={{ width: 20, height: 20, pointerEvents: "none" }} />
