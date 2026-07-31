@@ -226,7 +226,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
               ...fontCondensato,
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-              fontSize: 8, lineHeight: 1.05,
+              fontSize: 10, lineHeight: 1.05,
             }}
           >
             {etichetta}
@@ -274,7 +274,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
                   ...fontCondensato,
                   display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-                  flex: "1 1 auto", minWidth: 0, fontSize: 8, lineHeight: 1.05,
+                  flex: "1 1 auto", minWidth: 0, fontSize: 10, lineHeight: 1.05,
                 }}
               >
                 {etichetta}
@@ -2085,7 +2085,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
   // corsia, intestazione del giorno e i relativi font
   const isMobile = useIsMobile();
-  const LANE_H = isMobile ? 26 : 20; // altezza di ogni "corsia" di eventi (px)
+  const LANE_H = isMobile ? 28 : 20; // altezza di ogni "corsia" di eventi (px)
   const HEADER_H = isMobile ? 20 : 26; // spazio per il numero del giorno
   const GAP_LANE = isMobile ? 2 : 4; // spazio verticale tra due corsie di eventi sovrapposti
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
