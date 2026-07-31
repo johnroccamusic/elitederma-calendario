@@ -146,8 +146,17 @@ update public.corsi_date set leva_ids = array[leva_id]
 -- ---------------------------------------------------------
 alter table public.corsi_date add column if not exists data_inizio date;
 alter table public.corsi_date add column if not exists data_fine date;
-update public.corsi_date set data_inizio = data, data_fine = data
-  where data_inizio is null and data is not null;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'corsi_date' and column_name = 'data'
+  ) then
+    update public.corsi_date set data_inizio = data, data_fine = data
+      where data_inizio is null and data is not null;
+  end if;
+end $$;
 
 alter table public.iscritti add column if not exists tutor text;
 alter table public.iscritti add column if not exists telefono text;
