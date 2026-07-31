@@ -68,7 +68,21 @@ function leggiSlugData(testo) {
 }
 const GIORNI = ["L","M","M","G","V","S","D"];
 const COLORE_SABATO = "#F4F9FD"; // celeste tenuissimo, indice 5 = S
-const COLORE_DOMENICA = "#FBEAEA"; // rosso tenuissimo, indice 6 = D
+const COLORE_DOMENICA = "#CCCCCC"; // grigio medio, indice 6 = D
+
+// vero quando la finestra è larga quanto un cellulare: usato per ingrandire
+// le viste calendario (altrimenti le barre dei corsi diventano illeggibili
+// su schermi stretti, dato che lo spazio orizzontale per giorno si riduce
+// molto ma il testo resterebbe alla stessa dimensione)
+function useIsMobile(breakpoint = 700) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth <= breakpoint);
+  useEffect(() => {
+    function aggiorna() { setIsMobile(window.innerWidth <= breakpoint); }
+    window.addEventListener("resize", aggiorna);
+    return () => window.removeEventListener("resize", aggiorna);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 function fmtData(d) {
   const [y, m, day] = d.split("-");
@@ -1957,8 +1971,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
 }
 
 
-const LANE_H = 20; // altezza di ogni "corsia" di eventi (px)
-const HEADER_H = 26; // spazio per il numero del giorno
+const GAP_LANE = 4; // spazio verticale tra due corsie di eventi sovrapposti
 
 // un singolo mese: titolo + griglia con le barre degli eventi
 // idEvidenziato/overrideInizio/overrideFine/onDragBarra/refEvidenziato sono
@@ -1969,6 +1982,12 @@ const HEADER_H = 26; // spazio per il numero del giorno
 // comparire in una settimana diversa, React distrugge e ricrea il suo nodo
 // DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
 function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento }) {
+  // su schermi stretti (cellulare) le barre dei corsi diventano illeggibili
+  // se restano alla dimensione pensata per desktop: qui si ingrandiscono
+  // corsia, intestazione del giorno e i relativi font
+  const isMobile = useIsMobile();
+  const LANE_H = isMobile ? 30 : 20; // altezza di ogni "corsia" di eventi (px)
+  const HEADER_H = isMobile ? 32 : 26; // spazio per il numero del giorno
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
@@ -2007,7 +2026,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
     <div style={{ marginBottom: 34 }}>
       <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>{MESI[mese]} {anno}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
-        {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
+        {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: isMobile ? 13 : 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
       </div>
 
       {settimane.map((settimana, wi) => {
@@ -2018,7 +2037,13 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
         const eventiRiga = eventiMese.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
         const eventiConLane = assegnaLane(eventiRiga);
         const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
-        const rowHeight = HEADER_H + (maxLane + 1) * LANE_H + 6;
+        const numLane = maxLane + 1;
+        // l'altezza deve contenere anche il gap TRA le corsie (GAP_LANE per
+        // ognuna delle numLane-1 giunture): senza, con 3+ corsie sovrapposte
+        // nella stessa settimana la pila di barre sborda oltre il fondo
+        // della casella del giorno, perché lo spazio libero calcolato non
+        // teneva conto di quanto gap si accumula andando avanti
+        const rowHeight = HEADER_H + numLane * LANE_H + Math.max(0, numLane - 1) * GAP_LANE + 6;
 
         return (
           <div key={wi} style={{ position: "relative", marginBottom: 4 }}>
@@ -2034,11 +2059,11 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                     boxSizing: "border-box", cursor: d && onClickGiornoVuoto ? "pointer" : undefined,
                   }}
                 >
-                  {d && <div style={{ ...fontBody, fontSize: 12, color: NAVY, padding: "4px 6px" }}>{d}</div>}
+                  {d && <div style={{ ...fontBody, fontSize: isMobile ? 14 : 12, color: NAVY, padding: "4px 6px" }}>{d}</div>}
                 </div>
               ))}
             </div>
-            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: LANE_H, gap: 4, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: LANE_H, gap: GAP_LANE, pointerEvents: "none" }}>
               {eventiConLane.map((ev) => {
                 const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
@@ -2085,7 +2110,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       color: "#000",
-                      fontSize: 8,
+                      fontSize: isMobile ? 12 : 8,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: evidenziata ? "grab" : "pointer",
@@ -2118,7 +2143,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc),
-                          giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 4, inset: 6,
+                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 10 : 7, gap: 4, inset: 6,
                           continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2,
                         })}
                       </div>
@@ -2496,7 +2521,11 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
         const eventiConLane = assegnaLane(eventiRiga);
         const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
         const barH = 15;
-        const rowHeight = 20 + Math.max(0, maxLane + 1) * barH + 4;
+        const numLane = Math.max(0, maxLane + 1);
+        // vedi MeseGriglia: l'altezza deve contenere anche il gap (3px) tra
+        // ogni coppia di corsie, altrimenti con più corsi sovrapposti la
+        // pila di barre sborda oltre il fondo della casella del giorno
+        const rowHeight = 20 + numLane * barH + Math.max(0, numLane - 1) * 3 + 4;
 
         return (
           <div key={wi} style={{ position: "relative", marginBottom: 3 }}>
