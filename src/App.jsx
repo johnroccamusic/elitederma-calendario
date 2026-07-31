@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfjsWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// build "legacy" invece di quella principale: consigliata dalla stessa
+// pdf.js per i browser che supportano peggio i worker "module" (in
+// particolare Safari/iOS), dove la build principale può innescare un bug
+// interno della libreria durante l'estrazione del testo (es. un fallback
+// a "fake worker" che prende un percorso di codice meno testato)
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import pdfjsWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
 
@@ -3184,41 +3189,49 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   // legge il modulo di iscrizione PDF appena caricato e compila da solo tutor,
   // nome, cognome, telefono, metodo/importo dell'acconto e taglia divisa —
   // solo nei campi ancora vuoti, per non sovrascrivere dati già inseriti a mano
+  // applica i dati letti dal modulo ai campi del form. Con sovrascrivi=false
+  // (comportamento di sempre, al solo caricamento del file) tocca solo i
+  // campi ancora vuoti; con sovrascrivi=true (pulsante "Leggi dati dal
+  // modulo", scelta esplicita dell'utente) sostituisce anche quelli già
+  // compilati a mano
+  function applicaDatiModulo(dati, sovrascrivi) {
+    const salta = (giaCompilato) => !sovrascrivi && giaCompilato;
+    if (dati.tutor && !salta(tutor.trim())) setTutor(dati.tutor.toUpperCase());
+    if (dati.nome && !salta(nome.trim())) setNome(dati.nome.toUpperCase());
+    if (dati.cognome && !salta(cognome.trim())) setCognome(dati.cognome.toUpperCase());
+    if (dati.telefono && !salta(telefono.trim())) setTelefono(dati.telefono.toUpperCase());
+
+    if (dati.tagliaDivisa && !salta(tagliaDivisa)) {
+      const taglia = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
+      if (taglia) setTagliaDivisa(taglia);
+    }
+
+    if (dati.tipoCorso && !salta(pacchettoKit.trim())) setPacchettoKit(dati.tipoCorso.toUpperCase());
+
+    if (dati.tipoPagamentoSaldo && !salta(accordiCommerciali.trim())) setAccordiCommerciali(dati.tipoPagamentoSaldo.toUpperCase());
+
+    if (dati.scelteModelle && !salta(richiedeModelle !== "")) {
+      const testoModelle = dati.scelteModelle.toLowerCase();
+      if (testoModelle.includes("cercherò io") || testoModelle.includes("cerchero io")) setRichiedeModelle("no");
+    }
+
+    if ((dati.accontoMetodo || dati.accontoImporto) && !salta(pagAcconto.totale !== "")) {
+      const metodo = ["Sito", "Bonifico", "Pos", "Contanti", "Rate"].find((m) => m.toLowerCase() === (dati.accontoMetodo || "").toLowerCase());
+      setPagAcconto((prev) => {
+        let next = metodo ? { ...prev, metodo } : prev;
+        if (dati.accontoImporto) next = conTotaleAggiornato(next, dati.accontoImporto.replace(",", "."), true);
+        return next;
+      });
+    }
+  }
+
   async function gestisciFileModulo(file) {
     setFileIscrizione(file);
     if (!file || file.type !== "application/pdf") return;
     try {
       const dati = await estraiDatiModuloPdf(file);
       if (!dati) { setMsg("Non ho trovato i dati attesi nel modulo PDF: da compilare a mano."); return; }
-
-      if (dati.tutor && !tutor.trim()) setTutor(dati.tutor.toUpperCase());
-      if (dati.nome && !nome.trim()) setNome(dati.nome.toUpperCase());
-      if (dati.cognome && !cognome.trim()) setCognome(dati.cognome.toUpperCase());
-      if (dati.telefono && !telefono.trim()) setTelefono(dati.telefono.toUpperCase());
-
-      if (dati.tagliaDivisa && !tagliaDivisa) {
-        const taglia = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
-        if (taglia) setTagliaDivisa(taglia);
-      }
-
-      if (dati.tipoCorso && !pacchettoKit.trim()) setPacchettoKit(dati.tipoCorso.toUpperCase());
-
-      if (dati.tipoPagamentoSaldo && !accordiCommerciali.trim()) setAccordiCommerciali(dati.tipoPagamentoSaldo.toUpperCase());
-
-      if (dati.scelteModelle && richiedeModelle === "") {
-        const testoModelle = dati.scelteModelle.toLowerCase();
-        if (testoModelle.includes("cercherò io") || testoModelle.includes("cerchero io")) setRichiedeModelle("no");
-      }
-
-      if ((dati.accontoMetodo || dati.accontoImporto) && pagAcconto.totale === "") {
-        const metodo = ["Sito", "Bonifico", "Pos", "Contanti", "Rate"].find((m) => m.toLowerCase() === (dati.accontoMetodo || "").toLowerCase());
-        setPagAcconto((prev) => {
-          let next = metodo ? { ...prev, metodo } : prev;
-          if (dati.accontoImporto) next = conTotaleAggiornato(next, dati.accontoImporto.replace(",", "."), true);
-          return next;
-        });
-      }
-
+      applicaDatiModulo(dati, false);
       setMsg("Dati letti dal modulo PDF e inseriti nel form: controllali prima di salvare.");
     } catch (e) {
       // capita con alcuni PDF (bug interno della libreria di lettura, non
@@ -3226,6 +3239,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
       // solo della lettura automatica dei campi che non è riuscita, quindi
       // si tratta come il caso "nessun dato trovato" invece che come un
       // errore bloccante — si compila tutto a mano, senza impatti
+      setMsg("Non sono riuscito a leggere automaticamente questo modulo PDF: da compilare a mano.");
+    }
+  }
+
+  // pulsante esplicito "Leggi dati dal modulo": a differenza della lettura
+  // automatica al caricamento (che tocca solo i campi vuoti), qui l'utente
+  // sceglie consapevolmente di rileggere il PDF e sovrascrivere anche i
+  // campi già compilati a mano — da qui l'avviso prima di procedere
+  async function rileggiModuloForzato() {
+    if (!fileIscrizione) { setMsg("Carica prima il modulo PDF."); return; }
+    if (!window.confirm("Vuoi leggere i dati dal modulo caricato? La lettura sovrascriverà i dati eventualmente già inseriti a mano.")) return;
+    try {
+      const dati = await estraiDatiModuloPdf(fileIscrizione);
+      if (!dati) { setMsg("Non ho trovato i dati attesi nel modulo PDF: da compilare a mano."); return; }
+      applicaDatiModulo(dati, true);
+      setMsg("Dati letti dal modulo PDF e inseriti nel form (sovrascritti): controllali prima di salvare.");
+    } catch (e) {
       setMsg("Non sono riuscito a leggere automaticamente questo modulo PDF: da compilare a mano.");
     }
   }
@@ -3521,8 +3551,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
-            <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia/pacchetto/modelle/accordi commerciali vengono letti e inseriti automaticamente nei campi ancora vuoti.</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="file" accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
+              <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione}>Leggi dati dal modulo</Button>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
+              Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia/pacchetto/modelle/accordi commerciali vengono letti e inseriti automaticamente nei campi ancora vuoti. "Leggi dati dal modulo" li rilegge e sostituisce anche quelli già compilati a mano.
+            </div>
           </Field>
           <Field label="Screen acconto (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
