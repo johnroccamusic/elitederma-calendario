@@ -1960,7 +1960,11 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                                 const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
                                 const liberi = Math.max(0, max - occupati);
                                 return (
-                                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, padding: "5px 10px", whiteSpace: "nowrap" }}>
+                                  <span
+                                    onClick={onApriData ? () => onApriData(cd) : undefined}
+                                    title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
+                                    style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, padding: "5px 10px", whiteSpace: "nowrap", cursor: onApriData ? "pointer" : undefined }}
+                                  >
                                     {liberi} POST{liberi === 1 ? "O" : "I"}
                                   </span>
                                 );
