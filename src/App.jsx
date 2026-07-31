@@ -4249,8 +4249,9 @@ export default function App() {
     setSchedaKey((k) => k + 1);
   }
 
-  // swipe da sinistra a destra su mobile → un passo indietro nella cronologia
-  // (come i pulsanti "indietro")
+  // swipe da sinistra a destra su mobile → un passo indietro nella cronologia,
+  // swipe da destra a sinistra → un passo avanti (stessa cosa dei pulsanti
+  // "Indietro"/"Avanti" in alto, gesto equivalente)
   useEffect(() => {
     let startX = 0, startY = 0, tracking = false;
     function onTouchStart(e) {
@@ -4264,8 +4265,9 @@ export default function App() {
       tracking = false;
       const dx = e.changedTouches[0].clientX - startX;
       const dy = e.changedTouches[0].clientY - startY;
-      if (dx > 80 && Math.abs(dy) < Math.abs(dx) * 0.6) {
-        vaiIndietro();
+      if (Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) * 0.6) {
+        if (dx > 0) vaiIndietro();
+        else vaiAvanti();
       }
     }
     window.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -4274,7 +4276,7 @@ export default function App() {
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchend", onTouchEnd);
     };
-  }, [pilaIndietro]);
+  }, [pilaIndietro, pilaAvanti]);
 
   if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={() => setOk(true)} /></div>;
 
