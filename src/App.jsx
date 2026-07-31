@@ -4602,7 +4602,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 15, color: NAVY }}>
 
                       {i.pacchetto_kit && (
-                        <div style={{ marginBottom: 6 }}><span style={{ color: GRAFITE }}>Pacchetto/Kit:</span> <b style={{ color: NAVY }}>{i.pacchetto_kit}</b></div>
+                        <div style={{ marginBottom: 14 }}><span style={{ color: GRAFITE }}>Pacchetto/Kit:</span> <b style={{ color: NAVY }}>{i.pacchetto_kit}</b></div>
                       )}
                       {i.totale_pattuito != null && (
                         <div style={{ marginBottom: 6 }}>
