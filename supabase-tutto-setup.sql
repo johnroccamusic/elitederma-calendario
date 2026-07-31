@@ -247,4 +247,22 @@ create policy "accesso interno diploma-fonts" on storage.objects for all to anon
   using (bucket_id = 'diploma-fonts') with check (bucket_id = 'diploma-fonts');
 
 
+-- ---------------------------------------------------------
+-- 8) Eccezioni diplomi: diplomi alternativi assegnabili al singolo
+-- iscritto (template e/o data diversi da quelli normali del corso)
+-- ---------------------------------------------------------
+create table if not exists public.diploma_eccezioni (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  file_path text not null,
+  ts timestamptz not null default now()
+);
+alter table public.diploma_eccezioni enable row level security;
+drop policy if exists "accesso interno diploma_eccezioni" on public.diploma_eccezioni;
+create policy "accesso interno diploma_eccezioni" on public.diploma_eccezioni for all to anon using (true) with check (true);
+
+alter table public.iscritti add column if not exists diploma_eccezione_id uuid references public.diploma_eccezioni(id) on delete set null;
+alter table public.iscritti add column if not exists diploma_eccezione_data date;
+
+
 notify pgrst, 'reload schema';

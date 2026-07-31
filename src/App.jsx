@@ -1612,7 +1612,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
         <Button onClick={() => setShowAssistenteModal(true)}>Aggiungi Assistente</Button>
         <Button onClick={() => setShowLevaModal(true)}>Aggiungi Leva</Button>
         <Button variant="ghost" onClick={onApriAssegnazioneMaster}>Assegnazione Master</Button>
-        <Button variant="ghost" onClick={onApriFontDiplomi}>Font Diplomi</Button>
+        <Button variant="ghost" onClick={onApriFontDiplomi}>Setting diplomi</Button>
       </div>
 
       <div style={cardStyle}>
@@ -1996,9 +1996,12 @@ const ELEMENTI_DIPLOMA = [
 // colore/allineamento di nome/città-data/firma — sempre gli stessi su
 // tutti i corsi, calibrati qui trascinando 3 testi di prova sopra
 // l'anteprima di un diploma di riferimento caricato apposta per questo
-function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
+function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
   const [config, setConfig] = useState(fontDiplomi || CONFIG_DIPLOMI_DEFAULT);
   const [msg, setMsg] = useState("");
+  const [nomeEccezione, setNomeEccezione] = useState("");
+  const [fileEccezione, setFileEccezione] = useState(null);
+  const [salvandoEccezione, setSalvandoEccezione] = useState(false);
   const [fileRiferimentoNuovo, setFileRiferimentoNuovo] = useState(null);
   const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
@@ -2045,6 +2048,33 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
     const { error } = await supabase.storage.from(bucket).upload(percorso, file);
     if (error) throw error;
     return percorso;
+  }
+
+  // "Eccezioni diplomi": diplomi caricati qui una volta per tutte, poi
+  // scelti sul singolo iscritto (in Contabilità classe) al posto del
+  // template normale del corso
+  async function aggiungiEccezione() {
+    if (!nomeEccezione.trim()) { setMsg("Dai un nome all'eccezione."); return; }
+    if (!fileEccezione) { setMsg("Scegli il file PDF dell'eccezione."); return; }
+    setSalvandoEccezione(true);
+    try {
+      const percorso = await caricaFile(fileEccezione, "diploma-templates", "eccezione");
+      const { error } = await supabase.from("diploma_eccezioni").insert({ nome: nomeEccezione.trim(), file_path: percorso });
+      if (error) { setMsg("Errore: " + error.message); setSalvandoEccezione(false); return; }
+      await ricarica();
+      setNomeEccezione(""); setFileEccezione(null);
+      setMsg("Eccezione diploma aggiunta.");
+    } catch (e) {
+      setMsg("Errore nel caricamento dell'eccezione: " + e.message);
+    }
+    setSalvandoEccezione(false);
+  }
+  async function eliminaEccezione(id) {
+    if (!window.confirm("Eliminare questa eccezione diploma? Gli iscritti che la usano torneranno al template normale del corso.")) return;
+    const { error } = await supabase.from("diploma_eccezioni").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+    setMsg("Eccezione diploma eliminata.");
   }
 
   async function gestisciUploadFont(file, campo) {
@@ -2179,11 +2209,41 @@ function FontDiplomi({ fontDiplomi, ricarica, onBack }) {
 
   return (
     <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Font Diplomi" onBack={onBack} />
+      <TopBar title="Setting diplomi" onBack={onBack} />
       <div style={subStyle}>
         Impostazioni globali per la stampa dei diplomi: i 3 font e la posizione di nome, città/data e firma sono
         uguali per tutti i corsi. Carica qui un diploma di riferimento per vedere dove finiranno i testi e
         trascinarli nel punto giusto.
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Eccezioni diplomi</div>
+        <div style={subStyle}>
+          Diplomi alternativi, caricati qui una volta per tutte: da "Contabilità classe" si può assegnare
+          un'eccezione a un singolo iscritto, che verrà stampata al posto del template normale del corso.
+        </div>
+        <Field label="Nome eccezione">
+          <input style={inputStyle} value={nomeEccezione} onChange={(e) => setNomeEccezione(e.target.value)} placeholder="es. Diploma rifatto per errore stampa" />
+        </Field>
+        <Field label="File diploma (PDF)">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileEccezione(e.target.files?.[0] || null)} />
+            {fileEccezione ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file caricato</span>}
+          </div>
+        </Field>
+        <Button onClick={aggiungiEccezione} disabled={salvandoEccezione}>{salvandoEccezione ? "Salvataggio…" : "Salva eccezione"}</Button>
+
+        {(diplomaEccezioni || []).length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            {diplomaEccezioni.map((d) => (
+              <RigaEliminabile
+                key={d.id}
+                label={<span style={{ display: "flex", alignItems: "center", gap: 10 }}>{d.nome} <BadgeFileCaricato /></span>}
+                onDelete={() => eliminaEccezione(d.id)}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={cardStyle}>
@@ -3561,7 +3621,7 @@ function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -3592,6 +3652,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [caricando, setCaricando] = useState(false);
 
   const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
+  const [eccezioneApertaId, setEccezioneApertaId] = useState(null); // id dell'iscritto per cui si sta scegliendo l'eccezione diploma
   const [msg, setMsg] = useState("");
   const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
   const [mostraGestione, setMostraGestione] = useState(sottoVistaIniziale?.mostraGestione ?? false);
@@ -3703,15 +3764,38 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       const fontData = await embedFontOFallback(config.font_data_path);
       const fontFirma = await embedFontOFallback(config.font_firma_path);
 
+      // un iscritto con un'"eccezione diploma" assegnata (da Contabilità
+      // classe) usa quel template al posto di quello del corso: si
+      // scarica una sola volta per eccezione, anche se piu' iscritti la
+      // condividono. Nome allievo e master restano quelli calcolati
+      // normalmente: cambiano solo il template e/o la data
+      const cacheDocEccezioni = new Map();
+      async function docTemplatePer(iscritto) {
+        const eccezione = iscritto.diploma_eccezione_id
+          ? (diplomaEccezioni || []).find((d) => d.id === iscritto.diploma_eccezione_id)
+          : null;
+        if (!eccezione) return templateDoc;
+        if (!cacheDocEccezioni.has(eccezione.id)) {
+          const bytesEccezione = await scaricaBytes("diploma-templates", eccezione.file_path);
+          cacheDocEccezioni.set(eccezione.id, await PDFDocument.load(bytesEccezione));
+        }
+        return cacheDocEccezioni.get(eccezione.id);
+      }
+
       for (const iscritto of listaIscritti) {
-        const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
+        const docDaUsare = await docTemplatePer(iscritto);
+        const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
         outputPdf.addPage(pagina);
+
+        const testoDataIscritto = iscritto.diploma_eccezione_data
+          ? `${toTitleCase(loc?.nome || "")}, ${fmtData(iscritto.diploma_eccezione_data)}`
+          : testoData;
 
         disegnaTestoDiploma(pagina, toTitleCase(`${iscritto.nome} ${iscritto.cognome}`), {
           posX: config.nome_pos_x, posY: config.nome_pos_y, fontSize: config.nome_font_size,
           colore: config.nome_colore, allineamento: config.nome_allineamento, font: fontNome,
         });
-        disegnaTestoDiploma(pagina, testoData, {
+        disegnaTestoDiploma(pagina, testoDataIscritto, {
           posX: config.data_pos_x, posY: config.data_pos_y, fontSize: config.data_font_size,
           colore: config.data_colore, allineamento: config.data_allineamento, font: fontData,
         });
@@ -4019,6 +4103,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
   async function salvaNotaRicontatto(id, valore) {
     const { error } = await supabase.from("iscritti").update({ note_ricontatto: valore.trim() || null }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  // eccezione diploma: sostituisce, solo per questo iscritto, il template
+  // del corso e/o la data mostrata sul diploma stampato — nome allievo e
+  // master restano quelli calcolati normalmente
+  async function impostaEccezioneDiploma(id, eccezioneId) {
+    const { error } = await supabase.from("iscritti").update({ diploma_eccezione_id: eccezioneId || null }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function impostaEccezioneData(id, data) {
+    const { error } = await supabase.from("iscritti").update({ diploma_eccezione_data: data || null }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
@@ -4403,6 +4501,50 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
                       style={{ ...inputStyle, fontSize: 13, textTransform: "uppercase" }}
                     />
+                  </div>
+                )}
+                {mostraGestione && (
+                  <div style={{ marginTop: 8 }}>
+                    <Button
+                      variant={i.diploma_eccezione_id || i.diploma_eccezione_data ? "primary" : "ghost"}
+                      onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
+                      style={{ padding: "6px 12px", fontSize: 13 }}
+                    >
+                      {i.diploma_eccezione_id || i.diploma_eccezione_data ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
+                    </Button>
+                  </div>
+                )}
+                {mostraGestione && eccezioneApertaId === i.id && (
+                  <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
+                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>
+                      Eccezione diploma per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:
+                    </div>
+                    <Field label="Diploma da usare (al posto del template normale del corso)">
+                      <select
+                        value={i.diploma_eccezione_id || ""}
+                        onChange={(e) => impostaEccezioneDiploma(i.id, e.target.value || null)}
+                        style={inputStyle}
+                      >
+                        <option value="">Nessuna — usa il template normale del corso</option>
+                        {(diplomaEccezioni || []).map((d) => (
+                          <option key={d.id} value={d.id}>{d.nome}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Data da mostrare sul diploma (opzionale — se vuota resta la data del corso)">
+                      <input
+                        type="date"
+                        value={i.diploma_eccezione_data || ""}
+                        min={corsoData.data_inizio}
+                        max={corsoData.data_fine}
+                        onChange={(e) => impostaEccezioneData(i.id, e.target.value || null)}
+                        style={inputStyle}
+                      />
+                    </Field>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 }}>
+                      Il nome dell'allievo e il nome della master restano invariati: cambiano solo il template del diploma e/o la data.
+                    </div>
+                    <Button variant="ghost" onClick={() => setEccezioneApertaId(null)}>Chiudi</Button>
                   </div>
                 )}
                 {mostraGestione && spostaIscrittoId === i.id && (
@@ -4878,6 +5020,7 @@ export default function App() {
   const [assistente, setAssistente] = useState([]);
   const [leva, setLeva] = useState([]);
   const [fontDiplomi, setFontDiplomi] = useState(null); // riga singola di impostazioni globali stampa diplomi, o null se non ancora creata
+  const [diplomaEccezioni, setDiplomaEccezioni] = useState([]); // diplomi "eccezione" caricabili sul singolo iscritto, al posto del template del corso
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -4889,7 +5032,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -4899,6 +5042,7 @@ export default function App() {
       supabase.from("assistente").select("*").order("nome"),
       supabase.from("leva").select("*").order("nome"),
       supabase.from("font_diplomi").select("*").limit(1),
+      supabase.from("diploma_eccezioni").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -4909,6 +5053,7 @@ export default function App() {
     setAssistente(a.data || []);
     setLeva(lv.data || []);
     setFontDiplomi(fd.data?.[0] || null);
+    setDiplomaEccezioni(de.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -5245,7 +5390,7 @@ export default function App() {
       )}
 
       {view === "fontdiplomi" && (
-        <FontDiplomi fontDiplomi={fontDiplomi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <FontDiplomi fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "statistiche" && (
@@ -5290,6 +5435,7 @@ export default function App() {
           iscritti={iscritti}
           master={master}
           fontDiplomi={fontDiplomi}
+          diplomaEccezioni={diplomaEccezioni}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
