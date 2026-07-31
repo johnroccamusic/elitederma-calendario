@@ -2061,7 +2061,11 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
       const percorso = await caricaFile(fileEccezione, "diploma-templates", "eccezione");
       const { error } = await supabase.from("diploma_eccezioni").insert({ nome: nomeEccezione.trim(), file_path: percorso });
       if (error) { setMsg("Errore: " + error.message); setSalvandoEccezione(false); return; }
-      await ricarica();
+      // il ricaricamento completo dei dati dell'app (9 tabelle) non serve
+      // per mostrare subito il salvataggio: la lista qui sotto si
+      // aggiorna da sola non appena la risposta arriva, senza dover
+      // bloccare l'utente in attesa
+      ricarica();
       setNomeEccezione(""); setFileEccezione(null);
       setMsg("Eccezione diploma aggiunta.");
     } catch (e) {
