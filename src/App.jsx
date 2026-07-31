@@ -3399,7 +3399,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
               <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione}>Leggi dati dal modulo</Button>
             </div>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
-              Caricando il PDF del modulo, tutor/nome/cognome/telefono/acconto/taglia/pacchetto/modelle/accordi commerciali vengono letti e inseriti automaticamente nei campi ancora vuoti. <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
+              <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
             </div>
           </Field>
 
