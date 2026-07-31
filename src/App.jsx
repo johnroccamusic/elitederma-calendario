@@ -2965,9 +2965,13 @@ function AllegatoLink({ percorso, etichetta }) {
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, ricarica, onBack }) {
-  const [vista, setVista] = useState("lista"); // 'lista' | 'form'
-  const [modificandoId, setModificandoId] = useState(null); // id dell'iscritto in modifica, null se è una nuova iscrizione
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
+  // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
+  // dal genitore (App) invece che sempre dai default: quando i pulsanti
+  // Indietro/Avanti riportano qui con uno stato salvato, il genitore
+  // rimonta questo componente (via key) passando lo stato da ripristinare
+  const [vista, setVista] = useState(sottoVistaIniziale?.vista ?? "lista"); // 'lista' | 'form'
+  const [modificandoId, setModificandoId] = useState(sottoVistaIniziale?.modificandoId ?? null); // id dell'iscritto in modifica, null se è una nuova iscrizione
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -2994,8 +2998,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, r
   const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
   const [msg, setMsg] = useState("");
   const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
-  const [mostraGestione, setMostraGestione] = useState(false);
+  const [mostraGestione, setMostraGestione] = useState(sottoVistaIniziale?.mostraGestione ?? false);
   const [linkMaster, setLinkMaster] = useState("");
+
+  // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
+  // quale iscritto in modifica, contabilità aperta o no): è così che i
+  // pulsanti Indietro/Avanti possono registrare anche questi passaggi
+  // interni, non solo i cambi di schermata principale
+  useEffect(() => {
+    onCambiaSottoVista?.({ vista, modificandoId, mostraGestione });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vista, modificandoId, mostraGestione]);
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
@@ -4173,15 +4186,32 @@ export default function App() {
   // cronologia di navigazione tra le schermate (view + eventuale corsoDataAperta
   // per "scheda"): senza, tornare indietro (swipe o pulsante) riportava sempre
   // e solo alla home invece che alla schermata da cui si era davvero venuti,
-  // costringendo a ricominciare da capo la ricerca del corso/iscritto
-  const statoAttualeRef = React.useRef({ view, corsoDataAperta });
+  // costringendo a ricominciare da capo la ricerca del corso/iscritto.
+  // sottoVistaScheda tiene traccia anche dei passaggi INTERNI a SchedaData
+  // (lista iscritti / form iscrivi-modifica / contabilità classe), che non
+  // cambiano "view" ma sono comunque passi su cui si vuole poter tornare.
+  const [sottoVistaScheda, setSottoVistaScheda] = useState(null);
+  // SchedaData inizializza vista/modificandoId/mostraGestione una sola volta,
+  // al primo render (useState): per "ripristinarli" quando Indietro/Avanti
+  // riportano a uno stato salvato bisogna rimontare il componente da zero,
+  // passandogli quello stato come valore iniziale — cambiare questa key è
+  // il modo per forzare React a farlo
+  const [schedaKey, setSchedaKey] = useState(0);
+  function stessoSottoVista(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    return a.vista === b.vista && a.modificandoId === b.modificandoId && a.mostraGestione === b.mostraGestione;
+  }
+
+  const statoAttualeRef = React.useRef({ view, corsoDataAperta, sottoVistaScheda });
   const navigazioneStoricoRef = React.useRef(false); // true mentre Indietro/Avanti stanno applicando un cambiamento (per non registrarlo di nuovo)
   const [pilaIndietro, setPilaIndietro] = useState([]);
   const [pilaAvanti, setPilaAvanti] = useState([]);
 
   useEffect(() => {
     const precedente = statoAttualeRef.current;
-    if (precedente.view === view && precedente.corsoDataAperta === corsoDataAperta) return;
+    const cambiato = precedente.view !== view || precedente.corsoDataAperta !== corsoDataAperta || !stessoSottoVista(precedente.sottoVistaScheda, sottoVistaScheda);
+    if (!cambiato) return;
     if (navigazioneStoricoRef.current) {
       navigazioneStoricoRef.current = false;
     } else {
@@ -4190,8 +4220,8 @@ export default function App() {
       setPilaIndietro((p) => [...p, precedente]);
       setPilaAvanti([]);
     }
-    statoAttualeRef.current = { view, corsoDataAperta };
-  }, [view, corsoDataAperta]);
+    statoAttualeRef.current = { view, corsoDataAperta, sottoVistaScheda };
+  }, [view, corsoDataAperta, sottoVistaScheda]);
 
   function vaiIndietro() {
     if (pilaIndietro.length === 0) return;
@@ -4199,9 +4229,16 @@ export default function App() {
     navigazioneStoricoRef.current = true;
     setPilaAvanti((p) => [...p, statoAttualeRef.current]);
     setPilaIndietro((p) => p.slice(0, -1));
-    statoAttualeRef.current = precedente;
+    // statoAttualeRef.current NON va aggiornato qui: deve restare com'era
+    // finché l'effetto qui sopra non vede il cambiamento vero e proprio
+    // (dopo che view/corsoDataAperta/sottoVistaScheda sono stati applicati),
+    // altrimenti l'effetto troverebbe "nessuna differenza" e non
+    // consumerebbe mai il flag navigazioneStoricoRef, che resterebbe
+    // bloccato a true e romperebbe ogni Indietro/Avanti successivo
     setView(precedente.view);
     setCorsoDataAperta(precedente.corsoDataAperta);
+    setSottoVistaScheda(precedente.sottoVistaScheda);
+    setSchedaKey((k) => k + 1);
   }
   function vaiAvanti() {
     if (pilaAvanti.length === 0) return;
@@ -4209,9 +4246,10 @@ export default function App() {
     navigazioneStoricoRef.current = true;
     setPilaIndietro((p) => [...p, statoAttualeRef.current]);
     setPilaAvanti((p) => p.slice(0, -1));
-    statoAttualeRef.current = successivo;
     setView(successivo.view);
     setCorsoDataAperta(successivo.corsoDataAperta);
+    setSottoVistaScheda(successivo.sottoVistaScheda);
+    setSchedaKey((k) => k + 1);
   }
 
   // swipe da sinistra a destra su mobile → un passo indietro nella cronologia
@@ -4253,6 +4291,8 @@ export default function App() {
 
   function apriData(cd) {
     setCorsoDataAperta(cd.id);
+    setSottoVistaScheda({ vista: "lista", modificandoId: null, mostraGestione: false });
+    setSchedaKey((k) => k + 1);
     setView("scheda");
   }
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
@@ -4438,6 +4478,7 @@ export default function App() {
 
       {view === "scheda" && corsoDataApertaObj && (
         <SchedaData
+          key={schedaKey}
           corsoData={corsoDataApertaObj}
           corsi={corsi}
           location={location}
@@ -4446,6 +4487,8 @@ export default function App() {
           master={master}
           ricarica={fetchDati}
           onBack={() => setView("home")}
+          sottoVistaIniziale={sottoVistaScheda}
+          onCambiaSottoVista={setSottoVistaScheda}
         />
       )}
     </div>
