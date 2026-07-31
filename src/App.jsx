@@ -4124,6 +4124,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
+  async function rimuoviEccezioneDiploma(id) {
+    const { error } = await supabase.from("iscritti").update({ diploma_eccezione_id: null, diploma_eccezione_data: null }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   async function eseguiSpostamento(iscritto, cdTarget, corsoTarget, locTarget) {
     const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
@@ -4522,11 +4527,25 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
                       </Button>
                       {impostata && (
-                        <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
-                          {eccezioneAttiva ? eccezioneAttiva.nome : ""}
-                          {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
-                          {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
-                        </span>
+                        <>
+                          <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+                            {eccezioneAttiva ? eccezioneAttiva.nome : ""}
+                            {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
+                            {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
+                          </span>
+                          <button
+                            onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
+                            title="Rimuovi eccezione diploma"
+                            style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                              <path d="M10 11v6" /><path d="M14 11v6" />
+                              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                            </svg>
+                          </button>
+                        </>
                       )}
                     </div>
                   );
