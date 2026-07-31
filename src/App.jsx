@@ -21,6 +21,7 @@ const GRAFITE = "#54585F";
 
 const fontDisplay = { fontFamily: "'Roboto',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
+const fontCondensato = { fontFamily: "'Sofia Sans Condensed',sans-serif" }; // più stretto del normale a parità di dimensione: usato per i nomi dei corsi sulle barre del calendario, dove lo spazio orizzontale è poco
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
@@ -222,9 +223,10 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
         <div style={{ height: "100%", display: "flex", alignItems: "center", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
           <span
             style={{
+              ...fontCondensato,
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-              fontSize: 9, lineHeight: 1.1,
+              fontSize: 8, lineHeight: 1.05,
             }}
           >
             {etichetta}
@@ -233,7 +235,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
       );
     }
     return (
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: `0 ${inset}px`, height: "100%", display: "flex", alignItems: "center", boxSizing: "border-box" }}>
+      <span style={{ ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: `0 ${inset}px`, height: "100%", display: "flex", alignItems: "center", boxSizing: "border-box" }}>
         {etichetta}
       </span>
     );
@@ -269,15 +271,16 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             isMobile ? (
               <span
                 style={{
+                  ...fontCondensato,
                   display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-                  flex: "1 1 auto", minWidth: 0, fontSize: 9, lineHeight: 1.1,
+                  flex: "1 1 auto", minWidth: 0, fontSize: 8, lineHeight: 1.05,
                 }}
               >
                 {etichetta}
               </span>
             ) : (
-              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
+              <span style={{ ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
             )
           )}
           {indice != null && !(isMobile && i === 0) && (
@@ -2207,7 +2210,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       color: "#000",
-                      fontSize: isMobile ? 10 : 8,
+                      fontSize: isMobile ? 9 : 8,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: evidenziata ? "grab" : "pointer",
@@ -2240,7 +2243,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
-                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 9 : 7, gap: 4, inset: 6,
+                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: 4, inset: 6,
                           continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2, isMobile,
                         })}
                       </div>
