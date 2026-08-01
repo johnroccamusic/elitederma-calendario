@@ -5898,8 +5898,10 @@ export default function App() {
       <div style={{ height: 44 }} />
       {view === "home" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
-          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
-          <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto" }} />
+          </div>
+          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 18, marginBottom: 30 }}>CALENDARIO CORSI</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
             <Button onClick={apriGestioneDate} style={{ width: 140, textAlign: "center" }}>Gestione date</Button>
             <Button onClick={apriStatistiche} style={{ width: 140, textAlign: "center" }}>Statistiche</Button>
