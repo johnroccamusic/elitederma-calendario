@@ -26,7 +26,7 @@ const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle sc
 const MUTED = "#8B8FA3";
 const GRAFITE = "#54585F";
 
-const fontDisplay = { fontFamily: "'Roboto',sans-serif", fontWeight: 500 };
+const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
 const fontCondensato = { fontFamily: "'Sofia Sans Condensed',sans-serif" }; // più stretto del normale a parità di dimensione: usato per i nomi dei corsi sulle barre del calendario, dove lo spazio orizzontale è poco
 
@@ -5897,11 +5897,11 @@ export default function App() {
           contenuto di ogni schermata invece di limitarsi ad affiancarlo */}
       <div style={{ height: 44 }} />
       {view === "home" && (
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 20px 60px" }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto" }} />
           </div>
-          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 18, marginBottom: 30 }}>CALENDARIO CORSI</div>
+          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 44, marginBottom: 30 }}>CALENDARIO CORSI</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
             <Button onClick={apriGestioneDate} style={{ width: 140, textAlign: "center" }}>Gestione date</Button>
             <Button onClick={apriStatistiche} style={{ width: 140, textAlign: "center" }}>Statistiche</Button>
