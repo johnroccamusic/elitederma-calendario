@@ -1976,14 +1976,12 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
               onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
               onBlur={() => setApriFiltroMasterDate(false)}
             />
-            {(filtroCorsoDate || filtroCittaDate || filtroMasterDate) && (
-              <button
-                onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                Reset filtri
-              </button>
-            )}
+            <button
+              onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+              style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
+            >
+              Reset filtri
+            </button>
           </div>
         </div>
 
@@ -3136,10 +3134,10 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
             </div>
           {Object.keys(c.mesi)
             .sort()
-            .map((chiaveMese) => {
+            .map((chiaveMese, mIdx) => {
               const gruppoMese = c.mesi[chiaveMese];
               return (
-                <div key={chiaveMese} style={{ marginBottom: 14 }}>
+                <div key={chiaveMese} style={{ marginBottom: 14, paddingTop: mIdx > 0 ? 14 : 0, borderTop: mIdx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
                   <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
                     {gruppoMese.etichetta}
                   </div>
@@ -3148,7 +3146,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
                     .map((cd, i) => {
                       const corso = corsoById[cd.corso_id];
-                      const sfondoRiga = i % 2 === 0 ? BG : "#fff";
+                      const sfondoRiga = BG;
                       const coloreBadge = i % 2 === 0 ? { bg: "#F3E3C9", testo: "#7A5A22" } : { bg: "#DCEAFB", testo: "#1D4ED8" };
                       return onEdit ? (
                         <div key={cd.id} style={{ marginBottom: 8 }}>
@@ -6040,14 +6038,12 @@ export default function App() {
                 onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
                 onBlur={() => setApriFiltroMasterHome(false)}
               />
-              {(filtroCorsoHome || filtroCittaHome || filtroMasterHome) && (
-                <button
-                  onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-                  style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
-                >
-                  Reset filtri
-                </button>
-              )}
+              <button
+                onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
+                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                Reset filtri
+              </button>
             </div>
           </div>
 
