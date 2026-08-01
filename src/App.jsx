@@ -1641,7 +1641,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
       </div>
 
       <div style={cardStyle}>
-        <div style={hStyle}>Aggiungi data</div>
+        <div style={{ ...hStyle, textAlign: "center", textTransform: "uppercase" }}>Aggiungi data</div>
         <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca due volte un corso già esistente per eliminarlo.</div>
         <SelettoreCalendario
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
