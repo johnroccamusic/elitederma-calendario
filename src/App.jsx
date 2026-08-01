@@ -549,6 +549,19 @@ function testiSegnaposto(listaIscritti) {
   });
   return mappa;
 }
+// quando si apre uno dei filtri "Filtra per..." si vuole vedere subito
+// l'elenco delle opzioni, non solo il <select> chiuso con la voce
+// generica selezionata: appena il select compare nel DOM, gli si dà il
+// focus e (dove supportato) si apre subito il suo menu nativo
+function useApriSelectAlMontaggio(aperto, ref) {
+  useEffect(() => {
+    if (!aperto) return;
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    try { el.showPicker?.(); } catch { /* fuori da un gesto utente diretto in alcuni browser: resta comunque il focus */ }
+  }, [aperto]);
+}
 // "#RRGGBB" → {r,g,b} 0-1, il formato richiesto dalla funzione rgb() di pdf-lib
 function hexInRgb01(hex) {
   const cifre = (hex || "#000000").replace("#", "").match(/.{1,2}/g);
@@ -1467,6 +1480,12 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   const [apriFiltroCorsoDate, setApriFiltroCorsoDate] = useState(false);
   const [apriFiltroCittaDate, setApriFiltroCittaDate] = useState(false);
   const [apriFiltroMasterDate, setApriFiltroMasterDate] = useState(false);
+  const selectFiltroCorsoDateRef = React.useRef(null);
+  const selectFiltroCittaDateRef = React.useRef(null);
+  const selectFiltroMasterDateRef = React.useRef(null);
+  useApriSelectAlMontaggio(apriFiltroCorsoDate, selectFiltroCorsoDateRef);
+  useApriSelectAlMontaggio(apriFiltroCittaDate, selectFiltroCittaDateRef);
+  useApriSelectAlMontaggio(apriFiltroMasterDate, selectFiltroMasterDateRef);
 
   const [dataInModifica, setDataInModifica] = useState(null);
   const [modDataInizio, setModDataInizio] = useState("");
@@ -1693,6 +1712,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
             {apriFiltroCorsoDate && (
               <select
                 autoFocus
+                ref={selectFiltroCorsoDateRef}
                 style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
                 value={filtroCorsoDate}
                 onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
@@ -1713,6 +1733,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
             {apriFiltroCittaDate && (
               <select
                 autoFocus
+                ref={selectFiltroCittaDateRef}
                 style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
                 value={filtroCittaDate}
                 onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
@@ -1733,6 +1754,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
             {apriFiltroMasterDate && (
               <select
                 autoFocus
+                ref={selectFiltroMasterDateRef}
                 style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
                 value={filtroMasterDate}
                 onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
@@ -5614,6 +5636,12 @@ export default function App() {
   const [apriFiltroCorsoHome, setApriFiltroCorsoHome] = useState(false);
   const [apriFiltroCittaHome, setApriFiltroCittaHome] = useState(false);
   const [apriFiltroMasterHome, setApriFiltroMasterHome] = useState(false);
+  const selectFiltroCorsoHomeRef = React.useRef(null);
+  const selectFiltroCittaHomeRef = React.useRef(null);
+  const selectFiltroMasterHomeRef = React.useRef(null);
+  useApriSelectAlMontaggio(apriFiltroCorsoHome, selectFiltroCorsoHomeRef);
+  useApriSelectAlMontaggio(apriFiltroCittaHome, selectFiltroCittaHomeRef);
+  useApriSelectAlMontaggio(apriFiltroMasterHome, selectFiltroMasterHomeRef);
 
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
@@ -5879,6 +5907,7 @@ export default function App() {
               {apriFiltroCorsoHome && (
                 <select
                   autoFocus
+                  ref={selectFiltroCorsoHomeRef}
                   style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
                   value={filtroCorsoHome}
                   onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
@@ -5899,6 +5928,7 @@ export default function App() {
               {apriFiltroCittaHome && (
                 <select
                   autoFocus
+                  ref={selectFiltroCittaHomeRef}
                   style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
                   value={filtroCittaHome}
                   onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
@@ -5919,6 +5949,7 @@ export default function App() {
               {apriFiltroMasterHome && (
                 <select
                   autoFocus
+                  ref={selectFiltroMasterHomeRef}
                   style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
                   value={filtroMasterHome}
                   onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
