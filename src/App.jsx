@@ -86,6 +86,7 @@ function leggiSlugData(testo) {
   return null;
 }
 const GIORNI = ["L","M","M","G","V","S","D"];
+const GIORNI_ABBR = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"]; // solo per l'intestazione del Calendario mensile
 const COLORE_SABATO = "#F4F9FD"; // celeste tenuissimo, indice 5 = S
 const COLORE_DOMENICA = "#CCCCCC"; // grigio medio, indice 6 = D
 
@@ -246,7 +247,7 @@ function etichettaBarra(corso, loc, maxChar = 10) {
 
 // angolo della punta di freccia, misurato dall'orizzontale: più è
 // piccolo più la punta appare schiacciata/allungata invece che a 45°
-const ANGOLO_PUNTA_FRECCIA_GRADI = 20;
+const ANGOLO_PUNTA_FRECCIA_GRADI = 12;
 // quanto deve rientrare orizzontalmente il taglio perché, unito a metà
 // altezza della barra, la punta risultante formi ANGOLO_PUNTA_FRECCIA_GRADI
 function runPuntaFreccia(altezzaPx) {
@@ -2488,16 +2489,18 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
     const d = dragSegnaRef.current;
     if (!d || e.pointerId !== d.pointerId || !contenitoreSegnaRef.current) return;
     const rect = contenitoreSegnaRef.current.getBoundingClientRect();
-    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
     const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
-    setConfigSegna((c) => ({ ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
+    // il nome si stampa sempre centrato tra le due linee di limite: solo
+    // la posizione verticale di ogni posto si trascina, l'orizzontale non
+    // conterebbe comunque nulla in stampa
+    setConfigSegna((c) => ({ ...c, [`${d.chiave}_pos_y`]: y }));
   }
   function fineDragSegna() {
     const d = dragSegnaRef.current;
     if (!d) return;
     dragSegnaRef.current = null;
     setSlotTrascinato(null);
-    aggiornaSegnaposti({ [`${d.chiave}_pos_x`]: configSegna[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: configSegna[`${d.chiave}_pos_y`] });
+    aggiornaSegnaposti({ [`${d.chiave}_pos_y`]: configSegna[`${d.chiave}_pos_y`] });
   }
 
   // due linee verticali trascinabili (solo orizzontalmente), sinistra e
@@ -2885,7 +2888,10 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
                 onPointerCancel={fineDragSegna}
                 style={{
                   position: "absolute",
-                  left: `${configSegna[`${chiave}_pos_x`]}%`,
+                  // il nome si stampa centrato tra le due linee di limite,
+                  // non nella posizione X trascinata (che quindi conta solo
+                  // in verticale): l'anteprima deve riflettere lo stesso
+                  left: `${(configSegna.limite_sx_pos_x + configSegna.limite_dx_pos_x) / 2}%`,
                   top: `${configSegna[`${chiave}_pos_y`]}%`,
                   transform: "translate(-50%, -50%)",
                   display: "flex",
@@ -3431,6 +3437,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   const LANE_H = isMobile ? 28 : 20; // altezza di ogni "corsia" di eventi (px)
   const HEADER_H = isMobile ? 20 : 26; // spazio per il numero del giorno
   const GAP_LANE = isMobile ? 2 : 4; // spazio verticale tra due corsie di eventi sovrapposti
+  const GAP_GIORNO = isMobile ? 6 : 8; // spazio orizzontale tra le colonne dei giorni
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
@@ -3468,8 +3475,8 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   return (
     <div style={{ marginBottom: 34 }}>
       <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>{MESI[mese]} {anno}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 4 }}>
-        {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: isMobile ? 13 : 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: GAP_GIORNO, marginBottom: 4 }}>
+        {GIORNI_ABBR.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: isMobile ? 13 : 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
       </div>
 
       {settimane.map((settimana, wi) => {
@@ -3490,14 +3497,14 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
 
         return (
           <div key={wi} style={{ position: "relative", marginBottom: 4 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: GAP_GIORNO }}>
               {settimana.map((d, i) => (
                 <div
                   key={i}
                   data-data={d ? dateStr(d) : undefined}
                   onClick={d && onClickGiornoVuoto ? () => onClickGiornoVuoto(dateStr(d)) : undefined}
                   style={{
-                    border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8, height: rowHeight,
+                    border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 12, height: rowHeight,
                     background: !d ? "transparent" : i === 5 ? COLORE_SABATO : i === 6 ? COLORE_DOMENICA : "#fff",
                     boxSizing: "border-box", cursor: d && onClickGiornoVuoto ? "pointer" : undefined,
                   }}
@@ -3506,7 +3513,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                 </div>
               ))}
             </div>
-            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: LANE_H, gap: GAP_LANE, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", top: HEADER_H, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: LANE_H, columnGap: GAP_GIORNO, rowGap: GAP_LANE, pointerEvents: "none" }}>
               {eventiConLane.map((ev) => {
                 const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
@@ -3586,7 +3593,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
-                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: 4, inset: 6,
+                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: GAP_GIORNO, inset: 6,
                           continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 6), isMobile,
                         })}
                       </div>
@@ -4532,23 +4539,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
         outputPdf.addPage(pagina);
         const { width: larghezzaPagina, height: altezzaPagina } = pagina.getSize();
-        // il testo è centrato su posX: per non superare NESSUNA delle due
-        // linee, lo spazio disponibile da ogni lato è la distanza (con
-        // segno) tra posX e quella linea; il lato più stretto è quello che
-        // vincola, raddoppiato dà la larghezza massima consentita. Usare
-        // semplicemente la distanza fissa tra le due linee (senza tener
-        // conto di dove sta posX) sbaglia ogni volta che il posto non è
-        // esattamente a metà strada tra sinistra e destra
-        function larghezzaMaxPer(posX) {
-          const spazioSx = (posX - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
-          const spazioDx = (cfg.limite_dx_pos_x - posX) / 100 * larghezzaPagina;
-          return 2 * Math.min(spazioSx, spazioDx);
-        }
+        // il nome si stampa sempre centrato esattamente a metà strada tra
+        // le due linee di limite (non nella posizione X di ogni singolo
+        // posto, che conta solo in verticale): così la larghezza massima è
+        // semplicemente la distanza tra le due linee, senza calcoli
+        // asimmetrici, e non può mai sforare né a sinistra né a destra
+        const posX = (cfg.limite_sx_pos_x + cfg.limite_dx_pos_x) / 2;
+        const larghezzaMax = Math.abs(cfg.limite_dx_pos_x - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
         // riduce fontSizeBase finché "testoRiga" non entra nel limite,
         // poi lo disegna: usata sia per un nome su una riga sola sia per
         // ciascuna delle due righe quando il nome viene spezzato
-        function disegnaRigaConLimite(testoRiga, posX, posY, fontSizeBase) {
-          const larghezzaMax = larghezzaMaxPer(posX);
+        function disegnaRigaConLimite(testoRiga, posY, fontSizeBase) {
           let fontSize = fontSizeBase;
           if (larghezzaMax > 0) {
             const larghezzaTesto = font.widthOfTextAtSize(testoRiga, fontSize);
@@ -4560,10 +4561,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         }
         gruppo.forEach((iscritto, idx) => {
           const slot = SLOT_SEGNAPOSTI[idx];
-          const posX = cfg[`${slot.chiave}_pos_x`];
           const posY = cfg[`${slot.chiave}_pos_y`];
           const testo = testi.get(iscritto.id);
-          const larghezzaMax = larghezzaMaxPer(posX);
           const parole = testo.trim().split(/\s+/);
           // un nome composto da più parole (es. "GIANFRANCA ANTONELLA") che
           // ci sta su una riga sola resta su una riga sola; solo se non ci
@@ -4571,13 +4570,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           // invece di rimpicciolire il font più del necessario
           const staSuUnaRiga = larghezzaMax <= 0 || parole.length < 2 || font.widthOfTextAtSize(testo, cfg.font_size) <= larghezzaMax;
           if (staSuUnaRiga) {
-            disegnaRigaConLimite(testo, posX, posY, cfg.font_size);
+            disegnaRigaConLimite(testo, posY, cfg.font_size);
           } else {
-            // scostamento verticale (in punti, poi convertito in % della
-            // pagina) di circa mezza riga sopra e sotto la posizione del posto
-            const scostamentoPercento = ((cfg.font_size * 0.55) / altezzaPagina) * 100;
-            disegnaRigaConLimite(parole[0], posX, posY - scostamentoPercento, cfg.font_size);
-            disegnaRigaConLimite(parole.slice(1).join(" "), posX, posY + scostamentoPercento, cfg.font_size);
+            // spezzando su 2 righe, ciascuna parola da sola ha di nuovo
+            // tutto lo spazio necessario: si scrive alla stessa dimensione
+            // usata per un nome su una riga sola, senza rimpicciolire, e le
+            // due righe restano vicine (poco più della metà di una riga
+            // sopra e sotto la posizione del posto, non un'intera riga)
+            const scostamentoPercento = ((cfg.font_size * 0.32) / altezzaPagina) * 100;
+            disegnaTestoDiploma(pagina, parole[0], {
+              posX, posY: posY - scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
+            });
+            disegnaTestoDiploma(pagina, parole.slice(1).join(" "), {
+              posX, posY: posY + scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
+            });
           }
         });
       }
