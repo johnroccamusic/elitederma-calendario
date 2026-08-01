@@ -4423,7 +4423,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         return cacheDocEccezioni.get(eccezione.id);
       }
 
-      for (const iscritto of listaIscritti) {
+      // se uno o più iscritti hanno "Ristampa solo questo" spuntato, il PDF
+      // si genera solo per loro; altrimenti (nessuno flaggato) per tutti,
+      // come sempre
+      const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
+      const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
+
+      for (const iscritto of iscrittiDaStampare) {
         const docDaUsare = await docTemplatePer(iscritto);
         const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
         outputPdf.addPage(pagina);
@@ -4853,6 +4859,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     ricarica();
   }
 
+  // se uno o più iscritti hanno questa casella spuntata, "Stampa diplomi"
+  // genera il PDF solo per loro invece che per tutta la classe
+  async function toggleRistampaDiploma(i) {
+    const { error } = await supabase.from("iscritti").update({ ristampa_diploma: !i.ristampa_diploma }).eq("id", i.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
   async function salvaNotaRicontatto(id, valore) {
     const { error } = await supabase.from("iscritti").update({ note_ricontatto: valore.trim() || null }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -5197,6 +5211,59 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           )}
           {listaIscritti.map((i, idx) => (
             <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
+              {mostraGestione && (
+                // barra degli strumenti della scheda (come la barra dei
+                // pulsanti in cima a una finestra Mac): le azioni
+                // sull'iscritto vivono qui, non più sparse dentro la scheda
+                <div
+                  style={{
+                    display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2,
+                    margin: "-16px -16px 12px", padding: "6px 10px",
+                    background: BG, borderTopLeftRadius: 14, borderTopRightRadius: 14,
+                    borderBottom: `1px solid ${CREAM_BORDER}`,
+                  }}
+                >
+                  <button
+                    onClick={() => toggleRistampaDiploma(i)}
+                    title="Ristampa solo questo (nel PDF di Stampa diplomi)"
+                    style={{
+                      border: "none", cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center",
+                      background: i.ristampa_diploma ? "#1D4ED8" : "transparent", color: i.ristampa_diploma ? "#fff" : NAVY,
+                    }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 6 2 18 2 18 9" />
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                      <rect x="6" y="14" width="12" height="8" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => apriModificaCompleta(i)}
+                    title="Modifica"
+                    style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex", alignItems: "center" }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "4px 10px", fontSize: 12 }}>
+                    Sposta
+                  </Button>
+                  <button
+                    onClick={() => elimina(i.id)}
+                    title="Elimina"
+                    style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex", alignItems: "center" }}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6" /><path d="M14 11v6" />
+                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                    </svg>
+                  </button>
+                </div>
+              )}
               <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
@@ -5215,35 +5282,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         <IconaWhatsapp size={22} />
                       </a>
                     </span>
-                  )}
-                  {mostraGestione && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: i.telefono ? 0 : "auto" }}>
-                      <button
-                        onClick={() => apriModificaCompleta(i)}
-                        title="Modifica"
-                        style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
-                      >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </button>
-                      <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "4px 10px", fontSize: 12 }}>
-                        Sposta
-                      </Button>
-                      <button
-                        onClick={() => elimina(i.id)}
-                        title="Elimina"
-                        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
-                      >
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6" />
-                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                          <path d="M10 11v6" /><path d="M14 11v6" />
-                          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                        </svg>
-                      </button>
-                    </div>
                   )}
                 </div>
                 {mostraGestione && (

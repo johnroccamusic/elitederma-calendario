@@ -305,4 +305,10 @@ alter table public.segnaposti_config add column if not exists limite_sx_pos_x nu
 alter table public.segnaposti_config add column if not exists limite_dx_pos_x numeric not null default 70;
 
 
+-- ---------------------------------------------------------
+-- 12) "Ristampa solo questo": stampa diplomi solo per gli iscritti flaggati
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists ristampa_diploma boolean not null default false;
+
+
 notify pgrst, 'reload schema';
