@@ -5497,7 +5497,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           }}
                         >
                           <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: colore }}>
-                            DA INCASSARE {daIncassare} €
+                            {i.incassato ? "INCASSATO" : `DA INCASSARE ${daIncassare} €`}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 14, color: colore }}>
                             <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
@@ -5758,7 +5758,7 @@ function VistaMaster({ param }) {
                 }}
               >
                 <div style={{ fontSize: 15, fontWeight: 700, color: colore }}>
-                  DA INCASSARE {daIncassare} €
+                  {i.incassato ? "INCASSATO" : `DA INCASSARE ${daIncassare} €`}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: colore }}>
                   <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
