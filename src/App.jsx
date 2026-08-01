@@ -3070,7 +3070,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
     <div>
       {cittaOrdinate.map((c, idx) => (
         <div key={c.nome} style={{ marginBottom: 24, paddingTop: idx > 0 ? 20 : 0, borderTop: idx > 0 ? `2px solid ${MUTED}` : "none" }}>
-          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 14, textAlign: "center" }}>{c.nome.toUpperCase()}</div>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 600, color: NAVY, marginBottom: 14, textAlign: "center" }}>{c.nome.toUpperCase()}</div>
           {Object.keys(c.mesi)
             .sort()
             .map((chiaveMese) => {
@@ -5897,7 +5897,7 @@ export default function App() {
           contenuto di ogni schermata invece di limitarsi ad affiancarlo */}
       <div style={{ height: 44 }} />
       {view === "home" && (
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "24px 20px 60px" }}>
+        <div style={{ maxWidth: 480, margin: "0 auto", padding: "42px 20px 60px" }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto" }} />
           </div>
@@ -5911,7 +5911,7 @@ export default function App() {
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
           <CardHome title="Archivio corsi passati" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
 
-          <div style={{ fontFamily: "'Roboto',sans-serif", fontWeight: 700, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
+          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
             DATE IN<br />PROGRAMMAZIONE
           </div>
 
