@@ -1444,16 +1444,12 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriData }) {
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
   const [nomeLoc, setNomeLoc] = useState("");
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
-  const [popupNuovaData, setPopupNuovaData] = useState(null);
-  const [popupEliminaData, setPopupEliminaData] = useState(null);
-  const corsoByIdImp = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const locByIdImp = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const [msg, setMsg] = useState("");
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
@@ -1474,25 +1470,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
   const [modNomeLoc, setModNomeLoc] = useState("");
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
 
-  const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
-  const [filtroCittaDate, setFiltroCittaDate] = useState("");
-  const [filtroMasterDate, setFiltroMasterDate] = useState("");
-  const [apriFiltroCorsoDate, setApriFiltroCorsoDate] = useState(false);
-  const [apriFiltroCittaDate, setApriFiltroCittaDate] = useState(false);
-  const [apriFiltroMasterDate, setApriFiltroMasterDate] = useState(false);
-  const selectFiltroCorsoDateRef = React.useRef(null);
-  const selectFiltroCittaDateRef = React.useRef(null);
-  const selectFiltroMasterDateRef = React.useRef(null);
-  useApriSelectAlMontaggio(apriFiltroCorsoDate, selectFiltroCorsoDateRef);
-  useApriSelectAlMontaggio(apriFiltroCittaDate, selectFiltroCittaDateRef);
-  useApriSelectAlMontaggio(apriFiltroMasterDate, selectFiltroMasterDateRef);
-
-  const [dataInModifica, setDataInModifica] = useState(null);
-  const [modDataInizio, setModDataInizio] = useState("");
-  const [modDataFine, setModDataFine] = useState("");
-  const [modPostiData, setModPostiData] = useState("");
-  const [modMasterSel, setModMasterSel] = useState("");
-
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
   async function eliminaCorso(id) {
@@ -1507,13 +1484,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
     const { error } = await supabase.from("location").delete().eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("Città eliminata.");
-    ricarica();
-  }
-  async function eliminaData(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setMsg("Data eliminata.");
     ricarica();
   }
   function apriModificaCorso(c) {
@@ -1570,42 +1540,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
     ricarica();
   }
 
-  function apriModificaData(cd) {
-    setDataInModifica(cd.id);
-    setModDataInizio(cd.data_inizio);
-    setModDataFine(cd.data_fine);
-    setModMasterSel(cd.master_id || "");
-    const corsoCd = corsi.find((c) => c.id === cd.corso_id);
-    const locCd = location.find((l) => l.id === cd.location_id);
-    setModPostiData(String(postiMaxEffettivi(cd, corsoCd, locCd)));
-  }
-  function cambiaModPostiData(delta) {
-    const locCd = location.find((l) => l.id === corsiDate.find((cd) => cd.id === dataInModifica)?.location_id);
-    const iscrittiCount = iscritti.filter((i) => i.corso_data_id === dataInModifica).length;
-    setModPostiData((v) => {
-      const nuovo = Math.max(iscrittiCount, (Number(v) || 0) + delta);
-      if (delta > 0 && locCd?.posti_max != null && nuovo > locCd.posti_max) {
-        setMsg(`Attenzione: superati i posti disponibili per la sede (max ${locCd.posti_max} a ${locCd.nome}).`);
-        return v;
-      }
-      return String(nuovo);
-    });
-  }
-  async function salvaModificaData(id) {
-    if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
-    const fine = modDataFine || modDataInizio;
-    const { error } = await supabase.from("corsi_date").update({
-      data_inizio: modDataInizio,
-      data_fine: fine,
-      posti_max: modPostiData ? Number(modPostiData) : null,
-      master_id: modMasterSel || null,
-    }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setDataInModifica(null);
-    setMsg("Data aggiornata.");
-    ricarica();
-  }
-
   async function aggiungiCorso() {
     if (!nomeCorso.trim()) return;
     if (coloriUsati.includes(colore.toLowerCase())) {
@@ -1640,22 +1574,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
     ricarica();
   }
 
-  async function salvaNuovaData({ corso_id, location_id, data_inizio, data_fine }) {
-    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine });
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setPopupNuovaData(null);
-    setMsg("Data aggiunta al calendario.");
-    ricarica();
-  }
-  async function eliminaDataCliccata(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setPopupEliminaData(null);
-    setMsg("Data eliminata.");
-    ricarica();
-  }
-
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Setting" onBack={onBack} />
@@ -1681,175 +1599,6 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
         ))}
       </div>
 
-      <div style={cardStyle}>
-        <div style={{ ...hStyle, textAlign: "center", textTransform: "uppercase" }}>Aggiungi data</div>
-        <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca due volte un corso già esistente per eliminarlo.</div>
-        <SelettoreCalendario
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          onClickGiorno={setPopupNuovaData}
-          onDoppioClickEvento={setPopupEliminaData}
-        />
-      </div>
-      {popupNuovaData && (
-        <PopupNuovaData corsi={corsi} location={location} dataClic={popupNuovaData} onSalva={salvaNuovaData} onChiudi={() => setPopupNuovaData(null)} />
-      )}
-      {popupEliminaData && (
-        <PopupEliminaData evento={popupEliminaData} corsoById={corsoByIdImp} locById={locByIdImp} onElimina={eliminaDataCliccata} onChiudi={() => setPopupEliminaData(null)} />
-      )}
-
-      <div style={cardStyle}>
-        <div style={{ ...hStyle, textAlign: "center" }}>PANNELLO DI GESTIONE DATE</div>
-        <div style={subStyle}>Solo le edizioni future, divise per città e corso. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
-
-        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <Button
-              variant={filtroCorsoDate ? "primary" : "ghost"}
-              onClick={() => { setApriFiltroCorsoDate((v) => !v); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-            >
-              {filtroCorsoDate ? corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase() : "Filtra per corso"}
-            </Button>
-            {apriFiltroCorsoDate && (
-              <select
-                autoFocus
-                ref={selectFiltroCorsoDateRef}
-                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                value={filtroCorsoDate}
-                onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
-                onBlur={() => setApriFiltroCorsoDate(false)}
-              >
-                <option value="">Tutti i corsi</option>
-                {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
-              </select>
-            )}
-          </div>
-          <div style={{ position: "relative" }}>
-            <Button
-              variant={filtroCittaDate ? "primary" : "ghost"}
-              onClick={() => { setApriFiltroCittaDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroMasterDate(false); }}
-            >
-              {filtroCittaDate ? location.find((l) => l.id === filtroCittaDate)?.nome.toUpperCase() : "Filtra per città"}
-            </Button>
-            {apriFiltroCittaDate && (
-              <select
-                autoFocus
-                ref={selectFiltroCittaDateRef}
-                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                value={filtroCittaDate}
-                onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
-                onBlur={() => setApriFiltroCittaDate(false)}
-              >
-                <option value="">Tutte le città</option>
-                {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-              </select>
-            )}
-          </div>
-          <div style={{ position: "relative" }}>
-            <Button
-              variant={filtroMasterDate ? "primary" : "ghost"}
-              onClick={() => { setApriFiltroMasterDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); }}
-            >
-              {filtroMasterDate ? master.find((m) => m.id === filtroMasterDate)?.nome.toUpperCase() : "Filtra per master"}
-            </Button>
-            {apriFiltroMasterDate && (
-              <select
-                autoFocus
-                ref={selectFiltroMasterDateRef}
-                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                value={filtroMasterDate}
-                onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
-                onBlur={() => setApriFiltroMasterDate(false)}
-              >
-                <option value="">Tutte le master</option>
-                {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-              </select>
-            )}
-          </div>
-          {(filtroCorsoDate || filtroCittaDate || filtroMasterDate) && (
-            <Button
-              variant="ghost"
-              onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-            >
-              Cancella filtri
-            </Button>
-          )}
-        </div>
-
-        <DateRaggruppatePerCitta
-          corsi={corsi}
-          location={location}
-          corsiDate={corsiDate.filter((cd) =>
-            cd.data_fine >= dataOggiStr() &&
-            (!filtroCorsoDate || cd.corso_id === filtroCorsoDate) &&
-            (!filtroCittaDate || cd.location_id === filtroCittaDate) &&
-            (!filtroMasterDate || cd.master_id === filtroMasterDate)
-          )}
-          iscritti={iscritti}
-          master={master}
-          onApriData={onApriData}
-          onDelete={eliminaData}
-          onEdit={apriModificaData}
-          idInModifica={dataInModifica}
-          renderModifica={() => (
-            <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
-              <div style={{ marginBottom: 14 }}>
-                <CalendarioModifica
-                  corsi={corsi}
-                  location={location}
-                  corsiDate={corsiDate}
-                  iscritti={iscritti}
-                  cdId={dataInModifica}
-                  valore={{ inizio: modDataInizio, fine: modDataFine }}
-                  onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
-                  ricarica={ricarica}
-                  onDataEliminata={(id) => { if (id === dataInModifica) setDataInModifica(null); }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Data inizio">
-                    <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Data fine">
-                    <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
-                  </Field>
-                </div>
-              </div>
-              <Field label="Posti in classe">
-                <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-                  <button
-                    type="button"
-                    onClick={() => cambiaModPostiData(-1)}
-                    disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
-                    style={{
-                      width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
-                      cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
-                      opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
-                    }}
-                  >
-                    −
-                  </button>
-                  <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
-                  <button
-                    type="button"
-                    onClick={() => cambiaModPostiData(1)}
-                    style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
-                  >
-                    +
-                  </button>
-                </div>
-              </Field>
-              <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
-                <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
-              </div>
-            </div>
-          )}
-        />
-      </div>
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
 
@@ -2030,6 +1779,272 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
           />
         </Modal>
       )}
+    </div>
+  );
+}
+
+// "Gestione date": calendario per aggiungere nuove edizioni e pannello
+// per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
+// sua pagina separata (stesso sblocco amministratore condiviso)
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData }) {
+  const [msg, setMsg] = useState("");
+  const [popupNuovaData, setPopupNuovaData] = useState(null);
+  const [popupEliminaData, setPopupEliminaData] = useState(null);
+  const corsoByIdImp = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locByIdImp = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
+  const [filtroCittaDate, setFiltroCittaDate] = useState("");
+  const [filtroMasterDate, setFiltroMasterDate] = useState("");
+  const [apriFiltroCorsoDate, setApriFiltroCorsoDate] = useState(false);
+  const [apriFiltroCittaDate, setApriFiltroCittaDate] = useState(false);
+  const [apriFiltroMasterDate, setApriFiltroMasterDate] = useState(false);
+  const selectFiltroCorsoDateRef = React.useRef(null);
+  const selectFiltroCittaDateRef = React.useRef(null);
+  const selectFiltroMasterDateRef = React.useRef(null);
+  useApriSelectAlMontaggio(apriFiltroCorsoDate, selectFiltroCorsoDateRef);
+  useApriSelectAlMontaggio(apriFiltroCittaDate, selectFiltroCittaDateRef);
+  useApriSelectAlMontaggio(apriFiltroMasterDate, selectFiltroMasterDateRef);
+
+  const [dataInModifica, setDataInModifica] = useState(null);
+  const [modDataInizio, setModDataInizio] = useState("");
+  const [modDataFine, setModDataFine] = useState("");
+  const [modPostiData, setModPostiData] = useState("");
+  const [modMasterSel, setModMasterSel] = useState("");
+
+  async function eliminaData(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Data eliminata.");
+    ricarica();
+  }
+  function apriModificaData(cd) {
+    setDataInModifica(cd.id);
+    setModDataInizio(cd.data_inizio);
+    setModDataFine(cd.data_fine);
+    setModMasterSel(cd.master_id || "");
+    const corsoCd = corsi.find((c) => c.id === cd.corso_id);
+    const locCd = location.find((l) => l.id === cd.location_id);
+    setModPostiData(String(postiMaxEffettivi(cd, corsoCd, locCd)));
+  }
+  function cambiaModPostiData(delta) {
+    const locCd = location.find((l) => l.id === corsiDate.find((cd) => cd.id === dataInModifica)?.location_id);
+    const iscrittiCount = iscritti.filter((i) => i.corso_data_id === dataInModifica).length;
+    setModPostiData((v) => {
+      const nuovo = Math.max(iscrittiCount, (Number(v) || 0) + delta);
+      if (delta > 0 && locCd?.posti_max != null && nuovo > locCd.posti_max) {
+        setMsg(`Attenzione: superati i posti disponibili per la sede (max ${locCd.posti_max} a ${locCd.nome}).`);
+        return v;
+      }
+      return String(nuovo);
+    });
+  }
+  async function salvaModificaData(id) {
+    if (!modDataInizio) { setMsg("Seleziona almeno una data d'inizio."); return; }
+    const fine = modDataFine || modDataInizio;
+    const { error } = await supabase.from("corsi_date").update({
+      data_inizio: modDataInizio,
+      data_fine: fine,
+      posti_max: modPostiData ? Number(modPostiData) : null,
+      master_id: modMasterSel || null,
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setDataInModifica(null);
+    setMsg("Data aggiornata.");
+    ricarica();
+  }
+  async function salvaNuovaData({ corso_id, location_id, data_inizio, data_fine }) {
+    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setPopupNuovaData(null);
+    setMsg("Data aggiunta al calendario.");
+    ricarica();
+  }
+  async function eliminaDataCliccata(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
+    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setPopupEliminaData(null);
+    setMsg("Data eliminata.");
+    ricarica();
+  }
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Gestione date" onBack={onBack} />
+
+      <div style={cardStyle}>
+        <div style={{ ...hStyle, textAlign: "center", textTransform: "uppercase" }}>Aggiungi data</div>
+        <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca due volte un corso già esistente per eliminarlo.</div>
+        <SelettoreCalendario
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          onClickGiorno={setPopupNuovaData}
+          onDoppioClickEvento={setPopupEliminaData}
+        />
+      </div>
+      {popupNuovaData && (
+        <PopupNuovaData corsi={corsi} location={location} dataClic={popupNuovaData} onSalva={salvaNuovaData} onChiudi={() => setPopupNuovaData(null)} />
+      )}
+      {popupEliminaData && (
+        <PopupEliminaData evento={popupEliminaData} corsoById={corsoByIdImp} locById={locByIdImp} onElimina={eliminaDataCliccata} onChiudi={() => setPopupEliminaData(null)} />
+      )}
+
+      <div style={cardStyle}>
+        <div style={{ ...hStyle, textAlign: "center" }}>PANNELLO DI GESTIONE DATE</div>
+        <div style={subStyle}>Solo le edizioni future, divise per città e corso. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ position: "relative" }}>
+            <Button
+              variant={filtroCorsoDate ? "primary" : "ghost"}
+              onClick={() => { setApriFiltroCorsoDate((v) => !v); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+            >
+              {filtroCorsoDate ? corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase() : "Filtra per corso"}
+            </Button>
+            {apriFiltroCorsoDate && (
+              <select
+                autoFocus
+                ref={selectFiltroCorsoDateRef}
+                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                value={filtroCorsoDate}
+                onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
+                onBlur={() => setApriFiltroCorsoDate(false)}
+              >
+                <option value="">Tutti i corsi</option>
+                {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
+              </select>
+            )}
+          </div>
+          <div style={{ position: "relative" }}>
+            <Button
+              variant={filtroCittaDate ? "primary" : "ghost"}
+              onClick={() => { setApriFiltroCittaDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroMasterDate(false); }}
+            >
+              {filtroCittaDate ? location.find((l) => l.id === filtroCittaDate)?.nome.toUpperCase() : "Filtra per città"}
+            </Button>
+            {apriFiltroCittaDate && (
+              <select
+                autoFocus
+                ref={selectFiltroCittaDateRef}
+                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                value={filtroCittaDate}
+                onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
+                onBlur={() => setApriFiltroCittaDate(false)}
+              >
+                <option value="">Tutte le città</option>
+                {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+              </select>
+            )}
+          </div>
+          <div style={{ position: "relative" }}>
+            <Button
+              variant={filtroMasterDate ? "primary" : "ghost"}
+              onClick={() => { setApriFiltroMasterDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); }}
+            >
+              {filtroMasterDate ? master.find((m) => m.id === filtroMasterDate)?.nome.toUpperCase() : "Filtra per master"}
+            </Button>
+            {apriFiltroMasterDate && (
+              <select
+                autoFocus
+                ref={selectFiltroMasterDateRef}
+                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+                value={filtroMasterDate}
+                onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
+                onBlur={() => setApriFiltroMasterDate(false)}
+              >
+                <option value="">Tutte le master</option>
+                {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+              </select>
+            )}
+          </div>
+          {(filtroCorsoDate || filtroCittaDate || filtroMasterDate) && (
+            <Button
+              variant="ghost"
+              onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+            >
+              Cancella filtri
+            </Button>
+          )}
+        </div>
+
+        <DateRaggruppatePerCitta
+          corsi={corsi}
+          location={location}
+          corsiDate={corsiDate.filter((cd) =>
+            cd.data_fine >= dataOggiStr() &&
+            (!filtroCorsoDate || cd.corso_id === filtroCorsoDate) &&
+            (!filtroCittaDate || cd.location_id === filtroCittaDate) &&
+            (!filtroMasterDate || cd.master_id === filtroMasterDate)
+          )}
+          iscritti={iscritti}
+          master={master}
+          onApriData={onApriData}
+          onDelete={eliminaData}
+          onEdit={apriModificaData}
+          idInModifica={dataInModifica}
+          renderModifica={() => (
+            <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
+              <div style={{ marginBottom: 14 }}>
+                <CalendarioModifica
+                  corsi={corsi}
+                  location={location}
+                  corsiDate={corsiDate}
+                  iscritti={iscritti}
+                  cdId={dataInModifica}
+                  valore={{ inizio: modDataInizio, fine: modDataFine }}
+                  onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
+                  ricarica={ricarica}
+                  onDataEliminata={(id) => { if (id === dataInModifica) setDataInModifica(null); }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Data inizio">
+                    <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Data fine">
+                    <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
+                  </Field>
+                </div>
+              </div>
+              <Field label="Posti in classe">
+                <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                  <button
+                    type="button"
+                    onClick={() => cambiaModPostiData(-1)}
+                    disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
+                    style={{
+                      width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
+                      cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
+                      opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
+                    }}
+                  >
+                    −
+                  </button>
+                  <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
+                  <button
+                    type="button"
+                    onClick={() => cambiaModPostiData(1)}
+                    style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+                  >
+                    +
+                  </button>
+                </div>
+              </Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
+                <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
+              </div>
+            </div>
+          )}
+        />
+      </div>
+
+      {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
     </div>
   );
 }
@@ -5823,6 +5838,7 @@ export default function App() {
   }
   function apriStatistiche() { apriViewProtetta("statistiche"); }
   function apriImpostazioni() { apriViewProtetta("impostazioni"); }
+  function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -5884,9 +5900,10 @@ export default function App() {
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "60px 20px" }}>
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20 }}>
-            <Button onClick={apriImpostazioni} style={{ width: 140, textAlign: "center" }}>Setting</Button>
+          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+            <Button onClick={apriGestioneDate} style={{ width: 140, textAlign: "center" }}>Gestione date</Button>
             <Button onClick={apriStatistiche} style={{ width: 140, textAlign: "center" }}>Statistiche</Button>
+            <Button onClick={apriImpostazioni} style={{ width: 140, textAlign: "center" }}>Setting</Button>
           </div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
@@ -6005,7 +6022,11 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriData={apriData} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} />
+      )}
+
+      {view === "gestionedate" && (
+        <GestioneDate corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData} />
       )}
 
       {view === "fontdiplomi" && (
