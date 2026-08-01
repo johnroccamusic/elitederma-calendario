@@ -4441,9 +4441,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
         // solo il nome allievo è limitato dalle 2 linee di "Diploma di
         // riferimento": se supera quella larghezza si rimpicciolisce
-        // solo per questo nome, non tocca città/data né firma
+        // solo per questo nome, non tocca città/data né firma. Il nome è
+        // centrato su nome_pos_x: il lato più stretto rispetto alle due
+        // linee è quello che vincola, raddoppiato dà la larghezza massima
+        // (la sola distanza fissa tra le due linee sbaglierebbe ogni volta
+        // che nome_pos_x non sta esattamente a metà strada tra le due)
         const testoNome = toTitleCase(`${iscritto.nome} ${iscritto.cognome}`);
-        const larghezzaMaxNome = Math.abs((config.nome_limite_dx ?? 100) - (config.nome_limite_sx ?? 0)) / 100 * larghezzaPaginaDiploma;
+        const spazioSxNome = (config.nome_pos_x - config.nome_limite_sx) / 100 * larghezzaPaginaDiploma;
+        const spazioDxNome = (config.nome_limite_dx - config.nome_pos_x) / 100 * larghezzaPaginaDiploma;
+        const larghezzaMaxNome = 2 * Math.min(spazioSxNome, spazioDxNome);
         let nomeFontSize = config.nome_font_size;
         if (larghezzaMaxNome > 0) {
           const larghezzaTestoNome = fontNome.widthOfTextAtSize(testoNome, nomeFontSize);
@@ -4526,13 +4532,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
         outputPdf.addPage(pagina);
         const { width: larghezzaPagina, height: altezzaPagina } = pagina.getSize();
-        // la distanza tra le due linee di limite (uguali per tutti i
-        // posti) è la larghezza massima consentita per il nome in stampa
-        const larghezzaMax = Math.abs(cfg.limite_dx_pos_x - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
-        // riduce fontSizeBase finché "testoRiga" non entra in larghezzaMax,
+        // il testo è centrato su posX: per non superare NESSUNA delle due
+        // linee, lo spazio disponibile da ogni lato è la distanza (con
+        // segno) tra posX e quella linea; il lato più stretto è quello che
+        // vincola, raddoppiato dà la larghezza massima consentita. Usare
+        // semplicemente la distanza fissa tra le due linee (senza tener
+        // conto di dove sta posX) sbaglia ogni volta che il posto non è
+        // esattamente a metà strada tra sinistra e destra
+        function larghezzaMaxPer(posX) {
+          const spazioSx = (posX - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
+          const spazioDx = (cfg.limite_dx_pos_x - posX) / 100 * larghezzaPagina;
+          return 2 * Math.min(spazioSx, spazioDx);
+        }
+        // riduce fontSizeBase finché "testoRiga" non entra nel limite,
         // poi lo disegna: usata sia per un nome su una riga sola sia per
         // ciascuna delle due righe quando il nome viene spezzato
         function disegnaRigaConLimite(testoRiga, posX, posY, fontSizeBase) {
+          const larghezzaMax = larghezzaMaxPer(posX);
           let fontSize = fontSizeBase;
           if (larghezzaMax > 0) {
             const larghezzaTesto = font.widthOfTextAtSize(testoRiga, fontSize);
@@ -4547,6 +4563,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           const posX = cfg[`${slot.chiave}_pos_x`];
           const posY = cfg[`${slot.chiave}_pos_y`];
           const testo = testi.get(iscritto.id);
+          const larghezzaMax = larghezzaMaxPer(posX);
           const parole = testo.trim().split(/\s+/);
           // un nome composto da più parole (es. "GIANFRANCA ANTONELLA") che
           // ci sta su una riga sola resta su una riga sola; solo se non ci
