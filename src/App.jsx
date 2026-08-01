@@ -4957,7 +4957,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           )}
           {listaIscritti.map((i, idx) => (
             <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
@@ -4966,18 +4966,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
-                    {i.telefono && (
-                      <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12 }}>
-                        · <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
-                          <IconaWhatsapp size={22} />
-                        </a>
-                      </span>
-                    )}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
+                  {i.telefono && (
+                    <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+                      <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                      <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
+                        <IconaWhatsapp size={22} />
+                      </a>
+                    </span>
+                  )}
                   {mostraGestione && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: i.telefono ? 0 : "auto" }}>
                       <button
                         onClick={() => apriModificaCompleta(i)}
                         title="Modifica"
