@@ -3146,7 +3146,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
                     .map((cd, i) => {
                       const corso = corsoById[cd.corso_id];
-                      const sfondoRiga = BG;
+                      const sfondoRiga = "transparent";
                       const coloreBadge = i % 2 === 0 ? { bg: "#F3E3C9", testo: "#7A5A22" } : { bg: "#DCEAFB", testo: "#1D4ED8" };
                       return onEdit ? (
                         <div key={cd.id} style={{ marginBottom: 8 }}>
