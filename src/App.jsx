@@ -2083,6 +2083,11 @@ const CONFIG_DIPLOMI_DEFAULT = {
   nome_pos_x: 50, nome_pos_y: 45, nome_font_size: 24, nome_colore: "#ffffff", nome_allineamento: "center",
   data_pos_x: 50, data_pos_y: 65, data_font_size: 16, data_colore: "#ffffff", data_allineamento: "center",
   firma_pos_x: 50, firma_pos_y: 80, firma_font_size: 16, firma_colore: "#ffffff", firma_allineamento: "center",
+  // due linee verticali trascinabili che limitano solo la larghezza del
+  // nome allievo (non città/data né firma, né il resto del diploma): se
+  // il nome supera questa larghezza il font si rimpicciolisce in stampa
+  nome_limite_sx: 20,
+  nome_limite_dx: 80,
 };
 // i 3 testi scritti sui diplomi: chiave dei campi in font_diplomi, colore
 // dell'indicatore nell'editor visivo ed etichetta del testo di prova
@@ -2103,10 +2108,11 @@ const CONFIG_SEGNAPOSTI_DEFAULT = {
   riferimento_path: null,
   font_size: 20,
   colore: "#000000",
-  // linea verticale trascinabile: la distanza tra questa linea e il
-  // centro di ciascun posto (in entrambe le direzioni, testo centrato)
-  // definisce la larghezza massima consentita per quel nome in stampa
-  limite_pos_x: 85,
+  // due linee verticali trascinabili (sinistra/destra): la distanza tra
+  // le due definisce la larghezza massima consentita per il nome in
+  // stampa, uguale per tutti i 7 posti
+  limite_sx_pos_x: 30,
+  limite_dx_pos_x: 70,
   // posizioni di default: 7 righe distribuite lungo il foglio, poi si
   // trascinano nel punto esatto sul foglio di riferimento caricato
   slot1_pos_x: 50, slot1_pos_y: 12.5,
@@ -2140,9 +2146,11 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
   const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
   const [elementoTrascinato, setElementoTrascinato] = useState(null);
+  const [limiteNomeTrascinato, setLimiteNomeTrascinato] = useState(null); // "sx" | "dx" | null
   const canvasRef = React.useRef(null);
   const contenitoreRef = React.useRef(null);
   const dragRef = React.useRef(null);
+  const dragLimiteNomeRef = React.useRef(null);
 
   // ---- "Regolazione segnaposto": stessa logica del diploma di
   // riferimento sopra, ma con 7 posti invece di 3 elementi diversi, e in
@@ -2152,7 +2160,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
   const [dimensioniCanvasSegna, setDimensioniCanvasSegna] = useState(null);
   const [larghezzaMostrataSegna, setLarghezzaMostrataSegna] = useState(null);
   const [slotTrascinato, setSlotTrascinato] = useState(null);
-  const [limiteTrascinato, setLimiteTrascinato] = useState(false);
+  const [limiteTrascinato, setLimiteTrascinato] = useState(null); // "sx" | "dx" | null
   const canvasSegnaRef = React.useRef(null);
   const contenitoreSegnaRef = React.useRef(null);
   const dragSegnaRef = React.useRef(null);
@@ -2484,27 +2492,29 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
     aggiornaSegnaposti({ [`${d.chiave}_pos_x`]: configSegna[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: configSegna[`${d.chiave}_pos_y`] });
   }
 
-  // linea verticale trascinabile (solo orizzontalmente) che segna la
-  // larghezza massima del testo: in stampa, un nome più largo di questo
-  // limite viene rimpicciolito solo per quella riga, non per tutte
-  function iniziaDragLimite(e) {
+  // due linee verticali trascinabili (solo orizzontalmente), sinistra e
+  // destra: la distanza tra le due segna la larghezza massima del nome;
+  // in stampa, un nome più largo di questo limite viene rimpicciolito
+  // solo per quella riga, non per tutte
+  function iniziaDragLimite(e, lato) {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragLimiteRef.current = { pointerId: e.pointerId };
-    setLimiteTrascinato(true);
+    dragLimiteRef.current = { lato, pointerId: e.pointerId };
+    setLimiteTrascinato(lato);
   }
   function muoviDragLimite(e) {
     const d = dragLimiteRef.current;
     if (!d || e.pointerId !== d.pointerId || !contenitoreSegnaRef.current) return;
     const rect = contenitoreSegnaRef.current.getBoundingClientRect();
     const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-    setConfigSegna((c) => ({ ...c, limite_pos_x: x }));
+    setConfigSegna((c) => ({ ...c, [`limite_${d.lato}_pos_x`]: x }));
   }
   function fineDragLimite() {
-    if (!dragLimiteRef.current) return;
+    const d = dragLimiteRef.current;
+    if (!d) return;
     dragLimiteRef.current = null;
-    setLimiteTrascinato(false);
-    aggiornaSegnaposti({ limite_pos_x: configSegna.limite_pos_x });
+    setLimiteTrascinato(null);
+    aggiornaSegnaposti({ [`limite_${d.lato}_pos_x`]: configSegna[`limite_${d.lato}_pos_x`] });
   }
 
   function iniziaDrag(e, chiave) {
@@ -2530,6 +2540,29 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
     // tempo reale) nello stato locale da muoviDrag: qui la si salva solo,
     // rileggendola dallo stato attuale invece di ricalcolarla
     aggiorna({ [`${d.chiave}_pos_x`]: config[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: config[`${d.chiave}_pos_y`] });
+  }
+
+  // due linee verticali trascinabili che limitano solo la larghezza del
+  // nome allievo: città/data e firma non ne sono toccate
+  function iniziaDragLimiteNome(e, lato) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragLimiteNomeRef.current = { lato, pointerId: e.pointerId };
+    setLimiteNomeTrascinato(lato);
+  }
+  function muoviDragLimiteNome(e) {
+    const d = dragLimiteNomeRef.current;
+    if (!d || e.pointerId !== d.pointerId || !contenitoreRef.current) return;
+    const rect = contenitoreRef.current.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    setConfig((c) => ({ ...c, [`nome_limite_${d.lato}`]: x }));
+  }
+  function fineDragLimiteNome() {
+    const d = dragLimiteNomeRef.current;
+    if (!d) return;
+    dragLimiteNomeRef.current = null;
+    setLimiteNomeTrascinato(null);
+    aggiorna({ [`nome_limite_${d.lato}`]: config[`nome_limite_${d.lato}`] });
   }
 
   const traduzioneAllineamento = { left: "flex-start", center: "center", right: "flex-end" };
@@ -2650,7 +2683,12 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
 
       <div style={cardStyle}>
         <div style={hStyle}>Diploma di riferimento</div>
-        <div style={subStyle}>Un PDF diploma qualsiasi, usato solo per calibrare la posizione: la stessa posizione verrà applicata al template di ciascun corso.</div>
+        <div style={subStyle}>
+          Un PDF diploma qualsiasi, usato solo per calibrare la posizione: la stessa posizione verrà applicata al
+          template di ciascun corso. La riga tratteggiata rossa (2 linee) segna la larghezza massima del nome
+          allievo — non tocca città/data né firma: se in stampa un nome la supera, il font si rimpicciolisce solo
+          per quel nome.
+        </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <input
             type="file"
@@ -2673,6 +2711,30 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
                 finché non si disegna, nessun disegno finché non c'è il
                 canvas) */}
             <canvas ref={canvasRef} style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}` }} />
+            {["sx", "dx"].map((lato) => (
+              <div
+                key={lato}
+                onPointerDown={(e) => iniziaDragLimiteNome(e, lato)}
+                onPointerMove={muoviDragLimiteNome}
+                onPointerUp={fineDragLimiteNome}
+                onPointerCancel={fineDragLimiteNome}
+                title="Trascina per impostare la larghezza massima del nome allievo"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${config[`nome_limite_${lato}`]}%`,
+                  width: 20,
+                  transform: "translateX(-50%)",
+                  cursor: "ew-resize",
+                  display: "flex",
+                  justifyContent: "center",
+                  touchAction: "none",
+                }}
+              >
+                <div style={{ width: 0, height: "100%", borderLeft: `2px dashed #C0392B`, background: limiteNomeTrascinato === lato ? "rgba(192,57,43,0.08)" : "transparent" }} />
+              </div>
+            ))}
             {ELEMENTI_DIPLOMA.map(({ chiave, colore, testoProva, campoFont, famigliaFont }) => (
               <div
                 key={chiave}
@@ -2760,8 +2822,9 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
           A differenza del diploma, qui il file caricato è il vero foglio A4 che verrà stampato (non solo un
           riferimento): trascina ciascuno dei {POSTI_PER_PAGINA_SEGNAPOSTI} nomi di prova nel punto esatto della
           griglia. Se una classe ha più di {POSTI_PER_PAGINA_SEGNAPOSTI} iscritti, la stampa genera altre pagine
-          ripartendo dal primo posto. La riga tratteggiata rossa è la larghezza massima del testo: se un nome in
-          stampa la supera, si rimpicciolisce automaticamente solo per quel nome, senza toccare gli altri.
+          ripartendo dal primo posto. Le due linee tratteggiate rosse (sinistra e destra) segnano la larghezza
+          massima del testo, uguale per tutti i posti: se un nome in stampa la supera, si rimpicciolisce
+          automaticamente solo per quel nome, senza toccare gli altri.
         </div>
         <Field label="Segnaposti di riferimento (PDF A4)">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -2781,27 +2844,30 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
             style={{ position: "relative", marginTop: 16, width: "100%", maxWidth: dimensioniCanvasSegna?.width || 800, touchAction: "none" }}
           >
             <canvas ref={canvasSegnaRef} style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}` }} />
-            <div
-              onPointerDown={iniziaDragLimite}
-              onPointerMove={muoviDragLimite}
-              onPointerUp={fineDragLimite}
-              onPointerCancel={fineDragLimite}
-              title="Trascina per impostare la larghezza massima del testo"
-              style={{
-                position: "absolute",
-                top: 0,
-                bottom: 0,
-                left: `${configSegna.limite_pos_x}%`,
-                width: 20,
-                transform: "translateX(-50%)",
-                cursor: "ew-resize",
-                display: "flex",
-                justifyContent: "center",
-                touchAction: "none",
-              }}
-            >
-              <div style={{ width: 0, height: "100%", borderLeft: `2px dashed #C0392B`, background: limiteTrascinato ? "rgba(192,57,43,0.08)" : "transparent" }} />
-            </div>
+            {["sx", "dx"].map((lato) => (
+              <div
+                key={lato}
+                onPointerDown={(e) => iniziaDragLimite(e, lato)}
+                onPointerMove={muoviDragLimite}
+                onPointerUp={fineDragLimite}
+                onPointerCancel={fineDragLimite}
+                title="Trascina per impostare la larghezza massima del testo"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  bottom: 0,
+                  left: `${configSegna[`limite_${lato}_pos_x`]}%`,
+                  width: 20,
+                  transform: "translateX(-50%)",
+                  cursor: "ew-resize",
+                  display: "flex",
+                  justifyContent: "center",
+                  touchAction: "none",
+                }}
+              >
+                <div style={{ width: 0, height: "100%", borderLeft: `2px dashed #C0392B`, background: limiteTrascinato === lato ? "rgba(192,57,43,0.08)" : "transparent" }} />
+              </div>
+            ))}
             {SLOT_SEGNAPOSTI.map(({ chiave, numero }) => (
               <div
                 key={chiave}
@@ -4350,13 +4416,24 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         const docDaUsare = await docTemplatePer(iscritto);
         const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
         outputPdf.addPage(pagina);
+        const { width: larghezzaPaginaDiploma } = pagina.getSize();
 
         const testoDataIscritto = iscritto.diploma_eccezione_data
           ? `${toTitleCase(loc?.nome || "")}, ${fmtData(iscritto.diploma_eccezione_data)}`
           : testoData;
 
-        disegnaTestoDiploma(pagina, toTitleCase(`${iscritto.nome} ${iscritto.cognome}`), {
-          posX: config.nome_pos_x, posY: config.nome_pos_y, fontSize: config.nome_font_size,
+        // solo il nome allievo è limitato dalle 2 linee di "Diploma di
+        // riferimento": se supera quella larghezza si rimpicciolisce
+        // solo per questo nome, non tocca città/data né firma
+        const testoNome = toTitleCase(`${iscritto.nome} ${iscritto.cognome}`);
+        const larghezzaMaxNome = Math.abs((config.nome_limite_dx ?? 100) - (config.nome_limite_sx ?? 0)) / 100 * larghezzaPaginaDiploma;
+        let nomeFontSize = config.nome_font_size;
+        if (larghezzaMaxNome > 0) {
+          const larghezzaTestoNome = fontNome.widthOfTextAtSize(testoNome, nomeFontSize);
+          if (larghezzaTestoNome > larghezzaMaxNome) nomeFontSize = Math.max(6, (larghezzaMaxNome / larghezzaTestoNome) * nomeFontSize);
+        }
+        disegnaTestoDiploma(pagina, testoNome, {
+          posX: config.nome_pos_x, posY: config.nome_pos_y, fontSize: nomeFontSize,
           colore: config.nome_colore, allineamento: config.nome_allineamento, font: fontNome,
         });
         disegnaTestoDiploma(pagina, testoDataIscritto, {
@@ -4431,10 +4508,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           const slot = SLOT_SEGNAPOSTI[idx];
           const posX = cfg[`${slot.chiave}_pos_x`];
           const testo = testi.get(iscritto.id);
-          // il testo è centrato sul posto: la distanza dalla linea di
-          // limite, raddoppiata (simmetrica su entrambi i lati), è la
-          // larghezza massima consentita per QUESTO nome in stampa
-          const larghezzaMax = Math.abs((cfg.limite_pos_x ?? 100) - posX) / 100 * larghezzaPagina * 2;
+          // la distanza tra le due linee di limite (uguali per tutti i
+          // posti) è la larghezza massima consentita per il nome in stampa
+          const larghezzaMax = Math.abs((cfg.limite_dx_pos_x ?? 100) - (cfg.limite_sx_pos_x ?? 0)) / 100 * larghezzaPagina;
           let fontSize = cfg.font_size;
           if (larghezzaMax > 0) {
             const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);

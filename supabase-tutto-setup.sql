@@ -296,4 +296,13 @@ alter table public.segnaposti_config add column if not exists limite_pos_x numer
 alter table public.master add column if not exists diploma_gia_firmato boolean not null default false;
 
 
+-- ---------------------------------------------------------
+-- 11) Linee di limite testo: nome allievo (diploma) e segnaposti
+-- ---------------------------------------------------------
+alter table public.font_diplomi add column if not exists nome_limite_sx numeric not null default 20;
+alter table public.font_diplomi add column if not exists nome_limite_dx numeric not null default 80;
+alter table public.segnaposti_config add column if not exists limite_sx_pos_x numeric not null default 30;
+alter table public.segnaposti_config add column if not exists limite_dx_pos_x numeric not null default 70;
+
+
 notify pgrst, 'reload schema';
