@@ -6,7 +6,20 @@
     <title>Calendario Corsi · Elitederma Academy</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Sofia+Sans+Condensed:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <style>html, body { touch-action: pan-x pan-y; }</style>
+    <style>
+      html, body { touch-action: pan-x pan-y; }
+      /* campi disabilitati (scheda iscritto in sola lettura): restano
+         bloccati ma il testo deve leggersi bene, non solo grigio chiaro.
+         -webkit-text-fill-color serve perche' Safari/iOS ignora "color"
+         sui controlli disabled e mostra comunque un grigio molto chiaro */
+      fieldset:disabled input,
+      fieldset:disabled select,
+      fieldset:disabled textarea {
+        color: #0E1B33 !important;
+        -webkit-text-fill-color: #0E1B33 !important;
+        opacity: 1 !important;
+      }
+    </style>
   </head>
   <body style="margin:0">
     <div id="root"></div>
