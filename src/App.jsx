@@ -542,6 +542,14 @@ function hexInRgb01(hex) {
   const [r, g, b] = cifre.map((h) => parseInt(h, 16) / 255);
   return { r, g, b };
 }
+// scarica un file dallo storage Supabase come bytes grezzi, usato sia per
+// "Stampa diplomi" che per "Stampa Segnaposto" (template, font)
+async function scaricaBytesStorage(bucket, percorso) {
+  const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
+  const risposta = await fetch(data.publicUrl);
+  if (!risposta.ok) throw new Error(`impossibile scaricare ${percorso}`);
+  return new Uint8Array(await risposta.arrayBuffer());
+}
 
 function dataOggiStr() {
   const d = new Date();
@@ -2016,12 +2024,37 @@ const ELEMENTI_DIPLOMA = [
   { chiave: "firma", colore: "#EA580C", etichetta: "Firma master", testoProva: "Nome Master", campoFont: "font_firma_path", famigliaFont: "diplomaFontFirma" },
 ];
 
+// quanti nomi allievo entrano in un foglio A4 di segnaposti: oltre questo
+// numero la stampa genera più pagine, ripetendo lo stesso foglio di
+// riferimento e ricominciando dal primo posto
+const POSTI_PER_PAGINA_SEGNAPOSTI = 7;
+const CONFIG_SEGNAPOSTI_DEFAULT = {
+  id: null,
+  font_path: null,
+  riferimento_path: null,
+  font_size: 20,
+  colore: "#000000",
+  // posizioni di default: 7 righe distribuite lungo il foglio, poi si
+  // trascinano nel punto esatto sul foglio di riferimento caricato
+  slot1_pos_x: 50, slot1_pos_y: 12.5,
+  slot2_pos_x: 50, slot2_pos_y: 25,
+  slot3_pos_x: 50, slot3_pos_y: 37.5,
+  slot4_pos_x: 50, slot4_pos_y: 50,
+  slot5_pos_x: 50, slot5_pos_y: 62.5,
+  slot6_pos_x: 50, slot6_pos_y: 75,
+  slot7_pos_x: 50, slot7_pos_y: 87.5,
+};
+const SLOT_SEGNAPOSTI = Array.from({ length: POSTI_PER_PAGINA_SEGNAPOSTI }, (_, idx) => ({
+  chiave: `slot${idx + 1}`,
+  numero: idx + 1,
+}));
+
 // pagina globale (non per corso) di impostazioni per la stampa diplomi:
 // i 3 font usati per scrivere su ogni diploma, e la posizione/dimensione/
 // colore/allineamento di nome/città-data/firma — sempre gli stessi su
 // tutti i corsi, calibrati qui trascinando 3 testi di prova sopra
 // l'anteprima di un diploma di riferimento caricato apposta per questo
-function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
+function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBack }) {
   const [config, setConfig] = useState(fontDiplomi || CONFIG_DIPLOMI_DEFAULT);
   const [msg, setMsg] = useState("");
   const [nomeEccezione, setNomeEccezione] = useState("");
@@ -2034,6 +2067,19 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
   const canvasRef = React.useRef(null);
   const contenitoreRef = React.useRef(null);
   const dragRef = React.useRef(null);
+
+  // ---- "Regolazione segnaposto": stessa logica del diploma di
+  // riferimento sopra, ma con 7 posti invece di 3 elementi diversi, e in
+  // una tabella (segnaposti_config) separata da font_diplomi
+  const [configSegna, setConfigSegna] = useState(segnaposti || CONFIG_SEGNAPOSTI_DEFAULT);
+  const [fileRiferimentoSegnaNuovo, setFileRiferimentoSegnaNuovo] = useState(null);
+  const [dimensioniCanvasSegna, setDimensioniCanvasSegna] = useState(null);
+  const [larghezzaMostrataSegna, setLarghezzaMostrataSegna] = useState(null);
+  const [slotTrascinato, setSlotTrascinato] = useState(null);
+  const canvasSegnaRef = React.useRef(null);
+  const contenitoreSegnaRef = React.useRef(null);
+  const dragSegnaRef = React.useRef(null);
+  const modificatoLocalmenteSegnaRef = React.useRef(false);
   // una volta che l'utente inizia a modificare qualcosa qui, lo stato
   // locale diventa l'unica fonte di verità: il ricaricamento dati che
   // "aggiorna" lancia dopo ogni salvataggio serve al resto dell'app (es.
@@ -2064,6 +2110,28 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
       const { data, error } = await supabase.from("font_diplomi").insert(payload).select("id").single();
       if (error) { setMsg("Errore: " + error.message); return; }
       setConfig((c) => ({ ...c, id: data.id }));
+    }
+    ricarica();
+  }
+
+  useEffect(() => {
+    if (!modificatoLocalmenteSegnaRef.current) setConfigSegna(segnaposti || CONFIG_SEGNAPOSTI_DEFAULT);
+  }, [segnaposti]);
+
+  async function aggiornaSegnaposti(campi) {
+    modificatoLocalmenteSegnaRef.current = true;
+    const nuovo = { ...configSegna, ...campi };
+    setConfigSegna(nuovo);
+    const payload = { ...nuovo };
+    delete payload.id;
+    delete payload.ts;
+    if (nuovo.id) {
+      const { error } = await supabase.from("segnaposti_config").update(payload).eq("id", nuovo.id);
+      if (error) { setMsg("Errore: " + error.message); return; }
+    } else {
+      const { data, error } = await supabase.from("segnaposti_config").insert(payload).select("id").single();
+      if (error) { setMsg("Errore: " + error.message); return; }
+      setConfigSegna((c) => ({ ...c, id: data.id }));
     }
     ricarica();
   }
@@ -2125,6 +2193,31 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
       await aggiorna({ diploma_riferimento_path: percorso });
     } catch (e) {
       setMsg("Errore nel caricamento del diploma di riferimento: " + e.message);
+    }
+  }
+
+  async function gestisciUploadFontSegnaposti(file) {
+    if (!file) return;
+    try {
+      const percorso = await caricaFile(file, "diploma-fonts", "font_segnaposto");
+      await aggiornaSegnaposti({ font_path: percorso });
+      setMsg("Font caricato.");
+    } catch (e) {
+      setMsg("Errore nel caricamento del font: " + e.message);
+    }
+  }
+
+  // a differenza del diploma (dove il riferimento serve solo a calibrare
+  // e ogni corso ha il suo template), qui il file caricato è il vero
+  // foglio di stampa: lo stesso, sempre, per ogni classe
+  async function gestisciUploadRiferimentoSegnaposti(file) {
+    if (!file) return;
+    setFileRiferimentoSegnaNuovo(file);
+    try {
+      const percorso = await caricaFile(file, "diploma-templates", "segnaposti-riferimento");
+      await aggiornaSegnaposti({ riferimento_path: percorso });
+    } catch (e) {
+      setMsg("Errore nel caricamento del foglio segnaposti: " + e.message);
     }
   }
 
@@ -2209,6 +2302,90 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
     ? larghezzaMostrata / (dimensioniCanvas.width / SCALA_ANTEPRIMA_DIPLOMA)
     : 1;
 
+  // stesse identiche logiche di sopra (render su canvas, font-face,
+  // scala anteprima), applicate al foglio segnaposti di riferimento
+  useEffect(() => {
+    let annullato = false;
+    async function renderizza() {
+      let buffer;
+      try {
+        if (fileRiferimentoSegnaNuovo) {
+          buffer = await fileRiferimentoSegnaNuovo.arrayBuffer();
+        } else if (configSegna.riferimento_path) {
+          const { data } = supabase.storage.from("diploma-templates").getPublicUrl(configSegna.riferimento_path);
+          const risposta = await fetch(data.publicUrl);
+          buffer = await risposta.arrayBuffer();
+        } else {
+          setDimensioniCanvasSegna(null);
+          return;
+        }
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: SCALA_ANTEPRIMA_DIPLOMA });
+        const canvas = canvasSegnaRef.current;
+        if (!canvas || annullato) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+        if (!annullato) setDimensioniCanvasSegna({ width: viewport.width, height: viewport.height });
+      } catch (e) {
+        if (!annullato) setMsg("Non sono riuscito a mostrare l'anteprima del foglio segnaposti: " + e.message);
+      }
+    }
+    renderizza();
+    return () => { annullato = true; };
+  }, [fileRiferimentoSegnaNuovo, configSegna.riferimento_path]);
+
+  useEffect(() => {
+    async function carica(percorso, famiglia) {
+      if (!percorso) return;
+      try {
+        const { data } = supabase.storage.from("diploma-fonts").getPublicUrl(percorso);
+        const font = new FontFace(famiglia, `url(${data.publicUrl})`);
+        await font.load();
+        document.fonts.add(font);
+      } catch { /* niente da fare: resta il font di sistema in anteprima */ }
+    }
+    carica(configSegna.font_path, "fontSegnaposto");
+  }, [configSegna.font_path]);
+
+  useEffect(() => {
+    if (!fileRiferimentoSegnaNuovo && !configSegna.riferimento_path) return;
+    const el = contenitoreSegnaRef.current;
+    if (!el) return;
+    const osservatore = new ResizeObserver((voci) => {
+      for (const voce of voci) setLarghezzaMostrataSegna(voce.contentRect.width);
+    });
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, [fileRiferimentoSegnaNuovo, configSegna.riferimento_path]);
+
+  const scalaAnteprimaTestoSegna = (dimensioniCanvasSegna && larghezzaMostrataSegna)
+    ? larghezzaMostrataSegna / (dimensioniCanvasSegna.width / SCALA_ANTEPRIMA_DIPLOMA)
+    : 1;
+
+  function iniziaDragSegna(e, chiave) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragSegnaRef.current = { chiave, pointerId: e.pointerId };
+    setSlotTrascinato(chiave);
+  }
+  function muoviDragSegna(e) {
+    const d = dragSegnaRef.current;
+    if (!d || e.pointerId !== d.pointerId || !contenitoreSegnaRef.current) return;
+    const rect = contenitoreSegnaRef.current.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    setConfigSegna((c) => ({ ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
+  }
+  function fineDragSegna() {
+    const d = dragSegnaRef.current;
+    if (!d) return;
+    dragSegnaRef.current = null;
+    setSlotTrascinato(null);
+    aggiornaSegnaposti({ [`${d.chiave}_pos_x`]: configSegna[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: configSegna[`${d.chiave}_pos_y`] });
+  }
+
   function iniziaDrag(e, chiave) {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -2277,7 +2454,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
 
       <div style={cardStyle}>
         <div style={hStyle}>Font</div>
-        <div style={subStyle}>Usati per scrivere i 3 testi su ogni diploma stampato.</div>
+        <div style={subStyle}>Usati per scrivere i 3 testi su ogni diploma stampato, e il nome sui segnaposti.</div>
         {[
           { campo: "font_allievo_path", etichetta: "Font Allievo" },
           { campo: "font_data_path", etichetta: "Font città e data" },
@@ -2295,6 +2472,17 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
             </div>
           </Field>
         ))}
+        <Field label="Font segnaposto">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              type="file"
+              accept=".ttf,.otf,font/ttf,font/otf"
+              style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+              onChange={(e) => gestisciUploadFontSegnaposti(e.target.files?.[0] || null)}
+            />
+            {configSegna.font_path ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun font caricato</span>}
+          </div>
+        </Field>
       </div>
 
       <div style={cardStyle}>
@@ -2399,6 +2587,99 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, ricarica, onBack }) {
                 </select>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Regolazione segnaposto</div>
+        <div style={subStyle}>
+          A differenza del diploma, qui il file caricato è il vero foglio A4 che verrà stampato (non solo un
+          riferimento): trascina ciascuno dei {POSTI_PER_PAGINA_SEGNAPOSTI} nomi di prova nel punto esatto della
+          griglia. Se una classe ha più di {POSTI_PER_PAGINA_SEGNAPOSTI} iscritti, la stampa genera altre pagine
+          ripartendo dal primo posto.
+        </div>
+        <Field label="Segnaposti di riferimento (PDF A4)">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              type="file"
+              accept="application/pdf"
+              style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+              onChange={(e) => gestisciUploadRiferimentoSegnaposti(e.target.files?.[0] || null)}
+            />
+            {(fileRiferimentoSegnaNuovo || configSegna.riferimento_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun foglio caricato</span>}
+          </div>
+        </Field>
+
+        {(fileRiferimentoSegnaNuovo || configSegna.riferimento_path) && (
+          <div
+            ref={contenitoreSegnaRef}
+            style={{ position: "relative", marginTop: 16, width: "100%", maxWidth: dimensioniCanvasSegna?.width || 800, touchAction: "none" }}
+          >
+            <canvas ref={canvasSegnaRef} style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}` }} />
+            {SLOT_SEGNAPOSTI.map(({ chiave, numero }) => (
+              <div
+                key={chiave}
+                onPointerDown={(e) => iniziaDragSegna(e, chiave)}
+                onPointerMove={muoviDragSegna}
+                onPointerUp={fineDragSegna}
+                onPointerCancel={fineDragSegna}
+                style={{
+                  position: "absolute",
+                  left: `${configSegna[`${chiave}_pos_x`]}%`,
+                  top: `${configSegna[`${chiave}_pos_y`]}%`,
+                  transform: "translate(-50%, -50%)",
+                  display: "flex",
+                  justifyContent: "center",
+                  minWidth: 40,
+                  cursor: "grab",
+                  padding: 4,
+                  border: `2px dashed #2563EB`,
+                  borderRadius: 4,
+                  background: slotTrascinato === chiave ? "#2563EB22" : "transparent",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: configSegna.font_size * scalaAnteprimaTestoSegna,
+                    color: configSegna.colore,
+                    fontFamily: configSegna.font_path ? "fontSegnaposto" : undefined,
+                    whiteSpace: "nowrap",
+                    userSelect: "none",
+                    pointerEvents: "none",
+                  }}
+                >
+                  Nome {numero}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(fileRiferimentoSegnaNuovo || configSegna.riferimento_path) && (
+          <div style={{ marginTop: 18, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>Dimensione font (uguale per tutti i posti)</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                onClick={() => aggiornaSegnaposti({ font_size: Math.max(6, configSegna.font_size - 1) })}
+                style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+              >
+                −
+              </button>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 26, textAlign: "center" }}>{configSegna.font_size}</span>
+              <button
+                onClick={() => aggiornaSegnaposti({ font_size: Math.min(120, configSegna.font_size + 1) })}
+                style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+              >
+                +
+              </button>
+            </div>
+            <input
+              type="color"
+              value={configSegna.colore}
+              onChange={(e) => aggiornaSegnaposti({ colore: e.target.value })}
+              style={{ width: 36, height: 30, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6 }}
+            />
           </div>
         )}
       </div>
@@ -3650,7 +3931,7 @@ function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -3687,6 +3968,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [mostraGestione, setMostraGestione] = useState(sottoVistaIniziale?.mostraGestione ?? false);
   const [linkMaster, setLinkMaster] = useState("");
   const [generandoDiplomi, setGenerandoDiplomi] = useState(false);
+  const [generandoSegnaposti, setGenerandoSegnaposti] = useState(false);
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -3765,12 +4047,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
       const testoFirma = masterCorso ? toTitleCase(masterCorso.nome) : "";
 
-      async function scaricaBytes(bucket, percorso) {
-        const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
-        const risposta = await fetch(data.publicUrl);
-        if (!risposta.ok) throw new Error(`impossibile scaricare ${percorso}`);
-        return new Uint8Array(await risposta.arrayBuffer());
-      }
+      const scaricaBytes = scaricaBytesStorage;
 
       const templateBytes = await scaricaBytes("diploma-templates", corso.diploma_template_path);
       const templateDoc = await PDFDocument.load(templateBytes);
@@ -3850,6 +4127,68 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       window.alert("Errore nella generazione dei diplomi: " + e.message);
     } finally {
       setGenerandoDiplomi(false);
+    }
+  }
+
+  // stampa i segnaposti (nome allievo) per tutti gli iscritti di questa
+  // classe: usa direttamente il foglio "Segnaposti di riferimento"
+  // caricato in Setting diplomi come vero e proprio template di stampa
+  // (a differenza dei diplomi, qui non c'è un template diverso per ogni
+  // corso). Se gli iscritti superano i posti di una pagina, se ne
+  // generano altre, ripartendo dal primo posto della griglia
+  async function stampaSegnaposti() {
+    const cfg = segnaposti || CONFIG_SEGNAPOSTI_DEFAULT;
+    if (!cfg.riferimento_path) {
+      window.alert('Nessun foglio segnaposti di riferimento caricato — impostalo da Setting diplomi.');
+      return;
+    }
+    if (listaIscritti.length === 0) {
+      window.alert("Non ci sono iscritti in questa classe.");
+      return;
+    }
+    setGenerandoSegnaposti(true);
+    try {
+      const templateBytes = await scaricaBytesStorage("diploma-templates", cfg.riferimento_path);
+      const templateDoc = await PDFDocument.load(templateBytes);
+
+      const outputPdf = await PDFDocument.create();
+      outputPdf.registerFontkit(fontkit);
+      let font = null;
+      if (cfg.font_path) {
+        try {
+          const bytesFont = await scaricaBytesStorage("diploma-fonts", cfg.font_path);
+          font = await outputPdf.embedFont(bytesFont);
+        } catch { /* ripiego sotto */ }
+      }
+      if (!font) font = await outputPdf.embedFont(StandardFonts.Helvetica);
+
+      for (let inizio = 0; inizio < listaIscritti.length; inizio += POSTI_PER_PAGINA_SEGNAPOSTI) {
+        const gruppo = listaIscritti.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
+        const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
+        outputPdf.addPage(pagina);
+        gruppo.forEach((iscritto, idx) => {
+          const slot = SLOT_SEGNAPOSTI[idx];
+          disegnaTestoDiploma(pagina, toTitleCase(`${iscritto.nome} ${iscritto.cognome}`), {
+            posX: cfg[`${slot.chiave}_pos_x`], posY: cfg[`${slot.chiave}_pos_y`], fontSize: cfg.font_size,
+            colore: cfg.colore, allineamento: "center", font,
+          });
+        });
+      }
+
+      const bytesFinali = await outputPdf.save();
+      const blob = new Blob([bytesFinali], { type: "application/pdf" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `segnaposti-${slugify(corso.nome)}-${corsoData.data_fine}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      window.alert("Errore nella generazione dei segnaposti: " + e.message);
+    } finally {
+      setGenerandoSegnaposti(false);
     }
   }
 
@@ -4204,6 +4543,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             {mostraGestione && (
               <Button variant="ghost" onClick={stampaDiplomi} disabled={generandoDiplomi}>
                 {generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"}
+              </Button>
+            )}
+            {mostraGestione && (
+              <Button variant="ghost" onClick={stampaSegnaposti} disabled={generandoSegnaposti}>
+                {generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto"}
               </Button>
             )}
             {!mostraGestione && (
@@ -5096,6 +5440,7 @@ export default function App() {
   const [leva, setLeva] = useState([]);
   const [fontDiplomi, setFontDiplomi] = useState(null); // riga singola di impostazioni globali stampa diplomi, o null se non ancora creata
   const [diplomaEccezioni, setDiplomaEccezioni] = useState([]); // diplomi "eccezione" caricabili sul singolo iscritto, al posto del template del corso
+  const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -5107,7 +5452,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -5118,6 +5463,7 @@ export default function App() {
       supabase.from("leva").select("*").order("nome"),
       supabase.from("font_diplomi").select("*").limit(1),
       supabase.from("diploma_eccezioni").select("*").order("nome"),
+      supabase.from("segnaposti_config").select("*").limit(1),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -5129,6 +5475,7 @@ export default function App() {
     setLeva(lv.data || []);
     setFontDiplomi(fd.data?.[0] || null);
     setDiplomaEccezioni(de.data || []);
+    setSegnaposti(sg.data?.[0] || null);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -5465,7 +5812,7 @@ export default function App() {
       )}
 
       {view === "fontdiplomi" && (
-        <FontDiplomi fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <FontDiplomi fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni} segnaposti={segnaposti} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "statistiche" && (
@@ -5511,6 +5858,7 @@ export default function App() {
           master={master}
           fontDiplomi={fontDiplomi}
           diplomaEccezioni={diplomaEccezioni}
+          segnaposti={segnaposti}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
