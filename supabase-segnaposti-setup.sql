@@ -16,6 +16,7 @@ create table if not exists public.segnaposti_config (
   riferimento_path text,
   font_size int not null default 20,
   colore text not null default '#000000',
+  limite_pos_x numeric not null default 85,
   slot1_pos_x numeric not null default 50, slot1_pos_y numeric not null default 12.5,
   slot2_pos_x numeric not null default 50, slot2_pos_y numeric not null default 25,
   slot3_pos_x numeric not null default 50, slot3_pos_y numeric not null default 37.5,
@@ -28,5 +29,9 @@ create table if not exists public.segnaposti_config (
 alter table public.segnaposti_config enable row level security;
 drop policy if exists "accesso interno segnaposti_config" on public.segnaposti_config;
 create policy "accesso interno segnaposti_config" on public.segnaposti_config for all to anon using (true) with check (true);
+
+-- se la tabella esisteva gia' da una precedente esecuzione di questo
+-- file (prima che si aggiungesse la linea di larghezza massima)
+alter table public.segnaposti_config add column if not exists limite_pos_x numeric not null default 85;
 
 notify pgrst, 'reload schema';

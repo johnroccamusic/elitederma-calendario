@@ -535,6 +535,20 @@ function toTitleCase(testo) {
     .map((parola) => (parola ? parola.charAt(0).toUpperCase() + parola.slice(1) : parola))
     .join("");
 }
+// testo da stampare sul segnaposto di ciascun iscritto della classe:
+// solo il nome (già maiuscolo, così com'è salvato). Se nella stessa
+// classe più iscritti condividono lo stesso nome, si aggiunge
+// l'iniziale del cognome per distinguerli (es. "GIULIA G.")
+function testiSegnaposto(listaIscritti) {
+  const conteggio = new Map();
+  listaIscritti.forEach((i) => conteggio.set(i.nome, (conteggio.get(i.nome) || 0) + 1));
+  const mappa = new Map();
+  listaIscritti.forEach((i) => {
+    const testo = conteggio.get(i.nome) > 1 ? `${i.nome} ${i.cognome.charAt(0)}.` : i.nome;
+    mappa.set(i.id, testo);
+  });
+  return mappa;
+}
 // "#RRGGBB" → {r,g,b} 0-1, il formato richiesto dalla funzione rgb() di pdf-lib
 function hexInRgb01(hex) {
   const cifre = (hex || "#000000").replace("#", "").match(/.{1,2}/g);
@@ -2034,6 +2048,10 @@ const CONFIG_SEGNAPOSTI_DEFAULT = {
   riferimento_path: null,
   font_size: 20,
   colore: "#000000",
+  // linea verticale trascinabile: la distanza tra questa linea e il
+  // centro di ciascun posto (in entrambe le direzioni, testo centrato)
+  // definisce la larghezza massima consentita per quel nome in stampa
+  limite_pos_x: 85,
   // posizioni di default: 7 righe distribuite lungo il foglio, poi si
   // trascinano nel punto esatto sul foglio di riferimento caricato
   slot1_pos_x: 50, slot1_pos_y: 12.5,
@@ -2076,9 +2094,11 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
   const [dimensioniCanvasSegna, setDimensioniCanvasSegna] = useState(null);
   const [larghezzaMostrataSegna, setLarghezzaMostrataSegna] = useState(null);
   const [slotTrascinato, setSlotTrascinato] = useState(null);
+  const [limiteTrascinato, setLimiteTrascinato] = useState(false);
   const canvasSegnaRef = React.useRef(null);
   const contenitoreSegnaRef = React.useRef(null);
   const dragSegnaRef = React.useRef(null);
+  const dragLimiteRef = React.useRef(null);
   const modificatoLocalmenteSegnaRef = React.useRef(false);
   // una volta che l'utente inizia a modificare qualcosa qui, lo stato
   // locale diventa l'unica fonte di verità: il ricaricamento dati che
@@ -2386,6 +2406,29 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
     aggiornaSegnaposti({ [`${d.chiave}_pos_x`]: configSegna[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: configSegna[`${d.chiave}_pos_y`] });
   }
 
+  // linea verticale trascinabile (solo orizzontalmente) che segna la
+  // larghezza massima del testo: in stampa, un nome più largo di questo
+  // limite viene rimpicciolito solo per quella riga, non per tutte
+  function iniziaDragLimite(e) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragLimiteRef.current = { pointerId: e.pointerId };
+    setLimiteTrascinato(true);
+  }
+  function muoviDragLimite(e) {
+    const d = dragLimiteRef.current;
+    if (!d || e.pointerId !== d.pointerId || !contenitoreSegnaRef.current) return;
+    const rect = contenitoreSegnaRef.current.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    setConfigSegna((c) => ({ ...c, limite_pos_x: x }));
+  }
+  function fineDragLimite() {
+    if (!dragLimiteRef.current) return;
+    dragLimiteRef.current = null;
+    setLimiteTrascinato(false);
+    aggiornaSegnaposti({ limite_pos_x: configSegna.limite_pos_x });
+  }
+
   function iniziaDrag(e, chiave) {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -2597,7 +2640,8 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
           A differenza del diploma, qui il file caricato è il vero foglio A4 che verrà stampato (non solo un
           riferimento): trascina ciascuno dei {POSTI_PER_PAGINA_SEGNAPOSTI} nomi di prova nel punto esatto della
           griglia. Se una classe ha più di {POSTI_PER_PAGINA_SEGNAPOSTI} iscritti, la stampa genera altre pagine
-          ripartendo dal primo posto.
+          ripartendo dal primo posto. La riga tratteggiata rossa è la larghezza massima del testo: se un nome in
+          stampa la supera, si rimpicciolisce automaticamente solo per quel nome, senza toccare gli altri.
         </div>
         <Field label="Segnaposti di riferimento (PDF A4)">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -2617,6 +2661,27 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
             style={{ position: "relative", marginTop: 16, width: "100%", maxWidth: dimensioniCanvasSegna?.width || 800, touchAction: "none" }}
           >
             <canvas ref={canvasSegnaRef} style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}` }} />
+            <div
+              onPointerDown={iniziaDragLimite}
+              onPointerMove={muoviDragLimite}
+              onPointerUp={fineDragLimite}
+              onPointerCancel={fineDragLimite}
+              title="Trascina per impostare la larghezza massima del testo"
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: `${configSegna.limite_pos_x}%`,
+                width: 20,
+                transform: "translateX(-50%)",
+                cursor: "ew-resize",
+                display: "flex",
+                justifyContent: "center",
+                touchAction: "none",
+              }}
+            >
+              <div style={{ width: 0, height: "100%", borderLeft: `2px dashed #C0392B`, background: limiteTrascinato ? "rgba(192,57,43,0.08)" : "transparent" }} />
+            </div>
             {SLOT_SEGNAPOSTI.map(({ chiave, numero }) => (
               <div
                 key={chiave}
@@ -4162,14 +4227,28 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       }
       if (!font) font = await outputPdf.embedFont(StandardFonts.Helvetica);
 
+      const testi = testiSegnaposto(listaIscritti);
+
       for (let inizio = 0; inizio < listaIscritti.length; inizio += POSTI_PER_PAGINA_SEGNAPOSTI) {
         const gruppo = listaIscritti.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
         const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
         outputPdf.addPage(pagina);
+        const { width: larghezzaPagina } = pagina.getSize();
         gruppo.forEach((iscritto, idx) => {
           const slot = SLOT_SEGNAPOSTI[idx];
-          disegnaTestoDiploma(pagina, toTitleCase(`${iscritto.nome} ${iscritto.cognome}`), {
-            posX: cfg[`${slot.chiave}_pos_x`], posY: cfg[`${slot.chiave}_pos_y`], fontSize: cfg.font_size,
+          const posX = cfg[`${slot.chiave}_pos_x`];
+          const testo = testi.get(iscritto.id);
+          // il testo è centrato sul posto: la distanza dalla linea di
+          // limite, raddoppiata (simmetrica su entrambi i lati), è la
+          // larghezza massima consentita per QUESTO nome in stampa
+          const larghezzaMax = Math.abs((cfg.limite_pos_x ?? 100) - posX) / 100 * larghezzaPagina * 2;
+          let fontSize = cfg.font_size;
+          if (larghezzaMax > 0) {
+            const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);
+            if (larghezzaTesto > larghezzaMax) fontSize = Math.max(6, (larghezzaMax / larghezzaTesto) * fontSize);
+          }
+          disegnaTestoDiploma(pagina, testo, {
+            posX, posY: cfg[`${slot.chiave}_pos_y`], fontSize,
             colore: cfg.colore, allineamento: "center", font,
           });
         });
@@ -5691,8 +5770,8 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
           <div style={{ ...fontDisplay, fontSize: 17, color: NAVY, marginBottom: 30, textAlign: "center", letterSpacing: 0.5 }}>ELITEDERMA</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20 }}>
-            <Button onClick={apriImpostazioni}>Setting</Button>
-            <Button onClick={apriStatistiche}>Statistiche</Button>
+            <Button onClick={apriImpostazioni} style={{ width: 140, textAlign: "center" }}>Setting</Button>
+            <Button onClick={apriStatistiche} style={{ width: 140, textAlign: "center" }}>Statistiche</Button>
           </div>
           <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
           <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
