@@ -1619,15 +1619,25 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Setting" onBack={onBack} />
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-        <Button onClick={() => setShowCorsoModal(true)}>Aggiungi corso</Button>
-        <Button onClick={() => setShowLocModal(true)}>Aggiungi location</Button>
-        <Button onClick={() => setShowMasterModal(true)}>Aggiungi Master</Button>
-        <Button onClick={() => setShowHotelModal(true)}>Aggiungi Hotel</Button>
-        <Button onClick={() => setShowAssistenteModal(true)}>Aggiungi Assistente</Button>
-        <Button onClick={() => setShowLevaModal(true)}>Aggiungi Leva</Button>
-        <Button variant="ghost" onClick={onApriAssegnazioneMaster}>Assegnazione Master</Button>
-        <Button variant="ghost" onClick={onApriFontDiplomi}>Setting diplomi</Button>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
+        {[
+          { etichetta: "Definisci corsi", onClick: () => setShowCorsoModal(true) },
+          { etichetta: "Definisci Location", onClick: () => setShowLocModal(true) },
+          { etichetta: "Definisci Master", onClick: () => setShowMasterModal(true) },
+          { etichetta: "Definisci Hotel", onClick: () => setShowHotelModal(true) },
+          { etichetta: "Definisci Assistenti", onClick: () => setShowAssistenteModal(true) },
+          { etichetta: "Definisci Leve", onClick: () => setShowLevaModal(true) },
+          { etichetta: "Assegna Master", onClick: onApriAssegnazioneMaster },
+          { etichetta: "Setting diplomi", onClick: onApriFontDiplomi },
+        ].map(({ etichetta, onClick }) => (
+          <Button
+            key={etichetta}
+            onClick={onClick}
+            style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", whiteSpace: "normal", lineHeight: 1.25, padding: "6px 8px" }}
+          >
+            {etichetta}
+          </Button>
+        ))}
       </div>
 
       <div style={cardStyle}>
