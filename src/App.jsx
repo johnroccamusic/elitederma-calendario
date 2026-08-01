@@ -122,6 +122,29 @@ function IconaWhatsapp({ size = 16 }) {
     </svg>
   );
 }
+// icone delle 3 card della home (Calendario/Cerca iscritto/Archivio)
+function IconaCalendarioCard({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4" /><path d="M16 3v4" /><path d="M3 10h18" />
+    </svg>
+  );
+}
+function IconaRicercaCard({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+function IconaOrologioCard({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" />
+    </svg>
+  );
+}
 // data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
 // ultime iscrizioni per giorno di inserimento)
 function fmtDataLunga(dataStr) {
@@ -339,7 +362,40 @@ function BadgeFileCaricato() {
   );
 }
 
-function CardHome({ title, sub, onClick }) {
+// senza "icona": riga singola titolo+freccia (usato in Statistiche).
+// con "icona": card più alta, icona in alto a sinistra e freccia in
+// alto a destra sulla stessa riga, titolo e sottotitolo sotto (usato
+// nella home, per le card affiancate in riga)
+function CardHome({ title, sub, onClick, icona }) {
+  if (icona) {
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          ...fontBody,
+          textAlign: "left",
+          width: "100%",
+          height: "100%",
+          background: "#FFFFFF",
+          border: `1px solid ${CREAM_BORDER}`,
+          borderRadius: 14,
+          padding: 14,
+          cursor: "pointer",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 9, background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
+            {icona}
+          </div>
+          <div style={{ fontSize: 18, color: MUTED }}>&rsaquo;</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 15, color: NAVY }}>{title}</div>
+        {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{sub}</div>}
+      </button>
+    );
+  }
   return (
     <button
       onClick={onClick}
@@ -1890,82 +1946,45 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         <PopupEliminaData evento={popupEliminaData} corsoById={corsoByIdImp} locById={locByIdImp} onElimina={eliminaDataCliccata} onChiudi={() => setPopupEliminaData(null)} />
       )}
 
-      <div style={cardStyle}>
-        <div style={{ ...hStyle, textAlign: "center" }}>PANNELLO DI GESTIONE DATE</div>
-        <div style={subStyle}>Solo le edizioni future, divise per città e corso. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
+      <div>
+        <div style={subStyle}>Solo le edizioni future. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
 
-        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ position: "relative" }}>
-            <Button
-              variant={filtroCorsoDate ? "primary" : "ghost"}
-              onClick={() => { setApriFiltroCorsoDate((v) => !v); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-            >
-              {filtroCorsoDate ? corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase() : "Filtra per corso"}
-            </Button>
-            {apriFiltroCorsoDate && (
-              <select
-                autoFocus
-                ref={selectFiltroCorsoDateRef}
-                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                value={filtroCorsoDate}
-                onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
-                onBlur={() => setApriFiltroCorsoDate(false)}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>Date in programmazione</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <FiltroPill
+              etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
+              valore={filtroCorsoDate} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase()}
+              aperto={apriFiltroCorsoDate} selectRef={selectFiltroCorsoDateRef}
+              onToggle={() => { setApriFiltroCorsoDate((v) => !v); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+              onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
+              onBlur={() => setApriFiltroCorsoDate(false)}
+            />
+            <FiltroPill
+              etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
+              valore={filtroCittaDate} etichettaAttiva={location.find((l) => l.id === filtroCittaDate)?.nome.toUpperCase()}
+              aperto={apriFiltroCittaDate} selectRef={selectFiltroCittaDateRef}
+              onToggle={() => { setApriFiltroCittaDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroMasterDate(false); }}
+              onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
+              onBlur={() => setApriFiltroCittaDate(false)}
+            />
+            <FiltroPill
+              etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
+              valore={filtroMasterDate} etichettaAttiva={master.find((m) => m.id === filtroMasterDate)?.nome.toUpperCase()}
+              aperto={apriFiltroMasterDate} selectRef={selectFiltroMasterDateRef}
+              onToggle={() => { setApriFiltroMasterDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); }}
+              onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
+              onBlur={() => setApriFiltroMasterDate(false)}
+            />
+            {(filtroCorsoDate || filtroCittaDate || filtroMasterDate) && (
+              <button
+                onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
               >
-                <option value="">Tutti i corsi</option>
-                {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
-              </select>
+                Reset filtri
+              </button>
             )}
           </div>
-          <div style={{ position: "relative" }}>
-            <Button
-              variant={filtroCittaDate ? "primary" : "ghost"}
-              onClick={() => { setApriFiltroCittaDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroMasterDate(false); }}
-            >
-              {filtroCittaDate ? location.find((l) => l.id === filtroCittaDate)?.nome.toUpperCase() : "Filtra per città"}
-            </Button>
-            {apriFiltroCittaDate && (
-              <select
-                autoFocus
-                ref={selectFiltroCittaDateRef}
-                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                value={filtroCittaDate}
-                onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
-                onBlur={() => setApriFiltroCittaDate(false)}
-              >
-                <option value="">Tutte le città</option>
-                {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-              </select>
-            )}
-          </div>
-          <div style={{ position: "relative" }}>
-            <Button
-              variant={filtroMasterDate ? "primary" : "ghost"}
-              onClick={() => { setApriFiltroMasterDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); }}
-            >
-              {filtroMasterDate ? master.find((m) => m.id === filtroMasterDate)?.nome.toUpperCase() : "Filtra per master"}
-            </Button>
-            {apriFiltroMasterDate && (
-              <select
-                autoFocus
-                ref={selectFiltroMasterDateRef}
-                style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                value={filtroMasterDate}
-                onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
-                onBlur={() => setApriFiltroMasterDate(false)}
-              >
-                <option value="">Tutte le master</option>
-                {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-              </select>
-            )}
-          </div>
-          {(filtroCorsoDate || filtroCittaDate || filtroMasterDate) && (
-            <Button
-              variant="ghost"
-              onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-            >
-              Cancella filtri
-            </Button>
-          )}
         </div>
 
         <DateRaggruppatePerCitta
@@ -3005,6 +3024,40 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   );
 }
 
+// tasto filtro "a pillola": pieno/scuro quando un valore è scelto,
+// altrimenti contornato; al click apre sotto di sé un <select> nativo
+// con l'elenco delle opzioni. Usato per i filtri corso/città/master
+// sia in Home che in Gestione date
+function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={onToggle}
+        style={{
+          ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20,
+          border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
+          background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap",
+        }}
+      >
+        {valore ? etichettaAttiva : etichetta}
+      </button>
+      {aperto && (
+        <select
+          autoFocus
+          ref={selectRef}
+          style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
+          value={valore}
+          onChange={onChange}
+          onBlur={onBlur}
+        >
+          <option value="">{opzioneVuota}</option>
+          {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
 function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -3068,52 +3121,66 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
 
   return (
     <div>
-      {cittaOrdinate.map((c, idx) => (
-        <div key={c.nome} style={{ marginBottom: 24, marginTop: idx > 0 ? 20 : 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 600, color: "#fff", background: "#000", borderRadius: 8, padding: "1px 16px", marginBottom: 14, textAlign: "center" }}>{c.nome.toUpperCase()}</div>
+      {cittaOrdinate.map((c, idx) => {
+        const totaleCorsiCitta = Object.values(c.mesi).reduce((tot, m) => tot + m.voci.length, 0);
+        return (
+          <div key={c.nome} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, marginTop: idx > 0 ? 0 : 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                <span style={{ width: 4, height: 22, borderRadius: 2, background: "#C9A26D", flexShrink: 0 }} />
+                <span style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>{toTitleCase(c.nome)}</span>
+              </div>
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"}
+              </span>
+            </div>
           {Object.keys(c.mesi)
             .sort()
             .map((chiaveMese) => {
               const gruppoMese = c.mesi[chiaveMese];
               return (
                 <div key={chiaveMese} style={{ marginBottom: 14 }}>
-                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1, paddingBottom: 8, borderBottom: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
                     {gruppoMese.etichetta}
                   </div>
                   {gruppoMese.voci
                     .slice()
                     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-                    .map((cd) => {
+                    .map((cd, i) => {
                       const corso = corsoById[cd.corso_id];
+                      const sfondoRiga = i % 2 === 0 ? BG : "#fff";
+                      const coloreBadge = i % 2 === 0 ? { bg: "#F3E3C9", testo: "#7A5A22" } : { bg: "#DCEAFB", testo: "#1D4ED8" };
                       return onEdit ? (
-                        <div key={cd.id} style={{ padding: "9px 4px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ ...fontBody, fontSize: 15, color: NAVY, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                        <div key={cd.id} style={{ marginBottom: 8 }}>
+                          <div style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                             <span
                               onClick={onApriData ? () => onApriData(cd) : undefined}
                               title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
-                              style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: "1 1 auto", cursor: onApriData ? "pointer" : undefined }}
+                              style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto", cursor: onApriData ? "pointer" : undefined }}
                             >
-                              <span style={{ width: 14, height: 14, borderRadius: 4, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                              <b style={{ color: NAVY, fontWeight: 700, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</b>
-                              {cd.master_id && (
-                                <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  · {masterById[cd.master_id]?.nome?.toUpperCase() || "?"}
-                                </span>
-                              )}
+                              <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                              <span style={{ minWidth: 0 }}>
+                                <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
+                                {cd.master_id && (
+                                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    Master: {toTitleCase(masterById[cd.master_id]?.nome || "?")}
+                                  </div>
+                                )}
+                              </span>
                             </span>
-                            <span style={{ flexShrink: 0 }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
-                            <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                              <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
                               {iscritti && (() => {
                                 const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-                                const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+                                const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
                                 const liberi = Math.max(0, max - occupati);
                                 return (
                                   <span
                                     onClick={onApriData ? () => onApriData(cd) : undefined}
                                     title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
-                                    style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, padding: "5px 10px", whiteSpace: "nowrap", cursor: onApriData ? "pointer" : undefined }}
+                                    style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", cursor: onApriData ? "pointer" : undefined }}
                                   >
-                                    {liberi} POST{liberi === 1 ? "O" : "I"}
+                                    {liberi} post{liberi === 1 ? "o" : "i"}
                                   </span>
                                 );
                               })()}
@@ -3139,6 +3206,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                                   <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                                 </svg>
                               </button>
+                              {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
                             </span>
                           </div>
                           {idInModifica === cd.id && renderModifica && renderModifica(cd)}
@@ -3147,54 +3215,56 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                         <div
                           key={cd.id}
                           onClick={() => onApriData?.(cd)}
-                          style={{ padding: "9px 4px", cursor: onApriData ? "pointer" : "default" }}
+                          style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", marginBottom: 8, cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
                         >
-                          <div style={{ ...fontBody, fontSize: 15, color: NAVY, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                            <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, flex: "1 1 auto" }}>
-                              <span style={{ width: 14, height: 14, borderRadius: 4, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                              <b style={{ color: NAVY, fontWeight: 700 }}>{corso?.nome?.toUpperCase() || "?"}</b>
-                            </span>
-                            <span style={{ flexShrink: 0 }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
-                            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                              {iscritti && (() => {
-                                const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-                                const occupati = iscritti.filter((i) => i.corso_data_id === cd.id).length;
-                                const liberi = Math.max(0, max - occupati);
-                                return (
-                                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, border: `1px solid ${NAVY}`, borderRadius: 8, padding: "5px 10px", whiteSpace: "nowrap" }}>
-                                    {liberi} POST{liberi === 1 ? "O" : "I"}
-                                  </span>
-                                );
-                              })()}
-                              {onDelete && (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }}
-                                  title="Elimina"
-                                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-                                >
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="3 6 5 6 21 6" />
-                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                    <path d="M10 11v6" /><path d="M14 11v6" />
-                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                  </svg>
-                                </button>
+                          <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
+                            <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                            <span style={{ minWidth: 0 }}>
+                              <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
+                              {cd.master_id && (
+                                <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                  Master: {toTitleCase(masterById[cd.master_id]?.nome || "?")}
+                                </div>
                               )}
                             </span>
-                          </div>
-                          {cd.master_id && (
-                            <div style={{ ...fontBody, fontSize: 11, color: MUTED, opacity: 0.75, paddingLeft: 20 }}>
-                              Master: {masterById[cd.master_id]?.nome?.toUpperCase() || "?"}
-                            </div>
-                          )}
+                          </span>
+                          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+                            {iscritti && (() => {
+                              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+                              const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
+                              const liberi = Math.max(0, max - occupati);
+                              return (
+                                <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap" }}>
+                                  {liberi} post{liberi === 1 ? "o" : "i"}
+                                </span>
+                              );
+                            })()}
+                            {onDelete && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }}
+                                title="Elimina"
+                                style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" />
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                  <path d="M10 11v6" /><path d="M14 11v6" />
+                                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                                </svg>
+                              </button>
+                            )}
+                            {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
+                          </span>
                         </div>
                       );
                     })}
                 </div>
               );
             })}
-        </div>
-      ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -5902,91 +5972,73 @@ export default function App() {
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto" }} />
           </div>
           <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 44, marginBottom: 30 }}>CALENDARIO CORSI</div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-            <Button onClick={apriGestioneDate} style={{ width: 140, textAlign: "center" }}>Gestione date</Button>
-            <Button onClick={apriStatistiche} style={{ width: 140, textAlign: "center" }}>Statistiche</Button>
-            <Button onClick={apriImpostazioni} style={{ width: 140, textAlign: "center" }}>Setting</Button>
+          <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, marginBottom: 20 }}>
+            {[
+              { etichetta: "Gestione date", onClick: apriGestioneDate },
+              { etichetta: "Statistiche", onClick: apriStatistiche },
+              { etichetta: "Setting", onClick: apriImpostazioni },
+            ].map(({ etichetta, onClick }) => (
+              <button
+                key={etichetta}
+                onClick={onClick}
+                style={{
+                  ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26,
+                  padding: "10px 6px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer",
+                  whiteSpace: "nowrap", textAlign: "center",
+                }}
+              >
+                {etichetta}
+              </button>
+            ))}
           </div>
-          <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} />
-          <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} />
-          <CardHome title="Archivio corsi passati" sub="Corsi con date già concluse" onClick={() => setView("archivio")} />
-
-          <div style={{ ...fontDisplay, fontWeight: 700, fontSize: 20, color: NAVY, margin: "34px 0 14px", textAlign: "center", letterSpacing: 1, lineHeight: 1.25 }}>
-            DATE IN<br />PROGRAMMAZIONE
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 140px" }}>
+              <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} icona={<IconaCalendarioCard />} />
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
+              <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} icona={<IconaRicercaCard />} />
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
+              <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} icona={<IconaOrologioCard />} />
+            </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginBottom: 28 }}>
-            <div style={{ position: "relative" }}>
-              <Button
-                variant={filtroCorsoHome ? "primary" : "ghost"}
-                onClick={() => { setApriFiltroCorsoHome((v) => !v); setApriFiltroCittaHome(false); }}
-              >
-                {filtroCorsoHome ? corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase() : "Filtra per corso"}
-              </Button>
-              {apriFiltroCorsoHome && (
-                <select
-                  autoFocus
-                  ref={selectFiltroCorsoHomeRef}
-                  style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                  value={filtroCorsoHome}
-                  onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
-                  onBlur={() => setApriFiltroCorsoHome(false)}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, margin: "34px 0 16px" }}>
+            <div style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>Date in programmazione</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <FiltroPill
+                etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
+                valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
+                aperto={apriFiltroCorsoHome} selectRef={selectFiltroCorsoHomeRef}
+                onToggle={() => { setApriFiltroCorsoHome((v) => !v); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
+                onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
+                onBlur={() => setApriFiltroCorsoHome(false)}
+              />
+              <FiltroPill
+                etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
+                valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
+                aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
+                onToggle={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroMasterHome(false); }}
+                onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
+                onBlur={() => setApriFiltroCittaHome(false)}
+              />
+              <FiltroPill
+                etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
+                valore={filtroMasterHome} etichettaAttiva={master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase()}
+                aperto={apriFiltroMasterHome} selectRef={selectFiltroMasterHomeRef}
+                onToggle={() => { setApriFiltroMasterHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
+                onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
+                onBlur={() => setApriFiltroMasterHome(false)}
+              />
+              {(filtroCorsoHome || filtroCittaHome || filtroMasterHome) && (
+                <button
+                  onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
+                  style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
                 >
-                  <option value="">Tutti i corsi</option>
-                  {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome.toUpperCase()}</option>)}
-                </select>
+                  Reset filtri
+                </button>
               )}
             </div>
-            <div style={{ position: "relative" }}>
-              <Button
-                variant={filtroCittaHome ? "primary" : "ghost"}
-                onClick={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); }}
-              >
-                {filtroCittaHome ? location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase() : "Filtra per città"}
-              </Button>
-              {apriFiltroCittaHome && (
-                <select
-                  autoFocus
-                  ref={selectFiltroCittaHomeRef}
-                  style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                  value={filtroCittaHome}
-                  onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
-                  onBlur={() => setApriFiltroCittaHome(false)}
-                >
-                  <option value="">Tutte le città</option>
-                  {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-                </select>
-              )}
-            </div>
-            <div style={{ position: "relative" }}>
-              <Button
-                variant={filtroMasterHome ? "primary" : "ghost"}
-                onClick={() => { setApriFiltroMasterHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
-              >
-                {filtroMasterHome ? master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase() : "Filtra per master"}
-              </Button>
-              {apriFiltroMasterHome && (
-                <select
-                  autoFocus
-                  ref={selectFiltroMasterHomeRef}
-                  style={{ ...inputStyle, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 10, width: "auto" }}
-                  value={filtroMasterHome}
-                  onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
-                  onBlur={() => setApriFiltroMasterHome(false)}
-                >
-                  <option value="">Tutte le master</option>
-                  {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-                </select>
-              )}
-            </div>
-            {(filtroCorsoHome || filtroCittaHome || filtroMasterHome) && (
-              <Button
-                variant="ghost"
-                onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-              >
-                Cancella filtri
-              </Button>
-            )}
           </div>
 
           <DateRaggruppatePerCitta
