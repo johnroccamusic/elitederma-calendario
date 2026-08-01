@@ -5226,61 +5226,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>
           )}
           {listaIscritti.map((i, idx) => (
-            <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
-              {mostraGestione && (
-                // barra degli strumenti della scheda (come la barra dei
-                // pulsanti in cima a una finestra Mac): le azioni
-                // sull'iscritto vivono qui, non più sparse dentro la scheda
-                <div
-                  style={{
-                    display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2,
-                    margin: "-16px -16px 12px", padding: "6px 10px",
-                    background: "#F7F3E9", borderTopLeftRadius: 14, borderTopRightRadius: 14,
-                    borderBottom: `1px solid ${CREAM_BORDER}`,
-                  }}
-                >
-                  <button
-                    onClick={() => toggleRistampaDiploma(i)}
-                    title="Ristampa solo questo (nel PDF di Stampa diplomi e Stampa segnaposti)"
-                    style={{
-                      border: "none", cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center",
-                      background: i.ristampa_diploma ? "#1D4ED8" : "transparent", color: i.ristampa_diploma ? "#fff" : NAVY,
-                    }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 6 2 18 2 18 9" />
-                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                      <rect x="6" y="14" width="12" height="8" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => apriModificaCompleta(i)}
-                    title="Modifica"
-                    style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex", alignItems: "center" }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </button>
-                  <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "4px 10px", fontSize: 12 }}>
-                    Sposta
-                  </Button>
-                  <button
-                    onClick={() => elimina(i.id)}
-                    title="Elimina"
-                    style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex", alignItems: "center" }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                      <path d="M10 11v6" /><path d="M14 11v6" />
-                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                    </svg>
-                  </button>
-                </div>
-              )}
-              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 10 }}>
+            <div key={i.id} style={{ ...cardStyle, padding: mostraGestione ? 0 : 16, marginBottom: 10, overflow: "hidden" }}>
+              {!mostraGestione && (
+                // fuori da "Contabilità classe": scheda semplice, solo nome e telefono
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 10 }}>
                   <div
                     onClick={() => apriModificaCompleta(i)}
                     title="Clicca per vedere i dati dell'iscritto"
@@ -5300,216 +5249,334 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </span>
                   )}
                 </div>
-                {mostraGestione && (
+              )}
+              {mostraGestione && (
+                <>
+                  {/* barra degli strumenti della scheda (come la barra dei
+                      pulsanti in cima a una finestra Mac): le azioni
+                      sull'iscritto vivono qui, non sparse dentro la scheda */}
                   <div
-                    onClick={() => toggleRicontattato(i)}
-                    style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16, cursor: "pointer" }}
+                    style={{
+                      display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2,
+                      padding: "6px 10px",
+                      background: "#F7F3E9",
+                      borderBottom: `1px solid ${CREAM_BORDER}`,
+                    }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: NAVY }}>
-                      <input type="checkbox" checked={!!i.ricontattato} readOnly style={{ width: 20, height: 20, pointerEvents: "none" }} />
-                      Ricontattato
-                    </div>
-                    <div style={{ display: "flex", gap: 6 }}>
-                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)" }} />
-                      <span style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)" }} />
-                    </div>
+                    <button
+                      onClick={() => toggleRistampaDiploma(i)}
+                      title="Ristampa solo questo (nel PDF di Stampa diplomi e Stampa segnaposti)"
+                      style={{
+                        border: "none", cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center",
+                        background: i.ristampa_diploma ? "#1D4ED8" : "transparent", color: i.ristampa_diploma ? "#fff" : NAVY,
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 6 2 18 2 18 9" />
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                        <rect x="6" y="14" width="12" height="8" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => apriModificaCompleta(i)}
+                      title="Modifica"
+                      style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex", alignItems: "center" }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <Button variant="ghost" onClick={() => setSpostaIscrittoId(spostaIscrittoId === i.id ? null : i.id)} style={{ padding: "4px 10px", fontSize: 12 }}>
+                      Sposta
+                    </Button>
+                    <button
+                      onClick={() => elimina(i.id)}
+                      title="Elimina"
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex", alignItems: "center" }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" /><path d="M14 11v6" />
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
                   </div>
-                )}
-                {mostraGestione && (
-                  <div style={{ marginTop: 6 }}>
-                    <input
-                      type="text"
-                      defaultValue={(i.note_ricontatto || "").toUpperCase()}
-                      placeholder="Note dopo il ricontatto"
-                      onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
-                      style={{ ...inputStyle, fontSize: 13, textTransform: "uppercase" }}
-                    />
-                  </div>
-                )}
-                {mostraGestione && (() => {
-                  const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
-                  const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
-                  return (
-                    <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <Button
-                        onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
-                        style={impostata
-                          ? { padding: "6px 12px", fontSize: 13, background: "#1D4ED8", border: "1px solid #1D4ED8", color: "#fff" }
-                          : { padding: "6px 12px", fontSize: 13, background: "#DBEAFE", border: "1px solid #BFDBFE", color: "#1D4ED8" }
-                        }
-                      >
-                        {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
-                      </Button>
-                      {impostata && (
-                        <>
-                          <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
-                            {eccezioneAttiva ? eccezioneAttiva.nome : ""}
-                            {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
-                            {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
-                          </span>
-                          <button
-                            onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
-                            title="Rimuovi eccezione diploma"
-                            style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6" />
-                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                              <path d="M10 11v6" /><path d="M14 11v6" />
-                              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                            </svg>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })()}
-                {mostraGestione && eccezioneApertaId === i.id && (
-                  <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
-                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>
-                      Eccezione diploma per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:
-                    </div>
-                    <Field label="Diploma da usare (al posto del template normale del corso)">
-                      <select
-                        value={i.diploma_eccezione_id || ""}
-                        onChange={(e) => impostaEccezioneDiploma(i.id, e.target.value || null)}
-                        style={inputStyle}
-                      >
-                        <option value="">Nessuna — usa il template normale del corso</option>
-                        {(diplomaEccezioni || []).map((d) => (
-                          <option key={d.id} value={d.id}>{d.nome}</option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Data da mostrare sul diploma (opzionale — se vuota resta la data del corso)">
-                      <input
-                        type="date"
-                        value={i.diploma_eccezione_data || ""}
-                        min={corsoData.data_inizio}
-                        max={corsoData.data_fine}
-                        onChange={(e) => impostaEccezioneData(i.id, e.target.value || null)}
-                        style={inputStyle}
-                      />
-                    </Field>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 }}>
-                      Il nome dell'allievo e il nome della master restano invariati: cambiano solo il template del diploma e/o la data.
-                    </div>
-                    <Button onClick={() => setEccezioneApertaId(null)}>Salva</Button>
-                  </div>
-                )}
-                {mostraGestione && spostaIscrittoId === i.id && (
-                  <div style={{ marginTop: 10, padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
-                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:</div>
-                    <SelettoreSpostamento
-                      corsi={corsi}
-                      location={location}
-                      corsiDate={corsiDate}
-                      iscritti={iscritti}
-                      corsoDataEscluso={corsoData.id}
-                      onScegli={(cd, corsoTarget, locTarget) => eseguiSpostamento(i, cd, corsoTarget, locTarget)}
-                    />
-                    <Button variant="ghost" onClick={() => setSpostaIscrittoId(null)} style={{ marginTop: 8 }}>Annulla</Button>
-                  </div>
-                )}
-                {mostraGestione && (
-                  <>
-                    <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 15, color: NAVY }}>
 
-                      {i.pacchetto_kit && (
-                        <div style={{ marginBottom: 14 }}><span style={{ color: GRAFITE }}>Pacchetto/Kit:</span> <b style={{ color: NAVY }}>{i.pacchetto_kit}</b></div>
-                      )}
-                      {i.totale_pattuito != null && (
-                        <div style={{ marginBottom: 6 }}>
-                          <span style={{ color: GRAFITE }}>Totale pattuito:</span> <b style={{ color: NAVY }}>{i.totale_pattuito} €</b>{i.quota_venditore != null && <> — <span style={{ color: GRAFITE }}>quota venditore:</span> <b style={{ color: NAVY }}>{i.quota_venditore} €</b></>}
+                  <div style={{ display: "flex", flexWrap: "wrap" }}>
+                    {/* colonna sinistra: anagrafica e ricontatto */}
+                    <div style={{ flex: "1 1 240px", minWidth: 220, background: BG_CHIARO, padding: 20 }}>
+                      <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
+                        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
+                        <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
+                        {i.tutor && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Tutor: {i.tutor}</div>}
+                        {i.note && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>({i.note})</div>}
+                      </div>
+                      {i.telefono && (
+                        <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
+                          <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 13, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                          <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center" }}>
+                            <IconaWhatsapp size={20} />
+                          </a>
                         </div>
                       )}
-                      {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (() => {
+
+                      <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, margin: "16px 0" }} />
+
+                      <div
+                        onClick={() => toggleRicontattato(i)}
+                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}
+                      >
+                        <input type="checkbox" checked={!!i.ricontattato} readOnly style={{ width: 20, height: 20, pointerEvents: "none" }} />
+                        Ricontattato
+                      </div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                        <span onClick={() => toggleRicontattato(i)} style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                        <span onClick={() => toggleRicontattato(i)} style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                      </div>
+                      <textarea
+                        rows={2}
+                        defaultValue={(i.note_ricontatto || "").toUpperCase()}
+                        placeholder="Note dopo il ricontatto"
+                        onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
+                        style={{ ...inputStyle, marginTop: 10, fontSize: 13, textTransform: "uppercase", resize: "vertical", width: "100%", boxSizing: "border-box" }}
+                      />
+
+                      {(() => {
+                        const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
+                        const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
+                        return (
+                          <div style={{ marginTop: 12 }}>
+                            <Button
+                              onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
+                              style={impostata
+                                ? { width: "100%", padding: "8px 12px", fontSize: 13, background: "#1D4ED8", border: "1px solid #1D4ED8", color: "#fff" }
+                                : { width: "100%", padding: "8px 12px", fontSize: 13, background: "#fff", border: "1px solid #1D4ED8", color: "#1D4ED8" }
+                              }
+                            >
+                              {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
+                            </Button>
+                            {impostata && (
+                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                                  {eccezioneAttiva ? eccezioneAttiva.nome : ""}
+                                  {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
+                                  {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
+                                </span>
+                                <button
+                                  onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
+                                  title="Rimuovi eccezione diploma"
+                                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                                >
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="3 6 5 6 21 6" />
+                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                    <path d="M10 11v6" /><path d="M14 11v6" />
+                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* colonna destra: pacchetto, pagamenti, allegati */}
+                    <div style={{ flex: "2 1 300px", minWidth: 260, padding: 20, ...fontBody, fontSize: 15, color: NAVY }}>
+                      {i.pacchetto_kit && (
+                        <div style={{ marginBottom: 18 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: NAVY }}>{i.pacchetto_kit}</div>
+                        </div>
+                      )}
+
+                      {(i.totale_pattuito != null || i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null || i.quota_venditore != null) && (() => {
                         const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
                         const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
+                        const celle = [
+                          i.totale_pattuito != null && { chiave: "pattuito", label: "Totale pattuito", valore: `${i.totale_pattuito} €` },
+                          (i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && { chiave: "pagato", label: "Totale pagato", valore: conRate !== netto ? `${conRate} €` : `${netto} €` },
+                          i.quota_venditore != null && { chiave: "venditore", label: "Quota venditore", valore: `${i.quota_venditore} €` },
+                        ].filter(Boolean);
                         return (
-                          <div style={{ marginBottom: 10 }}>
-                            <span style={{ color: GRAFITE }}>Totale pagato:</span> <b style={{ color: NAVY }}>{netto} €</b>{conRate !== netto && <> — <span style={{ color: GRAFITE }}>totale con interessi:</span> <b style={{ color: NAVY }}>{conRate} €</b></>}
+                          <div style={{ display: "flex", flexWrap: "wrap", marginBottom: 18 }}>
+                            {celle.map((c, ci) => (
+                              <div key={c.chiave} style={{ paddingLeft: ci > 0 ? 16 : 0, paddingRight: 16, borderLeft: ci > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                                <div style={{ fontSize: 12, color: MUTED, marginBottom: 4 }}>{c.label}</div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{c.valore}</div>
+                              </div>
+                            ))}
                           </div>
                         );
                       })()}
 
                       {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                            {i.acconto_totale != null && <div><span style={{ color: GRAFITE }}>Pagato in acconto:</span> <b style={{ color: NAVY }}>{totQuota(i, "acconto")} €</b> ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
-                            {i.precorso_totale != null && <div><span style={{ color: GRAFITE }}>Pagato pre corso:</span> <b style={{ color: NAVY }}>{totQuota(i, "precorso")} €</b> ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
-                            {i.saldo_totale != null && <div><span style={{ color: GRAFITE }}>Importo da pagare al corso:</span> <b style={{ color: NAVY }}>{i.saldo_totale} €</b> ({i.saldo_metodo || "?"})</div>}
-                          </div>
-                        </div>
-                      )}
-
-                      {i.richiede_modelle && (
-                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Modelle</div>
-                          {i.numero_modelle != null && (
-                            <div><span style={{ color: GRAFITE }}>Modelle da pagare:</span> <b style={{ color: NAVY }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €</b>{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+                        <div style={{ paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pagamenti</div>
+                          {i.acconto_totale != null && (
+                            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                              <span style={{ color: GRAFITE }}>Pagato in acconto</span>
+                              <span style={{ display: "flex", alignItems: "baseline", gap: 20 }}>
+                                <b style={{ color: NAVY, whiteSpace: "nowrap" }}>{totQuota(i, "acconto")} €{i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}</b>
+                                <span style={{ color: MUTED, fontSize: 13, whiteSpace: "nowrap" }}>{i.acconto_metodo || "?"}</span>
+                              </span>
+                            </div>
+                          )}
+                          {i.precorso_totale != null && (
+                            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                              <span style={{ color: GRAFITE }}>Pagato pre corso</span>
+                              <span style={{ display: "flex", alignItems: "baseline", gap: 20 }}>
+                                <b style={{ color: NAVY, whiteSpace: "nowrap" }}>{totQuota(i, "precorso")} €{i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}</b>
+                                <span style={{ color: MUTED, fontSize: 13, whiteSpace: "nowrap" }}>{i.precorso_metodo || "?"}</span>
+                              </span>
+                            </div>
+                          )}
+                          {i.saldo_totale != null && (
+                            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                              <span style={{ color: GRAFITE }}>Importo da pagare al corso</span>
+                              <span style={{ display: "flex", alignItems: "baseline", gap: 20 }}>
+                                <b style={{ color: NAVY, whiteSpace: "nowrap" }}>{i.saldo_totale} €</b>
+                                <span style={{ color: MUTED, fontSize: 13, whiteSpace: "nowrap" }}>{i.saldo_metodo || "?"}</span>
+                              </span>
+                            </div>
                           )}
                         </div>
                       )}
+
+                      {i.richiede_modelle && i.numero_modelle != null && (
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <span style={{ color: GRAFITE }}>Modelle da pagare</span>
+                          <b style={{ color: NAVY, whiteSpace: "nowrap" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</b>
+                        </div>
+                      )}
+
                       {i.taglia_divisa && (
-                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}><span style={{ color: GRAFITE }}>Taglia divisa:</span> <b style={{ color: NAVY }}>{i.taglia_divisa}</b></div>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <span style={{ color: GRAFITE }}>Taglia divisa</span>
+                          <b style={{ color: NAVY }}>{i.taglia_divisa}</b>
+                        </div>
                       )}
 
                       {i.accordi_commerciali && (
-                        <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <span style={{ color: GRAFITE }}>Accordi commerciali:</span> <b style={{ color: NAVY }}>{i.accordi_commerciali}</b>
+                        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <span style={{ color: GRAFITE }}>Accordi commerciali</span>
+                          <b style={{ color: NAVY }}>{i.accordi_commerciali}</b>
                         </div>
                       )}
 
                       {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
-                        <div style={{ paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Allegati</div>
-                          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                            {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
-                            {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
-                            {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
+                        <div style={{ paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 4 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Allegati</div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {[
+                              i.file_iscrizione && { percorso: i.file_iscrizione, etichetta: "Modulo iscrizione" },
+                              i.file_screen_acconto && { percorso: i.file_screen_acconto, etichetta: "Screen acconto" },
+                              i.file_screen_recap && { percorso: i.file_screen_recap, etichetta: "Screen recap" },
+                            ].filter(Boolean).map((f) => (
+                              <div key={f.etichetta} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                                </svg>
+                                <AllegatoLink percorso={f.percorso} etichetta={f.etichetta} />
+                              </div>
+                            ))}
                           </div>
                         </div>
                       )}
 
                       {i.totale_pattuito == null && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
-                        <div>Nessun dato di vendita registrato per questo iscritto.</div>
+                        <div style={{ color: MUTED }}>Nessun dato di vendita registrato per questo iscritto.</div>
                       )}
                     </div>
-                    {(i.saldo_totale != null || i.numero_modelle != null) && (() => {
-                      const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
-                      const aPosto = i.incassato || daIncassare === 0;
-                      const colore = aPosto ? "#2E7D32" : "#C0392B";
-                      return (
-                        <div
-                          onClick={() => toggleIncassato(i)}
-                          style={{
-                            marginTop: 8,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            padding: "12px 14px",
-                            background: aPosto ? "#E8F5E9" : "#FDECEC",
-                            border: `1px solid ${colore}`,
-                            borderRadius: 8,
-                            cursor: "pointer",
-                          }}
+                  </div>
+
+                  {eccezioneApertaId === i.id && (
+                    <div style={{ margin: "0 20px 20px", padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
+                      <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>
+                        Eccezione diploma per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:
+                      </div>
+                      <Field label="Diploma da usare (al posto del template normale del corso)">
+                        <select
+                          value={i.diploma_eccezione_id || ""}
+                          onChange={(e) => impostaEccezioneDiploma(i.id, e.target.value || null)}
+                          style={inputStyle}
                         >
-                          <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: colore }}>
-                            {i.incassato ? `INCASSATO ${daIncassare} €` : `DA INCASSARE ${daIncassare} €`}
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 14, color: colore }}>
-                            <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                            incassato
+                          <option value="">Nessuna — usa il template normale del corso</option>
+                          {(diplomaEccezioni || []).map((d) => (
+                            <option key={d.id} value={d.id}>{d.nome}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Data da mostrare sul diploma (opzionale — se vuota resta la data del corso)">
+                        <input
+                          type="date"
+                          value={i.diploma_eccezione_data || ""}
+                          min={corsoData.data_inizio}
+                          max={corsoData.data_fine}
+                          onChange={(e) => impostaEccezioneData(i.id, e.target.value || null)}
+                          style={inputStyle}
+                        />
+                      </Field>
+                      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 }}>
+                        Il nome dell'allievo e il nome della master restano invariati: cambiano solo il template del diploma e/o la data.
+                      </div>
+                      <Button onClick={() => setEccezioneApertaId(null)}>Salva</Button>
+                    </div>
+                  )}
+                  {spostaIscrittoId === i.id && (
+                    <div style={{ margin: "0 20px 20px", padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
+                      <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:</div>
+                      <SelettoreSpostamento
+                        corsi={corsi}
+                        location={location}
+                        corsiDate={corsiDate}
+                        iscritti={iscritti}
+                        corsoDataEscluso={corsoData.id}
+                        onScegli={(cd, corsoTarget, locTarget) => eseguiSpostamento(i, cd, corsoTarget, locTarget)}
+                      />
+                      <Button variant="ghost" onClick={() => setSpostaIscrittoId(null)} style={{ marginTop: 8 }}>Annulla</Button>
+                    </div>
+                  )}
+
+                  {(i.saldo_totale != null || i.numero_modelle != null) && (() => {
+                    const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+                    const aPosto = i.incassato || daIncassare === 0;
+                    const colore = aPosto ? "#2E7D32" : "#C0392B";
+                    return (
+                      <div
+                        onClick={() => toggleIncassato(i)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "14px 20px",
+                          background: aPosto ? "#E8F5E9" : "#FDECEC",
+                          borderTop: `1px solid ${CREAM_BORDER}`,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "stretch", gap: 12 }}>
+                          <div style={{ width: 4, borderRadius: 2, background: colore }} />
+                          <div>
+                            <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: colore, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                              {i.incassato ? "Incassato" : "Da incassare"}
+                            </div>
+                            <div style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: colore }}>{daIncassare} €</div>
                           </div>
                         </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
-            ))}
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: colore }}>
+                          <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
+                          Incassato
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </div>
+          ))}
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
           {mostraGestione && (
