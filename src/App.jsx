@@ -88,7 +88,7 @@ function leggiSlugData(testo) {
 const GIORNI = ["L","M","M","G","V","S","D"];
 const GIORNI_ABBR = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"]; // solo per l'intestazione del Calendario mensile
 const COLORE_SABATO = "#F4F9FD"; // celeste tenuissimo, indice 5 = S
-const COLORE_DOMENICA = "#CCCCCC"; // grigio medio, indice 6 = D
+const COLORE_DOMENICA = "#F2F2F2"; // grigio molto chiaro, indice 6 = D
 
 // vero quando la finestra è larga quanto un cellulare: usato per ingrandire
 // le viste calendario (altrimenti le barre dei corsi diventano illeggibili
@@ -247,7 +247,7 @@ function etichettaBarra(corso, loc, maxChar = 10) {
 
 // angolo della punta di freccia, misurato dall'orizzontale: più è
 // piccolo più la punta appare schiacciata/allungata invece che a 45°
-const ANGOLO_PUNTA_FRECCIA_GRADI = 12;
+const ANGOLO_PUNTA_FRECCIA_GRADI = 78;
 // quanto deve rientrare orizzontalmente il taglio perché, unito a metà
 // altezza della barra, la punta risultante formi ANGOLO_PUNTA_FRECCIA_GRADI
 function runPuntaFreccia(altezzaPx) {
@@ -3437,7 +3437,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   const LANE_H = isMobile ? 28 : 20; // altezza di ogni "corsia" di eventi (px)
   const HEADER_H = isMobile ? 20 : 26; // spazio per il numero del giorno
   const GAP_LANE = isMobile ? 2 : 4; // spazio verticale tra due corsie di eventi sovrapposti
-  const GAP_GIORNO = isMobile ? 6 : 8; // spazio orizzontale tra le colonne dei giorni
+  const GAP_GIORNO = 2; // spazio orizzontale tra le colonne dei giorni: celle quasi a contatto
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
