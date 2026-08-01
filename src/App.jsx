@@ -244,13 +244,21 @@ function etichettaBarra(corso, loc, maxChar = 10) {
   return `${nome} ${siglaCitta(loc?.nome)}`;
 }
 
+// angolo della punta di freccia, misurato dall'orizzontale: più è
+// piccolo più la punta appare schiacciata/allungata invece che a 45°
+const ANGOLO_PUNTA_FRECCIA_GRADI = 20;
+// quanto deve rientrare orizzontalmente il taglio perché, unito a metà
+// altezza della barra, la punta risultante formi ANGOLO_PUNTA_FRECCIA_GRADI
+function runPuntaFreccia(altezzaPx) {
+  return (altezzaPx / 2) / Math.tan((ANGOLO_PUNTA_FRECCIA_GRADI * Math.PI) / 180);
+}
 // se il corso prosegue nella riga precedente/successiva (spezzato dal
-// cambio di settimana), taglia gli angoli della barra a 45° dal lato
+// cambio di settimana), taglia gli angoli della barra dal lato
 // interessato: la barra stessa diventa la punta di una freccia che indica
 // da/verso dove prosegue, invece di un simbolo scritto dentro
 function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
   if (!continuaPrima && !continuaDopo) return undefined;
-  const h = altezzaPx / 2;
+  const h = runPuntaFreccia(altezzaPx);
   const punti = [];
   punti.push(continuaPrima ? `${h}px 0` : "0 0");
   punti.push(continuaDopo ? `calc(100% - ${h}px) 0` : "100% 0");
@@ -313,7 +321,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
         <div
           key={i}
           style={{
-            display: "flex", alignItems: "center", justifyContent: i === 0 ? "space-between" : "flex-end", gap: 3, minWidth: 0, overflow: "hidden",
+            display: "flex", alignItems: "center", justifyContent: i === 0 ? "space-between" : "center", gap: 3, minWidth: 0, overflow: "hidden",
             paddingLeft: i === 0 ? inset + (continuaPrima ? coneRun : 0) : 0,
             paddingRight: gap + (i === ultimo && continuaDopo ? coneRun : 0),
             boxSizing: "border-box",
@@ -336,7 +344,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             )
           )}
           {indice != null && !(isMobile && i === 0) && (
-            <span style={{ fontSize: fontSizeBadge, background: "transparent", border: `1px solid ${GRAFITE}`, color: GRAFITE, borderRadius: 4, padding: "0 4px", flexShrink: 0, fontWeight: 400 }}>
+            <span style={{ ...fontBody, fontSize: fontSizeBadge, color: MUTED, flexShrink: 0, fontWeight: 400 }}>
               {indice}/{giorniTotali}
             </span>
           )}
@@ -3579,7 +3587,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
                           giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: 4, inset: 6,
-                          continuaPrima, continuaDopo, coneRun: (LANE_H - 6) / 2, isMobile,
+                          continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 6), isMobile,
                         })}
                       </div>
                     </div>
@@ -4056,7 +4064,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                         {contenutoBarraCalendario({
                           etichetta: etichettaBarra(corso, loc),
                           giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
-                          continuaPrima, continuaDopo, coneRun: (barH - 5) / 2,
+                          continuaPrima, continuaDopo, coneRun: runPuntaFreccia(barH - 5),
                         })}
                       </div>
                     </div>
@@ -4360,7 +4368,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     }
     setGenerandoDiplomi(true);
     try {
-      const config = fontDiplomi || CONFIG_DIPLOMI_DEFAULT;
+      // stesso motivo del merge in stampaSegnaposti: un campo mancante
+      // (colonna nuova non ancora migrata su questo database) non deve
+      // ripiegare su un valore che disattiva il limite in silenzio
+      const config = { ...CONFIG_DIPLOMI_DEFAULT, ...(fontDiplomi || {}) };
       const masterCorso = corsoData.master_id ? (master || []).find((m) => m.id === corsoData.master_id) : null;
       const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
       // tolto lo spazio tra nome e cognome: con un font firma corsivo il
@@ -4472,7 +4483,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // corso). Se gli iscritti superano i posti di una pagina, se ne
   // generano altre, ripartendo dal primo posto della griglia
   async function stampaSegnaposti() {
-    const cfg = segnaposti || CONFIG_SEGNAPOSTI_DEFAULT;
+    // se la riga esiste ma manca ancora qualche colonna nuova (es.
+    // limite_sx_pos_x/limite_dx_pos_x, appena aggiunte e non ancora
+    // eseguite su questo database), il campo mancante non deve
+    // "spegnere" il limite tornando a 0/100 (praticamente nessun
+    // limite): meglio ripiegare sul valore di default vero e proprio
+    const cfg = { ...CONFIG_SEGNAPOSTI_DEFAULT, ...(segnaposti || {}) };
     if (!cfg.riferimento_path) {
       window.alert('Nessun foglio segnaposti di riferimento caricato — impostalo da Setting diplomi.');
       return;
@@ -4503,23 +4519,43 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         const gruppo = listaIscritti.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
         const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
         outputPdf.addPage(pagina);
-        const { width: larghezzaPagina } = pagina.getSize();
+        const { width: larghezzaPagina, height: altezzaPagina } = pagina.getSize();
+        // la distanza tra le due linee di limite (uguali per tutti i
+        // posti) è la larghezza massima consentita per il nome in stampa
+        const larghezzaMax = Math.abs(cfg.limite_dx_pos_x - cfg.limite_sx_pos_x) / 100 * larghezzaPagina;
+        // riduce fontSizeBase finché "testoRiga" non entra in larghezzaMax,
+        // poi lo disegna: usata sia per un nome su una riga sola sia per
+        // ciascuna delle due righe quando il nome viene spezzato
+        function disegnaRigaConLimite(testoRiga, posX, posY, fontSizeBase) {
+          let fontSize = fontSizeBase;
+          if (larghezzaMax > 0) {
+            const larghezzaTesto = font.widthOfTextAtSize(testoRiga, fontSize);
+            if (larghezzaTesto > larghezzaMax) fontSize = Math.max(6, (larghezzaMax / larghezzaTesto) * fontSize);
+          }
+          disegnaTestoDiploma(pagina, testoRiga, {
+            posX, posY, fontSize, colore: cfg.colore, allineamento: "center", font,
+          });
+        }
         gruppo.forEach((iscritto, idx) => {
           const slot = SLOT_SEGNAPOSTI[idx];
           const posX = cfg[`${slot.chiave}_pos_x`];
+          const posY = cfg[`${slot.chiave}_pos_y`];
           const testo = testi.get(iscritto.id);
-          // la distanza tra le due linee di limite (uguali per tutti i
-          // posti) è la larghezza massima consentita per il nome in stampa
-          const larghezzaMax = Math.abs((cfg.limite_dx_pos_x ?? 100) - (cfg.limite_sx_pos_x ?? 0)) / 100 * larghezzaPagina;
-          let fontSize = cfg.font_size;
-          if (larghezzaMax > 0) {
-            const larghezzaTesto = font.widthOfTextAtSize(testo, fontSize);
-            if (larghezzaTesto > larghezzaMax) fontSize = Math.max(6, (larghezzaMax / larghezzaTesto) * fontSize);
+          const parole = testo.trim().split(/\s+/);
+          // un nome composto da più parole (es. "GIANFRANCA ANTONELLA") che
+          // ci sta su una riga sola resta su una riga sola; solo se non ci
+          // sta si spezza su 2 righe (una parola sopra, il resto sotto)
+          // invece di rimpicciolire il font più del necessario
+          const staSuUnaRiga = larghezzaMax <= 0 || parole.length < 2 || font.widthOfTextAtSize(testo, cfg.font_size) <= larghezzaMax;
+          if (staSuUnaRiga) {
+            disegnaRigaConLimite(testo, posX, posY, cfg.font_size);
+          } else {
+            // scostamento verticale (in punti, poi convertito in % della
+            // pagina) di circa mezza riga sopra e sotto la posizione del posto
+            const scostamentoPercento = ((cfg.font_size * 0.55) / altezzaPagina) * 100;
+            disegnaRigaConLimite(parole[0], posX, posY - scostamentoPercento, cfg.font_size);
+            disegnaRigaConLimite(parole.slice(1).join(" "), posX, posY + scostamentoPercento, cfg.font_size);
           }
-          disegnaTestoDiploma(pagina, testo, {
-            posX, posY: cfg[`${slot.chiave}_pos_y`], fontSize,
-            colore: cfg.colore, allineamento: "center", font,
-          });
         });
       }
 
