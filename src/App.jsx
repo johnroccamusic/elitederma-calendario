@@ -5999,14 +5999,14 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 140px" }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} icona={<IconaCalendarioCard />} />
             </div>
-            <div style={{ flex: "1 1 140px" }}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} icona={<IconaRicercaCard />} />
             </div>
-            <div style={{ flex: "1 1 140px" }}>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} icona={<IconaOrologioCard />} />
             </div>
           </div>
