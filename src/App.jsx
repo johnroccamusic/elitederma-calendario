@@ -2080,6 +2080,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
   const [salvandoEccezione, setSalvandoEccezione] = useState(false);
   const [eccezioneInModifica, setEccezioneInModifica] = useState(null);
   const [nomeModificaEccezione, setNomeModificaEccezione] = useState("");
+  const [fileModificaEccezione, setFileModificaEccezione] = useState(null);
   const [fileRiferimentoNuovo, setFileRiferimentoNuovo] = useState(null);
   const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
@@ -2198,14 +2199,22 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
   function apriModificaEccezione(d) {
     setEccezioneInModifica(d.id);
     setNomeModificaEccezione(d.nome);
+    setFileModificaEccezione(null);
   }
   async function salvaModificaEccezione(id) {
     if (!nomeModificaEccezione.trim()) { setMsg("Dai un nome all'eccezione."); return; }
-    const { error } = await supabase.from("diploma_eccezioni").update({ nome: nomeModificaEccezione.trim() }).eq("id", id);
+    const payload = { nome: nomeModificaEccezione.trim() };
+    if (fileModificaEccezione) {
+      try {
+        payload.file_path = await caricaFile(fileModificaEccezione, "diploma-templates", "eccezione");
+      } catch (e) { setMsg("Errore nel caricamento del file: " + e.message); return; }
+    }
+    const { error } = await supabase.from("diploma_eccezioni").update(payload).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setEccezioneInModifica(null);
+    setFileModificaEccezione(null);
     ricarica();
-    setMsg("Nome eccezione aggiornato.");
+    setMsg("Eccezione diploma aggiornata.");
   }
 
   async function gestisciUploadFont(file, campo) {
@@ -2500,28 +2509,44 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
           <div style={{ marginTop: 14 }}>
             {diplomaEccezioni.map((d) => (
               <div key={d.id}>
-                <RigaEliminabile
-                  label={
-                    <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {d.nome} <BadgeFileCaricato />
-                      <button
-                        onClick={() => apriModificaEccezione(d)}
-                        title="Modifica nome"
-                        style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                        </svg>
-                      </button>
-                    </span>
-                  }
-                  onDelete={() => eliminaEccezione(d.id)}
-                />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}`, gap: 10 }}>
+                  <div style={{ ...fontBody, fontSize: 14, color: NAVY }}>{d.nome}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <BadgeFileCaricato />
+                    <button
+                      onClick={() => apriModificaEccezione(d)}
+                      title="Modifica"
+                      style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => eliminaEccezione(d.id)}
+                      title="Elimina"
+                      style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" /><path d="M14 11v6" />
+                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
                 {eccezioneInModifica === d.id && (
                   <div style={{ padding: "10px 0 14px" }}>
                     <Field label="Nome eccezione">
                       <input style={inputStyle} value={nomeModificaEccezione} onChange={(e) => setNomeModificaEccezione(e.target.value)} />
+                    </Field>
+                    <Field label="File diploma (PDF) — scegline uno nuovo solo se vuoi sostituire la grafica">
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileModificaEccezione(e.target.files?.[0] || null)} />
+                        {fileModificaEccezione ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file nuovo scelto — resta quello attuale</span>}
+                      </div>
                     </Field>
                     <div style={{ display: "flex", gap: 8 }}>
                       <Button onClick={() => salvaModificaEccezione(d.id)}>Salva</Button>
