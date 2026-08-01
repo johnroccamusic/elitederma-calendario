@@ -3070,7 +3070,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
     <div>
       {cittaOrdinate.map((c, idx) => (
         <div key={c.nome} style={{ marginBottom: 24, marginTop: idx > 0 ? 20 : 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 600, color: "#fff", background: "#000", borderRadius: 8, padding: "10px 16px", marginBottom: 14, textAlign: "center" }}>{c.nome.toUpperCase()}</div>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 600, color: "#fff", background: "#000", borderRadius: 8, padding: "4px 16px", marginBottom: 14, textAlign: "center" }}>{c.nome.toUpperCase()}</div>
           {Object.keys(c.mesi)
             .sort()
             .map((chiaveMese) => {
