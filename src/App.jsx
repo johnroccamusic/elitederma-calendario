@@ -3550,15 +3550,14 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       gridRow: ev.lane + 1,
                       alignSelf: "center",
                       height: LANE_H - 4,
-                      // il colore pieno qui fa da "contorno": la fetta interna
-                      // (1px più stretta su ogni lato, stessa forma a punta di
-                      // freccia) lascia intravedere questo strato tutt'intorno,
-                      // angoli e punta della freccia compresi, cosa che un
-                      // semplice border-top/bottom non può fare su una forma
-                      // tagliata con clip-path
-                      background: coloreCorso,
+                      // niente bordo/contorno: solo il colore tenue di
+                      // sfondo, riempito dal basso col colore pieno via via
+                      // che si iscrivono allievi (vedi il div dell'occupancy
+                      // qui sotto)
+                      background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
+                      overflow: "hidden",
                       color: "#000",
                       fontSize: isMobile ? 9 : 8,
                       fontWeight: 500,
@@ -3568,35 +3567,24 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       userSelect: evidenziata ? "none" : undefined,
                       boxShadow: evidenziata ? "0 0 0 2px #fff, 0 0 0 4px " + NAVY : "none",
                       zIndex: evidenziata ? 5 : 1,
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
                     }}
                   >
-                    <div
-                      style={{
-                        position: "absolute", top: 1, left: 1, right: 1, bottom: 1,
-                        background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
-                        borderRadius: 3,
-                        clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 6),
-                        overflow: "hidden",
-                        whiteSpace: "nowrap",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {occupancy != null && (
-                        <div
-                          style={{
-                            position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
-                            background: coloreCorso, borderTop: `1px solid ${coloreCorso}`,
-                            boxSizing: "border-box", pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
-                          }}
-                        />
-                      )}
-                      <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
-                        {contenutoBarraCalendario({
-                          etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
-                          giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: GAP_GIORNO, inset: 6,
-                          continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 6), isMobile,
-                        })}
-                      </div>
+                    {occupancy != null && (
+                      <div
+                        style={{
+                          position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
+                          background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
+                        }}
+                      />
+                    )}
+                    <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+                      {contenutoBarraCalendario({
+                        etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
+                        giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: GAP_GIORNO, inset: 6,
+                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 4), isMobile,
+                      })}
                     </div>
                     {evidenziata && onDragBarra && (
                       <div
@@ -4037,43 +4025,36 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                       gridRow: ev.lane + 1,
                       alignSelf: "center",
                       height: barH - 3,
-                      background: coloreCorso,
+                      // niente bordo/contorno: solo il colore tenue di
+                      // sfondo, riempito dal basso col colore pieno via via
+                      // che si iscrivono allievi
+                      background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
                       borderRadius: 3,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, barH - 3),
+                      overflow: "hidden",
                       color: "#000",
                       fontSize: 9,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: "pointer",
+                      whiteSpace: "nowrap",
+                      textOverflow: "ellipsis",
                     }}
                   >
-                    <div
-                      style={{
-                        position: "absolute", top: 1, left: 1, right: 1, bottom: 1,
-                        background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
-                        borderRadius: 2,
-                        clipPath: clipPathBarra(continuaPrima, continuaDopo, barH - 5),
-                        overflow: "hidden",
-                        whiteSpace: "nowrap",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {occupancy != null && (
-                        <div
-                          style={{
-                            position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
-                            background: coloreCorso, borderTop: `1px solid ${coloreCorso}`,
-                            boxSizing: "border-box", pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
-                          }}
-                        />
-                      )}
-                      <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
-                        {contenutoBarraCalendario({
-                          etichetta: etichettaBarra(corso, loc),
-                          giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
-                          continuaPrima, continuaDopo, coneRun: runPuntaFreccia(barH - 5),
-                        })}
-                      </div>
+                    {occupancy != null && (
+                      <div
+                        style={{
+                          position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
+                          background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
+                        }}
+                      />
+                    )}
+                    <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
+                      {contenutoBarraCalendario({
+                        etichetta: etichettaBarra(corso, loc),
+                        giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
+                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(barH - 3),
+                      })}
                     </div>
                   </div>
                 );
