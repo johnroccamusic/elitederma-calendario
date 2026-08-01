@@ -1949,9 +1949,8 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       <div>
         <div style={subStyle}>Solo le edizioni future. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
-          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>Date in programmazione</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>Date in programmazione</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
             <FiltroPill
               etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
               valore={filtroCorsoDate} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase()}
@@ -1976,13 +1975,14 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
               onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
               onBlur={() => setApriFiltroMasterDate(false)}
             />
-            <button
-              onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-              style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
-            >
-              Reset filtri
-            </button>
-          </div>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <button
+                onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
+                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+              >
+                Reset filtri
+              </button>
+            </div>
         </div>
 
         <DateRaggruppatePerCitta
@@ -3028,13 +3028,14 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
 // sia in Home che in Gestione date
 function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota }) {
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
       <button
         onClick={onToggle}
         style={{
-          ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20,
+          ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
-          background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap",
+          background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block",
         }}
       >
         {valore ? etichettaAttiva : etichetta}
@@ -6011,9 +6012,8 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, margin: "34px 0 16px" }}>
-            <div style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>Date in programmazione</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, margin: "34px 0 10px" }}>Date in programmazione</div>
+          <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
               <FiltroPill
                 etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
                 valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
@@ -6038,13 +6038,14 @@ export default function App() {
                 onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
                 onBlur={() => setApriFiltroMasterHome(false)}
               />
-              <button
-                onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                Reset filtri
-              </button>
-            </div>
+              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                <button
+                  onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
+                  style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+                >
+                  Reset filtri
+                </button>
+              </div>
           </div>
 
           <DateRaggruppatePerCitta
