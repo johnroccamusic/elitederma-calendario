@@ -5923,49 +5923,59 @@ export default function App() {
 
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
-      <div style={{ position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", zIndex: 2000, display: "flex", gap: 8, pointerEvents: "none" }}>
-        <button
-          onClick={vaiIndietro}
-          disabled={pilaIndietro.length === 0}
-          style={{
-            ...fontBody, pointerEvents: "auto", background: "#000", color: "#fff", border: "none", borderRadius: 8,
-            padding: "8px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-            cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
-          }}
-        >
-          ← Indietro
-        </button>
-        <button
-          onClick={vaiAvanti}
-          disabled={pilaAvanti.length === 0}
-          style={{
-            ...fontBody, pointerEvents: "auto", background: "#000", color: "#fff", border: "none", borderRadius: 8,
-            padding: "8px 16px", fontSize: 13, fontWeight: 600, boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-            cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
-          }}
-        >
-          Avanti →
-        </button>
-        <button
-          onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
-          aria-label="Home"
-          title="Home"
-          style={{
-            ...fontBody, pointerEvents: "auto", background: "#000", color: "#fff", border: "none", borderRadius: 8,
-            padding: "8px 12px", fontSize: 13, fontWeight: 600, boxShadow: "0 2px 10px rgba(0,0,0,0.3)",
-            cursor: "pointer", display: "flex", alignItems: "center",
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-            <polyline points="9 22 9 12 15 12 15 22" />
-          </svg>
-        </button>
+      <div
+        style={{
+          position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)", maxWidth: 640,
+          zIndex: 2000, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+          background: "#fff", borderRadius: 30, padding: "8px 8px 8px 16px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
+          <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 34, width: "auto", flexShrink: 1, minWidth: 0 }} />
+        </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <button
+            onClick={vaiIndietro}
+            disabled={pilaIndietro.length === 0}
+            style={{
+              ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
+              padding: "8px 14px", fontSize: 13, fontWeight: 600,
+              cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+            }}
+          >
+            ← Indietro
+          </button>
+          <button
+            onClick={vaiAvanti}
+            disabled={pilaAvanti.length === 0}
+            style={{
+              ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
+              padding: "8px 14px", fontSize: 13, fontWeight: 600,
+              cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+            }}
+          >
+            Avanti →
+          </button>
+          <button
+            onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+            aria-label="Home"
+            title="Home"
+            style={{
+              background: NAVY, color: "#fff", border: "none", borderRadius: "50%",
+              width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+          </button>
+        </div>
       </div>
-      {/* riserva lo spazio occupato dalla barra fissa Indietro/Avanti qui sopra,
-          altrimenti (essendo "position:fixed") coprirebbe l'inizio del
-          contenuto di ogni schermata invece di limitarsi ad affiancarlo */}
-      <div style={{ height: 44 }} />
+      {/* riserva lo spazio occupato dalla barra fissa qui sopra, altrimenti
+          (essendo "position:fixed") coprirebbe l'inizio del contenuto di
+          ogni schermata invece di limitarsi ad affiancarlo */}
+      <div style={{ height: 76 }} />
       {view === "home" && (
         <div style={{ maxWidth: 480, margin: "0 auto", padding: "42px 20px 60px" }}>
           <div style={{ display: "flex", justifyContent: "center" }}>
