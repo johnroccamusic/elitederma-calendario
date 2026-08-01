@@ -3549,6 +3549,12 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       gridColumn: `${colStart + 1} / span ${colSpan}`,
                       gridRow: ev.lane + 1,
                       alignSelf: "center",
+                      // un po' di margine dai bordi dei giorni dove la barra
+                      // non prosegue: attaccata al bordo diventa un ammasso
+                      // di grafica; dove invece prosegue (freccia) deve
+                      // restare a contatto per sembrare un pezzo unico
+                      marginLeft: continuaPrima ? 0 : 3,
+                      marginRight: continuaDopo ? 0 : 3,
                       height: LANE_H - 4,
                       // niente bordo/contorno: solo il colore tenue di
                       // sfondo, riempito dal basso col colore pieno via via
@@ -4024,6 +4030,8 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                       gridColumn: `${colStart + 1} / span ${colSpan}`,
                       gridRow: ev.lane + 1,
                       alignSelf: "center",
+                      marginLeft: continuaPrima ? 0 : 2,
+                      marginRight: continuaDopo ? 0 : 2,
                       height: barH - 3,
                       // niente bordo/contorno: solo il colore tenue di
                       // sfondo, riempito dal basso col colore pieno via via
@@ -4513,10 +4521,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       }
       if (!font) font = await outputPdf.embedFont(StandardFonts.Helvetica);
 
+      // stesso comportamento di "Ristampa solo questo" nei diplomi: se
+      // qualcuno è flaggato, il foglio segnaposti si genera solo per lui
+      const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
+      const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
       const testi = testiSegnaposto(listaIscritti);
 
-      for (let inizio = 0; inizio < listaIscritti.length; inizio += POSTI_PER_PAGINA_SEGNAPOSTI) {
-        const gruppo = listaIscritti.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
+      for (let inizio = 0; inizio < iscrittiDaStampare.length; inizio += POSTI_PER_PAGINA_SEGNAPOSTI) {
+        const gruppo = iscrittiDaStampare.slice(inizio, inizio + POSTI_PER_PAGINA_SEGNAPOSTI);
         const [pagina] = await outputPdf.copyPages(templateDoc, [0]);
         outputPdf.addPage(pagina);
         const { width: larghezzaPagina, height: altezzaPagina } = pagina.getSize();
@@ -4558,7 +4570,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             // usata per un nome su una riga sola, senza rimpicciolire, e le
             // due righe restano vicine (poco più della metà di una riga
             // sopra e sotto la posizione del posto, non un'intera riga)
-            const scostamentoPercento = ((cfg.font_size * 0.32) / altezzaPagina) * 100;
+            const scostamentoPercento = ((cfg.font_size * 0.42) / altezzaPagina) * 100;
             disegnaTestoDiploma(pagina, parole[0], {
               posX, posY: posY - scostamentoPercento, fontSize: cfg.font_size, colore: cfg.colore, allineamento: "center", font,
             });
@@ -5223,13 +5235,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   style={{
                     display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 2,
                     margin: "-16px -16px 12px", padding: "6px 10px",
-                    background: BG, borderTopLeftRadius: 14, borderTopRightRadius: 14,
+                    background: "#F7F3E9", borderTopLeftRadius: 14, borderTopRightRadius: 14,
                     borderBottom: `1px solid ${CREAM_BORDER}`,
                   }}
                 >
                   <button
                     onClick={() => toggleRistampaDiploma(i)}
-                    title="Ristampa solo questo (nel PDF di Stampa diplomi)"
+                    title="Ristampa solo questo (nel PDF di Stampa diplomi e Stampa segnaposti)"
                     style={{
                       border: "none", cursor: "pointer", padding: 6, borderRadius: 6, display: "flex", alignItems: "center",
                       background: i.ristampa_diploma ? "#1D4ED8" : "transparent", color: i.ristampa_diploma ? "#fff" : NAVY,
