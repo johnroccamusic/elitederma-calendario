@@ -4175,7 +4175,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       const config = fontDiplomi || CONFIG_DIPLOMI_DEFAULT;
       const masterCorso = corsoData.master_id ? (master || []).find((m) => m.id === corsoData.master_id) : null;
       const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
-      const testoFirma = masterCorso ? toTitleCase(masterCorso.nome) : "";
+      // tolto lo spazio tra nome e cognome: con un font firma corsivo il
+      // testo deve scorrere come una firma vera, non con un vuoto in mezzo
+      const testoFirma = masterCorso ? toTitleCase(masterCorso.nome).replace(/\s+/g, "") : "";
 
       const scaricaBytes = scaricaBytesStorage;
 
