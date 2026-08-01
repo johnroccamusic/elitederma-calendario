@@ -1974,6 +1974,7 @@ function Impostazioni({ corsi, location, corsiDate, iscritti, master, hotel, ass
             nomeSingolare="Master" nomeArticolo="una" tabella="master"
             elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
+            mostraFirmaCheckbox
           />
         </Modal>
       )}
@@ -2884,10 +2885,16 @@ function Modal({ title, onClose, children }) {
 
 // gestione CRUD di una semplice tabella "nome" (master, hotel, assistente, leva):
 // aggiungi, elenco esistenti con modifica/elimina. Va dentro un <Modal>.
-function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder }) {
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraFirmaCheckbox }) {
   const [nome, setNome] = useState("");
   const [inModifica, setInModifica] = useState(null);
   const [modNome, setModNome] = useState("");
+
+  async function toggleFirmato(el) {
+    const { error } = await supabase.from(tabella).update({ diploma_gia_firmato: !el.diploma_gia_firmato }).eq("id", el.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   async function aggiungi() {
     if (!nome.trim()) return;
@@ -2934,6 +2941,15 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
             onModifica={() => apriModifica(el)}
             onDelete={() => elimina(el.id)}
           />
+          {mostraFirmaCheckbox && (
+            <div
+              onClick={() => toggleFirmato(el)}
+              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }}
+            >
+              <input type="checkbox" checked={!!el.diploma_gia_firmato} readOnly style={{ width: 18, height: 18, pointerEvents: "none" }} />
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
+            </div>
+          )}
           {inModifica === el.id && (
             <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
               <Field label="Nome">
@@ -4176,8 +4192,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       const masterCorso = corsoData.master_id ? (master || []).find((m) => m.id === corsoData.master_id) : null;
       const testoData = `${toTitleCase(loc?.nome || "")}, ${fmtData(corsoData.data_fine)}`;
       // tolto lo spazio tra nome e cognome: con un font firma corsivo il
-      // testo deve scorrere come una firma vera, non con un vuoto in mezzo
-      const testoFirma = masterCorso ? toTitleCase(masterCorso.nome).replace(/\s+/g, "") : "";
+      // testo deve scorrere come una firma vera, non con un vuoto in mezzo.
+      // Se la master ha "diploma già firmato" attivo, firmerà a mano: il
+      // campo firma resta vuoto, senza applicare nulla in automatico
+      const testoFirma = masterCorso && !masterCorso.diploma_gia_firmato
+        ? toTitleCase(masterCorso.nome).replace(/\s+/g, "")
+        : "";
 
       const scaricaBytes = scaricaBytesStorage;
 

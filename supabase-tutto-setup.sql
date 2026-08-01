@@ -290,4 +290,10 @@ create policy "accesso interno segnaposti_config" on public.segnaposti_config fo
 alter table public.segnaposti_config add column if not exists limite_pos_x numeric not null default 85;
 
 
+-- ---------------------------------------------------------
+-- 10) Master: "diploma gia' firmato" (niente firma automatica in stampa)
+-- ---------------------------------------------------------
+alter table public.master add column if not exists diploma_gia_firmato boolean not null default false;
+
+
 notify pgrst, 'reload schema';
