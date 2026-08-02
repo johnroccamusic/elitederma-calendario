@@ -5225,7 +5225,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           {listaIscritti.length === 0 && (
             <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto ancora. Usa "Iscrivi" in alto per aggiungerne uno.</div>
           )}
-          {listaIscritti.map((i, idx) => (
+          {listaIscritti.map((i, idx) => {
+            const mostraIncasso = i.saldo_totale != null || i.numero_modelle != null;
+            const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+            const aPosto = i.incassato || daIncassare === 0;
+            const coloreIncasso = aPosto ? "#2E7D32" : "#C0392B";
+            return (
             <div key={i.id} style={{ ...cardStyle, padding: mostraGestione ? 0 : 16, marginBottom: 10, overflow: "hidden" }}>
               {!mostraGestione && (
                 // fuori da "Contabilità classe": scheda semplice, solo nome e telefono
@@ -5251,7 +5256,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 </div>
               )}
               {mostraGestione && (
-                <>
+                // rotaia a sinistra di tutta la scheda: uno spazio vuoto in
+                // alto (2/3) e la barretta colorata in basso (1/3), alta
+                // esattamente un terzo dell'altezza della scheda perché lo
+                // stretch di flex la fa combaciare con l'altezza della
+                // colonna di contenuto qui accanto, che è quella "vera"
+                <div style={{ display: "flex" }}>
+                  <div style={{ width: 4, flexShrink: 0, display: "flex", flexDirection: "column" }}>
+                    <div style={{ flex: 2 }} />
+                    {mostraIncasso && <div style={{ flex: 1, borderRadius: 2, background: coloreIncasso }} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                   {/* barra degli strumenti della scheda (come la barra dei
                       pulsanti in cima a una finestra Mac): le azioni
                       sull'iscritto vivono qui, non sparse dentro la scheda */}
@@ -5538,43 +5553,37 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </div>
                   )}
 
-                  {(i.saldo_totale != null || i.numero_modelle != null) && (() => {
-                    const daIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
-                    const aPosto = i.incassato || daIncassare === 0;
-                    const colore = aPosto ? "#2E7D32" : "#C0392B";
-                    return (
-                      <div
-                        onClick={() => toggleIncassato(i)}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "14px 20px",
-                          background: "#fff",
-                          borderTop: `1px solid ${CREAM_BORDER}`,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "stretch", gap: 12 }}>
-                          <div style={{ width: 3, borderRadius: 2, background: colore }} />
-                          <div>
-                            <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: colore, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                              {i.incassato ? "Incassato" : "Da incassare"}
-                            </div>
-                            <div style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: colore }}>{daIncassare} €</div>
-                          </div>
+                  {mostraIncasso && (
+                    <div
+                      onClick={() => toggleIncassato(i)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "14px 20px",
+                        background: "#fff",
+                        borderTop: `1px solid ${CREAM_BORDER}`,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div>
+                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                          {i.incassato ? "Incassato" : "Da incassare"}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: colore }}>
-                          <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                          Incassato
-                        </div>
+                        <div style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</div>
                       </div>
-                    );
-                  })()}
-                </>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
+                        <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
+                        Incassato
+                      </div>
+                    </div>
+                  )}
+                  </div>
+                </div>
               )}
             </div>
-          ))}
+            );
+          })}
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
           {mostraGestione && (
