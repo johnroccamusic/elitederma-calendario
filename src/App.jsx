@@ -3437,7 +3437,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
   const LANE_H = isMobile ? 28 : 20; // altezza di ogni "corsia" di eventi (px)
   const HEADER_H = isMobile ? 20 : 26; // spazio per il numero del giorno
   const GAP_LANE = isMobile ? 2 : 4; // spazio verticale tra due corsie di eventi sovrapposti
-  const GAP_GIORNO = 2; // spazio orizzontale tra le colonne dei giorni: celle quasi a contatto
+  const GAP_GIORNO = 1; // spazio orizzontale tra le colonne dei giorni: celle quasi a contatto
   const giorniMese = new Date(anno, mese + 1, 0).getDate();
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
@@ -3496,7 +3496,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
         const rowHeight = HEADER_H + numLane * LANE_H + Math.max(0, numLane - 1) * GAP_LANE + 6;
 
         return (
-          <div key={wi} style={{ position: "relative", marginBottom: 4 }}>
+          <div key={wi} style={{ position: "relative", marginBottom: 2 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: GAP_GIORNO }}>
               {settimana.map((d, i) => (
                 <div
@@ -3504,7 +3504,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                   data-data={d ? dateStr(d) : undefined}
                   onClick={d && onClickGiornoVuoto ? () => onClickGiornoVuoto(dateStr(d)) : undefined}
                   style={{
-                    border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 12, height: rowHeight,
+                    border: d ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 6, height: rowHeight,
                     background: !d ? "transparent" : i === 5 ? COLORE_SABATO : i === 6 ? COLORE_DOMENICA : "#fff",
                     boxSizing: "border-box", cursor: d && onClickGiornoVuoto ? "pointer" : undefined,
                   }}
