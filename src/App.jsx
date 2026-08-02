@@ -5452,8 +5452,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                               {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
                             </Button>
                             {impostata && (
-                              <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginTop: 6, width: "100%" }}>
+                                <span style={{ ...fontBody, fontSize: 10, color: MUTED, flex: "1 1 auto", minWidth: 0, textAlign: "right" }}>
                                   {eccezioneAttiva ? eccezioneAttiva.nome : ""}
                                   {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
                                   {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
@@ -5461,7 +5461,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                                 <button
                                   onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
                                   title="Rimuovi eccezione diploma"
-                                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
                                 >
                                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                                     <polyline points="3 6 5 6 21 6" />
