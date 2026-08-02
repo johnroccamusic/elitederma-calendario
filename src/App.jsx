@@ -4259,6 +4259,85 @@ function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
   );
 }
 
+// calendario sempre visibile (non il picker nativo del browser, che su
+// alcuni dispositivi/browser non risponde in modo affidabile) per scegliere
+// la data eccezione da mostrare sul diploma: evidenzia i giorni in cui il
+// corso si sta davvero svolgendo
+function SelettoreDataDiploma({ valore, dataInizio, dataFine, onCambia }) {
+  const partenza = valore || dataInizio;
+  const [pAnno, pMese] = partenza.split("-").map(Number);
+  const [vista, setVista] = useState({ anno: pAnno, mese: pMese - 1 });
+  const settimane = generaSettimane(vista.anno, vista.mese);
+  const meseVuoto = (d) => (d ? d : "");
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, background: "#fff" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={() => setVista((v) => (v.mese === 0 ? { anno: v.anno - 1, mese: 11 } : { anno: v.anno, mese: v.mese - 1 }))}
+          style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY, fontSize: 16, padding: 4 }}
+        >
+          &larr;
+        </button>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{MESI[vista.mese]} {vista.anno}</div>
+        <button
+          type="button"
+          onClick={() => setVista((v) => (v.mese === 11 ? { anno: v.anno + 1, mese: 0 } : { anno: v.anno, mese: v.mese + 1 }))}
+          style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY, fontSize: 16, padding: 4 }}
+        >
+          &rarr;
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
+        {GIORNI_ABBR.map((g) => (
+          <div key={g} style={{ ...fontBody, textAlign: "center", fontSize: 10, color: MUTED }}>{g}</div>
+        ))}
+      </div>
+      {settimane.map((sett, wi) => (
+        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 2 }}>
+          {sett.map((d, di) => {
+            if (!d) return <div key={di} />;
+            const ds = dateStrFor(vista.anno, vista.mese, d);
+            const inCorso = ds >= dataInizio && ds <= dataFine;
+            const selezionato = ds === valore;
+            return (
+              <button
+                type="button"
+                key={di}
+                disabled={!inCorso}
+                onClick={() => onCambia(ds)}
+                title={inCorso ? "" : "Fuori dalle date del corso"}
+                style={{
+                  ...fontBody,
+                  aspectRatio: "1",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: inCorso ? "pointer" : "default",
+                  background: selezionato ? NAVY : inCorso ? "#DCE8FB" : "transparent",
+                  color: selezionato ? "#fff" : inCorso ? NAVY : "#C9C9C9",
+                  fontSize: 12,
+                  fontWeight: selezionato ? 700 : 400,
+                }}
+              >
+                {meseVuoto(d)}
+              </button>
+            );
+          })}
+        </div>
+      ))}
+      {valore && (
+        <button
+          type="button"
+          onClick={() => onCambia(null)}
+          style={{ ...fontBody, marginTop: 8, width: "100%", padding: "6px 0", border: "none", background: "none", color: "#C0392B", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+        >
+          Cancella (usa la data del corso)
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -5355,7 +5434,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         defaultValue={(i.note_ricontatto || "").toUpperCase()}
                         placeholder="Note dopo il ricontatto"
                         onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
-                        style={{ ...inputStyle, marginTop: 10, fontSize: 13, textTransform: "uppercase", resize: "vertical", width: "100%", boxSizing: "border-box" }}
+                        style={{ ...inputStyle, marginTop: 10, fontSize: 8, textTransform: "uppercase", resize: "vertical", width: "100%", boxSizing: "border-box" }}
                       />
 
                       {(() => {
@@ -5469,7 +5548,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         {i.taglia_divisa && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Taglia divisa</div>
-                            <div style={{ gridColumn: "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY }}>{i.taglia_divisa}</div>
+                            <div style={{ gridColumn: "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 22, color: NAVY }}>{i.taglia_divisa}</div>
                           </>
                         )}
                         {i.accordi_commerciali && (
@@ -5523,13 +5602,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         </select>
                       </Field>
                       <Field label="Data da mostrare sul diploma (opzionale — se vuota resta la data del corso)">
-                        <input
-                          type="date"
-                          value={i.diploma_eccezione_data || ""}
-                          min={corsoData.data_inizio}
-                          max={corsoData.data_fine}
-                          onChange={(e) => impostaEccezioneData(i.id, e.target.value || null)}
-                          style={inputStyle}
+                        <SelettoreDataDiploma
+                          valore={i.diploma_eccezione_data || null}
+                          dataInizio={corsoData.data_inizio}
+                          dataFine={corsoData.data_fine}
+                          onCambia={(data) => impostaEccezioneData(i.id, data)}
                         />
                       </Field>
                       <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 }}>
