@@ -323,8 +323,14 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
           key={i}
           style={{
             display: "flex", alignItems: "center", justifyContent: i === 0 ? "space-between" : "center", gap: 3, minWidth: 0, overflow: "hidden",
-            paddingLeft: i === 0 ? inset + (continuaPrima ? coneRun : 0) : 0,
-            paddingRight: gap + (i === ultimo && continuaDopo ? coneRun : 0),
+            // il rientro riservato al cono della freccia è sempre lo stesso,
+            // sia che questo segmento prosegua davvero da/verso un'altra
+            // riga sia che inizi/finisca dritto: così i numeri di frazione
+            // restano allineati alla stessa distanza dal bordo del giorno
+            // su tutte le righe, indipendentemente da dove ogni singolo
+            // corso comincia
+            paddingLeft: i === 0 ? inset + coneRun : 0,
+            paddingRight: gap + (i === ultimo ? coneRun : 0),
             boxSizing: "border-box",
           }}
         >
