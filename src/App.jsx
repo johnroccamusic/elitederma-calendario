@@ -5394,13 +5394,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </button>
                   </div>
 
-                  {/* grid, non flex: con flex la colonna sinistra si
-                      allargava/stringeva a seconda del contenuto, con
-                      "1fr 2fr" resta sempre esattamente 1/3 - 2/3 della
-                      larghezza della scheda */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr" }}>
+                  {/* flex, non grid: flex-basis 0 con grow 1/2 resta
+                      sempre esattamente 1/3 - 2/3 della larghezza della
+                      scheda (come "1fr 2fr"), ma lo stretch dell'altezza
+                      tra le due colonne è più affidabile tra i browser -
+                      lo sfondo della colonna sinistra deve arrivare fino
+                      in fondo alla scheda, non fermarsi al suo contenuto */}
+                  <div style={{ display: "flex", alignItems: "stretch" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
-                    <div style={{ minWidth: 0, background: "#F6F6F8", padding: 20 }}>
+                    <div style={{ flex: "1 1 0", minWidth: 0, background: "#F6F6F8", padding: 20 }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -5452,24 +5454,26 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                               {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
                             </Button>
                             {impostata && (
-                              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, marginTop: 6, width: "100%" }}>
-                                <span style={{ ...fontBody, fontSize: 10, color: MUTED, flex: "1 1 auto", minWidth: 0, textAlign: "right" }}>
+                              <div style={{ marginTop: 6, width: "100%" }}>
+                                <div style={{ ...fontBody, fontSize: 10, color: MUTED, textAlign: "right" }}>
                                   {eccezioneAttiva ? eccezioneAttiva.nome : ""}
                                   {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
                                   {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
-                                </span>
-                                <button
-                                  onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
-                                  title="Rimuovi eccezione diploma"
-                                  style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, flexShrink: 0, display: "flex", alignItems: "center" }}
-                                >
-                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="3 6 5 6 21 6" />
-                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                    <path d="M10 11v6" /><path d="M14 11v6" />
-                                    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                  </svg>
-                                </button>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                  <button
+                                    onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
+                                    title="Rimuovi eccezione diploma"
+                                    style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+                                  >
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polyline points="3 6 5 6 21 6" />
+                                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                      <path d="M10 11v6" /><path d="M14 11v6" />
+                                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+                                    </svg>
+                                  </button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -5478,7 +5482,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
-                    <div style={{ minWidth: 0, padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
+                    <div style={{ flex: "2 1 0", minWidth: 0, padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
                       {i.pacchetto_kit && (
                         <div style={{ marginBottom: 18 }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
@@ -5554,7 +5558,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         {i.accordi_commerciali && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Accordi commerciali</div>
-                            <div style={{ gridColumn: "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY }}>{i.accordi_commerciali}</div>
+                            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
                           </>
                         )}
                         {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
