@@ -5165,24 +5165,24 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         </div>
       )}
       <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} />
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 8 }}>
-        <div>
-          <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
-            {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
-          </div>
-          {corsoData.master_id && (
-            <div style={{ ...fontBody, color: MUTED, fontSize: 13 }}>
-              Master: {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
-            </div>
-          )}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
+          {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
         </div>
+        {corsoData.master_id && (
+          <div style={{ ...fontBody, color: MUTED, fontSize: 13 }}>
+            Master: {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
         {vista === "lista" ? (
           <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
             <button
               onClick={apriGestioneClasse}
               style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", whiteSpace: "nowrap", textAlign: "center" }}
             >
-              {mostraGestione ? "Esci da contabilità classe" : "Contabilità classe"}
+              {mostraGestione ? "Esci da contabilità" : "Contabilità classe"}
             </button>
             {mostraGestione && (
               <button
