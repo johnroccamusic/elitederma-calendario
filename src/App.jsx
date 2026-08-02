@@ -5585,6 +5585,38 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       {i.totale_pattuito == null && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
                         <div style={{ color: MUTED }}>Nessun dato di vendita registrato per questo iscritto.</div>
                       )}
+
+                      {/* "Da incassare" resta dentro la colonna bianca,
+                          allineato come Pagamenti/Allegati: il celeste
+                          della colonna sinistra prosegue così ininterrotto
+                          fino in fondo alla scheda, senza una riga a parte
+                          che lo tagli */}
+                      {mostraIncasso && (
+                        <div
+                          onClick={() => toggleIncassato(i)}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            gap: 10,
+                            paddingTop: 14,
+                            marginTop: 4,
+                            borderTop: `1px solid ${CREAM_BORDER}`,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                            <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
+                              {i.incassato ? "Incassato" : "Da incassare"}
+                            </span>
+                            <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
+                            <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
+                            Incassato
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -5634,38 +5666,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </div>
                   )}
 
-                  {mostraIncasso && (
-                    <div
-                      onClick={() => toggleIncassato(i)}
-                      style={{
-                        display: "flex",
-                        alignItems: "stretch",
-                        justifyContent: "space-between",
-                        padding: "14px 20px 14px 16px",
-                        // il celeste della colonna sinistra deve continuare
-                        // fino in fondo alla scheda, anche dietro a questa
-                        // riga: niente sfondo bianco uniforme, ma lo stesso
-                        // taglio 1/3-2/3 delle due colonne sopra
-                        background: "linear-gradient(to right, #F6F6F8 0%, #F6F6F8 33.333%, #fff 33.333%, #fff 100%)",
-                        borderTop: `1px solid ${CREAM_BORDER}`,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: coloreIncasso }} />
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                          <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
-                            {i.incassato ? "Incassato" : "Da incassare"}
-                          </span>
-                          <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</span>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
-                        <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
-                        Incassato
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
             </div>
