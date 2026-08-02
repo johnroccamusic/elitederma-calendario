@@ -5394,15 +5394,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </button>
                   </div>
 
-                  {/* flex, non grid: flex-basis 0 con grow 1/2 resta
-                      sempre esattamente 1/3 - 2/3 della larghezza della
-                      scheda (come "1fr 2fr"), ma lo stretch dell'altezza
-                      tra le due colonne è più affidabile tra i browser -
-                      lo sfondo della colonna sinistra deve arrivare fino
-                      in fondo alla scheda, non fermarsi al suo contenuto */}
-                  <div style={{ display: "flex", alignItems: "stretch" }}>
+                  {/* tabella, non flex/grid: colonne di altezza sempre
+                      identica tra loro è un comportamento base delle
+                      celle di tabella, garantito su ogni browser da
+                      prima che esistessero flexbox e grid - lo sfondo
+                      della colonna sinistra deve arrivare fino in fondo
+                      alla scheda, non fermarsi al suo contenuto */}
+                  <div style={{ display: "table", width: "100%", tableLayout: "fixed" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
-                    <div style={{ flex: "1 1 0", minWidth: 0, background: "#F6F6F8", padding: 20 }}>
+                    <div style={{ display: "table-cell", width: "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -5482,7 +5482,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
-                    <div style={{ flex: "2 1 0", minWidth: 0, padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
+                    <div style={{ display: "table-cell", width: "66.667%", verticalAlign: "top", padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
                       {i.pacchetto_kit && (
                         <div style={{ marginBottom: 18 }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
