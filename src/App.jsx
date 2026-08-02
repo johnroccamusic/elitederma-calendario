@@ -146,6 +146,28 @@ function IconaOrologioCard({ size = 18 }) {
     </svg>
   );
 }
+// icone del riepilogo amministrativo (contabilità classe)
+function IconaPortafoglio({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+    </svg>
+  );
+}
+function IconaBanconota({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="6" width="20" height="12" rx="2" /><circle cx="12" cy="12" r="2" /><path d="M6 12h.01M18 12h.01" />
+    </svg>
+  );
+}
+function IconaCartaPos({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+    </svg>
+  );
+}
 // data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
 // ultime iscrizioni per giorno di inserimento)
 function fmtDataLunga(dataStr) {
@@ -1253,8 +1275,15 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
     .slice()
     .sort((a, b) => b.ts.localeCompare(a.ts));
 
+  // le iscrizioni flaggate "vecchia iscrizione" (inserite ora ma relative a
+  // un corso già passato) non entrano nei gruppi per giorno: altrimenti
+  // sporcherebbero il giorno di inserimento con dati che non riguardano
+  // davvero "oggi". Finiscono tutte in un unico elenco a parte
+  const recenti = ordinate.filter((i) => !i.vecchia_iscrizione);
+  const mesePrecedenti = ordinate.filter((i) => i.vecchia_iscrizione);
+
   const gruppi = {};
-  ordinate.forEach((i) => {
+  recenti.forEach((i) => {
     const chiave = i.ts.slice(0, 10); // "YYYY-MM-DD"
     if (!gruppi[chiave]) gruppi[chiave] = [];
     gruppi[chiave].push(i);
@@ -1265,13 +1294,53 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
   const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
 
+  const tabella = (lista) => (
+    <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+      <table style={{ borderCollapse: "collapse", width: "100%" }}>
+        <thead>
+          <tr>
+            <th style={thStyle}>Tutor</th>
+            <th style={thStyle}>Tipo di corso</th>
+            <th style={thStyle}>Pacchetto/Kit</th>
+            <th style={thStyle}>Città</th>
+            <th style={thStyle}>Data del corso</th>
+            <th style={{ ...thStyle, borderRight: "none" }}>Importo pattuito</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lista.map((i) => {
+            const cd = cdById[i.corso_data_id];
+            const corso = cd ? corsoById[cd.corso_id] : null;
+            const loc = cd ? locById[cd.location_id] : null;
+            return (
+              <tr
+                key={i.id}
+                onClick={onApriIscritto ? () => onApriIscritto(i) : undefined}
+                style={{ cursor: onApriIscritto ? "pointer" : undefined }}
+              >
+                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>{(i.tutor || "—").toUpperCase()}</td>
+                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
+                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY }}>{i.pacchetto_kit || "—"}</td>
+                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
+                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap", borderRight: "none" }}>
+                  {i.totale_pattuito != null ? `${i.totale_pattuito} €` : "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
       <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 800, color: NAVY, textAlign: "center", marginBottom: 30 }}>
         ULTIME ISCRIZIONI
       </div>
 
-      {chiaviData.length === 0 && (
+      {chiaviData.length === 0 && mesePrecedenti.length === 0 && (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna iscrizione ancora.</div>
       )}
 
@@ -1280,45 +1349,18 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
           <div style={{ ...fontBody, fontSize: 15, fontWeight: 600, color: NAVY, textAlign: "center", marginBottom: 12 }}>
             {fmtDataLunga(data)}
           </div>
-          <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-            <table style={{ borderCollapse: "collapse", width: "100%" }}>
-              <thead>
-                <tr>
-                  <th style={thStyle}>Tutor</th>
-                  <th style={thStyle}>Tipo di corso</th>
-                  <th style={thStyle}>Pacchetto/Kit</th>
-                  <th style={thStyle}>Città</th>
-                  <th style={thStyle}>Data del corso</th>
-                  <th style={{ ...thStyle, borderRight: "none" }}>Importo pattuito</th>
-                </tr>
-              </thead>
-              <tbody>
-                {gruppi[data].map((i) => {
-                  const cd = cdById[i.corso_data_id];
-                  const corso = cd ? corsoById[cd.corso_id] : null;
-                  const loc = cd ? locById[cd.location_id] : null;
-                  return (
-                    <tr
-                      key={i.id}
-                      onClick={onApriIscritto ? () => onApriIscritto(i) : undefined}
-                      style={{ cursor: onApriIscritto ? "pointer" : undefined }}
-                    >
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>{(i.tutor || "—").toUpperCase()}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY }}>{i.pacchetto_kit || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap", borderRight: "none" }}>
-                        {i.totale_pattuito != null ? `${i.totale_pattuito} €` : "—"}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {tabella(gruppi[data])}
         </div>
       ))}
+
+      {mesePrecedenti.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ ...fontBody, fontSize: 15, fontWeight: 600, color: NAVY, textAlign: "center", marginBottom: 12 }}>
+            Mesi precedenti
+          </div>
+          {tabella(mesePrecedenti)}
+        </div>
+      )}
     </div>
   );
 }
@@ -1389,6 +1431,10 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 
   const filtrati = iscritti.filter((i) => {
     if (!i.ts) return false;
+    // le iscrizioni flaggate "vecchia iscrizione" sono relative a un corso
+    // già passato inserito ora: non devono contare nelle statistiche per
+    // periodo, altrimenti gonfiano il mese in cui vengono solo inserite
+    if (i.vecchia_iscrizione) return false;
     if (da && i.ts < da) return false;
     if (a && i.ts > `${a}T23:59:59.999`) return false;
     return true;
@@ -4355,6 +4401,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [note, setNote] = useState("");
   const [tutor, setTutor] = useState("");
   const [telefono, setTelefono] = useState("");
+  // iscrizione inserita ora ma relativa a un corso già passato: non deve
+  // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
+  // momento in cui viene salvata nel database, non la data del corso)
+  const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
   const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "" };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagPrecorso, setPagPrecorso] = useState(QUOTA_VUOTA);
@@ -4380,6 +4430,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [linkMaster, setLinkMaster] = useState("");
   const [generandoDiplomi, setGenerandoDiplomi] = useState(false);
   const [generandoSegnaposti, setGenerandoSegnaposti] = useState(false);
+
+  // pannello "Riepilogo amministrativo" (costi della classe): parte
+  // chiuso perché, se sempre aperto, intralcia la normale gestione
+  // contabilità (spuntare incassato, aprire schede...)
+  const [costiAperto, setCostiAperto] = useState(false);
+  const [costoAccademia, setCostoAccademia] = useState(corsoData.costo_accademia != null ? String(corsoData.costo_accademia) : "");
+  const [costoMaster, setCostoMaster] = useState(corsoData.costo_master != null ? String(corsoData.costo_master) : "");
+  const [costoAssistenti, setCostoAssistenti] = useState(corsoData.costo_assistenti != null ? String(corsoData.costo_assistenti) : "");
+  const [costoPranzi, setCostoPranzi] = useState(corsoData.costo_pranzi != null ? String(corsoData.costo_pranzi) : "");
+  const [costoHotel, setCostoHotel] = useState(corsoData.costo_hotel != null ? String(corsoData.costo_hotel) : "");
+  const [costiImprevisti, setCostiImprevisti] = useState(corsoData.costi_imprevisti != null ? String(corsoData.costi_imprevisti) : "");
+  const [notaImprevisto, setNotaImprevisto] = useState(corsoData.nota_imprevisto || "");
+  // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
+  const [costiExtra, setCostiExtra] = useState(
+    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "" })) : []
+  );
+  const [salvandoCosti, setSalvandoCosti] = useState(false);
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -4409,6 +4476,49 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
   const max = postiMaxEffettivi(corsoData, corso, loc);
   const liberi = Math.max(0, max - listaIscritti.length);
+
+  // "Da avere al corso" e le modelle sono gli unici importi incassati
+  // fisicamente il giorno del corso (in contanti o via POS): acconto/pre
+  // corso arrivano prima, con bonifico/sito, e non passano dalle mani
+  // del master in aula — per questo il riepilogo costi si basa solo su
+  // questi importi, non sul totale generale della classe
+  const contantiClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Contanti" ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0));
+  const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0));
+  const daIncassareClasse = round2(contantiClasse + posClasse);
+  const totaleCostiClasse = round2(
+    parseNum(costoAccademia) + parseNum(costoMaster) + parseNum(costoAssistenti) +
+    parseNum(costoPranzi) + parseNum(costoHotel) + parseNum(costiImprevisti) +
+    costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+  );
+  const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
+
+  function aggiungiVoceCosto() {
+    setCostiExtra((prev) => [...prev, { titolo: "", valore: "" }]);
+    setCostiAperto(true);
+  }
+  function modificaVoceCosto(idx, campo, valore) {
+    setCostiExtra((prev) => prev.map((c, i) => (i === idx ? { ...c, [campo]: valore } : c)));
+  }
+  function rimuoviVoceCosto(idx) {
+    setCostiExtra((prev) => prev.filter((_, i) => i !== idx));
+  }
+  async function salvaCostiClasse() {
+    setSalvandoCosti(true);
+    const { error } = await supabase.from("corsi_date").update({
+      costo_accademia: costoAccademia === "" ? null : parseNum(costoAccademia),
+      costo_master: costoMaster === "" ? null : parseNum(costoMaster),
+      costo_assistenti: costoAssistenti === "" ? null : parseNum(costoAssistenti),
+      costo_pranzi: costoPranzi === "" ? null : parseNum(costoPranzi),
+      costo_hotel: costoHotel === "" ? null : parseNum(costoHotel),
+      costi_imprevisti: costiImprevisti === "" ? null : parseNum(costiImprevisti),
+      nota_imprevisto: notaImprevisto.trim() || null,
+      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore) })),
+    }).eq("id", corsoData.id);
+    setSalvandoCosti(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Costi salvati.");
+    ricarica();
+  }
 
   function apriGestioneClasse() {
     if (mostraGestione) { setMostraGestione(false); return; }
@@ -4697,7 +4807,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   }
 
   function resetCampi() {
-    setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono("");
+    setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTagliaDivisa("");
@@ -4714,6 +4824,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   function apriModificaCompleta(i) {
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
+    setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
       totale: i.acconto_totale != null ? String(i.acconto_totale) : "",
@@ -4800,6 +4911,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         note: note.trim() || null,
         tutor: tutor.trim() || null,
         telefono: telefono.trim() || null,
+        vecchia_iscrizione: vecchiaIscrizione,
         acconto_imponibile: pagAcconto.imponibile === "" ? null : parseNum(pagAcconto.imponibile),
         acconto_totale: pagAcconto.totale === "" ? null : parseNum(pagAcconto.totale),
         acconto_metodo: pagAcconto.metodo || null,
@@ -4872,7 +4984,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     if (dati.telefono && !salta(telefono.trim())) setTelefono(dati.telefono.toUpperCase());
 
     if (dati.tagliaDivisa && !salta(tagliaDivisa)) {
-      const taglia = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
+      const taglia = ["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
       if (taglia) setTagliaDivisa(taglia);
     }
 
@@ -5070,9 +5182,128 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         </div>
       )}
 
+      {vista === "lista" && mostraGestione && (
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div
+            onClick={() => setCostiAperto((v) => !v)}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 20px", cursor: "pointer" }}
+          >
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                title="Aggiungi voce di costo"
+                onClick={(e) => { e.stopPropagation(); aggiungiVoceCosto(); }}
+                style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
+              >
+                +
+              </button>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: costiAperto ? "rotate(180deg)" : "none" }}>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </div>
+          </div>
+
+          {costiAperto && (
+            <div style={{ padding: "0 20px 20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 22 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Totale da incassare</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {daIncassareClasse}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Contanti</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Pos</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {posClasse}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Costi della classe</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
+                <Field label="Costo accademia"><input style={inputStyle} inputMode="decimal" value={costoAccademia} onChange={(e) => setCostoAccademia(e.target.value)} /></Field>
+                <Field label="Costo master"><input style={inputStyle} inputMode="decimal" value={costoMaster} onChange={(e) => setCostoMaster(e.target.value)} /></Field>
+                <Field label="Costo assistenti"><input style={inputStyle} inputMode="decimal" value={costoAssistenti} onChange={(e) => setCostoAssistenti(e.target.value)} /></Field>
+                <Field label="Costo pranzi"><input style={inputStyle} inputMode="decimal" value={costoPranzi} onChange={(e) => setCostoPranzi(e.target.value)} /></Field>
+                <Field label="Costo hotel"><input style={inputStyle} inputMode="decimal" value={costoHotel} onChange={(e) => setCostoHotel(e.target.value)} /></Field>
+                <Field label="Costi imprevisti"><input style={inputStyle} inputMode="decimal" value={costiImprevisti} onChange={(e) => setCostiImprevisti(e.target.value)} /></Field>
+              </div>
+
+              {costiExtra.map((voce, idx) => (
+                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "2 1 140px", minWidth: 0 }}>
+                    <Field label="Voce di costo"><input style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Titolo" value={voce.titolo} onChange={(e) => modificaVoceCosto(idx, "titolo", e.target.value.toUpperCase())} /></Field>
+                  </div>
+                  <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                    <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceCosto(idx, "valore", e.target.value)} /></Field>
+                  </div>
+                  <button
+                    onClick={() => rimuoviVoceCosto(idx)}
+                    title="Rimuovi voce"
+                    style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                      <path d="M10 11v6" /><path d="M14 11v6" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+
+              <Field label="Nota imprevisto"><input style={inputStyle} placeholder="Indica di che spesa si tratta" value={notaImprevisto} onChange={(e) => setNotaImprevisto(e.target.value)} /></Field>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14, paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale costi</div>
+                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCostiClasse}</div>
+                </div>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Risultato classe</div>
+                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: risultatoClasse < 0 ? "#C0392B" : NAVY }}>€ {risultatoClasse}</div>
+                </div>
+                <Button onClick={salvaCostiClasse} disabled={salvandoCosti}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {vista === "form" && (
-        <div style={cardStyle} onBlur={() => { if (modificandoId && !soloLettura) autosalva(); }}>
-          <div style={hStyle}>{soloLettura ? "Scheda iscritto" : modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+        <div
+          style={cardStyle}
+          onBlur={(e) => {
+            // se il focus sta passando a un bottone (es. proprio "Fatto,
+            // torna alla lista"), non serve il salvataggio automatico qui:
+            // quel bottone fa già il suo salvataggio completo. Altrimenti
+            // il blur del campo appena lasciato parte per primo, disabilita
+            // il bottone mentre salva, e il click sullo stesso bottone (che
+            // nel frattempo è disabled) non scatta: serve un secondo click
+            if (modificandoId && !soloLettura && !(e.relatedTarget && e.relatedTarget.tagName === "BUTTON")) autosalva();
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={hStyle}>{soloLettura ? "Scheda iscritto" : modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+            {adminSbloccato && !soloLettura && (
+              <label
+                title="L'iscrizione non compare tra le iscrizioni/statistiche di oggi: finisce nell'elenco Statistiche → Ultime iscrizioni → Mesi precedenti"
+                style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12, color: MUTED }}
+              >
+                <input type="checkbox" checked={vecchiaIscrizione} onChange={(e) => setVecchiaIscrizione(e.target.checked)} style={{ width: 16, height: 16 }} />
+                Vecchia iscrizione
+              </label>
+            )}
+          </div>
           {soloLettura ? (
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
               Sola visualizzazione: per modificare i dati serve aprire "Contabilità classe".
@@ -5295,7 +5526,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
           <Field label="Taglia divisa">
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", ...fontBody, fontSize: 14, color: NAVY }}>
-              {["XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((taglia) => (
+              {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((taglia) => (
                 <label key={taglia} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
                   <input type="radio" name="tagliaDivisa" checked={tagliaDivisa === taglia} onChange={() => setTagliaDivisa(taglia)} />
                   {taglia}
@@ -5480,7 +5711,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
                         const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
                         return (
-                          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
+                          <div style={{ position: "absolute", left: 20, right: 20, bottom: 20 }}>
                             <Button
                               onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
                               style={impostata
@@ -5562,14 +5793,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         {i.acconto_totale != null && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Pagato in acconto</div>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{totQuota(i, "acconto")} €{i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}</div>
+                            <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{totQuota(i, "acconto")} €{i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}</div>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "nowrap" }}>{i.acconto_metodo || "?"}</div>
                           </>
                         )}
                         {i.precorso_totale != null && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Pagato pre corso</div>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{totQuota(i, "precorso")} €{i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}</div>
+                            <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{totQuota(i, "precorso")} €{i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}</div>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "nowrap" }}>{i.precorso_metodo || "?"}</div>
                           </>
                         )}
@@ -5583,7 +5814,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         {i.richiede_modelle && i.numero_modelle != null && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Modelle da pagare</div>
-                            <div style={{ gridColumn: "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+                            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
                           </>
                         )}
                         {i.taglia_divisa && (

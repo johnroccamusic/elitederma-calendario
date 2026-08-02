@@ -311,4 +311,23 @@ alter table public.segnaposti_config add column if not exists limite_dx_pos_x nu
 alter table public.iscritti add column if not exists ristampa_diploma boolean not null default false;
 
 
+-- ---------------------------------------------------------
+-- 13) "Vecchia iscrizione": non conta nelle statistiche/iscrizioni di oggi
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists vecchia_iscrizione boolean not null default false;
+
+
+-- ---------------------------------------------------------
+-- 14) "Riepilogo amministrativo": costi della classe (Contabilità classe)
+-- ---------------------------------------------------------
+alter table public.corsi_date add column if not exists costo_accademia numeric;
+alter table public.corsi_date add column if not exists costo_master numeric;
+alter table public.corsi_date add column if not exists costo_assistenti numeric;
+alter table public.corsi_date add column if not exists costo_pranzi numeric;
+alter table public.corsi_date add column if not exists costo_hotel numeric;
+alter table public.corsi_date add column if not exists costi_imprevisti numeric;
+alter table public.corsi_date add column if not exists nota_imprevisto text;
+alter table public.corsi_date add column if not exists costi_extra jsonb not null default '[]';
+
+
 notify pgrst, 'reload schema';
