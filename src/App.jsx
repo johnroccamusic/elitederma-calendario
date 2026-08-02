@@ -5643,13 +5643,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         cursor: "pointer",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "stretch", gap: 12 }}>
-                        <div style={{ width: 3, borderRadius: 2, background: coloreIncasso }} />
-                        <div>
-                          <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 3, alignSelf: "stretch", borderRadius: 2, background: coloreIncasso }} />
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
                             {i.incassato ? "Incassato" : "Da incassare"}
-                          </div>
-                          <div style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</div>
+                          </span>
+                          <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</span>
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
