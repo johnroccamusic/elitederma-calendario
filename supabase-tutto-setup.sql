@@ -325,8 +325,6 @@ alter table public.corsi_date add column if not exists costo_master numeric;
 alter table public.corsi_date add column if not exists costo_assistenti numeric;
 alter table public.corsi_date add column if not exists costo_pranzi numeric;
 alter table public.corsi_date add column if not exists costo_hotel numeric;
-alter table public.corsi_date add column if not exists costi_imprevisti numeric;
-alter table public.corsi_date add column if not exists nota_imprevisto text;
 alter table public.corsi_date add column if not exists costi_extra jsonb not null default '[]';
 
 

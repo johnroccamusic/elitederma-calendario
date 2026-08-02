@@ -4440,8 +4440,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [costoAssistenti, setCostoAssistenti] = useState(corsoData.costo_assistenti != null ? String(corsoData.costo_assistenti) : "");
   const [costoPranzi, setCostoPranzi] = useState(corsoData.costo_pranzi != null ? String(corsoData.costo_pranzi) : "");
   const [costoHotel, setCostoHotel] = useState(corsoData.costo_hotel != null ? String(corsoData.costo_hotel) : "");
-  const [costiImprevisti, setCostiImprevisti] = useState(corsoData.costi_imprevisti != null ? String(corsoData.costi_imprevisti) : "");
-  const [notaImprevisto, setNotaImprevisto] = useState(corsoData.nota_imprevisto || "");
   // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
   const [costiExtra, setCostiExtra] = useState(
     Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "" })) : []
@@ -4485,9 +4483,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const contantiClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Contanti" ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0));
   const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0));
   const daIncassareClasse = round2(contantiClasse + posClasse);
+  // la quota venditore di ogni iscritto è un costo della classe a tutti gli
+  // effetti (va pagata al venditore): fa parte del totale costi anche prima
+  // che l'amministratore compili qualunque altro campo del pannello
+  const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
   const totaleCostiClasse = round2(
-    parseNum(costoAccademia) + parseNum(costoMaster) + parseNum(costoAssistenti) +
-    parseNum(costoPranzi) + parseNum(costoHotel) + parseNum(costiImprevisti) +
+    quoteVenditoreClasse + parseNum(costoAccademia) + parseNum(costoMaster) + parseNum(costoAssistenti) +
+    parseNum(costoPranzi) + parseNum(costoHotel) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
@@ -4510,8 +4512,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       costo_assistenti: costoAssistenti === "" ? null : parseNum(costoAssistenti),
       costo_pranzi: costoPranzi === "" ? null : parseNum(costoPranzi),
       costo_hotel: costoHotel === "" ? null : parseNum(costoHotel),
-      costi_imprevisti: costiImprevisti === "" ? null : parseNum(costiImprevisti),
-      nota_imprevisto: notaImprevisto.trim() || null,
       costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore) })),
     }).eq("id", corsoData.id);
     setSalvandoCosti(false);
@@ -5190,13 +5190,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           >
             <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <button
-                title="Aggiungi voce di costo"
-                onClick={(e) => { e.stopPropagation(); aggiungiVoceCosto(); }}
-                style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
-              >
-                +
-              </button>
+              {costiAperto && (
+                <button
+                  title="Aggiungi voce di costo"
+                  onClick={(e) => { e.stopPropagation(); aggiungiVoceCosto(); }}
+                  style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
+                >
+                  +
+                </button>
+              )}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: costiAperto ? "rotate(180deg)" : "none" }}>
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -5236,7 +5238,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 <Field label="Costo assistenti"><input style={inputStyle} inputMode="decimal" value={costoAssistenti} onChange={(e) => setCostoAssistenti(e.target.value)} /></Field>
                 <Field label="Costo pranzi"><input style={inputStyle} inputMode="decimal" value={costoPranzi} onChange={(e) => setCostoPranzi(e.target.value)} /></Field>
                 <Field label="Costo hotel"><input style={inputStyle} inputMode="decimal" value={costoHotel} onChange={(e) => setCostoHotel(e.target.value)} /></Field>
-                <Field label="Costi imprevisti"><input style={inputStyle} inputMode="decimal" value={costiImprevisti} onChange={(e) => setCostiImprevisti(e.target.value)} /></Field>
               </div>
 
               {costiExtra.map((voce, idx) => (
@@ -5260,8 +5261,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   </button>
                 </div>
               ))}
-
-              <Field label="Nota imprevisto"><input style={inputStyle} placeholder="Indica di che spesa si tratta" value={notaImprevisto} onChange={(e) => setNotaImprevisto(e.target.value)} /></Field>
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14, paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <div>
