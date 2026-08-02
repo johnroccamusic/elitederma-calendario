@@ -5177,24 +5177,40 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           )}
         </div>
         {vista === "lista" ? (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Button variant={mostraGestione ? "primary" : "ghost"} onClick={apriGestioneClasse}>
+          <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
+            <button
+              onClick={apriGestioneClasse}
+              style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", whiteSpace: "nowrap", textAlign: "center" }}
+            >
               {mostraGestione ? "Esci da contabilità classe" : "Contabilità classe"}
-            </Button>
+            </button>
             {mostraGestione && (
-              <Button variant="ghost" onClick={stampaDiplomi} disabled={generandoDiplomi}>
+              <button
+                onClick={stampaDiplomi}
+                disabled={generandoDiplomi}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, whiteSpace: "nowrap", textAlign: "center" }}
+              >
                 {generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"}
-              </Button>
+              </button>
             )}
             {mostraGestione && (
-              <Button variant="ghost" onClick={stampaSegnaposti} disabled={generandoSegnaposti}>
+              <button
+                onClick={stampaSegnaposti}
+                disabled={generandoSegnaposti}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, whiteSpace: "nowrap", textAlign: "center" }}
+              >
                 {generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto"}
-              </Button>
+              </button>
             )}
             {!mostraGestione && (
-              <Button onClick={apriIscrizione} disabled={liberi <= 0} title={liberi <= 0 ? "Nessun posto disponibile" : ""}>
+              <button
+                onClick={apriIscrizione}
+                disabled={liberi <= 0}
+                title={liberi <= 0 ? "Nessun posto disponibile" : ""}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: liberi <= 0 ? "default" : "pointer", opacity: liberi <= 0 ? 0.5 : 1, whiteSpace: "nowrap", textAlign: "center" }}
+              >
                 {liberi <= 0 ? "Completo" : "Iscrivi"}
-              </Button>
+              </button>
             )}
           </div>
         ) : (
