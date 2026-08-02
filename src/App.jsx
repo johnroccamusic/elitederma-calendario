@@ -5262,17 +5262,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 </div>
               )}
               {mostraGestione && (
-                // rotaia a sinistra di tutta la scheda: uno spazio vuoto in
-                // alto (2/3) e la barretta colorata in basso (1/3), alta
-                // esattamente un terzo dell'altezza della scheda perché lo
-                // stretch di flex la fa combaciare con l'altezza della
-                // colonna di contenuto qui accanto, che è quella "vera"
-                <div style={{ display: "flex" }}>
-                  <div style={{ width: 4, flexShrink: 0, display: "flex", flexDirection: "column" }}>
-                    <div style={{ flex: 2 }} />
-                    {mostraIncasso && <div style={{ flex: 1, borderRadius: 2, background: coloreIncasso }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                <>
                   {/* barra degli strumenti della scheda (come la barra dei
                       pulsanti in cima a una finestra Mac): le azioni
                       sull'iscritto vivono qui, non sparse dentro la scheda */}
@@ -5376,8 +5366,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                             <Button
                               onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
                               style={impostata
-                                ? { width: "100%", padding: "8px 12px", fontSize: 13, background: "#1D4ED8", border: "1px solid #1D4ED8", color: "#fff" }
-                                : { width: "100%", padding: "8px 12px", fontSize: 13, background: "#fff", border: "1px solid #1D4ED8", color: "#1D4ED8" }
+                                ? { width: "100%", padding: "8px 6px", fontSize: 10.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#6FA8DC", border: "1px solid #6FA8DC", color: "#fff" }
+                                : { width: "100%", padding: "8px 6px", fontSize: 10.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#fff", border: "1px solid #1D4ED8", color: "#1D4ED8" }
                               }
                             >
                               {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
@@ -5568,19 +5558,22 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       onClick={() => toggleIncassato(i)}
                       style={{
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "stretch",
                         justifyContent: "space-between",
-                        padding: "14px 20px",
+                        padding: "14px 20px 14px 16px",
                         background: "#fff",
                         borderTop: `1px solid ${CREAM_BORDER}`,
                         cursor: "pointer",
                       }}
                     >
-                      <div>
-                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                          {i.incassato ? "Incassato" : "Da incassare"}
+                      <div style={{ display: "flex", alignItems: "stretch", gap: 12 }}>
+                        <div style={{ width: 3, borderRadius: 2, background: coloreIncasso }} />
+                        <div>
+                          <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                            {i.incassato ? "Incassato" : "Da incassare"}
+                          </div>
+                          <div style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</div>
                         </div>
-                        <div style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
                         <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
@@ -5588,8 +5581,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       </div>
                     </div>
                   )}
-                  </div>
-                </div>
+                </>
               )}
             </div>
             );
