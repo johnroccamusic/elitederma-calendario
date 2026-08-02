@@ -5128,6 +5128,32 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // singola classe)
   const soloLettura = !!(modificandoId && !adminSbloccato);
 
+  // riga "etichetta / importo / metodo" della sezione Pagamenti: da
+  // desktop importo e metodo restano in due colonne fisse (allineate
+  // riga per riga e scheda per scheda); da mobile non c'è spazio per 3
+  // colonne, quindi importo e metodo vanno appaiati sulla stessa riga
+  // sotto l'etichetta
+  function rigaPagamento(label, valore, metodo) {
+    if (isMobile) {
+      return (
+        <>
+          <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
+          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", gap: 10, paddingBottom: 10 }}>
+            <span style={{ minWidth: 0, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</span>
+            <span style={{ minWidth: 0, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", textAlign: "right" }}>{metodo}</span>
+          </div>
+        </>
+      );
+    }
+    return (
+      <>
+        <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
+        <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+        <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{metodo}</div>
+      </>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       {msgErrore && (
@@ -5784,48 +5810,50 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       {/* un'unica griglia per tutte le righe sotto, così
                           l'importo e il metodo restano nella stessa colonna
                           riga per riga invece di rincorrere la lunghezza
-                          dell'etichetta a sinistra */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", columnGap: 14 }}>
+                          dell'etichetta a sinistra. Le colonne importo/metodo
+                          usano una larghezza FISSA (in "ch", non "auto"):
+                          "auto" si dimensiona sul contenuto più lungo di
+                          ogni singola scheda, quindi schede diverse (una con
+                          "0 €", un'altra con "353.8 €") finiscono con le
+                          colonne disallineate tra loro anche se le schede
+                          hanno la stessa larghezza. Da mobile lo spazio non
+                          basta per 3 colonne fisse: importo e metodo vanno
+                          allora sulla stessa riga, sotto l'etichetta */}
+                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 9ch 9ch", columnGap: 14 }}>
                         {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
                           <div style={{ gridColumn: "1 / -1", fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
                         )}
-                        {i.acconto_totale != null && (
-                          <>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Pagato in acconto</div>
-                            <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{totQuota(i, "acconto")} €{i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}</div>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "nowrap" }}>{i.acconto_metodo || "?"}</div>
-                          </>
+                        {i.acconto_totale != null && rigaPagamento(
+                          "Pagato in acconto",
+                          `${totQuota(i, "acconto")} €${i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}`,
+                          i.acconto_metodo || "?"
                         )}
-                        {i.precorso_totale != null && (
-                          <>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Pagato pre corso</div>
-                            <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{totQuota(i, "precorso")} €{i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}</div>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "nowrap" }}>{i.precorso_metodo || "?"}</div>
-                          </>
+                        {i.precorso_totale != null && rigaPagamento(
+                          "Pagato pre corso",
+                          `${totQuota(i, "precorso")} €${i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}`,
+                          i.precorso_metodo || "?"
                         )}
-                        {i.saldo_totale != null && (
-                          <>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Importo da pagare al corso</div>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{i.saldo_totale} €</div>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "nowrap" }}>{i.saldo_metodo || "?"}</div>
-                          </>
+                        {i.saldo_totale != null && rigaPagamento(
+                          "Importo da pagare al corso",
+                          `${i.saldo_totale} €`,
+                          i.saldo_metodo || "?"
                         )}
                         {i.richiede_modelle && i.numero_modelle != null && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Modelle da pagare</div>
-                            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+                            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
                           </>
                         )}
                         {i.taglia_divisa && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Taglia divisa</div>
-                            <div style={{ gridColumn: "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 22, color: NAVY }}>{i.taglia_divisa}</div>
+                            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 22, color: NAVY }}>{i.taglia_divisa}</div>
                           </>
                         )}
                         {i.accordi_commerciali && (
                           <>
                             <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Accordi commerciali</div>
-                            <div style={{ gridColumn: "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
+                            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
                           </>
                         )}
                         {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
