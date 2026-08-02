@@ -506,7 +506,10 @@ function conTotaleAggiornato(prev, valore, applicaIva) {
   return { ...prev, totale: valore, imponibile };
 }
 function ivaDiQuota(q) {
-  if (q.imponibile === "" && q.totale === "") return "";
+  // imponibile vuoto (es. "Contanti no IVA": la casella resta bloccata
+  // e non si riempie mai da sola) significa "nessuna IVA da mostrare",
+  // anche se il totale è già stato inserito
+  if (q.imponibile === "") return "";
   return round2(parseNum(q.totale) - parseNum(q.imponibile)).toFixed(2);
 }
 // quota venditore: 7% del totale pattuito, min 50€, altrimenti arrotondata ai 5€ superiori
@@ -5148,11 +5151,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Contanti no IVA", "Rate"]}
             totaleBloccato={false}
+            imponibileBloccato={pagAcconto.metodo === "Contanti no IVA"}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
-            onTotale={(v) => setPagAcconto((prev) => conTotaleAggiornato(prev, v, true))}
-            onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
+            onTotale={(v) => setPagAcconto((prev) => (prev.metodo === "Contanti no IVA" ? { ...prev, totale: v } : conTotaleAggiornato(prev, v, true)))}
+            onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: v === "Contanti no IVA" ? "" : prev.imponibile }))}
             onInteressi={(v) => setPagAcconto((prev) => ({ ...prev, interessi: v }))}
             onTotaleConInteressi={(v) =>
               setPagAcconto((prev) => {
@@ -5403,8 +5407,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       alla scheda, non fermarsi al suo contenuto */}
                   <div style={{ display: "table", width: "100%", tableLayout: "fixed" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
-                    <div style={{ display: "table-cell", width: "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
-                    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                    <div style={{ display: "table-cell", position: "relative", width: "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -5445,7 +5448,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
                         const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
                         return (
-                          <div style={{ marginTop: "auto", paddingTop: 12 }}>
+                          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0 }}>
                             <Button
                               onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
                               style={impostata
@@ -5481,7 +5484,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           </div>
                         );
                       })()}
-                    </div>
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
