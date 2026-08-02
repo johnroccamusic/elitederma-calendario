@@ -5319,9 +5319,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </button>
                   </div>
 
-                  <div style={{ display: "flex", flexWrap: "wrap" }}>
+                  {/* grid, non flex: con flex la colonna sinistra si
+                      allargava/stringeva a seconda del contenuto, con
+                      "1fr 2fr" resta sempre esattamente 1/3 - 2/3 della
+                      larghezza della scheda */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
-                    <div style={{ flex: "1 1 240px", minWidth: 220, background: "#F6F6F8", padding: 20 }}>
+                    <div style={{ minWidth: 0, background: "#F6F6F8", padding: 20 }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -5399,7 +5403,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
-                    <div style={{ flex: "2 1 300px", minWidth: 260, padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
+                    <div style={{ minWidth: 0, padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
                       {i.pacchetto_kit && (
                         <div style={{ marginBottom: 18 }}>
                           <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
