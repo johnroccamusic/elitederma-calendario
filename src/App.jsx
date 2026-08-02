@@ -4345,6 +4345,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // rimonta questo componente (via key) passando lo stato da ripristinare
   const [vista, setVista] = useState(sottoVistaIniziale?.vista ?? "lista"); // 'lista' | 'form'
   const [modificandoId, setModificandoId] = useState(sottoVistaIniziale?.modificandoId ?? null); // id dell'iscritto in modifica, null se è una nuova iscrizione
+  const isMobile = useIsMobile();
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -5403,6 +5404,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   <div style={{ display: "table", width: "100%", tableLayout: "fixed" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
                     <div style={{ display: "table-cell", width: "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
+                    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 4 }}>{idx + 1}.</div>
                         <div style={{ ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</div>
@@ -5443,12 +5445,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
                         const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
                         return (
-                          <div style={{ marginTop: 12 }}>
+                          <div style={{ marginTop: "auto", paddingTop: 12 }}>
                             <Button
                               onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
                               style={impostata
-                                ? { width: "100%", padding: "8px 6px", fontSize: 10.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#6FA8DC", border: "1px solid #6FA8DC", color: "#fff" }
-                                : { width: "100%", padding: "8px 6px", fontSize: 10.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#fff", border: "1px solid #1D4ED8", color: "#1D4ED8" }
+                                ? { width: "100%", padding: "8px 6px", fontSize: 10.5, lineHeight: 1.25, whiteSpace: isMobile ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#6FA8DC", border: "1px solid #6FA8DC", color: "#fff" }
+                                : { width: "100%", padding: "8px 6px", fontSize: 10.5, lineHeight: 1.25, whiteSpace: isMobile ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#fff", border: "1px solid #1D4ED8", color: "#1D4ED8" }
                               }
                             >
                               {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
@@ -5479,6 +5481,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           </div>
                         );
                       })()}
+                    </div>
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
@@ -5605,11 +5608,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                             cursor: "pointer",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "baseline", gap: isMobile ? 2 : 8 }}>
                             <span style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreIncasso, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>
                               {i.incassato ? "Incassato" : "Da incassare"}
                             </span>
-                            <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso }}>{daIncassare} €</span>
+                            <span style={{ ...fontBody, fontSize: 22, fontWeight: 800, color: coloreIncasso, whiteSpace: "nowrap" }}>{daIncassare} €</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 14, color: coloreIncasso }}>
                             <input type="checkbox" checked={!!i.incassato} readOnly style={{ width: 22, height: 22, pointerEvents: "none" }} />
