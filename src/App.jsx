@@ -5642,7 +5642,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         alignItems: "stretch",
                         justifyContent: "space-between",
                         padding: "14px 20px 14px 16px",
-                        background: "#fff",
+                        // il celeste della colonna sinistra deve continuare
+                        // fino in fondo alla scheda, anche dietro a questa
+                        // riga: niente sfondo bianco uniforme, ma lo stesso
+                        // taglio 1/3-2/3 delle due colonne sopra
+                        background: "linear-gradient(to right, #F6F6F8 0%, #F6F6F8 33.333%, #fff 33.333%, #fff 100%)",
                         borderTop: `1px solid ${CREAM_BORDER}`,
                         cursor: "pointer",
                       }}
