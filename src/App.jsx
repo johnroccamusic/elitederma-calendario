@@ -506,7 +506,7 @@ function conTotaleAggiornato(prev, valore, applicaIva) {
   return { ...prev, totale: valore, imponibile };
 }
 function ivaDiQuota(q) {
-  // imponibile vuoto (es. "Contanti no IVA": la casella resta bloccata
+  // imponibile vuoto (es. "Cash no iva": la casella resta bloccata
   // e non si riempie mai da sola) significa "nessuna IVA da mostrare",
   // anche se il totale è già stato inserito
   if (q.imponibile === "") return "";
@@ -5151,12 +5151,25 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Contanti no IVA", "Rate"]}
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"]}
             totaleBloccato={false}
-            imponibileBloccato={pagAcconto.metodo === "Contanti no IVA"}
+            imponibileBloccato={pagAcconto.metodo === "Cash no iva"}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
-            onTotale={(v) => setPagAcconto((prev) => (prev.metodo === "Contanti no IVA" ? { ...prev, totale: v } : conTotaleAggiornato(prev, v, true)))}
-            onMetodo={(v) => setPagAcconto((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: v === "Contanti no IVA" ? "" : prev.imponibile }))}
+            onTotale={(v) => setPagAcconto((prev) => (prev.metodo === "Cash no iva" ? { ...prev, totale: v } : conTotaleAggiornato(prev, v, true)))}
+            onMetodo={(v) =>
+              setPagAcconto((prev) => {
+                if (v === "Cash no iva") {
+                  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: "" };
+                }
+                // si esce da "Cash no iva": ripristina l'IVA ricalcolando
+                // l'imponibile dal totale già inserito, invece di lasciare
+                // l'imponibile vuoto come se non fosse mai stato compilato
+                if (prev.metodo === "Cash no iva" && prev.totale !== "") {
+                  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
+                }
+                return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+              })
+            }
             onInteressi={(v) => setPagAcconto((prev) => ({ ...prev, interessi: v }))}
             onTotaleConInteressi={(v) =>
               setPagAcconto((prev) => {
@@ -5188,35 +5201,54 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               })
             }
           />
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG_CHIARO }}>
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale senza Iva">
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.imponibile) + parseNum(pagPrecorso.imponibile) + parseNum(pagSaldo.imponibile)).toFixed(2)} disabled />
-                </Field>
+          {(() => {
+            // l'iva di una quota è "totale - imponibile", ma quando
+            // l'imponibile è vuoto (Cash no iva) non c'è nessun calcolo da
+            // fare: quella quota è per intero "senza iva" e non deve
+            // abbassare il totale senza iva solo perché la casella
+            // imponibile non è mai stata riempita
+            const impEffettivo = (q) => (q.imponibile === "" ? parseNum(q.totale) : parseNum(q.imponibile));
+            const ivaEffettiva = (q) => (q.imponibile === "" ? 0 : round2(parseNum(q.totale) - parseNum(q.imponibile)));
+            const nessunaIva = ivaEffettiva(pagAcconto) === 0 && ivaEffettiva(pagPrecorso) === 0 && ivaEffettiva(pagSaldo) === 0;
+            const totaleSenzaIva = impEffettivo(pagAcconto) + impEffettivo(pagPrecorso) + impEffettivo(pagSaldo);
+            const totaleConIva = parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale);
+            return (
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG_CHIARO }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 100px" }}>
+                    <Field label="Totale senza Iva">
+                      <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totaleSenzaIva.toFixed(2)} disabled />
+                    </Field>
+                  </div>
+                  {/* se nessuna quota ha davvero un'IVA (tutte pagate con
+                      metodi "no iva"), il totale con IVA sarebbe identico a
+                      quello senza IVA: inutile e fuorviante mostrarlo */}
+                  {!nessunaIva && (
+                    <div style={{ flex: "1 1 100px" }}>
+                      <Field label="Totale con Iva">
+                        <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totaleConIva.toFixed(2)} disabled />
+                      </Field>
+                    </div>
+                  )}
+                  <div style={{ flex: "1 1 100px" }}>
+                    <Field label="Totale con interessi">
+                      <input
+                        style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
+                        value={(() => {
+                          const intAcconto = pagAcconto.metodo === "Rate" ? parseNum(pagAcconto.interessi) : 0;
+                          const intPrecorso = pagPrecorso.metodo === "Rate" ? parseNum(pagPrecorso.interessi) : 0;
+                          if (intAcconto <= 0 && intPrecorso <= 0) return "";
+                          return (totaleConIva + intAcconto + intPrecorso).toFixed(2);
+                        })()}
+                        disabled
+                      />
+                    </Field>
+                  </div>
+                </div>
               </div>
-              <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale con Iva">
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale)).toFixed(2)} disabled />
-                </Field>
-              </div>
-              <div style={{ flex: "1 1 100px" }}>
-                <Field label="Totale con interessi">
-                  <input
-                    style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
-                    value={(() => {
-                      const intAcconto = pagAcconto.metodo === "Rate" ? parseNum(pagAcconto.interessi) : 0;
-                      const intPrecorso = pagPrecorso.metodo === "Rate" ? parseNum(pagPrecorso.interessi) : 0;
-                      if (intAcconto <= 0 && intPrecorso <= 0) return "";
-                      return (parseNum(pagAcconto.totale) + intAcconto + parseNum(pagPrecorso.totale) + intPrecorso + parseNum(pagSaldo.totale)).toFixed(2);
-                    })()}
-                    disabled
-                  />
-                </Field>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
           <Field label="Accordi commerciali">
             <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
           </Field>
