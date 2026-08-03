@@ -147,6 +147,15 @@ function IconaOrologioCard({ size = 18 }) {
     </svg>
   );
 }
+function IconaLoghiCard({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <circle cx="9" cy="9" r="2.2" />
+      <path d="M21 15l-5.5-5.5a2 2 0 0 0-2.8 0L4 18" />
+    </svg>
+  );
+}
 // icone del riepilogo amministrativo (contabilità classe)
 function IconaPortafoglio({ size = 20 }) {
   return (
@@ -1614,7 +1623,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi }) {
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -1758,6 +1767,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
           { etichetta: "Definisci Leve", onClick: () => setShowLevaModal(true) },
           { etichetta: "Assegna Master", onClick: onApriAssegnazioneMaster },
           { etichetta: "Setting diplomi", onClick: onApriFontDiplomi },
+          { etichetta: "Setting loghi", onClick: onApriSettingLoghi },
         ].map(({ etichetta, onClick }) => (
           <Button
             key={etichetta}
@@ -2241,6 +2251,48 @@ const SLOT_SEGNAPOSTI = Array.from({ length: POSTI_PER_PAGINA_SEGNAPOSTI }, (_, 
   chiave: `slot${idx + 1}`,
   numero: idx + 1,
 }));
+
+// ---------- Setting loghi / Generazione loghi ----------
+const CONFIG_LOGHI_DEFAULT = { id: null, font_nome_path: null, font_numero_path: null, prossimo_numero: 1 };
+// i 4 corsi che hanno sia il logo Artist che quello Expert; Master
+// Assistant e Master sono categorie a sé, aggiunte a parte sotto
+const CORSI_LOGO = [
+  { chiave: "microblading", etichetta: "Microblading" },
+  { chiave: "pmu", etichetta: "PMU" },
+  { chiave: "laminazione", etichetta: "Laminazione" },
+  { chiave: "extension", etichetta: "Extension" },
+];
+const VARIANTI_LOGO = [
+  { chiave: "artist", etichetta: "Artist" },
+  { chiave: "expert", etichetta: "Expert" },
+];
+// le 10 categorie effettive (righe di loghi_categorie): usata sia da
+// "Setting loghi" (per disegnare le 10 card) sia da "Generazione loghi"
+// (per risalire dalla scelta corso+variante alla chiave giusta)
+const CATEGORIE_LOGO = [
+  ...CORSI_LOGO.flatMap((c) => VARIANTI_LOGO.map((v) => ({
+    chiave: `${c.chiave}_${v.chiave}`,
+    etichetta: `${c.etichetta} — ${v.etichetta}`,
+    richiedeBianco: true,
+  }))),
+  { chiave: "master_assistant", etichetta: "Master Assistant", richiedeBianco: true },
+  { chiave: "master", etichetta: "Master", richiedeBianco: false },
+];
+
+const SIGLA_PAESE_LOGO = "IT";
+// due lettere iniziali di un nome completo: se ha più parole prende la
+// prima lettera della prima e dell'ultima parola (ignora eventuali nomi
+// composti nel mezzo), altrimenti raddoppia l'unica parola disponibile
+function inizialiNomeLogo(nomeCompleto) {
+  const parole = (nomeCompleto || "").trim().split(/\s+/).filter(Boolean);
+  if (parole.length === 0) return "XX";
+  if (parole.length === 1) return (parole[0] + "X").slice(0, 2).toUpperCase();
+  return (parole[0][0] + parole[parole.length - 1][0]).toUpperCase();
+}
+// es. master "Andrea Paura" + allieva "Carla Bosi" + numero 402 -> "APCB0402IT"
+function calcolaCodiceLogo(masterNome, allievaNome, numero) {
+  return `${inizialiNomeLogo(masterNome)}${inizialiNomeLogo(allievaNome)}${String(numero).padStart(4, "0")}${SIGLA_PAESE_LOGO}`;
+}
 
 // pagina globale (non per corso) di impostazioni per la stampa diplomi:
 // i 3 font usati per scrivere su ogni diploma, e la posizione/dimensione/
@@ -3055,6 +3107,477 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
       </div>
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+    </div>
+  );
+}
+
+// una card per ciascuna delle 10 categorie di loghi: upload nero/bianco,
+// e (appena c'è un nero) un'anteprima con 2 testi di prova trascinabili
+// (nome allieva, codice progressivo) sopra l'immagine vera del logo —
+// stessa logica di trascinamento a percentuale di ELEMENTI_DIPLOMA in
+// FontDiplomi, ma qui il riferimento è una semplice <img>, non un canvas
+// pdf.js: niente conversione punti-PDF, basta naturalWidth dell'immagine
+function CategoriaLogo({ categoria, ricarica }) {
+  const [config, setConfig] = useState(categoria);
+  const [previewNeroUrl, setPreviewNeroUrl] = useState(null);
+  const [previewBiancoUrl, setPreviewBiancoUrl] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
+  const [naturaleWidth, setNaturaleWidth] = useState(null);
+  const [elementoTrascinato, setElementoTrascinato] = useState(null);
+  const contenitoreRef = React.useRef(null);
+  const dragRef = React.useRef(null);
+  const modificatoLocalmenteRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!modificatoLocalmenteRef.current) setConfig(categoria);
+  }, [categoria]);
+
+  async function aggiorna(campi) {
+    modificatoLocalmenteRef.current = true;
+    setConfig((c) => ({ ...c, ...campi }));
+    const { error } = await supabase.from("loghi_categorie").update(campi).eq("chiave", categoria.chiave);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  async function caricaLogo(file, campo) {
+    if (!file) return;
+    if (campo === "logo_nero_path") setPreviewNeroUrl(URL.createObjectURL(file));
+    else setPreviewBiancoUrl(URL.createObjectURL(file));
+    try {
+      const percorso = `${categoria.chiave}/${campo === "logo_nero_path" ? "nero" : "bianco"}-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("loghi-immagini").upload(percorso, file);
+      if (error) throw error;
+      await aggiorna({ [campo]: percorso });
+    } catch (e) {
+      setMsg("Errore nel caricamento del logo: " + e.message);
+    }
+  }
+
+  const srcNero = previewNeroUrl || (config.logo_nero_path ? supabase.storage.from("loghi-immagini").getPublicUrl(config.logo_nero_path).data.publicUrl : null);
+  const srcBianco = previewBiancoUrl || (config.logo_bianco_path ? supabase.storage.from("loghi-immagini").getPublicUrl(config.logo_bianco_path).data.publicUrl : null);
+
+  useEffect(() => {
+    if (!srcNero) { setLarghezzaMostrata(null); return; }
+    const el = contenitoreRef.current;
+    if (!el) return;
+    const osservatore = new ResizeObserver((voci) => {
+      for (const voce of voci) setLarghezzaMostrata(voce.contentRect.width);
+    });
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, [srcNero]);
+
+  const scalaAnteprima = naturaleWidth && larghezzaMostrata ? larghezzaMostrata / naturaleWidth : 1;
+
+  function iniziaDrag(e, chiave) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { chiave, pointerId: e.pointerId };
+    setElementoTrascinato(chiave);
+  }
+  function muoviDrag(e) {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId || !contenitoreRef.current) return;
+    const rect = contenitoreRef.current.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    setConfig((c) => ({ ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
+  }
+  function fineDrag() {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    setElementoTrascinato(null);
+    aggiorna({ [`${d.chiave}_pos_x`]: config[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: config[`${d.chiave}_pos_y`] });
+  }
+
+  const ELEMENTI_LOGO = [
+    { chiave: "nome", colore: "#2563EB", etichetta: "Nome allieva", testoProva: "Nome Cognome" },
+    { chiave: "numero", colore: "#EA580C", etichetta: "Codice progressivo", testoProva: calcolaCodiceLogo("Andrea Paura", "Carla Bosi", 402) },
+  ];
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 16 }}>
+      <div style={hStyle}>{config.etichetta}</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ flex: "1 1 200px" }}>
+          <Field label="Logo nero (diventa il riferimento qui sotto)">
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input type="file" accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_nero_path")} />
+              {srcNero && <BadgeFileCaricato />}
+            </div>
+          </Field>
+        </div>
+        {config.richiede_bianco && (
+          <div style={{ flex: "1 1 200px" }}>
+            <Field label="Logo bianco">
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="file" accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_bianco_path")} />
+                {srcBianco && <BadgeFileCaricato />}
+              </div>
+            </Field>
+          </div>
+        )}
+      </div>
+
+      {srcNero && (
+        <>
+          <div ref={contenitoreRef} style={{ position: "relative", width: "100%", maxWidth: naturaleWidth || 500, touchAction: "none" }}>
+            <img
+              src={srcNero}
+              alt={config.etichetta}
+              style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#EFEFEF" }}
+              onLoad={(e) => setNaturaleWidth(e.target.naturalWidth)}
+            />
+            {ELEMENTI_LOGO.map(({ chiave, colore, testoProva }) => (
+              <div
+                key={chiave}
+                onPointerDown={(e) => iniziaDrag(e, chiave)}
+                onPointerMove={muoviDrag}
+                onPointerUp={fineDrag}
+                onPointerCancel={fineDrag}
+                style={{
+                  position: "absolute",
+                  left: `${config[`${chiave}_pos_x`]}%`,
+                  top: `${config[`${chiave}_pos_y`]}%`,
+                  transform: "translate(-50%, -50%)",
+                  cursor: "grab",
+                  padding: 4,
+                  border: `2px dashed ${colore}`,
+                  borderRadius: 4,
+                  background: elementoTrascinato === chiave ? `${colore}22` : "transparent",
+                  touchAction: "none",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: config[`${chiave}_font_size`] * scalaAnteprima,
+                    color: config[`${chiave}_colore`],
+                    whiteSpace: "nowrap",
+                    userSelect: "none",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {testoProva}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            {ELEMENTI_LOGO.map(({ chiave, colore, etichetta }) => (
+              <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: colore, flexShrink: 0 }} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 140 }}>{etichetta}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    onClick={() => aggiorna({ [`${chiave}_font_size`]: Math.max(6, config[`${chiave}_font_size`] - 2) })}
+                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+                  >
+                    −
+                  </button>
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 30, textAlign: "center" }}>{config[`${chiave}_font_size`]}</span>
+                  <button
+                    onClick={() => aggiorna({ [`${chiave}_font_size`]: Math.min(400, config[`${chiave}_font_size`] + 2) })}
+                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}
+                  >
+                    +
+                  </button>
+                </div>
+                <input
+                  type="color"
+                  value={config[`${chiave}_colore`]}
+                  onChange={(e) => aggiorna({ [`${chiave}_colore`]: e.target.value })}
+                  style={{ width: 36, height: 30, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6 }}
+                />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 8 }}>{msg}</div>}
+    </div>
+  );
+}
+
+// pagina "Setting loghi": i 2 font condivisi + il numero di partenza del
+// contatore progressivo globale, poi una card per ciascuna delle 10
+// categorie (CategoriaLogo)
+function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
+  const [config, setConfig] = useState(loghiImpostazioni || CONFIG_LOGHI_DEFAULT);
+  const [numeroPartenza, setNumeroPartenza] = useState(String((loghiImpostazioni || CONFIG_LOGHI_DEFAULT).prossimo_numero));
+  const [msg, setMsg] = useState("");
+  const modificatoLocalmenteRef = React.useRef(false);
+
+  useEffect(() => {
+    if (!modificatoLocalmenteRef.current) {
+      const nuovo = loghiImpostazioni || CONFIG_LOGHI_DEFAULT;
+      setConfig(nuovo);
+      setNumeroPartenza(String(nuovo.prossimo_numero));
+    }
+  }, [loghiImpostazioni]);
+
+  async function aggiorna(campi) {
+    modificatoLocalmenteRef.current = true;
+    const nuovo = { ...config, ...campi };
+    setConfig(nuovo);
+    const payload = { ...nuovo };
+    delete payload.id;
+    delete payload.ts;
+    if (nuovo.id) {
+      const { error } = await supabase.from("loghi_impostazioni").update(payload).eq("id", nuovo.id);
+      if (error) { setMsg("Errore: " + error.message); return; }
+    } else {
+      const { data, error } = await supabase.from("loghi_impostazioni").insert(payload).select("id").single();
+      if (error) { setMsg("Errore: " + error.message); return; }
+      setConfig((c) => ({ ...c, id: data.id }));
+    }
+    ricarica();
+  }
+
+  async function caricaFont(file, campo) {
+    if (!file) return;
+    try {
+      const percorso = `${campo}-${Date.now()}-${file.name}`;
+      const { error } = await supabase.storage.from("loghi-fonts").upload(percorso, file);
+      if (error) throw error;
+      await aggiorna({ [campo]: percorso });
+      setMsg("Font caricato.");
+    } catch (e) {
+      setMsg("Errore nel caricamento del font: " + e.message);
+    }
+  }
+
+  function salvaNumeroPartenza() {
+    const n = parseInt(numeroPartenza, 10);
+    if (isNaN(n) || n < 0) { setMsg("Numero non valido."); return; }
+    aggiorna({ prossimo_numero: n });
+  }
+
+  return (
+    <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Setting loghi" onBack={onBack} />
+      <div style={subStyle}>
+        Carica qui i 2 font usati per scrivere nome allieva e codice progressivo sui loghi, il numero da cui riparte
+        il contatore (unico per tutti i loghi), e per ciascuna categoria il logo nero/bianco con la posizione dei 2
+        testi calibrata trascinandoli sopra l'immagine vera.
+      </div>
+
+      <div style={cardStyle}>
+        <div style={hStyle}>Font e contatore</div>
+        <Field label="Font nome allieva">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="file" accept=".ttf,.otf,font/ttf,font/otf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => caricaFont(e.target.files?.[0] || null, "font_nome_path")} />
+            {config.font_nome_path && <BadgeFileCaricato />}
+          </div>
+        </Field>
+        <Field label="Font codice progressivo">
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="file" accept=".ttf,.otf,font/ttf,font/otf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => caricaFont(e.target.files?.[0] || null, "font_numero_path")} />
+            {config.font_numero_path && <BadgeFileCaricato />}
+          </div>
+        </Field>
+        <Field label="Numero di partenza (contatore progressivo)">
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input inputMode="numeric" value={numeroPartenza} onChange={(e) => setNumeroPartenza(e.target.value.replace(/\D/g, ""))} style={{ ...inputStyle, width: 120 }} />
+            <Button variant="ghost" onClick={salvaNumeroPartenza}>Salva</Button>
+          </div>
+        </Field>
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
+      </div>
+
+      {loghiCategorie.map((cat) => (
+        <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} />
+      ))}
+    </div>
+  );
+}
+
+// componi su un <canvas> offscreen il logo sorgente + nome + codice, alla
+// risoluzione piena dell'immagine originale (non quella ridotta
+// dell'anteprima), e restituisce il PNG risultante come Blob
+async function componiLogoPng({ percorsoLogo, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero }) {
+  const bytes = await scaricaBytesStorage("loghi-immagini", percorsoLogo);
+  const blobSorgente = new Blob([bytes]);
+  const url = URL.createObjectURL(blobSorgente);
+  try {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error("immagine logo non valida"));
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    await document.fonts.ready;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `${categoria.nome_font_size}px ${famigliaNome}, sans-serif`;
+    ctx.fillStyle = categoria.nome_colore;
+    ctx.fillText(nomeTesto, (canvas.width * categoria.nome_pos_x) / 100, (canvas.height * categoria.nome_pos_y) / 100);
+    ctx.font = `${categoria.numero_font_size}px ${famigliaNumero}, sans-serif`;
+    ctx.fillStyle = categoria.numero_colore;
+    ctx.fillText(codiceTesto, (canvas.width * categoria.numero_pos_x) / 100, (canvas.height * categoria.numero_pos_y) / 100);
+    return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function scaricaBlob(blob, nomeFile) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeFile;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// pagina aperta dalla home (nessun codice amministratore richiesto, la usa
+// chiunque abbia appena concluso un corso con un'allieva): sceglie
+// master + corso + eventuale variante Artist/Expert + nome allieva, e
+// genera i PNG nero (sempre) e bianco (se la categoria lo richiede) con
+// nome e codice progressivo scritti sopra, usando la calibrazione fatta
+// in "Setting loghi"
+function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica, onBack }) {
+  const [masterId, setMasterId] = useState("");
+  const [corso, setCorso] = useState("");
+  const [variante, setVariante] = useState("artist");
+  const [nomeAllieva, setNomeAllieva] = useState("");
+  const [generando, setGenerando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [codiceGenerato, setCodiceGenerato] = useState(null);
+
+  const OPZIONI_CORSO = [...CORSI_LOGO, { chiave: "master_assistant", etichetta: "Master Assistant" }, { chiave: "master", etichetta: "Master" }];
+  const richiedeVariante = corso && corso !== "master_assistant" && corso !== "master";
+  const chiaveCategoria = corso ? (richiedeVariante ? `${corso}_${variante}` : corso) : null;
+  const categoria = chiaveCategoria ? loghiCategorie.find((c) => c.chiave === chiaveCategoria) : null;
+  const masterScelta = master.find((m) => m.id === masterId);
+
+  const prossimoNumero = loghiImpostazioni?.prossimo_numero ?? 1;
+  const anteprimaCodice = masterScelta && nomeAllieva.trim() ? calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero) : null;
+
+  useEffect(() => {
+    async function caricaFontGenerazione() {
+      if (loghiImpostazioni?.font_nome_path) {
+        try {
+          const { data } = supabase.storage.from("loghi-fonts").getPublicUrl(loghiImpostazioni.font_nome_path);
+          const f = new FontFace("loghiFontNomeGen", `url(${data.publicUrl})`);
+          await f.load();
+          document.fonts.add(f);
+        } catch { /* fallback al font di sistema */ }
+      }
+      if (loghiImpostazioni?.font_numero_path) {
+        try {
+          const { data } = supabase.storage.from("loghi-fonts").getPublicUrl(loghiImpostazioni.font_numero_path);
+          const f = new FontFace("loghiFontNumeroGen", `url(${data.publicUrl})`);
+          await f.load();
+          document.fonts.add(f);
+        } catch { /* fallback al font di sistema */ }
+      }
+    }
+    caricaFontGenerazione();
+  }, [loghiImpostazioni?.font_nome_path, loghiImpostazioni?.font_numero_path]);
+
+  async function genera() {
+    if (!masterScelta) { setMsg("Scegli la master."); return; }
+    if (!categoria) { setMsg("Scegli il tipo di corso/logo."); return; }
+    if (!nomeAllieva.trim()) { setMsg("Inserisci il nome dell'allieva."); return; }
+    if (!categoria.logo_nero_path) { setMsg("Manca ancora il logo nero di questa categoria in Setting loghi."); return; }
+    if (categoria.richiede_bianco && !categoria.logo_bianco_path) { setMsg("Manca ancora il logo bianco di questa categoria in Setting loghi."); return; }
+
+    setGenerando(true);
+    setMsg("");
+    try {
+      const codice = calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
+      const blobNero = await componiLogoPng({
+        percorsoLogo: categoria.logo_nero_path,
+        nomeTesto: nomeAllieva.trim().toUpperCase(),
+        codiceTesto: codice,
+        categoria,
+        famigliaNome: "loghiFontNomeGen",
+        famigliaNumero: "loghiFontNumeroGen",
+      });
+      scaricaBlob(blobNero, `${categoria.chiave}-nero-${codice}.png`);
+
+      if (categoria.richiede_bianco) {
+        const blobBianco = await componiLogoPng({
+          percorsoLogo: categoria.logo_bianco_path,
+          nomeTesto: nomeAllieva.trim().toUpperCase(),
+          codiceTesto: codice,
+          categoria,
+          famigliaNome: "loghiFontNomeGen",
+          famigliaNumero: "loghiFontNumeroGen",
+        });
+        scaricaBlob(blobBianco, `${categoria.chiave}-bianco-${codice}.png`);
+      }
+
+      const { error } = await supabase.from("loghi_impostazioni").update({ prossimo_numero: prossimoNumero + 1 }).eq("id", loghiImpostazioni.id);
+      if (error) { setMsg("Loghi generati, ma non sono riuscito ad aggiornare il contatore: " + error.message); setGenerando(false); return; }
+      setCodiceGenerato(codice);
+      setMsg(`Loghi generati con codice ${codice}.`);
+      ricarica();
+    } catch (e) {
+      setMsg("Errore nella generazione: " + e.message);
+    }
+    setGenerando(false);
+  }
+
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px" }}>
+      <TopBar title="Generazione loghi" onBack={onBack} />
+      <div style={cardStyle}>
+        <Field label="Master">
+          <select style={inputStyle} value={masterId} onChange={(e) => setMasterId(e.target.value)}>
+            <option value="">— scegli —</option>
+            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+          </select>
+        </Field>
+        <Field label="Tipo di corso">
+          <select style={inputStyle} value={corso} onChange={(e) => setCorso(e.target.value)}>
+            <option value="">— scegli —</option>
+            {OPZIONI_CORSO.map((c) => <option key={c.chiave} value={c.chiave}>{c.etichetta}</option>)}
+          </select>
+        </Field>
+        {richiedeVariante && (
+          <Field label="Tipo di logo">
+            <div style={{ display: "flex", gap: 14, ...fontBody, fontSize: 13, color: NAVY }}>
+              {VARIANTI_LOGO.map((v) => (
+                <label key={v.chiave} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                  <input type="radio" name="varianteLogo" checked={variante === v.chiave} onChange={() => setVariante(v.chiave)} />
+                  {v.etichetta}
+                </label>
+              ))}
+            </div>
+          </Field>
+        )}
+        <Field label="Nome allieva">
+          <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeAllieva} onChange={(e) => setNomeAllieva(e.target.value)} placeholder="Nome Cognome" />
+        </Field>
+
+        {anteprimaCodice && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+            Codice che verrà usato: <b style={{ color: NAVY }}>{anteprimaCodice}</b>
+          </div>
+        )}
+
+        <Button onClick={genera} disabled={generando} style={{ width: "100%" }}>
+          {generando ? "Genero…" : "Genera loghi"}
+        </Button>
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+        {codiceGenerato && (
+          <div style={{ ...fontBody, fontSize: 13, color: "#2E7D32", marginTop: 6 }}>
+            I 2 file PNG sono stati scaricati.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -6427,6 +6950,8 @@ export default function App() {
   const [fontDiplomi, setFontDiplomi] = useState(null); // riga singola di impostazioni globali stampa diplomi, o null se non ancora creata
   const [diplomaEccezioni, setDiplomaEccezioni] = useState([]); // diplomi "eccezione" caricabili sul singolo iscritto, al posto del template del corso
   const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
+  const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
+  const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -6444,7 +6969,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -6456,6 +6981,8 @@ export default function App() {
       supabase.from("font_diplomi").select("*").limit(1),
       supabase.from("diploma_eccezioni").select("*").order("nome"),
       supabase.from("segnaposti_config").select("*").limit(1),
+      supabase.from("loghi_impostazioni").select("*").limit(1),
+      supabase.from("loghi_categorie").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -6468,6 +6995,8 @@ export default function App() {
     setFontDiplomi(fd.data?.[0] || null);
     setDiplomaEccezioni(de.data || []);
     setSegnaposti(sg.data?.[0] || null);
+    setLoghiImpostazioni(li.data?.[0] || null);
+    setLoghiCategorie(lc.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -6714,15 +7243,18 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
               <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} icona={<IconaCalendarioCard />} />
             </div>
-            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
               <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} icona={<IconaRicercaCard />} />
             </div>
-            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
               <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} icona={<IconaOrologioCard />} />
+            </div>
+            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
+              <CardHome title="Generazione loghi" sub="Crea il PNG con nome e codice" onClick={() => setView("generazioneloghi")} icona={<IconaLoghiCard />} />
             </div>
           </div>
 
@@ -6797,7 +7329,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
       )}
 
       {view === "gestionedate" && (
@@ -6806,6 +7338,14 @@ export default function App() {
 
       {view === "fontdiplomi" && (
         <FontDiplomi fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni} segnaposti={segnaposti} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+      )}
+
+      {view === "settingloghi" && (
+        <SettingLoghi loghiImpostazioni={loghiImpostazioni} loghiCategorie={loghiCategorie} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+      )}
+
+      {view === "generazioneloghi" && (
+        <GenerazioneLoghi master={master} loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (
