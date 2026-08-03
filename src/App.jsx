@@ -3413,9 +3413,12 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
         {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
       </div>
 
-      {loghiCategorie.map((cat) => (
-        <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} />
-      ))}
+      {CATEGORIE_LOGO
+        .map((c) => loghiCategorie.find((lc) => lc.chiave === c.chiave))
+        .filter(Boolean)
+        .map((cat) => (
+          <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} />
+        ))}
     </div>
   );
 }
