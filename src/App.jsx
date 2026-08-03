@@ -3640,23 +3640,23 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           onBlur={() => { if (nome !== (modella.nome_modella || "")) onSalva("nome_modella", nome); }}
-          style={{ ...inputStyle, flex: "1 1 130px", padding: "6px 10px" }}
+          style={{ ...inputStyle, flex: "2 1 160px", padding: "6px 10px" }}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 170px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 110px" }}>
           <input
             placeholder="Tel."
             value={telefono}
             onChange={(e) => setTelefono(e.target.value)}
             onBlur={() => { if (telefono !== (modella.telefono_modella || "")) onSalva("telefono_modella", telefono); }}
-            style={{ ...inputStyle, flex: 1, padding: "6px 10px" }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "6px 10px" }}
           />
           {telefono.trim() && (
             <>
-              <a href={`tel:${telefono.replace(/\s+/g, "")}`} title="Chiama" style={{ display: "flex", alignItems: "center", color: NAVY, flexShrink: 0 }}>
-                <IconaTelefono />
+              <a href={`tel:${telefono.replace(/\s+/g, "")}`} title="Chiama" style={{ display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, flexShrink: 0, padding: 6 }}>
+                <IconaTelefono size={34} />
               </a>
-              <a href={`https://wa.me/${numeroWhatsapp(telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-                <IconaWhatsapp />
+              <a href={`https://wa.me/${numeroWhatsapp(telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, padding: 6 }}>
+                <IconaWhatsapp size={34} />
               </a>
             </>
           )}
@@ -7187,7 +7187,7 @@ function VistaRicercaModelle({ param }) {
           {masterNome && ` — Master: ${masterNome.toUpperCase()}`} — Ricerca modelle
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
-          Appena trovi una modella per un trattamento, scrivi qui il suo nome e il suo numero: si salva da solo.
+          Appena trovi una modella per un trattamento, spunta se viene la mattina o il pomeriggio e scrivi il suo nome e il suo numero: si salva da solo.
         </div>
 
         {iscrittiConModelle.length === 0 && <div style={{ color: MUTED }}>Nessuna modella richiesta per questa classe.</div>}
@@ -7203,7 +7203,6 @@ function VistaRicercaModelle({ param }) {
                 <RigaModella
                   key={mi}
                   modella={m}
-                  mostraOrario={false}
                   primaRiga={mi === 0}
                   onSalva={(campo, valore) => aggiornaModellaSlot(i.id, mi, campo, valore)}
                 />
