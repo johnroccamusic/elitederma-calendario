@@ -29,6 +29,11 @@ const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilit�
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
+// serif elegante per il titolo del corso nell'intestazione scura
+// (Contabilità classe / schede di inserimento allievo): unico punto dove
+// si usa questo font, per dargli un peso più "editoriale" rispetto al
+// sans-serif del resto dell'app
+const fontHero = { fontFamily: "'Playfair Display',serif", fontWeight: 700 };
 const fontCondensato = { fontFamily: "'Sofia Sans Condensed',sans-serif" }; // più stretto del normale a parità di dimensione: usato per i nomi dei corsi sulle barre del calendario, dove lo spazio orizzontale è poco
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
@@ -400,6 +405,72 @@ function IconaChevronGiuErp({ size = 14, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+// icone della barra azioni con intestazione scura (Contabilità classe /
+// schede di inserimento allievo)
+function IconaFrecciaSinistra({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 12H5" /><path d="M11 18l-6-6 6-6" />
+    </svg>
+  );
+}
+function IconaLibroContabile({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18" /><path d="M7 13h4M7 16.5h7" />
+    </svg>
+  );
+}
+function IconaStampante({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9V3h12v6" />
+      <rect x="3" y="9" width="18" height="8" rx="1.5" />
+      <path d="M6 14h12v7H6z" />
+    </svg>
+  );
+}
+function IconaBigliettoSegnaposto({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.5a1.5 1.5 0 0 0 0 3V16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3.5a1.5 1.5 0 0 0 0-3Z" />
+      <path d="M10 6v12" strokeDasharray="1.5 2.5" />
+    </svg>
+  );
+}
+function IconaPersonaAggiungi({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="4" />
+      <path d="M2 20c0-4 3.1-6.5 7-6.5" />
+      <path d="M17 9v6M14 12h6" />
+    </svg>
+  );
+}
+function IconaRiepilogoCircolare({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 3.5h7l3 3V19a1.3 1.3 0 0 1-1.3 1.3H7A1.3 1.3 0 0 1 5.7 19V4.8A1.3 1.3 0 0 1 7 3.5Z" />
+      <path d="M8.5 9h7M8.5 12.5h7M8.5 16h4.5" />
+    </svg>
+  );
+}
+// decorazione a onde nell'angolo dell'intestazione scura: puramente
+// ornamentale (pointer-events:none), non interattiva
+function DecorazioneOndeHero() {
+  return (
+    <svg
+      width="200" height="180" viewBox="0 0 200 180" fill="none"
+      style={{ position: "absolute", top: 0, right: 0, pointerEvents: "none", opacity: 0.35 }}
+    >
+      <path d="M40 180C90 140 110 100 90 40" stroke={GOLD} strokeWidth="1" opacity="0.5" />
+      <path d="M70 180C120 140 140 100 120 30" stroke={GOLD} strokeWidth="1" opacity="0.4" />
+      <path d="M100 180C150 140 170 100 150 20" stroke={GOLD} strokeWidth="1" opacity="0.3" />
+      <path d="M130 180C180 140 200 100 180 10" stroke={GOLD} strokeWidth="1" opacity="0.2" />
     </svg>
   );
 }
@@ -6400,108 +6471,108 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           </div>
         </div>
       )}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>{(corso?.nome || "").toUpperCase()}</div>
-        {loc?.nome && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "6px 14px" }}>
-            <IconaPin size={14} />
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
-          </div>
-        )}
-      </div>
-      {(() => {
-        const celleIntestazione = [
-          {
-            chiave: "date", Icona: IconaDataAccento, label: "Date",
-            valore: fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
-          },
-          corsoData.master_id && {
-            chiave: "master", Icona: IconaMasterAccento, label: "Master",
-            valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
-          },
-          { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
-        ].filter(Boolean);
-        return (
-          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 18 }}>
-            <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
-              {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
-                <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                  <Icona size={26} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
-                    <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+      <div style={{ position: "relative", overflow: "hidden", background: NAVY, borderRadius: 24, padding: "28px 26px", marginBottom: 0 }}>
+        <DecorazioneOndeHero />
+        <div style={{ ...fontBody, position: "relative", fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>
+          {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
+        </div>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 22 }}>
+          <div style={{ ...fontHero, fontSize: 40, color: "#F7F2E7", lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+          {loc?.nome && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "6px 14px", flexShrink: 0 }}>
+              <IconaPin size={14} color={GOLD} />
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+            </div>
+          )}
+        </div>
+        {(() => {
+          const celleIntestazione = [
+            {
+              chiave: "date", Icona: IconaDataAccento, label: "Date",
+              valore: fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
+            },
+            corsoData.master_id && {
+              chiave: "master", Icona: IconaMasterAccento, label: "Master",
+              valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
+            },
+            { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
+          ].filter(Boolean);
+          return (
+            <div style={{ position: "relative", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
+                {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
+                  <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? "1px solid rgba(255,255,255,0.12)" : "none" }}>
+                    <Icona size={26} color={GOLD} />
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
+                      <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#F7F2E7", whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+      </div>
+
+      {(() => {
+        const pulsanti = vista === "lista"
+          ? (mostraGestione
+              ? [
+                  { chiave: "esci", etichetta: "Esci da contabilità", Icona: IconaFrecciaSinistra, onClick: apriGestioneClasse },
+                  { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
+                  { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
+                  { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true },
+                ]
+              : [
+                  { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse },
+                  { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
+                ])
+          : [{ chiave: "torna", etichetta: "Torna alla lista", Icona: IconaFrecciaSinistra, onClick: annullaForm }];
+
+        return (
+          <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
+            <div style={{ background: "#fff", borderRadius: 22, padding: "8px 10px", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
+              {pulsanti.map((p) => (
+                <button
+                  key={p.chiave}
+                  onClick={p.onClick}
+                  disabled={p.disabled}
+                  style={{
+                    ...fontDisplay, fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
+                    padding: p.primario ? "12px 22px" : "10px 14px",
+                    borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
+                    background: p.primario ? GOLD : "transparent",
+                    color: NAVY, opacity: p.disabled ? 0.5 : 1,
+                    marginLeft: p.primario ? "auto" : 0,
+                    textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap",
+                  }}
+                >
+                  <p.Icona size={17} color={p.primario ? NAVY : GOLD} />
+                  {p.etichetta}
+                </button>
               ))}
             </div>
           </div>
         );
       })()}
-      <div style={{ display: "flex", marginBottom: 32 }}>
-        {vista === "lista" ? (
-          <div style={{ display: "flex", width: "100%", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
-            <button
-              onClick={apriGestioneClasse}
-              style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
-            >
-              <EtichettaAdattiva testo={mostraGestione ? "Esci da\ncontabilità" : "Contabilità\nclasse"} />
-            </button>
-            {mostraGestione && (
-              <button
-                onClick={stampaDiplomi}
-                disabled={generandoDiplomi}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <EtichettaAdattiva testo={generandoDiplomi ? "Genero i diplomi…" : "Stampa\ndiplomi"} />
-              </button>
-            )}
-            {mostraGestione && (
-              <button
-                onClick={stampaSegnaposti}
-                disabled={generandoSegnaposti}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <EtichettaAdattiva testo={generandoSegnaposti ? "Genero i segnaposti…" : "Stampa\nSegnaposto"} />
-              </button>
-            )}
-            {mostraGestione && (
-              <button
-                onClick={() => setVista("modelle")}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <EtichettaAdattiva testo={"Assegna\nmodelle"} />
-              </button>
-            )}
-            {!mostraGestione && (
-              <button
-                onClick={apriIscrizione}
-                disabled={liberi <= 0}
-                title={liberi <= 0 ? "Nessun posto disponibile" : ""}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: liberi <= 0 ? "default" : "pointer", opacity: liberi <= 0 ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <EtichettaAdattiva testo={liberi <= 0 ? "Completo" : "Iscrivi"} />
-              </button>
-            )}
-          </div>
-        ) : (
-          <Button variant="ghost" onClick={annullaForm}>&larr; Torna alla lista</Button>
-        )}
-      </div>
 
       {vista === "lista" && mostraGestione && (
-        <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "center", textTransform: "uppercase", letterSpacing: 1, marginBottom: 18 }}>
-          Contabilità classe
-        </div>
-      )}
-
-      {vista === "lista" && mostraGestione && (
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", boxShadow: "0 16px 30px -16px rgba(14,27,51,0.25)" }}>
           <div
             onClick={() => setCostiAperto((v) => !v)}
-            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 20px", cursor: "pointer" }}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, padding: "18px 20px", cursor: "pointer" }}
           >
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+              <div style={{ width: 42, height: 42, flexShrink: 0, borderRadius: "50%", border: `1px solid ${GOLD}`, display: "flex", alignItems: "center", justifyContent: "center", color: GOLD }}>
+                <IconaRiepilogoCircolare size={20} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Riepilogo amministrativo</div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Incassi, costi e saldo della classe</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {costiAperto && (
                 <button
                   title="Aggiungi voce di costo"
