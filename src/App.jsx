@@ -124,6 +124,16 @@ function IconaWhatsapp({ size = 16 }) {
     </svg>
   );
 }
+// icona telefono: usata accanto a un CAMPO DI TESTO editabile per il
+// numero (non sul numero stesso, altrimenti su schermo touch un tocco per
+// chiamare finirebbe invece per mettere a fuoco/modificare il campo)
+function IconaTelefono({ size = 16, color = "#0E1B33" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+    </svg>
+  );
+}
 // icone delle 3 card della home (Calendario/Cerca iscritto/Archivio)
 function IconaCalendarioCard({ size = 18 }) {
   return (
@@ -3597,6 +3607,65 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
   );
 }
 
+// una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
+// nella pagina pubblica di ricerca modelle), e nome/telefono della modella
+// una volta trovata. Nome/telefono usano stato locale e si salvano solo al
+// blur, non ad ogni tasto: altrimenti ogni carattere digitato scatenerebbe
+// un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
+// focus mentre si scrive
+function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
+  const [nome, setNome] = useState(modella.nome_modella || "");
+  const [telefono, setTelefono] = useState(modella.telefono_modella || "");
+  useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
+  useEffect(() => { setTelefono(modella.telefono_modella || ""); }, [modella.telefono_modella]);
+
+  return (
+    <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, marginBottom: 8 }}>{modella.tipo || "(trattamento non scelto)"}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        {mostraOrario && (
+          <>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+              <input type="checkbox" checked={!!modella.mattina} onChange={(e) => onSalva("mattina", e.target.checked)} />
+              MAT
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+              <input type="checkbox" checked={!!modella.pomeriggio} onChange={(e) => onSalva("pomeriggio", e.target.checked)} />
+              POM
+            </label>
+          </>
+        )}
+        <input
+          placeholder="Nome"
+          value={nome}
+          onChange={(e) => setNome(e.target.value)}
+          onBlur={() => { if (nome !== (modella.nome_modella || "")) onSalva("nome_modella", nome); }}
+          style={{ ...inputStyle, flex: "1 1 130px", padding: "6px 10px" }}
+        />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flex: "1 1 170px" }}>
+          <input
+            placeholder="Tel."
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            onBlur={() => { if (telefono !== (modella.telefono_modella || "")) onSalva("telefono_modella", telefono); }}
+            style={{ ...inputStyle, flex: 1, padding: "6px 10px" }}
+          />
+          {telefono.trim() && (
+            <>
+              <a href={`tel:${telefono.replace(/\s+/g, "")}`} title="Chiama" style={{ display: "flex", alignItems: "center", color: NAVY, flexShrink: 0 }}>
+                <IconaTelefono />
+              </a>
+              <a href={`https://wa.me/${numeroWhatsapp(telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+                <IconaWhatsapp />
+              </a>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Modal({ title, onClose, children }) {
   const overlayRef = React.useRef(null);
 
@@ -5146,7 +5215,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     if (n === tipiModelle.length) return;
     setTipiModelle((prev) => {
       if (n < prev.length) return prev.slice(0, n);
-      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: "", mattina: false, pomeriggio: false }))];
+      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }))];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [richiedeModelle, numeroModelle]);
@@ -5528,7 +5597,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
     setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
-    setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio })) : []);
+    setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "" })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
     setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
@@ -5610,7 +5679,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
-        tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio })) : [],
+        tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "" })) : [],
         pacchetto_kit: pacchettoKit.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
@@ -6385,7 +6454,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           <div>
             <div style={{ ...hStyle, marginBottom: 4 }}>Assegna modelle</div>
             <div style={subStyle}>
-              Per ogni modella richiesta, spunta se viene la mattina o il pomeriggio: si salva da solo, non serve premere Salva.
+              Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
             </div>
 
             {iscrittiConModelle.length === 0 && (
@@ -6397,21 +6466,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
                   {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
                   {i.tipi_modelle.map((m, idx) => (
-                    <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                      <span style={{ ...fontBody, fontSize: 14, color: NAVY }}>{m.tipo || "(trattamento non scelto)"}</span>
-                      <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 13, color: NAVY }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                          <input type="checkbox" checked={!!m.mattina} onChange={(e) => aggiornaModellaSlot(i.id, idx, "mattina", e.target.checked)} />
-                          Mattina
-                        </label>
-                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                          <input type="checkbox" checked={!!m.pomeriggio} onChange={(e) => aggiornaModellaSlot(i.id, idx, "pomeriggio", e.target.checked)} />
-                          Pomeriggio
-                        </label>
-                      </div>
-                    </div>
+                    <RigaModella
+                      key={idx}
+                      modella={m}
+                      primaRiga={idx === 0}
+                      onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
+                    />
                   ))}
                 </div>
               </div>
@@ -6419,7 +6481,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
             <div style={cardStyle}>
               <div style={hStyle}>Link per ricerca modelle</div>
-              <div style={subStyle}>Genera un link di sola lettura, senza dati personali o di pagamento, con solo i trattamenti richiesti: da mandare a chi cerca le modelle per questa classe.</div>
+              <div style={subStyle}>Genera un link senza dati personali o di pagamento, con solo i trattamenti richiesti, dove chi cerca le modelle può scrivere nome e telefono appena ne trova una.</div>
               <Button variant="ghost" onClick={generaLinkModelle} style={{ width: "100%" }}>Genera link per ricerca modelle</Button>
               {linkModelle && (
                 <div style={{ marginTop: 12 }}>
@@ -7127,13 +7189,28 @@ function VistaRicercaModelle({ param }) {
   const { cd, corso, loc, masterNome, iscritti } = dati;
   const iscrittiConModelle = iscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
 
+  async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
+    const iscritto = iscritti.find((x) => x.id === iscrittoId);
+    if (!iscritto) return;
+    const nuovoElenco = (iscritto.tipi_modelle || []).map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
+    if (error) return;
+    setDati((prev) => ({
+      ...prev,
+      iscritti: prev.iscritti.map((x) => (x.id === iscrittoId ? { ...x, tipi_modelle: nuovoElenco } : x)),
+    }));
+  }
+
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
       <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
         <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 6 }}>
           {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
           {masterNome && ` — Master: ${masterNome.toUpperCase()}`} — Ricerca modelle
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
+          Appena trovi una modella per un trattamento, scrivi qui il suo nome e il suo numero: si salva da solo.
         </div>
 
         {iscrittiConModelle.length === 0 && <div style={{ color: MUTED }}>Nessuna modella richiesta per questa classe.</div>}
@@ -7144,16 +7221,22 @@ function VistaRicercaModelle({ param }) {
               <span style={{ color: MUTED, fontWeight: 400, fontSize: 13 }}>{idx + 1}.</span>
               {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <div>
               {i.tipi_modelle.map((m, mi) => (
-                <div key={mi} style={{ fontSize: 14, color: NAVY }}>• {m.tipo || "(trattamento non scelto)"}</div>
+                <RigaModella
+                  key={mi}
+                  modella={m}
+                  mostraOrario={false}
+                  primaRiga={mi === 0}
+                  onSalva={(campo, valore) => aggiornaModellaSlot(i.id, mi, campo, valore)}
+                />
               ))}
             </div>
           </div>
         ))}
 
         <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
-          Pagina di sola lettura — Elitederma Academy
+          Elitederma Academy
         </div>
       </div>
     </div>
