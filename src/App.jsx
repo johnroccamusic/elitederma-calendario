@@ -6032,9 +6032,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           </div>
         );
       })()}
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
+      <div style={{ display: "flex", marginBottom: 32 }}>
         {vista === "lista" ? (
-          <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", width: "100%", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
             <button
               onClick={apriGestioneClasse}
               style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
