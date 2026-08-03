@@ -38,10 +38,10 @@ const fontCondensato = { fontFamily: "'Sofia Sans Condensed',sans-serif" }; // p
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 100, 70, 60, 100, 90, 100, 90, 150, 100, 100];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 100, 70, 60, 100, 90, 100, 90, 150, 150, 100, 100];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Assistenti", "Leve", "Viaggio", "Alloggio", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Assistenti", "Leve", "Viaggio master", "Viaggio ass.", "Alloggio", "Note viaggio"];
 
 // una "stagione" va da settembre di un anno ad agosto dell'anno successivo,
 // identificata dall'anno in cui inizia (es. 2026 = Stagione 2026-2027)
@@ -510,6 +510,14 @@ function IconaCalendarioLeve({ size = 16, color = "currentColor" }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="5" width="18" height="16" rx="2" />
       <path d="M8 3v4M16 3v4M3 10h18" />
+    </svg>
+  );
+}
+function IconaCopiaFile({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="2" />
+      <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
     </svg>
   );
 }
@@ -1334,7 +1342,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     salvaCampo(cd.id, campo, elenco);
   }
 
-  async function caricaBiglietti(cd, fileList) {
+  async function caricaBiglietti(cd, fileList, campo) {
     const nuovi = [];
     for (const file of Array.from(fileList || [])) {
       const percorso = `${cd.id}/biglietto-${Date.now()}-${file.name}`;
@@ -1343,24 +1351,24 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
       nuovi.push(percorso);
     }
     if (nuovi.length === 0) return;
-    await salvaCampo(cd.id, "viaggio_file", [...(cd.viaggio_file || []), ...nuovi]);
+    await salvaCampo(cd.id, campo, [...(cd[campo] || []), ...nuovi]);
   }
 
-  async function cancellaBiglietti(cd) {
-    const n = (cd.viaggio_file || []).length;
+  async function cancellaBiglietti(cd, campo) {
+    const n = (cd[campo] || []).length;
     if (n === 0) return;
     if (!window.confirm(`Vuoi cancellare ${n === 1 ? "il file caricato" : `i ${n} file caricati`}?`)) return;
-    await salvaCampo(cd.id, "viaggio_file", []);
+    await salvaCampo(cd.id, campo, []);
     window.alert("Eseguito.");
   }
 
-  async function copiaBiglietti(cd) {
-    const file = cd.viaggio_file || [];
+  async function copiaBiglietti(cd, campo, tipo) {
+    const file = cd[campo] || [];
     if (file.length === 0) { window.alert("Non ci sono biglietti."); return; }
     const corso = corsoById[cd.corso_id];
     const loc = locById[cd.location_id];
     const leggibile = [slugify(corso?.nome), slugify(loc?.nome), slugData(cd.data_inizio, cd.data_fine)].filter(Boolean).join("/");
-    const url = `${window.location.origin}${window.location.pathname}?biglietti=${leggibile}`;
+    const url = `${window.location.origin}${window.location.pathname}?biglietti=${leggibile}${tipo ? `&tipo=${tipo}` : ""}`;
     try {
       await navigator.clipboard.writeText(url);
       window.alert("Link copiato.");
@@ -1487,6 +1495,43 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     );
   }
 
+  // cella "Viaggio master"/"Viaggio ass.": pallino rosso/verde (prenotato
+  // o no), icona per copiare il link di sola lettura dei biglietti, "+"
+  // per caricarne di nuovi, conteggio di quelli già presenti
+  function cellaViaggio(cd, campoPrenotato, campoFile, tipoLink) {
+    const nBiglietti = (cd[campoFile] || []).length;
+    const attivo = !!cd[campoPrenotato];
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
+        <button
+          onClick={() => salvaCampo(cd.id, campoPrenotato, !attivo)}
+          title={attivo ? "Viaggio prenotato" : "Viaggio non prenotato"}
+          style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: attivo ? "#2E7D32" : "#C0392B", flexShrink: 0 }}
+        />
+        <button
+          onClick={() => copiaBiglietti(cd, campoFile, tipoLink)}
+          title="Copia link biglietti"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", flexShrink: 0, padding: 0 }}
+        >
+          <IconaCopiaFile size={14} color={NAVY} />
+        </button>
+        <label style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>
+          +
+          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files, campoFile); e.target.value = ""; }} />
+        </label>
+        {nBiglietti > 0 && (
+          <span
+            onClick={() => cancellaBiglietti(cd, campoFile)}
+            title="Clicca per cancellare i file caricati"
+            style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
+          >
+            {nBiglietti} file
+          </span>
+        )}
+      </div>
+    );
+  }
+
   function tabellaMese(righeMese) {
     return (
       <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, marginBottom: 28, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.2)" }}>
@@ -1512,7 +1557,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
             {righeMese.map((cd) => {
               const corso = corsoById[cd.corso_id];
               const loc = locById[cd.location_id];
-              const nBiglietti = (cd.viaggio_file || []).length;
               const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
               return (
                 <tr key={cd.id}>
@@ -1546,23 +1590,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                     {elencoModificabile(cd, "leva_ids", leva)}
                   </td>
                   <td style={celStyle}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
-                      {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
-                      <button onClick={() => copiaBiglietti(cd)} style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: "#2563EB", background: "#fff", border: "1px solid #2563EB", borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>Copia</button>
-                      <label style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                        +
-                        <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
-                      </label>
-                      {nBiglietti > 0 && (
-                        <span
-                          onClick={() => cancellaBiglietti(cd)}
-                          title="Clicca per cancellare i file caricati"
-                          style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
-                        >
-                          {nBiglietti} file
-                        </span>
-                      )}
-                    </div>
+                    {cellaViaggio(cd, "viaggio_prenotato", "viaggio_file", undefined)}
+                  </td>
+                  <td style={celStyle}>
+                    {cellaViaggio(cd, "viaggio_assistente_prenotato", "viaggio_assistente_file", "assistente")}
                   </td>
                   <td style={celStyle}>
                     <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
@@ -7988,7 +8019,7 @@ function VistaRicercaModelle({ param }) {
 }
 
 // pagina pubblica di sola lettura con i biglietti di viaggio caricati per una data
-function VistaBiglietti({ param }) {
+function VistaBiglietti({ param, tipo }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
 
@@ -8038,14 +8069,14 @@ function VistaBiglietti({ param }) {
   }
 
   const { cd, corso, loc } = dati;
-  const file = cd.viaggio_file || [];
+  const file = (tipo === "assistente" ? cd.viaggio_assistente_file : cd.viaggio_file) || [];
 
   return (
     <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
       <div style={{ maxWidth: 480, margin: "0 auto", padding: "40px 20px" }}>
         <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
-          {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — biglietti di viaggio
+          {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`} — biglietti di viaggio{tipo === "assistente" ? " (assistente)" : ""}
         </div>
 
         {file.length === 0 && <div style={{ color: MUTED }}>Nessun biglietto caricato.</div>}
@@ -8542,7 +8573,8 @@ export default function App() {
   }
   const paramBiglietti = new URLSearchParams(window.location.search).get("biglietti");
   if (paramBiglietti) {
-    return <VistaBiglietti param={paramBiglietti} />;
+    const tipoBiglietti = new URLSearchParams(window.location.search).get("tipo");
+    return <VistaBiglietti param={paramBiglietti} tipo={tipoBiglietti} />;
   }
   // se il link contiene ?modelle=<id>, mostro solo l'elenco dei trattamenti
   // richiesti per questa classe (nessun dato personale/di pagamento)
