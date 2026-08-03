@@ -6351,24 +6351,28 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   <input style={inputStyle} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                 </Field>
               </div>
-              <div style={{ flex: 1 }}>
-                <Field label="Quota venditore (7%)" minLabelHeight={34}>
-                  <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
-                </Field>
-              </div>
-              <div style={{ flex: 1 }}>
-                <Field label="Quota speciale" minLabelHeight={34}>
-                  <input
-                    style={inputStyle}
-                    inputMode="decimal"
-                    placeholder="es. 60.00"
-                    value={quotaSpeciale}
-                    onChange={(e) => setQuotaSpeciale(e.target.value)}
-                  />
-                </Field>
-              </div>
+              {adminSbloccato && (
+                <>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Quota venditore (7%)" minLabelHeight={34}>
+                      <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                    </Field>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Quota speciale" minLabelHeight={34}>
+                      <input
+                        style={inputStyle}
+                        inputMode="decimal"
+                        placeholder="es. 60.00"
+                        value={quotaSpeciale}
+                        onChange={(e) => setQuotaSpeciale(e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </>
+              )}
             </div>
-            {quotaSpeciale !== "" && (
+            {adminSbloccato && quotaSpeciale !== "" && (
               <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
                 La quota speciale sostituisce ovunque la quota venditore del 7%.
               </div>
