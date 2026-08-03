@@ -5129,6 +5129,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [vista, setVista] = useState(sottoVistaIniziale?.vista ?? "lista"); // 'lista' | 'form'
   const [modificandoId, setModificandoId] = useState(sottoVistaIniziale?.modificandoId ?? null); // id dell'iscritto in modifica, null se è una nuova iscrizione
   const isMobile = useIsMobile();
+  // scheda "Iscrivi allievo" divisa in 3 schede per leggibilità: dati
+  // anagrafici, dati contabili, dati organizzativi. Il tasto Salva resta
+  // sempre visibile fuori dalle 3, non solo nell'ultima
+  const [schedaForm, setSchedaForm] = useState("anagrafica");
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -5590,6 +5594,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     resetCampi();
     setModificandoId(null);
     setMsg("");
+    setSchedaForm("anagrafica");
     setVista("form");
   }
 
@@ -5636,6 +5641,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
     setModificandoId(i.id);
     setMsg("");
+    setSchedaForm("anagrafica");
     setVista("form");
   }
 
@@ -6211,8 +6217,31 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             </div>
           )}
 
+          <div style={{ display: "flex", background: BG, borderRadius: 30, padding: 4, gap: 4, marginBottom: 18 }}>
+            {[
+              { chiave: "anagrafica", etichetta: "Anagrafica" },
+              { chiave: "contabili", etichetta: "Dati contabili" },
+              { chiave: "organizzativi", etichetta: "Dati organizzativi" },
+            ].map(({ chiave, etichetta }) => (
+              <button
+                key={chiave}
+                type="button"
+                onClick={() => setSchedaForm(chiave)}
+                style={{
+                  ...fontDisplay, flex: 1, borderRadius: 26, padding: "10px 14px", fontWeight: 600, cursor: "pointer", overflow: "hidden",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  border: "none", background: schedaForm === chiave ? NAVY : "transparent", color: schedaForm === chiave ? "#fff" : NAVY,
+                }}
+              >
+                <EtichettaAdattiva testo={etichetta} />
+              </button>
+            ))}
+          </div>
+
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
 
+          {schedaForm === "anagrafica" && (
+          <>
           <Field label="Modulo iscrizione (PDF)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
@@ -6307,7 +6336,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               </div>
             </div>
           )}
+          </>
+          )}
 
+          {schedaForm === "contabili" && (
+          <>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
@@ -6442,6 +6475,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               </div>
             );
           })()}
+          </>
+          )}
+
+          {schedaForm === "organizzativi" && (
+          <>
           <Field label="Accordi commerciali">
             <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
           </Field>
@@ -6535,6 +6573,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             </div>
           </Field>
           <Field label="Note (opzionale)"><input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+          </>
+          )}
 
           </fieldset>
 
