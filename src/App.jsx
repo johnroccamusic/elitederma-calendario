@@ -2115,18 +2115,18 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
               onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
               onBlur={() => setApriFiltroMasterDate(false)}
             />
-            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex" }}>
               <button
                 onClick={() => setCronologicoDate((v) => !v)}
-                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoDate ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoDate ? NAVY : "#fff", color: cronologicoDate ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
+                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoDate ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoDate ? NAVY : "#fff", color: cronologicoDate ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <EtichettaAdattiva testo="Cronologico" />
               </button>
             </div>
-            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex" }}>
               <button
                 onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
+                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <EtichettaAdattiva testo="Reset filtri" />
               </button>
@@ -3815,15 +3815,41 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
 }
 
 // etichetta dei tasti a pillola (Filtra corso/città/master, Cronologico,
-// Reset filtri, Contabilità classe, Iscrivi...): SEMPRE alla stessa
-// dimensione dei tasti vicini, mai più piccola o più grande. Se un'etichetta
-// di più parole non entra su una riga va semplicemente a capo (il tasto si
-// allarga in altezza, non si rimpicciolisce il testo) — niente riduzione
-// automatica del font, altrimenti tasti diversi nella stessa fila
-// finiscono con dimensioni del testo vistosamente diverse tra loro
-function EtichettaAdattiva({ testo, fontSizeBase = 13 }) {
+// Reset filtri, Contabilità classe, Iscrivi...). Un'etichetta di più parole
+// che non entra su una riga va semplicemente a capo (mai spezzare una
+// singola parola lasciando un'unica lettera orfana): il font si riduce
+// SOLO come ultima spiaggia, se anche una parola da sola — già sulla sua
+// riga — non ci sta comunque. Il tasto stesso (vedi i suoi stili in
+// App.jsx, height:"100%") si allarga poi fino all'altezza del vicino più
+// alto, così tasti con font ridotto o testo su 2 righe restano comunque
+// alti quanto gli altri della stessa fila
+function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
+  const ref = React.useRef(null);
+  const [fontSize, setFontSize] = useState(fontSizeBase);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    function adatta() {
+      let dimensione = fontSizeBase;
+      el.style.fontSize = `${dimensione}px`;
+      while (el.scrollWidth > el.clientWidth + 0.5 && dimensione > fontSizeMin) {
+        dimensione -= 0.5;
+        el.style.fontSize = `${dimensione}px`;
+      }
+      setFontSize(dimensione);
+    }
+    adatta();
+    const osservatore = new ResizeObserver(adatta);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testo, fontSizeBase, fontSizeMin]);
+  return { ref, fontSize };
+}
+function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
+  const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
   return (
-    <span style={{ display: "block", fontSize: fontSizeBase, whiteSpace: "normal", textAlign: "center", lineHeight: 1.25, overflowWrap: "anywhere" }}>
+    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "normal", textAlign: "center", lineHeight: 1.25, wordBreak: "keep-all", overflowWrap: "normal" }}>
       {testo}
     </span>
   );
@@ -3835,14 +3861,14 @@ function EtichettaAdattiva({ testo, fontSizeBase = 13 }) {
 // sia in Home che in Gestione date
 function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota }) {
   return (
-    <div style={{ position: "relative", flex: "1 1 0", minWidth: 0 }}>
+    <div style={{ position: "relative", flex: "1 1 0", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
         style={{
           ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          overflow: "hidden", width: "100%", display: "block",
+          overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
         <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />
@@ -5964,7 +5990,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
             <button
               onClick={apriGestioneClasse}
-              style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden" }}
+              style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
               <EtichettaAdattiva testo={mostraGestione ? "Esci da contabilità" : "Contabilità classe"} />
             </button>
@@ -5972,7 +5998,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               <button
                 onClick={stampaDiplomi}
                 disabled={generandoDiplomi}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, overflow: "hidden" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <EtichettaAdattiva testo={generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"} />
               </button>
@@ -5981,7 +6007,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               <button
                 onClick={stampaSegnaposti}
                 disabled={generandoSegnaposti}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, overflow: "hidden" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <EtichettaAdattiva testo={generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto"} />
               </button>
@@ -5989,7 +6015,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             {mostraGestione && (
               <button
                 onClick={() => setVista("modelle")}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <EtichettaAdattiva testo="Assegna modelle" />
               </button>
@@ -5999,7 +6025,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 onClick={apriIscrizione}
                 disabled={liberi <= 0}
                 title={liberi <= 0 ? "Nessun posto disponibile" : ""}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: liberi <= 0 ? "default" : "pointer", opacity: liberi <= 0 ? 0.5 : 1, overflow: "hidden" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: liberi <= 0 ? "default" : "pointer", opacity: liberi <= 0 ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
                 <EtichettaAdattiva testo={liberi <= 0 ? "Completo" : "Iscrivi"} />
               </button>
@@ -7670,18 +7696,18 @@ export default function App() {
                 onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
                 onBlur={() => setApriFiltroMasterHome(false)}
               />
-              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <div style={{ flex: "1 1 0", minWidth: 0, display: "flex" }}>
                 <button
                   onClick={() => setCronologicoHome((v) => !v)}
-                  style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
+                  style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   <EtichettaAdattiva testo="Cronologico" />
                 </button>
               </div>
-              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <div style={{ flex: "1 1 0", minWidth: 0, display: "flex" }}>
                 <button
                   onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-                  style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
+                  style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
                 >
                   <EtichettaAdattiva testo="Reset filtri" />
                 </button>
