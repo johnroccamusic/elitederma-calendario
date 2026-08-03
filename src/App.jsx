@@ -329,6 +329,80 @@ function IconaFormeRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+// icone della pagina "ERP" (testata + card KPI)
+function IconaRicercaErp({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+    </svg>
+  );
+}
+function IconaCampanellaErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
+    </svg>
+  );
+}
+function IconaIngranaggioErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 13a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V19a2 2 0 1 1-4 0v-.2a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H4a2 2 0 1 1 0-4h.2a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H10a1.7 1.7 0 0 0 1-1.6V4a2 2 0 1 1 4 0v.2a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V10a1.7 1.7 0 0 0 1.6 1H20a2 2 0 1 1 0 4h-.2a1.7 1.7 0 0 0-1.5 1Z" />
+    </svg>
+  );
+}
+function IconaRicevutaErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2.5h12v19l-2.5-1.5-2.5 1.5-2.5-1.5-2.5 1.5-2.5-1.5V2.5Z" />
+      <path d="M9 8h6M9 12h6" />
+    </svg>
+  );
+}
+function IconaBustaErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="5" width="19" height="14" rx="2" />
+      <path d="M3 6.5l9 6.5 9-6.5" />
+    </svg>
+  );
+}
+function IconaLaureaErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 9l10-4.5L22 9l-10 4.5L2 9Z" />
+      <path d="M6 11.3V16c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4.7" />
+      <path d="M22 9v6" />
+    </svg>
+  );
+}
+function IconaScatolaErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 8l9-4.5L21 8v8l-9 4.5L3 16V8Z" />
+      <path d="M3 8l9 4.5L21 8" />
+      <path d="M12 12.5V21" />
+    </svg>
+  );
+}
+function IconaClipboardErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 3h6a1 1 0 0 1 1 1v1H8V4a1 1 0 0 1 1-1Z" />
+      <path d="M8.5 11.5h7M8.5 15h7" />
+    </svg>
+  );
+}
+function IconaChevronGiuErp({ size = 14, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
 // data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
 // ultime iscrizioni per giorno di inserimento)
 function fmtDataLunga(dataStr) {
@@ -7800,6 +7874,476 @@ function VistaBiglietti({ param }) {
   );
 }
 
+// ---------- ERP: dashboard direzionale ----------
+// somma i costi di un'edizione (corso_data): le 5 voci fisse più le voci
+// libere aggiunte in "Riepilogo amministrativo" (Contabilità classe)
+function costoClasseErp(cd) {
+  const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.reduce((s, c) => s + (Number(c.valore) || 0), 0) : 0;
+  return (cd.costo_accademia || 0) + (cd.costo_master || 0) + (cd.costo_assistenti || 0) + (cd.costo_pranzi || 0) + (cd.costo_hotel || 0) + extra;
+}
+function fmtEuroErp(n) {
+  return `${Math.round(n || 0).toLocaleString("it-IT")} €`;
+}
+function fmtEuroKErp(n) {
+  const v = n || 0;
+  if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1).replace(".", ",")}K €`;
+  return fmtEuroErp(v);
+}
+function fmtPctErp(n) {
+  if (n == null || !isFinite(n)) return "—";
+  return `${n.toFixed(1).replace(".", ",")}%`;
+}
+function round1Erp(n) {
+  return Math.round(n * 10) / 10;
+}
+// range del periodo scelto, sempre con date costruite dal costruttore
+// numerico di Date (anno, mese, giorno) invece che da stringa: evita lo
+// sfasamento di un giorno che "new Date(stringa)" introdurrebbe in alcuni
+// fusi orari, perché legge un istante UTC con i getter in ora locale
+function rangePeriodoErp(periodo) {
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (periodo === "30giorni") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() - 29);
+    return { inizio: fmt(inizio), fine: fmt(oggi) };
+  }
+  if (periodo === "trimestre") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1);
+    return { inizio: fmt(inizio), fine: fmt(oggi) };
+  }
+  return { inizio: `${oggi.getFullYear()}-01-01`, fine: `${oggi.getFullYear()}-12-31` };
+}
+// stesso numero di giorni del periodo attuale, subito prima del suo inizio: usato per confronti "vs periodo precedente"
+function rangePrecedenteErp(range) {
+  const [aI, mI, gI] = range.inizio.split("-").map(Number);
+  const [aF, mF, gF] = range.fine.split("-").map(Number);
+  const inizio = new Date(aI, mI - 1, gI);
+  const fine = new Date(aF, mF - 1, gF);
+  const giorni = Math.round((fine - inizio) / 86400000) + 1;
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const finePrec = new Date(aI, mI - 1, gI - 1);
+  const inizioPrec = new Date(finePrec.getFullYear(), finePrec.getMonth(), finePrec.getDate() - giorni + 1);
+  return { inizio: fmt(inizioPrec), fine: fmt(finePrec) };
+}
+function variazionePctErp(attuale, precedente) {
+  if (!precedente) return attuale ? null : 0;
+  return ((attuale - precedente) / Math.abs(precedente)) * 100;
+}
+// ricavi/costi/allievi/riempimento/cash flow/crediti di un insieme di
+// edizioni filtrate per periodo + sede — riusata sia per i KPI del
+// periodo corrente/precedente sia per ogni riga di "Andamento per sede"
+function calcolaKpiErp({ corsiDate, iscritti, inizio, fine, sedeId, corsoById, locById }) {
+  const cdFiltrate = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
+  const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
+  const iscrittiFiltrati = iscritti.filter((i) => idsCd.has(i.corso_data_id));
+  const ricavi = round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+  const costiClasse = round2(cdFiltrate.reduce((s, cd) => s + costoClasseErp(cd), 0));
+  const quoteVenditore = round2(iscrittiFiltrati.reduce((s, i) => s + (i.quota_venditore || 0), 0));
+  const costi = round2(costiClasse + quoteVenditore);
+  const utile = round2(ricavi - costi);
+  const riempimenti = cdFiltrate
+    .map((cd) => {
+      const n = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+      const max = postiMaxEffettivi(cd, corsoById[cd.corso_id], locById[cd.location_id]);
+      return max > 0 ? (n / max) * 100 : null;
+    })
+    .filter((v) => v != null);
+  const riempimentoMedio = riempimenti.length ? round1Erp(riempimenti.reduce((s, v) => s + v, 0) / riempimenti.length) : 0;
+  // "cash flow": incassato realmente (acconto/precorso arrivati prima +
+  // saldo solo se già spuntato "incassato") meno i costi — non è un vero
+  // saldo di cassa bancario (non tracciato), ma un incassato netto reale
+  const incassatoReale = round2(iscrittiFiltrati.reduce((s, i) => s + (i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.incassato ? (i.saldo_totale || 0) + modelleTotaleDi(i) : 0), 0));
+  const cashFlow = round2(incassatoReale - costi);
+  const creditiDaIncassare = round2(iscrittiFiltrati.filter((i) => !i.incassato).reduce((s, i) => s + (i.saldo_totale || 0) + modelleTotaleDi(i), 0));
+  const pagamentiAperti = iscrittiFiltrati.filter((i) => !i.incassato && (i.saldo_totale || 0) + modelleTotaleDi(i) > 0).length;
+  return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati };
+}
+
+function CardKpiErp({ titolo, valore, variazione, variazioneInvertita, sub, Icona, coloreIcona, coloreBgIcona, scuro }) {
+  const positivo = variazione == null ? null : variazioneInvertita ? variazione <= 0 : variazione >= 0;
+  return (
+    <div style={{ ...cardStyle, padding: 18, background: scuro ? NAVY : "#fff", marginBottom: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ width: 38, height: 38, borderRadius: 10, background: coloreBgIcona, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <Icona size={19} color={coloreIcona} />
+        </div>
+        {variazione != null && (
+          <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: positivo ? "#2E7D32" : "#C0392B", background: positivo ? "#E3F3E5" : "#FBE4E1", borderRadius: 8, padding: "2px 8px", whiteSpace: "nowrap" }}>
+            {variazione >= 0 ? "↗" : "↘"} {fmtPctErp(Math.abs(variazione))}
+          </div>
+        )}
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: scuro ? "rgba(255,255,255,0.7)" : MUTED, marginBottom: 4 }}>{titolo}</div>
+      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: scuro ? "#fff" : NAVY, marginBottom: 4 }}>{valore}</div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: scuro ? "rgba(255,255,255,0.6)" : MUTED }}>{sub}</div>
+    </div>
+  );
+}
+
+function RigaBusinessPulseErp({ Icona, coloreIconaProp, titolo, sub, valore, ultima }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: ultima ? "none" : `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ width: 34, height: 34, borderRadius: 9, background: BG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icona size={17} color={coloreIconaProp || NAVY} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{sub}</div>
+      </div>
+      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{valore}</div>
+    </div>
+  );
+}
+
+function GaugeMargineErp({ percentuale }) {
+  const clamp = Math.max(0, Math.min(100, percentuale));
+  const raggio = 34;
+  const circonferenza = 2 * Math.PI * raggio;
+  const offset = circonferenza * (1 - clamp / 100);
+  return (
+    <div style={{ position: "relative", width: 84, height: 84, flexShrink: 0 }}>
+      <svg width={84} height={84} viewBox="0 0 84 84">
+        <circle cx="42" cy="42" r={raggio} fill="none" stroke={BG} strokeWidth="9" />
+        <circle
+          cx="42" cy="42" r={raggio} fill="none" stroke={GOLD} strokeWidth="9" strokeLinecap="round"
+          strokeDasharray={circonferenza} strokeDashoffset={offset}
+          transform="rotate(-90 42 42)"
+        />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column" }}>
+        <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>{percentuale.toFixed(1).replace(".", ",")}%</div>
+        <div style={{ ...fontBody, fontSize: 9, color: MUTED }}>margine</div>
+      </div>
+    </div>
+  );
+}
+
+// dashboard direzionale: riepiloga ricavi/costi/utile/allievi/andamento
+// per sede usando SOLO i dati già tracciati dal gestionale (iscritti,
+// costi per edizione, quota venditore, incassato, sede confermata).
+// Magazzino/CRM/Contabilità generale/Report non esistono ancora come
+// moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
+// restano visibili ma disattivati, invece di inventare numeri finti
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("anno");
+  const [sedeSel, setSedeSel] = useState("");
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  const range = rangePeriodoErp(periodo);
+  const rangePrec = rangePrecedenteErp(range);
+
+  const kpi = useMemo(
+    () => calcolaKpiErp({ corsiDate, iscritti, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
+    [corsiDate, iscritti, range.inizio, range.fine, sedeSel, corsoById, locById]
+  );
+  const kpiPrec = useMemo(
+    () => calcolaKpiErp({ corsiDate, iscritti, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
+    [corsiDate, iscritti, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
+  );
+
+  const varRicavi = variazionePctErp(kpi.ricavi, kpiPrec.ricavi);
+  const varCosti = variazionePctErp(kpi.costi, kpiPrec.costi);
+  const varUtile = variazionePctErp(kpi.utile, kpiPrec.utile);
+  const varAllievi = variazionePctErp(kpi.nAllievi, kpiPrec.nAllievi);
+
+  const marginePct = kpi.ricavi > 0 ? round1Erp((kpi.utile / kpi.ricavi) * 100) : 0;
+  const giudizioMargine = marginePct >= 30 ? "Ottima" : marginePct >= 15 ? "Buona" : marginePct >= 0 ? "Da migliorare" : "In perdita";
+
+  const mesiRange = useMemo(() => {
+    const [annoIni, meseIni] = range.inizio.split("-").map(Number);
+    const [annoFin, meseFin] = range.fine.split("-").map(Number);
+    const risultato = [];
+    let anno = annoIni, mese = meseIni;
+    while (anno < annoFin || (anno === annoFin && mese <= meseFin)) {
+      risultato.push({ anno, mese0: mese - 1 });
+      mese += 1;
+      if (mese > 12) { mese = 1; anno += 1; }
+    }
+    return risultato;
+  }, [range.inizio, range.fine]);
+
+  const andamentoMensile = mesiRange.map(({ anno, mese0 }) => {
+    const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
+    const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
+    const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
+    const k = calcolaKpiErp({ corsiDate, iscritti, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+    return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
+  });
+  const maxBarra = Math.max(1, ...andamentoMensile.flatMap((m) => [m.ricavi, m.costi]));
+
+  const sediConDati = location.filter((l) => corsiDate.some((cd) => cd.location_id === l.id && cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine));
+  const righeSedi = (sediConDati.length ? sediConDati : location)
+    .map((l) => {
+      const k = calcolaKpiErp({ corsiDate, iscritti, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
+      const kPrec = calcolaKpiErp({ corsiDate, iscritti, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
+      return { location: l, ...k, trend: variazionePctErp(k.ricavi, kPrec.ricavi) };
+    })
+    .sort((a, b) => b.ricavi - a.ricavi);
+
+  const oggiStr = dataOggiStr();
+  const tra60gg = (() => {
+    const d = new Date();
+    const d2 = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 60);
+    return `${d2.getFullYear()}-${String(d2.getMonth() + 1).padStart(2, "0")}-${String(d2.getDate()).padStart(2, "0")}`;
+  })();
+  const corsiConfermatiProssimi = corsiDate.filter((cd) => cd.data_inizio >= oggiStr && cd.data_inizio <= tra60gg && cd.sede_confermata).length;
+
+  // unico alert reale che ho dati per calcolare davvero: fatture in
+  // scadenza e scorte di magazzino non sono ancora tracciate nel gestionale
+  const SOGLIA_RIEMPIMENTO_BASSO_ERP = 60;
+  const classiSottoSoglia = kpi.cdFiltrate.filter((cd) => {
+    const n = iscritti.filter((i) => i.corso_data_id === cd.id).length;
+    const max = postiMaxEffettivi(cd, corsoById[cd.corso_id], locById[cd.location_id]);
+    return max > 0 && (n / max) * 100 < SOGLIA_RIEMPIMENTO_BASSO_ERP;
+  }).length;
+
+  const vociNav = [
+    { chiave: "dashboard", etichetta: "Dashboard", attiva: true, corrente: true },
+    { chiave: "calendario", etichetta: "Calendario", attiva: true, onClick: onApriGestioneDate },
+    { chiave: "corsi", etichetta: "Corsi", attiva: true, onClick: onApriImpostazioni },
+    { chiave: "allievi", etichetta: "Allievi", attiva: true, onClick: onApriCercaIscritto },
+    { chiave: "crm", etichetta: "CRM & vendite", attiva: false },
+    { chiave: "sedi", etichetta: "Sedi", attiva: true, onClick: onApriImpostazioni },
+    { chiave: "team", etichetta: "Team", attiva: true, onClick: onApriImpostazioni },
+    { chiave: "contabilita", etichetta: "Contabilità", attiva: false },
+    { chiave: "magazzino", etichetta: "Magazzino", attiva: false },
+    { chiave: "report", etichetta: "Report", attiva: false },
+  ];
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+      <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
+          </button>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>ERP</div>
+        </div>
+        {!isMobile && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 12px", maxWidth: 420, opacity: 0.55 }} title="Ricerca non ancora disponibile">
+            <IconaRicercaErp size={16} color="#fff" />
+            <input disabled placeholder="Cerca allievi, corsi, fatture…" style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 13, flex: 1, cursor: "not-allowed" }} />
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <div style={{ opacity: 0.4, cursor: "not-allowed", display: "flex" }} title="Notifiche non ancora disponibili"><IconaCampanellaErp color="#fff" /></div>
+          <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
+            <IconaIngranaggioErp color="#fff" />
+          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", ...fontDisplay, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>GR</div>
+            {!isMobile && (
+              <div>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", lineHeight: 1.2, whiteSpace: "nowrap" }}>GianLuca Rocca</div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.2 }}>Amministratore</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: "#fff", borderBottom: `1px solid ${CREAM_BORDER}`, padding: isMobile ? "0 12px" : "0 28px", display: "flex", gap: 4, overflowX: "auto" }}>
+        {vociNav.map((v) => (
+          <button
+            key={v.chiave}
+            onClick={v.attiva ? v.onClick : undefined}
+            disabled={!v.attiva}
+            title={v.attiva ? undefined : "Sezione non ancora collegata a dati reali"}
+            style={{
+              ...fontBody, fontSize: 13.5, fontWeight: 600, padding: "14px 12px", whiteSpace: "nowrap",
+              background: "transparent", border: "none", borderBottom: v.corrente ? `2px solid ${GOLD}` : "2px solid transparent",
+              color: v.corrente ? NAVY : v.attiva ? MUTED : "#C7C9D4",
+              cursor: v.attiva ? "pointer" : "default",
+            }}
+          >
+            {v.etichetta}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ maxWidth: 1300, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
+          Control center · {fmtDataLunga(dataOggiStr())}
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 26 : 32, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Buongiorno, GianLuca.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 24 }}>Ecco come sta andando Elitederma oggi.</div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                {p.l}
+              </button>
+            ))}
+          </div>
+          <button disabled title="Non ancora disponibile" style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: "#C7C9D4", color: "#fff", cursor: "not-allowed" }}>
+            + Nuova operazione
+          </button>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Analisi sede</div>
+          <button onClick={() => setSedeSel("")} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === "" ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === "" ? NAVY : "#fff", color: sedeSel === "" ? "#fff" : NAVY, cursor: "pointer" }}>
+            Tutte le sedi
+          </button>
+          {location.map((l) => (
+            <button key={l.id} onClick={() => setSedeSel(l.id)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === l.id ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === l.id ? NAVY : "#fff", color: sedeSel === l.id ? "#fff" : NAVY, cursor: "pointer" }}>
+              {l.nome}
+            </button>
+          ))}
+          <button disabled title="Non ancora disponibile" style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C7C9D4", cursor: "not-allowed", marginLeft: "auto" }}>
+            Confronta sedi
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)", gap: 14, marginBottom: 18 }}>
+          <CardKpiErp titolo="Ricavi totali" valore={fmtEuroKErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
+          <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
+          <CardKpiErp titolo="Utile netto" valore={fmtEuroKErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
+          <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 14, marginBottom: 18, alignItems: "start" }}>
+          <div style={{ ...cardStyle, padding: 20 }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Andamento economico</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Ricavi e costi</div>
+              <div style={{ display: "flex", gap: 14, ...fontBody, fontSize: 12, color: MUTED }}>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: NAVY, display: "inline-block" }} />Ricavi</span>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: GOLD, display: "inline-block" }} />Costi</span>
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Risultato del periodo</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.utile)}</div>
+              {varUtile != null && (
+                <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: varUtile >= 0 ? "#2E7D32" : "#C0392B" }}>
+                  {varUtile >= 0 ? "↗" : "↘"} {fmtPctErp(varUtile)}
+                </span>
+              )}
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 10 : 18, height: 160, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10, overflowX: "auto" }}>
+              {andamentoMensile.map((m, idx) => (
+                <div key={`${m.etichetta}-${idx}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 24 }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 130 }}>
+                    <div title={`Ricavi: ${fmtEuroErp(m.ricavi)}`} style={{ width: isMobile ? 8 : 12, height: `${Math.max(2, (m.ricavi / maxBarra) * 130)}px`, background: NAVY, borderRadius: 3 }} />
+                    <div title={`Costi: ${fmtEuroErp(m.costi)}`} style={{ width: isMobile ? 8 : 12, height: `${Math.max(2, (m.costi / maxBarra) * 130)}px`, background: GOLD, borderRadius: 3 }} />
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{m.etichetta}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, padding: 20 }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Business pulse</div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 18 }}>Salute aziendale</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20, flexWrap: "wrap" }}>
+              <GaugeMargineErp percentuale={marginePct} />
+              <div>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: BG, borderRadius: 6, padding: "2px 8px", display: "inline-block", marginBottom: 6 }}>{giudizioMargine.toUpperCase()}</div>
+                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                  {marginePct >= 15 ? "Redditività solida" : marginePct >= 0 ? "Redditività da consolidare" : "Redditività in calo"}
+                </div>
+                {varUtile != null && (
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>
+                    {varUtile >= 0 ? "+" : ""}{varUtile.toFixed(1).replace(".", ",")} punti rispetto al periodo precedente
+                  </div>
+                )}
+              </div>
+            </div>
+            <RigaBusinessPulseErp Icona={IconaScatolaErp} titolo="Cash flow" sub="Incassato netto del periodo" valore={fmtEuroErp(kpi.cashFlow)} />
+            <RigaBusinessPulseErp Icona={IconaClipboardErp} titolo="Crediti da incassare" sub={`${kpi.pagamentiAperti} pagamenti aperti`} valore={fmtEuroErp(kpi.creditiDaIncassare)} />
+            <RigaBusinessPulseErp Icona={IconaDataAccento} coloreIconaProp={GOLD} titolo="Corsi confermati" sub="Prossimi 60 giorni" valore={String(corsiConfermatiProssimi)} ultima />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: 14, alignItems: "start" }}>
+          <div style={{ ...cardStyle, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Performance</div>
+              <button disabled title="Non ancora disponibile" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C7C9D4", background: "transparent", border: "none", cursor: "not-allowed" }}>Report completo →</button>
+            </div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Andamento per sede</div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Sede", "Ricavi", "Utile", "Riempimento", "Trend"].map((th) => (
+                      <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {righeSedi.map((r) => (
+                    <tr key={r.location.id}>
+                      <td style={{ padding: "10px 8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 26, height: 26, borderRadius: 8, background: BG, ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            {r.location.nome.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.ricavi)}</td>
+                      <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.utile)}</td>
+                      <td style={{ padding: "10px 8px", minWidth: 100 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden", minWidth: 40 }}>
+                            <div style={{ width: `${Math.min(100, r.riempimentoMedio)}%`, height: "100%", background: GOLD }} />
+                          </div>
+                          <span style={{ ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>{r.riempimentoMedio.toFixed(0)}%</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                        {r.trend != null ? (
+                          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: r.trend >= 0 ? "#2E7D32" : "#C0392B" }}>{r.trend >= 0 ? "↗" : "↘"} {fmtPctErp(r.trend)}</span>
+                        ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                  {righeSedi.length === 0 && (
+                    <tr><td colSpan={5} style={{ padding: "16px 8px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna data in questo periodo.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Da controllare</div>
+              {classiSottoSoglia > 0 && (
+                <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{classiSottoSoglia}</div>
+              )}
+            </div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Richiede attenzione</div>
+            {classiSottoSoglia > 0 ? (
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#2563EB", marginTop: 5, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 600, color: NAVY }}>{classiSottoSoglia} {classiSottoSoglia === 1 ? "classe" : "classi"} sotto il {SOGLIA_RIEMPIMENTO_BASSO_ERP}%</div>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Riempimento nel periodo selezionato</div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED }}>CRM</div>
+              </div>
+            ) : (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna criticità rilevata nel periodo selezionato.</div>
+            )}
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 14, lineHeight: 1.5 }}>
+              Fatture in scadenza e scorte di magazzino non sono ancora tracciate nel gestionale: compariranno qui non appena queste sezioni saranno collegate a dati reali.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
@@ -8042,6 +8586,7 @@ export default function App() {
   function apriStatistiche() { apriViewProtetta("statistiche"); }
   function apriImpostazioni() { apriViewProtetta("impostazioni"); }
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
+  function apriErp() { apriViewProtetta("erp"); }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -8114,10 +8659,11 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "center" }}>
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto" }} />
           </div>
-          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 44, marginBottom: 30 }}>CALENDARIO CORSI</div>
+          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 44, marginBottom: 30 }}>GESTIONALE ACADEMY</div>
           <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, marginBottom: 20 }}>
             {[
               { etichetta: "Gestione date", onClick: apriGestioneDate },
+              { etichetta: "ERP", onClick: apriErp },
               { etichetta: "Statistiche", onClick: apriStatistiche },
               { etichetta: "Setting", onClick: apriImpostazioni },
             ].map(({ etichetta, onClick }) => (
@@ -8240,6 +8786,16 @@ export default function App() {
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
           cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
+        />
+      )}
+
+      {view === "erp" && (
+        <PaginaErp
+          corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
+          onBack={() => setView("home")}
+          onApriGestioneDate={apriGestioneDate}
+          onApriImpostazioni={apriImpostazioni}
+          onApriCercaIscritto={() => setView("cercaiscritto")}
         />
       )}
 
