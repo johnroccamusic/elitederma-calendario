@@ -3814,39 +3814,16 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   );
 }
 
-// riduce automaticamente il font-size di un testo finché non entra nella
-// larghezza disponibile del suo contenitore, invece di troncarlo con "...":
-// su schermi stretti i tasti a pillola (Filtra corso/città/master,
-// Cronologico, Reset filtri...) hanno etichette di lunghezza diversa nello
-// stesso spazio ristretto, e un font-size fisso costringerebbe sempre a
-// mozzare quelle più lunghe
-function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
-  const ref = React.useRef(null);
-  const [fontSize, setFontSize] = useState(fontSizeBase);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    function adatta() {
-      let dimensione = fontSizeBase;
-      el.style.fontSize = `${dimensione}px`;
-      while (el.scrollWidth > el.clientWidth + 0.5 && dimensione > fontSizeMin) {
-        dimensione -= 0.5;
-        el.style.fontSize = `${dimensione}px`;
-      }
-      setFontSize(dimensione);
-    }
-    adatta();
-    const osservatore = new ResizeObserver(adatta);
-    osservatore.observe(el);
-    return () => osservatore.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testo, fontSizeBase, fontSizeMin]);
-  return { ref, fontSize };
-}
-function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
-  const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
+// etichetta dei tasti a pillola (Filtra corso/città/master, Cronologico,
+// Reset filtri, Contabilità classe, Iscrivi...): SEMPRE alla stessa
+// dimensione dei tasti vicini, mai più piccola o più grande. Se un'etichetta
+// di più parole non entra su una riga va semplicemente a capo (il tasto si
+// allarga in altezza, non si rimpicciolisce il testo) — niente riduzione
+// automatica del font, altrimenti tasti diversi nella stessa fila
+// finiscono con dimensioni del testo vistosamente diverse tra loro
+function EtichettaAdattiva({ testo, fontSizeBase = 13 }) {
   return (
-    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "nowrap" }}>
+    <span style={{ display: "block", fontSize: fontSizeBase, whiteSpace: "normal", textAlign: "center", lineHeight: 1.25, overflowWrap: "anywhere" }}>
       {testo}
     </span>
   );
