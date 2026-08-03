@@ -3142,16 +3142,179 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
 // stessa logica di trascinamento a percentuale di ELEMENTI_DIPLOMA in
 // FontDiplomi, ma qui il riferimento è una semplice <img>, non un canvas
 // pdf.js: niente conversione punti-PDF, basta naturalWidth dell'immagine
-function CategoriaLogo({ categoria, ricarica }) {
+// blocco di calibrazione per UNA variante (nero o bianco) di una
+// categoria: il nome è sempre centrato tra i 2 limiti sx/dx (trascinabili
+// solo in orizzontale) e trascinabile solo in verticale; il codice
+// progressivo resta libero in X/Y come prima. Il colore mostrato qui è
+// sempre l'OPPOSTO di quello reale (bianco su nero, nero su bianco): solo
+// per poterlo vedere durante il trascinamento, dato che in stampa il
+// testo è sempre coerente col colore del logo (nero su logo nero, bianco
+// su logo bianco)
+function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggiorna, testoProvaNome, testoProvaNumero, famigliaNome }) {
+  const [naturaleWidth, setNaturaleWidth] = useState(null);
+  const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
+  const contenitoreRef = React.useRef(null);
+  const dragRef = React.useRef(null);
+  const [trascinato, setTrascinato] = useState(null); // "nome" | "numero" | "limiteSx" | "limiteDx" | null
+
+  useEffect(() => {
+    if (!src) { setLarghezzaMostrata(null); return; }
+    const el = contenitoreRef.current;
+    if (!el) return;
+    const osservatore = new ResizeObserver((voci) => {
+      for (const voce of voci) setLarghezzaMostrata(voce.contentRect.width);
+    });
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+  }, [src]);
+
+  const scalaAnteprima = naturaleWidth && larghezzaMostrata ? larghezzaMostrata / naturaleWidth : 1;
+  const coloreAnteprima = prefisso === "nero" ? "#ffffff" : "#000000";
+  const kY = `${prefisso}_nome_pos_y`;
+  const kNumX = `${prefisso}_numero_pos_x`;
+  const kNumY = `${prefisso}_numero_pos_y`;
+  const kSx = `${prefisso}_nome_limite_sx`;
+  const kDx = `${prefisso}_nome_limite_dx`;
+  const kFontNome = `${prefisso}_nome_font_size`;
+  const kFontNumero = `${prefisso}_numero_font_size`;
+
+  function iniziaDrag(e, chiave) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { chiave, pointerId: e.pointerId };
+    setTrascinato(chiave);
+  }
+  function muoviDrag(e) {
+    const d = dragRef.current;
+    if (!d || e.pointerId !== d.pointerId || !contenitoreRef.current) return;
+    const rect = contenitoreRef.current.getBoundingClientRect();
+    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+    if (d.chiave === "nome") setConfig((c) => ({ ...c, [kY]: y }));
+    else if (d.chiave === "numero") setConfig((c) => ({ ...c, [kNumX]: x, [kNumY]: y }));
+    else if (d.chiave === "limiteSx") setConfig((c) => ({ ...c, [kSx]: Math.min(x, c[kDx] - 2) }));
+    else if (d.chiave === "limiteDx") setConfig((c) => ({ ...c, [kDx]: Math.max(x, c[kSx] + 2) }));
+  }
+  function fineDrag() {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    setTrascinato(null);
+    if (d.chiave === "nome") aggiorna({ [kY]: config[kY] });
+    else if (d.chiave === "numero") aggiorna({ [kNumX]: config[kNumX], [kNumY]: config[kNumY] });
+    else if (d.chiave === "limiteSx") aggiorna({ [kSx]: config[kSx] });
+    else if (d.chiave === "limiteDx") aggiorna({ [kDx]: config[kDx] });
+  }
+
+  if (!src) return null;
+
+  const limiteSxPx = naturaleWidth ? (naturaleWidth * config[kSx]) / 100 : 0;
+  const limiteDxPx = naturaleWidth ? (naturaleWidth * config[kDx]) / 100 : 0;
+  const adattamento = naturaleWidth
+    ? adattaNomeLogo(testoProvaNome, config[kFontNome], famigliaNome, Math.max(1, limiteDxPx - limiteSxPx))
+    : { fontSize: config[kFontNome], spaziatura: 0 };
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, marginBottom: 6 }}>{titolo}</div>
+      <div ref={contenitoreRef} style={{ position: "relative", width: "100%", maxWidth: naturaleWidth || 500, touchAction: "none" }}>
+        <img
+          src={src}
+          alt={titolo}
+          style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#EFEFEF" }}
+          onLoad={(e) => setNaturaleWidth(e.target.naturalWidth)}
+        />
+
+        <div
+          onPointerDown={(e) => iniziaDrag(e, "limiteSx")}
+          onPointerMove={muoviDrag}
+          onPointerUp={fineDrag}
+          onPointerCancel={fineDrag}
+          title="Limite sinistro del nome"
+          style={{ position: "absolute", left: `${config[kSx]}%`, top: 0, bottom: 0, width: 16, marginLeft: -8, cursor: "ew-resize", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}
+        >
+          <div style={{ width: 2, height: "100%", background: "#16A34A", opacity: trascinato === "limiteSx" ? 1 : 0.6 }} />
+        </div>
+        <div
+          onPointerDown={(e) => iniziaDrag(e, "limiteDx")}
+          onPointerMove={muoviDrag}
+          onPointerUp={fineDrag}
+          onPointerCancel={fineDrag}
+          title="Limite destro del nome"
+          style={{ position: "absolute", left: `${config[kDx]}%`, top: 0, bottom: 0, width: 16, marginLeft: -8, cursor: "ew-resize", display: "flex", alignItems: "center", justifyContent: "center", touchAction: "none" }}
+        >
+          <div style={{ width: 2, height: "100%", background: "#16A34A", opacity: trascinato === "limiteDx" ? 1 : 0.6 }} />
+        </div>
+
+        <div
+          onPointerDown={(e) => iniziaDrag(e, "nome")}
+          onPointerMove={muoviDrag}
+          onPointerUp={fineDrag}
+          onPointerCancel={fineDrag}
+          title="Trascina su/giù per la posizione verticale del nome"
+          style={{
+            position: "absolute", left: `${(config[kSx] + config[kDx]) / 2}%`, top: `${config[kY]}%`,
+            transform: "translate(-50%, -50%)", cursor: "ns-resize", padding: 4,
+            border: "2px dashed #2563EB", borderRadius: 4,
+            background: trascinato === "nome" ? "#2563EB22" : "transparent", touchAction: "none",
+          }}
+        >
+          <span style={{ fontSize: adattamento.fontSize * scalaAnteprima, letterSpacing: `${adattamento.spaziatura * scalaAnteprima}px`, color: coloreAnteprima, whiteSpace: "nowrap", userSelect: "none", pointerEvents: "none" }}>
+            {testoProvaNome}
+          </span>
+        </div>
+
+        <div
+          onPointerDown={(e) => iniziaDrag(e, "numero")}
+          onPointerMove={muoviDrag}
+          onPointerUp={fineDrag}
+          onPointerCancel={fineDrag}
+          title="Trascina per posizionare il codice progressivo"
+          style={{
+            position: "absolute", left: `${config[kNumX]}%`, top: `${config[kNumY]}%`,
+            transform: "translate(-50%, -50%)", cursor: "grab", padding: 4,
+            border: "2px dashed #EA580C", borderRadius: 4,
+            background: trascinato === "numero" ? "#EA580C22" : "transparent", touchAction: "none",
+          }}
+        >
+          <span style={{ fontSize: config[kFontNumero] * scalaAnteprima, color: coloreAnteprima, whiteSpace: "nowrap", userSelect: "none", pointerEvents: "none" }}>
+            {testoProvaNumero}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+          <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#2563EB", flexShrink: 0 }} />
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 140 }}>Nome allieva (dimensione base)</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button onClick={() => aggiorna({ [kFontNome]: Math.max(6, config[kFontNome] - 2) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>−</button>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 30, textAlign: "center" }}>{config[kFontNome]}</span>
+            <button onClick={() => aggiorna({ [kFontNome]: Math.min(400, config[kFontNome] + 2) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>+</button>
+          </div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>
+          Il nome viene sempre centrato tra le 2 righe verdi: se è più corto la spaziatura tra le lettere si allarga per riempirle, se è più lungo il font si rimpicciolisce automaticamente finché non ci entra.
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+          <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: "#EA580C", flexShrink: 0 }} />
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 140 }}>Codice progressivo</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button onClick={() => aggiorna({ [kFontNumero]: Math.max(6, config[kFontNumero] - 2) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>−</button>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 30, textAlign: "center" }}>{config[kFontNumero]}</span>
+            <button onClick={() => aggiorna({ [kFontNumero]: Math.min(400, config[kFontNumero] + 2) })} style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}>+</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
   const [config, setConfig] = useState(categoria);
   const [previewNeroUrl, setPreviewNeroUrl] = useState(null);
   const [previewBiancoUrl, setPreviewBiancoUrl] = useState(null);
   const [msg, setMsg] = useState("");
-  const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
-  const [naturaleWidth, setNaturaleWidth] = useState(null);
-  const [elementoTrascinato, setElementoTrascinato] = useState(null);
-  const contenitoreRef = React.useRef(null);
-  const dragRef = React.useRef(null);
   const modificatoLocalmenteRef = React.useRef(false);
 
   useEffect(() => {
@@ -3183,45 +3346,8 @@ function CategoriaLogo({ categoria, ricarica }) {
   const srcNero = previewNeroUrl || (config.logo_nero_path ? supabase.storage.from("loghi-immagini").getPublicUrl(config.logo_nero_path).data.publicUrl : null);
   const srcBianco = previewBiancoUrl || (config.logo_bianco_path ? supabase.storage.from("loghi-immagini").getPublicUrl(config.logo_bianco_path).data.publicUrl : null);
 
-  useEffect(() => {
-    if (!srcNero) { setLarghezzaMostrata(null); return; }
-    const el = contenitoreRef.current;
-    if (!el) return;
-    const osservatore = new ResizeObserver((voci) => {
-      for (const voce of voci) setLarghezzaMostrata(voce.contentRect.width);
-    });
-    osservatore.observe(el);
-    return () => osservatore.disconnect();
-  }, [srcNero]);
-
-  const scalaAnteprima = naturaleWidth && larghezzaMostrata ? larghezzaMostrata / naturaleWidth : 1;
-
-  function iniziaDrag(e, chiave) {
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    dragRef.current = { chiave, pointerId: e.pointerId };
-    setElementoTrascinato(chiave);
-  }
-  function muoviDrag(e) {
-    const d = dragRef.current;
-    if (!d || e.pointerId !== d.pointerId || !contenitoreRef.current) return;
-    const rect = contenitoreRef.current.getBoundingClientRect();
-    const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
-    setConfig((c) => ({ ...c, [`${d.chiave}_pos_x`]: x, [`${d.chiave}_pos_y`]: y }));
-  }
-  function fineDrag() {
-    const d = dragRef.current;
-    if (!d) return;
-    dragRef.current = null;
-    setElementoTrascinato(null);
-    aggiorna({ [`${d.chiave}_pos_x`]: config[`${d.chiave}_pos_x`], [`${d.chiave}_pos_y`]: config[`${d.chiave}_pos_y`] });
-  }
-
-  const ELEMENTI_LOGO = [
-    { chiave: "nome", colore: "#2563EB", etichetta: "Nome allieva", testoProva: "Nome Cognome" },
-    { chiave: "numero", colore: "#EA580C", etichetta: "Codice progressivo", testoProva: calcolaCodiceLogo("Andrea Paura", "Carla Bosi", 402) },
-  ];
+  const testoProvaNome = "NOME COGNOME";
+  const testoProvaNumero = calcolaCodiceLogo("Andrea Paura", "Carla Bosi", 402);
 
   return (
     <div style={{ ...cardStyle, marginBottom: 16 }}>
@@ -3237,7 +3363,7 @@ function CategoriaLogo({ categoria, ricarica }) {
         </div>
         {config.richiede_bianco && (
           <div style={{ flex: "1 1 200px" }}>
-            <Field label="Logo bianco">
+            <Field label="Logo bianco (diventa il riferimento qui sotto)">
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                 <input type="file" accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_bianco_path")} />
                 {srcBianco && <BadgeFileCaricato />}
@@ -3247,81 +3373,31 @@ function CategoriaLogo({ categoria, ricarica }) {
         )}
       </div>
 
-      {srcNero && (
-        <>
-          <div ref={contenitoreRef} style={{ position: "relative", width: "100%", maxWidth: naturaleWidth || 500, touchAction: "none" }}>
-            <img
-              src={srcNero}
-              alt={config.etichetta}
-              style={{ width: "100%", height: "auto", display: "block", borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#EFEFEF" }}
-              onLoad={(e) => setNaturaleWidth(e.target.naturalWidth)}
-            />
-            {ELEMENTI_LOGO.map(({ chiave, colore, testoProva }) => (
-              <div
-                key={chiave}
-                onPointerDown={(e) => iniziaDrag(e, chiave)}
-                onPointerMove={muoviDrag}
-                onPointerUp={fineDrag}
-                onPointerCancel={fineDrag}
-                style={{
-                  position: "absolute",
-                  left: `${config[`${chiave}_pos_x`]}%`,
-                  top: `${config[`${chiave}_pos_y`]}%`,
-                  transform: "translate(-50%, -50%)",
-                  cursor: "grab",
-                  padding: 4,
-                  border: `2px dashed ${colore}`,
-                  borderRadius: 4,
-                  background: elementoTrascinato === chiave ? `${colore}22` : "transparent",
-                  touchAction: "none",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: config[`${chiave}_font_size`] * scalaAnteprima,
-                    color: config[`${chiave}_colore`],
-                    whiteSpace: "nowrap",
-                    userSelect: "none",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {testoProva}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-            {ELEMENTI_LOGO.map(({ chiave, colore, etichetta }) => (
-              <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 12px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
-                <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", background: colore, flexShrink: 0 }} />
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 140 }}>{etichetta}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button
-                    onClick={() => aggiorna({ [`${chiave}_font_size`]: Math.max(6, config[`${chiave}_font_size`] - 2) })}
-                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, cursor: "pointer", fontSize: 16, lineHeight: 1 }}
-                  >
-                    −
-                  </button>
-                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 30, textAlign: "center" }}>{config[`${chiave}_font_size`]}</span>
-                  <button
-                    onClick={() => aggiorna({ [`${chiave}_font_size`]: Math.min(400, config[`${chiave}_font_size`] + 2) })}
-                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", cursor: "pointer", fontSize: 16, lineHeight: 1 }}
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="color"
-                  value={config[`${chiave}_colore`]}
-                  onChange={(e) => aggiorna({ [`${chiave}_colore`]: e.target.value })}
-                  style={{ width: 36, height: 30, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6 }}
-                />
-              </div>
-            ))}
-          </div>
-        </>
+      <BloccoCalibrazioneLogo
+        titolo="Posizionamento su logo nero (in stampa il testo è nero, qui è mostrato bianco solo per poterlo vedere)"
+        prefisso="nero"
+        src={srcNero}
+        config={config}
+        setConfig={setConfig}
+        aggiorna={aggiorna}
+        testoProvaNome={testoProvaNome}
+        testoProvaNumero={testoProvaNumero}
+        famigliaNome={famigliaNome}
+      />
+      {config.richiede_bianco && (
+        <BloccoCalibrazioneLogo
+          titolo="Posizionamento su logo bianco (in stampa il testo è bianco, qui è mostrato nero solo per poterlo vedere)"
+          prefisso="bianco"
+          src={srcBianco}
+          config={config}
+          setConfig={setConfig}
+          aggiorna={aggiorna}
+          testoProvaNome={testoProvaNome}
+          testoProvaNumero={testoProvaNumero}
+          famigliaNome={famigliaNome}
+        />
       )}
+
       {msg && <div style={{ ...fontBody, fontSize: 12, color: NAVY, marginTop: 8 }}>{msg}</div>}
     </div>
   );
@@ -3334,6 +3410,7 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
   const [config, setConfig] = useState(loghiImpostazioni || CONFIG_LOGHI_DEFAULT);
   const [numeroPartenza, setNumeroPartenza] = useState(String((loghiImpostazioni || CONFIG_LOGHI_DEFAULT).prossimo_numero));
   const [msg, setMsg] = useState("");
+  const [famigliaNomeAnteprima, setFamigliaNomeAnteprima] = useState(null);
   const modificatoLocalmenteRef = React.useRef(false);
 
   useEffect(() => {
@@ -3343,6 +3420,26 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
       setNumeroPartenza(String(nuovo.prossimo_numero));
     }
   }, [loghiImpostazioni]);
+
+  // carica il font del nome anche qui, per far vedere in anteprima lo
+  // stesso adattamento (spaziatura/rimpicciolimento) che verrà usato in
+  // "Generazione loghi": senza il font vero, misurare la larghezza del
+  // nome darebbe una stima imprecisa e la calibrazione non sarebbe fedele
+  useEffect(() => {
+    async function carica() {
+      if (!config.font_nome_path) { setFamigliaNomeAnteprima(null); return; }
+      try {
+        const { data } = supabase.storage.from("loghi-fonts").getPublicUrl(config.font_nome_path);
+        const f = new FontFace("loghiFontNomeSetting", `url(${data.publicUrl})`);
+        await f.load();
+        document.fonts.add(f);
+        setFamigliaNomeAnteprima("loghiFontNomeSetting");
+      } catch {
+        setFamigliaNomeAnteprima(null);
+      }
+    }
+    carica();
+  }, [config.font_nome_path]);
 
   async function aggiorna(campi) {
     modificatoLocalmenteRef.current = true;
@@ -3417,16 +3514,75 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
         .map((c) => loghiCategorie.find((lc) => lc.chiave === c.chiave))
         .filter(Boolean)
         .map((cat) => (
-          <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} />
+          <CategoriaLogo key={cat.chiave} categoria={cat} ricarica={ricarica} famigliaNome={famigliaNomeAnteprima} />
         ))}
     </div>
   );
 }
 
+// canvas offscreen riutilizzato solo per misurare il testo (measureText):
+// stessa istanza sia in anteprima (Setting loghi) sia in generazione, così
+// i 2 posti calcolano esattamente la stessa cosa
+let ctxMisuraLoghi = null;
+function ottieniCtxMisuraLoghi() {
+  if (!ctxMisuraLoghi) ctxMisuraLoghi = document.createElement("canvas").getContext("2d");
+  return ctxMisuraLoghi;
+}
+
+// il nome allieva va sempre centrato esattamente tra i 2 limiti sx/dx
+// impostati in "Setting loghi": se col font base è più STRETTO dello
+// spazio disponibile, si allarga la spaziatura tra le lettere fino a
+// riempirlo; se è più LARGO, si rimpicciolisce il font finché non
+// rientra (senza spaziatura extra)
+function adattaNomeLogo(testo, fontSizeBase, famiglia, spazioDisponibilePx) {
+  if (!testo) return { fontSize: fontSizeBase, spaziatura: 0 };
+  const ctx = ottieniCtxMisuraLoghi();
+  const famigliaSicura = famiglia || "sans-serif";
+  function larghezza(fontSize) {
+    ctx.font = `${fontSize}px "${famigliaSicura}", sans-serif`;
+    return testo.split("").reduce((s, ch) => s + ctx.measureText(ch).width, 0);
+  }
+  let fontSize = fontSizeBase;
+  let larghezzaTesto = larghezza(fontSize);
+  if (larghezzaTesto > spazioDisponibilePx) {
+    while (fontSize > 6 && larghezzaTesto > spazioDisponibilePx) {
+      fontSize -= 0.5;
+      larghezzaTesto = larghezza(fontSize);
+    }
+    return { fontSize, spaziatura: 0 };
+  }
+  const spaziatura = testo.length > 1 ? (spazioDisponibilePx - larghezzaTesto) / (testo.length - 1) : 0;
+  return { fontSize, spaziatura };
+}
+
+// disegna il nome centrato su centroX, lettera per lettera, con la
+// spaziatura calcolata da adattaNomeLogo (ctx.letterSpacing non è
+// disponibile in modo uniforme su tutti i browser: si posiziona ogni
+// carattere a mano per un risultato identico ovunque)
+function disegnaNomeConSpaziatura(ctx, testo, centroX, y, fontSize, famiglia, colore, spaziatura) {
+  const famigliaSicura = famiglia || "sans-serif";
+  ctx.font = `${fontSize}px "${famigliaSicura}", sans-serif`;
+  ctx.fillStyle = colore;
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  const caratteri = testo.split("");
+  const larghezze = caratteri.map((ch) => ctx.measureText(ch).width);
+  const larghezzaTotale = larghezze.reduce((s, w) => s + w, 0) + spaziatura * Math.max(0, caratteri.length - 1);
+  let x = centroX - larghezzaTotale / 2;
+  caratteri.forEach((ch, i) => {
+    ctx.fillText(ch, x, y);
+    x += larghezze[i] + spaziatura;
+  });
+}
+
 // componi su un <canvas> offscreen il logo sorgente + nome + codice, alla
 // risoluzione piena dell'immagine originale (non quella ridotta
-// dell'anteprima), e restituisce il PNG risultante come Blob
-async function componiLogoPng({ percorsoLogo, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero }) {
+// dell'anteprima), e restituisce il PNG risultante come Blob. Il colore
+// del testo non si sceglie più a mano: è sempre nero sul logo nero e
+// bianco sul logo bianco, per restare coerente col colore del logo
+// stesso; il nome è sempre centrato tra i 2 limiti della variante e
+// adattato automaticamente (spaziatura o rimpicciolimento) per entrarci
+async function componiLogoPng({ percorsoLogo, variante, nomeTesto, codiceTesto, categoria, famigliaNome, famigliaNumero }) {
   const bytes = await scaricaBytesStorage("loghi-immagini", percorsoLogo);
   const blobSorgente = new Blob([bytes]);
   const url = URL.createObjectURL(blobSorgente);
@@ -3443,14 +3599,23 @@ async function componiLogoPng({ percorsoLogo, nomeTesto, codiceTesto, categoria,
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0);
     await document.fonts.ready;
+
+    const colore = variante === "nero" ? "#000000" : "#ffffff";
+    const pfx = variante;
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `${categoria.nome_font_size}px ${famigliaNome}, sans-serif`;
-    ctx.fillStyle = categoria.nome_colore;
-    ctx.fillText(nomeTesto, (canvas.width * categoria.nome_pos_x) / 100, (canvas.height * categoria.nome_pos_y) / 100);
-    ctx.font = `${categoria.numero_font_size}px ${famigliaNumero}, sans-serif`;
-    ctx.fillStyle = categoria.numero_colore;
-    ctx.fillText(codiceTesto, (canvas.width * categoria.numero_pos_x) / 100, (canvas.height * categoria.numero_pos_y) / 100);
+    ctx.font = `${categoria[`${pfx}_numero_font_size`]}px ${famigliaNumero}, sans-serif`;
+    ctx.fillStyle = colore;
+    ctx.fillText(codiceTesto, (canvas.width * categoria[`${pfx}_numero_pos_x`]) / 100, (canvas.height * categoria[`${pfx}_numero_pos_y`]) / 100);
+
+    const limiteSxPx = (canvas.width * categoria[`${pfx}_nome_limite_sx`]) / 100;
+    const limiteDxPx = (canvas.width * categoria[`${pfx}_nome_limite_dx`]) / 100;
+    const centroXPx = (limiteSxPx + limiteDxPx) / 2;
+    const yPx = (canvas.height * categoria[`${pfx}_nome_pos_y`]) / 100;
+    const { fontSize, spaziatura } = adattaNomeLogo(nomeTesto, categoria[`${pfx}_nome_font_size`], famigliaNome, Math.max(1, limiteDxPx - limiteSxPx));
+    disegnaNomeConSpaziatura(ctx, nomeTesto, centroXPx, yPx, fontSize, famigliaNome, colore, spaziatura);
+
     return await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   } finally {
     URL.revokeObjectURL(url);
@@ -3527,6 +3692,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
       const codice = calcolaCodiceLogo(masterScelta.nome, nomeAllieva, prossimoNumero);
       const blobNero = await componiLogoPng({
         percorsoLogo: categoria.logo_nero_path,
+        variante: "nero",
         nomeTesto: nomeAllieva.trim().toUpperCase(),
         codiceTesto: codice,
         categoria,
@@ -3538,6 +3704,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
       if (categoria.richiede_bianco) {
         const blobBianco = await componiLogoPng({
           percorsoLogo: categoria.logo_bianco_path,
+          variante: "bianco",
           nomeTesto: nomeAllieva.trim().toUpperCase(),
           codiceTesto: codice,
           categoria,
