@@ -25,6 +25,7 @@ const BG = "#EFE9DC";
 const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
 const MUTED = "#8B8FA3";
 const GRAFITE = "#54585F";
+const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilità classe)
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
@@ -168,11 +169,60 @@ function IconaCartaPos({ size = 20 }) {
     </svg>
   );
 }
+// icone dell'intestazione "Contabilità classe" (pin località + le 3 celle
+// Date/Master/Disponibilità)
+function IconaPin({ size = 15, color = GOLD }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </svg>
+  );
+}
+function IconaDataAccento({ size = 26, color = GOLD }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="3" />
+      <path d="M8 3v4" /><path d="M16 3v4" /><path d="M3 10h18" />
+      <path d="M7.5 14h2M11 14h2M14.5 14h2M7.5 17h2M11 17h2" />
+    </svg>
+  );
+}
+function IconaMasterAccento({ size = 26, color = GOLD }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4.2 3.6-6.5 8-6.5s8 2.3 8 6.5" />
+    </svg>
+  );
+}
+function IconaDisponibilitaAccento({ size = 26, color = GOLD }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8.5" r="3.3" />
+      <path d="M2.5 20c0-3.6 2.9-5.6 6.5-5.6" />
+      <circle cx="16.5" cy="9.3" r="2.8" />
+      <path d="M13.3 14.7c2.9.2 6.2 1.8 6.2 5.3" />
+    </svg>
+  );
+}
 // data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
 // ultime iscrizioni per giorno di inserimento)
 function fmtDataLunga(dataStr) {
   const [anno, mese, giorno] = dataStr.split("-").map(Number);
   return `${giorno} ${MESI[mese - 1].toLowerCase()} ${anno}`;
+}
+
+// intervallo di date in italiano esteso, es. "18–19 ottobre 2026" (stesso
+// mese) o "28 settembre – 2 ottobre 2026" (mesi diversi) — usato
+// nell'intestazione di Contabilità classe
+function fmtIntervalloEsteso(inizio, fine) {
+  const [annoI, meseI, giornoI] = inizio.split("-").map(Number);
+  if (inizio === fine) return `${giornoI} ${MESI[meseI - 1].toLowerCase()} ${annoI}`;
+  const [annoF, meseF, giornoF] = fine.split("-").map(Number);
+  if (annoI === annoF && meseI === meseF) return `${giornoI}–${giornoF} ${MESI[meseI - 1].toLowerCase()} ${annoI}`;
+  if (annoI === annoF) return `${giornoI} ${MESI[meseI - 1].toLowerCase()} – ${giornoF} ${MESI[meseF - 1].toLowerCase()} ${annoI}`;
+  return `${giornoI} ${MESI[meseI - 1].toLowerCase()} ${annoI} – ${giornoF} ${MESI[meseF - 1].toLowerCase()} ${annoF}`;
 }
 
 // genera la griglia di un mese come array di settimane (7 celle, null=padding)
@@ -5164,17 +5214,43 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           </div>
         </div>
       )}
-      <TopBar title={`${(corso?.nome || "").toUpperCase()} · ${(loc?.nome || "").toUpperCase()}`} onBack={onBack} />
-      <div style={{ marginBottom: 18 }}>
-        <div style={{ ...fontBody, color: MUTED, fontSize: 14 }}>
-          {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} — {liberi} posti liberi su {max}
-        </div>
-        {corsoData.master_id && (
-          <div style={{ ...fontBody, color: MUTED, fontSize: 13 }}>
-            Master: {(master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?"}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, letterSpacing: 0.3 }}>{(corso?.nome || "").toUpperCase()}</div>
+        {loc?.nome && (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "6px 14px" }}>
+            <IconaPin size={14} />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
           </div>
         )}
       </div>
+      {(() => {
+        const celleIntestazione = [
+          {
+            chiave: "date", Icona: IconaDataAccento, label: "Date",
+            valore: fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
+          },
+          corsoData.master_id && {
+            chiave: "master", Icona: IconaMasterAccento, label: "Master",
+            valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
+          },
+          { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
+        ].filter(Boolean);
+        return (
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 18 }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
+              {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
+                <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                  <Icona size={26} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
+                    <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
         {vista === "lista" ? (
           <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
