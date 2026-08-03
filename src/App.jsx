@@ -1976,6 +1976,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
   const [filtroCittaDate, setFiltroCittaDate] = useState("");
   const [filtroMasterDate, setFiltroMasterDate] = useState("");
+  const [cronologicoDate, setCronologicoDate] = useState(false);
   const [apriFiltroCorsoDate, setApriFiltroCorsoDate] = useState(false);
   const [apriFiltroCittaDate, setApriFiltroCittaDate] = useState(false);
   const [apriFiltroMasterDate, setApriFiltroMasterDate] = useState(false);
@@ -2101,6 +2102,14 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
             />
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <button
+                onClick={() => setCronologicoDate((v) => !v)}
+                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: cronologicoDate ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoDate ? NAVY : "#fff", color: cronologicoDate ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+              >
+                Cronologico
+              </button>
+            </div>
+            <div style={{ flex: "1 1 0", minWidth: 0 }}>
+              <button
                 onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
                 style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
               >
@@ -2112,6 +2121,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         <DateRaggruppatePerCitta
           corsi={corsi}
           location={location}
+          cronologico={cronologicoDate}
           corsiDate={corsiDate.filter((cd) =>
             cd.data_fine >= dataOggiStr() &&
             (!filtroCorsoDate || cd.corso_id === filtroCorsoDate) &&
@@ -3804,7 +3814,7 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica }) {
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica, cronologico }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
@@ -3824,6 +3834,154 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
 
   if (corsiDate.length === 0) {
     return <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna data ancora.</div>;
+  }
+
+  // riga di un singolo corso: usata sia raggruppata per città (mostraCitta
+  // false, la città è già nell'intestazione della card) sia in modalità
+  // "Cronologico" (mostraCitta true: qui non c'è una card per città, quindi
+  // il nome città va scritto nella riga stessa, accanto al master)
+  function rigaCorso(cd, i, mostraCitta) {
+    const corso = corsoById[cd.corso_id];
+    const sfondoRiga = "transparent";
+    const coloreBadge = i % 2 === 0 ? { bg: "#F5EBDA", testo: "#A08A63" } : { bg: "#E3EDF8", testo: "#7C93AD" };
+    const rigaCittaMaster = (mostraCitta || cd.master_id) && (
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        {mostraCitta && toTitleCase(locById[cd.location_id]?.nome || "?")}
+        {mostraCitta && cd.master_id && " · "}
+        {cd.master_id && `Master: ${toTitleCase(masterById[cd.master_id]?.nome || "?")}`}
+      </div>
+    );
+    return onEdit ? (
+      <div key={cd.id} style={{ marginBottom: 8 }}>
+        <div style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <span
+            onClick={onApriData ? () => onApriData(cd) : undefined}
+            title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
+            style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto", cursor: onApriData ? "pointer" : undefined }}
+          >
+            <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+            <span style={{ minWidth: 0 }}>
+              <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
+              {rigaCittaMaster}
+            </span>
+          </span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+            {iscritti && (() => {
+              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+              const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
+              const liberi = Math.max(0, max - occupati);
+              return (
+                <span
+                  onClick={onApriData ? () => onApriData(cd) : undefined}
+                  title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
+                  style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", cursor: onApriData ? "pointer" : undefined }}
+                >
+                  {liberi} post{liberi === 1 ? "o" : "i"}
+                </span>
+              );
+            })()}
+            <button
+              onClick={() => onEdit(cd)}
+              title="Modifica"
+              style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => onDelete(cd.id)}
+              title="Elimina"
+              style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" /><path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+            {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
+          </span>
+        </div>
+        {idInModifica === cd.id && renderModifica && renderModifica(cd)}
+      </div>
+    ) : (
+      <div
+        key={cd.id}
+        onClick={() => onApriData?.(cd)}
+        style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", marginBottom: 8, cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
+          <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+          <span style={{ minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
+            {rigaCittaMaster}
+          </span>
+        </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+          {iscritti && (() => {
+            const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+            const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
+            const liberi = Math.max(0, max - occupati);
+            return (
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap" }}>
+                {liberi} post{liberi === 1 ? "o" : "i"}
+              </span>
+            );
+          })()}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }}
+              title="Elimina"
+              style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" /><path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          )}
+          {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
+        </span>
+      </div>
+    );
+  }
+
+  // "Cronologico": tutte le date di tutte le città in un'unica lista,
+  // raggruppata solo per mese e ordinata per data (invece che per città)
+  if (cronologico) {
+    const mesi = {};
+    corsiDate.forEach((cd) => {
+      const [anno, mese] = cd.data_inizio.split("-");
+      const chiaveMese = `${anno}-${mese}`;
+      if (!mesi[chiaveMese]) mesi[chiaveMese] = { etichetta: `${MESI[parseInt(mese, 10) - 1]} ${anno}`, voci: [] };
+      mesi[chiaveMese].voci.push(cd);
+    });
+    const chiaviMesi = Object.keys(mesi).sort();
+    return (
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
+        {chiaviMesi.map((chiaveMese, mIdx) => {
+          const gruppoMese = mesi[chiaveMese];
+          return (
+            <div key={chiaveMese} style={{ marginBottom: 14, paddingTop: mIdx > 0 ? 14 : 0, borderTop: mIdx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
+                {gruppoMese.etichetta}
+              </div>
+              {gruppoMese.voci
+                .slice()
+                .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
+                .map((cd, i) => rigaCorso(cd, i, true))}
+            </div>
+          );
+        })}
+      </div>
+    );
   }
 
   return (
@@ -3853,119 +4011,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                   {gruppoMese.voci
                     .slice()
                     .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-                    .map((cd, i) => {
-                      const corso = corsoById[cd.corso_id];
-                      const sfondoRiga = "transparent";
-                      const coloreBadge = i % 2 === 0 ? { bg: "#F5EBDA", testo: "#A08A63" } : { bg: "#E3EDF8", testo: "#7C93AD" };
-                      return onEdit ? (
-                        <div key={cd.id} style={{ marginBottom: 8 }}>
-                          <div style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-                            <span
-                              onClick={onApriData ? () => onApriData(cd) : undefined}
-                              title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
-                              style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto", cursor: onApriData ? "pointer" : undefined }}
-                            >
-                              <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                              <span style={{ minWidth: 0 }}>
-                                <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
-                                {cd.master_id && (
-                                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                    Master: {toTitleCase(masterById[cd.master_id]?.nome || "?")}
-                                  </div>
-                                )}
-                              </span>
-                            </span>
-                            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                              <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
-                              {iscritti && (() => {
-                                const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-                                const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
-                                const liberi = Math.max(0, max - occupati);
-                                return (
-                                  <span
-                                    onClick={onApriData ? () => onApriData(cd) : undefined}
-                                    title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
-                                    style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", cursor: onApriData ? "pointer" : undefined }}
-                                  >
-                                    {liberi} post{liberi === 1 ? "o" : "i"}
-                                  </span>
-                                );
-                              })()}
-                              <button
-                                onClick={() => onEdit(cd)}
-                                title="Modifica"
-                                style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => onDelete(cd.id)}
-                                title="Elimina"
-                                style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                  <path d="M10 11v6" /><path d="M14 11v6" />
-                                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                </svg>
-                              </button>
-                              {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
-                            </span>
-                          </div>
-                          {idInModifica === cd.id && renderModifica && renderModifica(cd)}
-                        </div>
-                      ) : (
-                        <div
-                          key={cd.id}
-                          onClick={() => onApriData?.(cd)}
-                          style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", marginBottom: 8, cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
-                        >
-                          <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
-                            <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                            <span style={{ minWidth: 0 }}>
-                              <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
-                              {cd.master_id && (
-                                <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                  Master: {toTitleCase(masterById[cd.master_id]?.nome || "?")}
-                                </div>
-                              )}
-                            </span>
-                          </span>
-                          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
-                            {iscritti && (() => {
-                              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-                              const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
-                              const liberi = Math.max(0, max - occupati);
-                              return (
-                                <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap" }}>
-                                  {liberi} post{liberi === 1 ? "o" : "i"}
-                                </span>
-                              );
-                            })()}
-                            {onDelete && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }}
-                                title="Elimina"
-                                style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-                              >
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6" />
-                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                  <path d="M10 11v6" /><path d="M14 11v6" />
-                                  <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                </svg>
-                              </button>
-                            )}
-                            {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
-                          </span>
-                        </div>
-                      );
-                    })}
+                    .map((cd, i) => rigaCorso(cd, i, false))}
                 </div>
               );
             })}
@@ -6956,6 +7002,7 @@ export default function App() {
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
   const [filtroMasterHome, setFiltroMasterHome] = useState("");
+  const [cronologicoHome, setCronologicoHome] = useState(false);
   const [apriFiltroCorsoHome, setApriFiltroCorsoHome] = useState(false);
   const [apriFiltroCittaHome, setApriFiltroCittaHome] = useState(false);
   const [apriFiltroMasterHome, setApriFiltroMasterHome] = useState(false);
@@ -7286,6 +7333,14 @@ export default function App() {
               />
               <div style={{ flex: "1 1 0", minWidth: 0 }}>
                 <button
+                  onClick={() => setCronologicoHome((v) => !v)}
+                  style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+                >
+                  Cronologico
+                </button>
+              </div>
+              <div style={{ flex: "1 1 0", minWidth: 0 }}>
+                <button
                   onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
                   style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
                 >
@@ -7297,6 +7352,7 @@ export default function App() {
           <DateRaggruppatePerCitta
             corsi={corsi}
             location={location}
+            cronologico={cronologicoHome}
             corsiDate={corsiDate.filter((cd) =>
               cd.data_fine >= dataOggiStr() &&
               (!filtroCorsoHome || cd.corso_id === filtroCorsoHome) &&
