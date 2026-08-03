@@ -391,4 +391,10 @@ create policy "accesso interno loghi-fonts" on storage.objects for all to anon
   using (bucket_id = 'loghi-fonts') with check (bucket_id = 'loghi-fonts');
 
 
+-- ---------------------------------------------------------
+-- 16) "Assegna modelle": trattamento + mattina/pomeriggio per ogni modella
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists tipi_modelle jsonb not null default '[]';
+
+
 notify pgrst, 'reload schema';

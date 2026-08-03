@@ -567,6 +567,12 @@ const inputStyle = {
 // ---------- helper per i calcoli di imponibile/IVA/totale ----------
 const PREZZO_MODELLA = 60;
 
+// trattamenti tra cui scegliere per ogni modella richiesta da un iscritto
+const OPZIONI_TIPO_MODELLA = [
+  "Microblading", "Sopracciglia ombretto", "Labbra", "Eyeliner",
+  "Pelo con dermografo", "Trico", "Areola", "Laminazione", "Extension", "Needling",
+];
+
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -5069,6 +5075,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [richiedeModelle, setRichiedeModelle] = useState("");
   const [numeroModelle, setNumeroModelle] = useState("");
   const [prezzoSpecialeModelle, setPrezzoSpecialeModelle] = useState("");
+  // un elemento per modella richiesta: { tipo, mattina, pomeriggio }. Il
+  // form modifica solo "tipo" — mattina/pomeriggio si impostano esclusivamente
+  // da "Assegna modelle" in Contabilità classe e qui restano invariati
+  const [tipiModelle, setTipiModelle] = useState([]);
   const [pacchettoKit, setPacchettoKit] = useState("");
   const [tagliaDivisa, setTagliaDivisa] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
@@ -5084,6 +5094,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
   const [mostraGestione, setMostraGestione] = useState(sottoVistaIniziale?.mostraGestione ?? false);
   const [linkMaster, setLinkMaster] = useState("");
+  const [linkModelle, setLinkModelle] = useState("");
   const [generandoDiplomi, setGenerandoDiplomi] = useState(false);
   const [generandoSegnaposti, setGenerandoSegnaposti] = useState(false);
 
@@ -5124,6 +5135,21 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // tiene l'elenco "tipiModelle" della stessa lunghezza del numero di
+  // modelle richiesto: aggiunge righe vuote se si aumenta il numero,
+  // taglia quelle in eccesso se si riduce (senza toccare tipo/mattina/
+  // pomeriggio delle righe che restano)
+  useEffect(() => {
+    if (richiedeModelle !== "si") { if (tipiModelle.length > 0) setTipiModelle([]); return; }
+    const n = Math.max(0, parseInt(numeroModelle, 10) || 0);
+    if (n === tipiModelle.length) return;
+    setTipiModelle((prev) => {
+      if (n < prev.length) return prev.slice(0, n);
+      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: "", mattina: false, pomeriggio: false }))];
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [richiedeModelle, numeroModelle]);
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
@@ -5465,7 +5491,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
-    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTotalePattuito(""); setQuotaSpeciale("");
+    setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTagliaDivisa("");
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -5502,6 +5528,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
     setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
+    setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
     setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
@@ -5583,6 +5610,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
+        tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio })) : [],
         pacchetto_kit: pacchettoKit.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
@@ -5718,6 +5746,34 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     } catch (e) {
       setMsg("Seleziona e copia il link qui sopra.");
     }
+  }
+
+  function generaLinkModelle() {
+    const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
+    const dataLeggibile = `${gg}-${mm}-${aaaa}`;
+    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), dataLeggibile].filter(Boolean).join("/");
+    const url = `${window.location.origin}${window.location.pathname}?modelle=${leggibile}`;
+    setLinkModelle(url);
+  }
+
+  async function copiaLinkModelle() {
+    try {
+      await navigator.clipboard.writeText(linkModelle);
+      setMsg("Link copiato.");
+    } catch (e) {
+      setMsg("Seleziona e copia il link qui sopra.");
+    }
+  }
+
+  // flagga/sflagga mattina o pomeriggio per una singola modella di un
+  // iscritto: si salva subito, niente tasto "Salva" separato
+  async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
+    const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
+    if (!iscritto) return;
+    const nuovoElenco = (iscritto.tipi_modelle || []).map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
   }
 
   async function toggleIncassato(i) {
@@ -5862,26 +5918,34 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, flexWrap: "wrap" }}>
             <button
               onClick={apriGestioneClasse}
-              style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", whiteSpace: "nowrap", textAlign: "center" }}
+              style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden" }}
             >
-              {mostraGestione ? "Esci da contabilità" : "Contabilità classe"}
+              <EtichettaAdattiva testo={mostraGestione ? "Esci da contabilità" : "Contabilità classe"} />
             </button>
             {mostraGestione && (
               <button
                 onClick={stampaDiplomi}
                 disabled={generandoDiplomi}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, whiteSpace: "nowrap", textAlign: "center" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, overflow: "hidden" }}
               >
-                {generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"}
+                <EtichettaAdattiva testo={generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"} />
               </button>
             )}
             {mostraGestione && (
               <button
                 onClick={stampaSegnaposti}
                 disabled={generandoSegnaposti}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, whiteSpace: "nowrap", textAlign: "center" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, overflow: "hidden" }}
               >
-                {generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto"}
+                <EtichettaAdattiva testo={generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto"} />
+              </button>
+            )}
+            {mostraGestione && (
+              <button
+                onClick={() => setVista("modelle")}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden" }}
+              >
+                <EtichettaAdattiva testo="Assegna modelle" />
               </button>
             )}
             {!mostraGestione && (
@@ -5889,9 +5953,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 onClick={apriIscrizione}
                 disabled={liberi <= 0}
                 title={liberi <= 0 ? "Nessun posto disponibile" : ""}
-                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: liberi <= 0 ? "default" : "pointer", opacity: liberi <= 0 ? 0.5 : 1, whiteSpace: "nowrap", textAlign: "center" }}
+                style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: liberi <= 0 ? "default" : "pointer", opacity: liberi <= 0 ? 0.5 : 1, overflow: "hidden" }}
               >
-                {liberi <= 0 ? "Completo" : "Iscrivi"}
+                <EtichettaAdattiva testo={liberi <= 0 ? "Completo" : "Iscrivi"} />
               </button>
             )}
           </div>
@@ -6244,6 +6308,26 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               <Field label="Prezzo speciale modelle (opzionale — se compilato sostituisce il calcolo automatico)">
                 <input style={inputStyle} inputMode="decimal" value={prezzoSpecialeModelle} onChange={(e) => setPrezzoSpecialeModelle(e.target.value)} />
               </Field>
+              {tipiModelle.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Trattamento di ogni modella</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {tipiModelle.map((m, idx) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, minWidth: 78, flexShrink: 0 }}>Modella {idx + 1}</span>
+                        <select
+                          style={{ ...inputStyle, flex: 1 }}
+                          value={m.tipo}
+                          onChange={(e) => setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, tipo: e.target.value } : x)))}
+                        >
+                          <option value="">— scegli —</option>
+                          {OPZIONI_TIPO_MODELLA.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -6294,6 +6378,60 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
         </div>
       )}
+
+      {vista === "modelle" && (() => {
+        const iscrittiConModelle = listaIscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+        return (
+          <div>
+            <div style={{ ...hStyle, marginBottom: 4 }}>Assegna modelle</div>
+            <div style={subStyle}>
+              Per ogni modella richiesta, spunta se viene la mattina o il pomeriggio: si salva da solo, non serve premere Salva.
+            </div>
+
+            {iscrittiConModelle.length === 0 && (
+              <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto di questa classe ha richiesto modelle.</div>
+            )}
+
+            {iscrittiConModelle.map((i) => (
+              <div key={i.id} style={{ ...cardStyle, padding: 18 }}>
+                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
+                  {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {i.tipi_modelle.map((m, idx) => (
+                    <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                      <span style={{ ...fontBody, fontSize: 14, color: NAVY }}>{m.tipo || "(trattamento non scelto)"}</span>
+                      <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 13, color: NAVY }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!m.mattina} onChange={(e) => aggiornaModellaSlot(i.id, idx, "mattina", e.target.checked)} />
+                          Mattina
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                          <input type="checkbox" checked={!!m.pomeriggio} onChange={(e) => aggiornaModellaSlot(i.id, idx, "pomeriggio", e.target.checked)} />
+                          Pomeriggio
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div style={cardStyle}>
+              <div style={hStyle}>Link per ricerca modelle</div>
+              <div style={subStyle}>Genera un link di sola lettura, senza dati personali o di pagamento, con solo i trattamenti richiesti: da mandare a chi cerca le modelle per questa classe.</div>
+              <Button variant="ghost" onClick={generaLinkModelle} style={{ width: "100%" }}>Genera link per ricerca modelle</Button>
+              {linkModelle && (
+                <div style={{ marginTop: 12 }}>
+                  <input readOnly value={linkModelle} onFocus={(e) => e.target.select()} style={{ ...inputStyle, marginBottom: 8 }} />
+                  <Button onClick={copiaLinkModelle} style={{ width: "100%" }}>Copia link</Button>
+                </div>
+              )}
+            </div>
+            {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+          </div>
+        );
+      })()}
 
       {vista === "lista" && (
         <>
@@ -6931,6 +7069,97 @@ function VistaMaster({ param }) {
   );
 }
 
+// pagina pubblica di sola lettura per chi cerca modelle per una classe:
+// solo i trattamenti richiesti, senza nessun dato personale o di pagamento
+// (stessa logica di slug di VistaMaster, ma parametro "?modelle=")
+function VistaRicercaModelle({ param }) {
+  const [dati, setDati] = useState(null);
+  const [errore, setErrore] = useState(false);
+
+  useEffect(() => {
+    async function carica() {
+      const parti = decodeURIComponent(param || "").split("/");
+      const [slugCorso, slugCitta, dataLeggibile] = parti;
+      const match = (dataLeggibile || "").match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (!slugCorso || !slugCitta || !match) { setErrore(true); return; }
+      const dataIso = `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
+
+      const [{ data: corsi }, { data: location }, { data: master }] = await Promise.all([
+        supabase.from("corsi").select("*"),
+        supabase.from("location").select("*"),
+        supabase.from("master").select("*"),
+      ]);
+      const corso = (corsi || []).find((c) => slugify(c.nome) === slugCorso);
+      const loc = (location || []).find((l) => slugify(l.nome) === slugCitta);
+      if (!corso || !loc) { setErrore(true); return; }
+
+      const { data: cd } = await supabase
+        .from("corsi_date")
+        .select("*")
+        .eq("corso_id", corso.id)
+        .eq("location_id", loc.id)
+        .eq("data_inizio", dataIso)
+        .maybeSingle();
+      if (!cd) { setErrore(true); return; }
+
+      const { data: iscritti } = await supabase.from("iscritti").select("*").eq("corso_data_id", cd.id).order("ts");
+      const masterNome = cd.master_id ? (master || []).find((m) => m.id === cd.master_id)?.nome : null;
+      setDati({ cd, corso, loc, masterNome, iscritti: iscritti || [] });
+    }
+    carica();
+  }, [param]);
+
+  if (errore) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY, padding: 20, textAlign: "center" }}>
+        Link non valido o corso non trovato.
+      </div>
+    );
+  }
+  if (!dati) {
+    return (
+      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
+        Caricamento…
+      </div>
+    );
+  }
+
+  const { cd, corso, loc, masterNome, iscritti } = dati;
+  const iscrittiConModelle = iscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+
+  return (
+    <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, marginBottom: 2 }}>{corso?.nome?.toUpperCase() || "?"} · {loc?.nome?.toUpperCase() || "?"}</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
+          {cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`}
+          {masterNome && ` — Master: ${masterNome.toUpperCase()}`} — Ricerca modelle
+        </div>
+
+        {iscrittiConModelle.length === 0 && <div style={{ color: MUTED }}>Nessuna modella richiesta per questa classe.</div>}
+
+        {iscrittiConModelle.map((i, idx) => (
+          <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ color: MUTED, fontWeight: 400, fontSize: 13 }}>{idx + 1}.</span>
+              {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {i.tipi_modelle.map((m, mi) => (
+                <div key={mi} style={{ fontSize: 14, color: NAVY }}>• {m.tipo || "(trattamento non scelto)"}</div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
+          Pagina di sola lettura — Elitederma Academy
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // pagina pubblica di sola lettura con i biglietti di viaggio caricati per una data
 function VistaBiglietti({ param }) {
   const [dati, setDati] = useState(null);
@@ -7017,6 +7246,12 @@ export default function App() {
   const paramBiglietti = new URLSearchParams(window.location.search).get("biglietti");
   if (paramBiglietti) {
     return <VistaBiglietti param={paramBiglietti} />;
+  }
+  // se il link contiene ?modelle=<id>, mostro solo l'elenco dei trattamenti
+  // richiesti per questa classe (nessun dato personale/di pagamento)
+  const paramModelle = new URLSearchParams(window.location.search).get("modelle");
+  if (paramModelle) {
+    return <VistaRicercaModelle param={paramModelle} />;
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
