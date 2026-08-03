@@ -6184,7 +6184,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
       {vista === "form" && (
         <div
-          style={cardStyle}
           onBlur={(e) => {
             // se il focus sta passando a un bottone (es. proprio "Fatto,
             // torna alla lista"), non serve il salvataggio automatico qui:
@@ -6195,6 +6194,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             if (modificandoId && !soloLettura && !(e.relatedTarget && e.relatedTarget.tagName === "BUTTON")) autosalva();
           }}
         >
+        <div style={cardStyle}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
             <div style={hStyle}>{soloLettura ? "Scheda iscritto" : modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
             {adminSbloccato && !soloLettura && (
@@ -6316,8 +6316,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             </div>
           )}
           </>
+          </fieldset>
+        </div>
 
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, margin: "28px 0 14px" }}>Dati contabili</div>
+        <div style={cardStyle}>
+          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Dati contabili</div>
           <>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 14 }}>
@@ -6458,8 +6462,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             );
           })()}
           </>
+          </fieldset>
+        </div>
 
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, margin: "28px 0 14px" }}>Dati organizzativi</div>
+        <div style={cardStyle}>
+          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Dati organizzativi</div>
           <>
           <Field label="Accordi commerciali">
             <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
@@ -6571,6 +6579,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             )}
           </div>
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+        </div>
         </div>
       )}
 
