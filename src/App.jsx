@@ -1966,17 +1966,16 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
   const [msg, setMsg] = useState("");
   const [popupNuovaData, setPopupNuovaData] = useState(null);
   const [popupEliminaData, setPopupEliminaData] = useState(null);
   const corsoByIdImp = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locByIdImp = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
-  const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
-  const [filtroCittaDate, setFiltroCittaDate] = useState("");
-  const [filtroMasterDate, setFiltroMasterDate] = useState("");
-  const [cronologicoDate, setCronologicoDate] = useState(false);
+  // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
+  // restano impostati anche se si esce da "Gestione date" e ci si torna,
+  // finché non si preme esplicitamente "Reset filtri"
   const [apriFiltroCorsoDate, setApriFiltroCorsoDate] = useState(false);
   const [apriFiltroCittaDate, setApriFiltroCittaDate] = useState(false);
   const [apriFiltroMasterDate, setApriFiltroMasterDate] = useState(false);
@@ -2103,17 +2102,17 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <button
                 onClick={() => setCronologicoDate((v) => !v)}
-                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: cronologicoDate ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoDate ? NAVY : "#fff", color: cronologicoDate ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoDate ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoDate ? NAVY : "#fff", color: cronologicoDate ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
               >
-                Cronologico
+                <EtichettaAdattiva testo="Cronologico" />
               </button>
             </div>
             <div style={{ flex: "1 1 0", minWidth: 0 }}>
               <button
                 onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-                style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
               >
-                Reset filtri
+                <EtichettaAdattiva testo="Reset filtri" />
               </button>
             </div>
         </div>
@@ -3740,6 +3739,44 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   );
 }
 
+// riduce automaticamente il font-size di un testo finché non entra nella
+// larghezza disponibile del suo contenitore, invece di troncarlo con "...":
+// su schermi stretti i tasti a pillola (Filtra corso/città/master,
+// Cronologico, Reset filtri...) hanno etichette di lunghezza diversa nello
+// stesso spazio ristretto, e un font-size fisso costringerebbe sempre a
+// mozzare quelle più lunghe
+function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
+  const ref = React.useRef(null);
+  const [fontSize, setFontSize] = useState(fontSizeBase);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    function adatta() {
+      let dimensione = fontSizeBase;
+      el.style.fontSize = `${dimensione}px`;
+      while (el.scrollWidth > el.clientWidth + 0.5 && dimensione > fontSizeMin) {
+        dimensione -= 0.5;
+        el.style.fontSize = `${dimensione}px`;
+      }
+      setFontSize(dimensione);
+    }
+    adatta();
+    const osservatore = new ResizeObserver(adatta);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testo, fontSizeBase, fontSizeMin]);
+  return { ref, fontSize };
+}
+function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
+  const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
+  return (
+    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "nowrap" }}>
+      {testo}
+    </span>
+  );
+}
+
 // tasto filtro "a pillola": pieno/scuro quando un valore è scelto,
 // altrimenti contornato; al click apre sotto di sé un <select> nativo
 // con l'elenco delle opzioni. Usato per i filtri corso/città/master
@@ -3750,13 +3787,13 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
       <button
         onClick={onToggle}
         style={{
-          ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20,
+          ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block",
+          overflow: "hidden", width: "100%", display: "block",
         }}
       >
-        {valore ? etichettaAttiva : etichetta}
+        <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />
       </button>
       {aperto && (
         <select
@@ -7003,6 +7040,14 @@ export default function App() {
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
   const [filtroMasterHome, setFiltroMasterHome] = useState("");
   const [cronologicoHome, setCronologicoHome] = useState(false);
+  // stessi filtri ma per "Gestione date": vivono qui (non dentro
+  // GestioneDate) perché quel componente viene smontato/rimontato ogni
+  // volta che si esce e si rientra nella view, e altrimenti perderebbe i
+  // filtri impostati in precedenza
+  const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
+  const [filtroCittaDate, setFiltroCittaDate] = useState("");
+  const [filtroMasterDate, setFiltroMasterDate] = useState("");
+  const [cronologicoDate, setCronologicoDate] = useState(false);
   const [apriFiltroCorsoHome, setApriFiltroCorsoHome] = useState(false);
   const [apriFiltroCittaHome, setApriFiltroCittaHome] = useState(false);
   const [apriFiltroMasterHome, setApriFiltroMasterHome] = useState(false);
@@ -7334,17 +7379,17 @@ export default function App() {
               <div style={{ flex: "1 1 0", minWidth: 0 }}>
                 <button
                   onClick={() => setCronologicoHome((v) => !v)}
-                  style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+                  style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
                 >
-                  Cronologico
+                  <EtichettaAdattiva testo="Cronologico" />
                 </button>
               </div>
               <div style={{ flex: "1 1 0", minWidth: 0 }}>
                 <button
                   onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-                  style={{ ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%", display: "block" }}
+                  style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "block" }}
                 >
-                  Reset filtri
+                  <EtichettaAdattiva testo="Reset filtri" />
                 </button>
               </div>
           </div>
@@ -7389,7 +7434,14 @@ export default function App() {
       )}
 
       {view === "gestionedate" && (
-        <GestioneDate corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData} />
+        <GestioneDate
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
+          filtroCorsoDate={filtroCorsoDate} setFiltroCorsoDate={setFiltroCorsoDate}
+          filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
+          filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
+          cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
+        />
       )}
 
       {view === "fontdiplomi" && (
