@@ -5135,6 +5135,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [note, setNote] = useState("");
   const [tutor, setTutor] = useState("");
   const [telefono, setTelefono] = useState("");
+  // dati di fatturazione: spuntando "Richiede fattura" compaiono i campi
+  // sotto; deflaggando spariscono E si azzerano (nessun dato residuo)
+  const [richiedeFattura, setRichiedeFattura] = useState(false);
+  const [fatturaDitta, setFatturaDitta] = useState("");
+  const [fatturaIndirizzo, setFatturaIndirizzo] = useState("");
+  const [fatturaCivico, setFatturaCivico] = useState("");
+  const [fatturaCitta, setFatturaCitta] = useState("");
+  const [fatturaProv, setFatturaProv] = useState("");
+  const [fatturaCap, setFatturaCap] = useState("");
+  const [fatturaPiva, setFatturaPiva] = useState("");
+  const [fatturaCodDest, setFatturaCodDest] = useState("");
+  const [fatturaPec, setFatturaPec] = useState("");
+  function svuotaCampiFattura() {
+    setFatturaDitta(""); setFatturaIndirizzo(""); setFatturaCivico("");
+    setFatturaCitta(""); setFatturaProv(""); setFatturaCap("");
+    setFatturaPiva(""); setFatturaCodDest(""); setFatturaPec("");
+  }
   // iscrizione inserita ora ma relativa a un corso già passato: non deve
   // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
   // momento in cui viene salvata nel database, non la data del corso)
@@ -5565,6 +5582,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTagliaDivisa("");
+    setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
 
@@ -5597,6 +5615,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       metodo: i.saldo_metodo || "",
     });
     setAccordiCommerciali(i.accordi_commerciali || "");
+    setRichiedeFattura(i.richiede_fattura === true);
+    setFatturaDitta(i.fattura_ditta || "");
+    setFatturaIndirizzo(i.fattura_indirizzo || "");
+    setFatturaCivico(i.fattura_civico || "");
+    setFatturaCitta(i.fattura_citta || "");
+    setFatturaProv(i.fattura_prov || "");
+    setFatturaCap(i.fattura_cap || "");
+    setFatturaPiva(i.fattura_piva || "");
+    setFatturaCodDest(i.fattura_cod_dest || "");
+    setFatturaPec(i.fattura_pec || "");
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
     setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
@@ -5679,6 +5707,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
         saldo_metodo: pagSaldo.metodo || null,
         accordi_commerciali: accordiCommerciali.trim() || null,
+        richiede_fattura: richiedeFattura,
+        fattura_ditta: richiedeFattura ? (fatturaDitta.trim() || null) : null,
+        fattura_indirizzo: richiedeFattura ? (fatturaIndirizzo.trim() || null) : null,
+        fattura_civico: richiedeFattura ? (fatturaCivico.trim() || null) : null,
+        fattura_citta: richiedeFattura ? (fatturaCitta.trim() || null) : null,
+        fattura_prov: richiedeFattura ? (fatturaProv.trim() || null) : null,
+        fattura_cap: richiedeFattura ? (fatturaCap.trim() || null) : null,
+        fattura_piva: richiedeFattura ? (fatturaPiva.trim() || null) : null,
+        fattura_cod_dest: richiedeFattura ? (fatturaCodDest.trim() || null) : null,
+        fattura_pec: richiedeFattura ? (fatturaPec.trim() || null) : null,
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
@@ -6197,14 +6235,79 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
           </div>
-          <div style={{ display: "flex", gap: 14 }}>
-            <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+            <div style={{ flex: "2 1 140px" }}>
               <Field label="Tutor"><input value={tutor} onChange={(e) => setTutor(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: "2 1 140px" }}>
               <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
+            <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
+                <input
+                  type="checkbox"
+                  checked={richiedeFattura}
+                  onChange={(e) => { setRichiedeFattura(e.target.checked); if (!e.target.checked) svuotaCampiFattura(); }}
+                />
+                Richiede fattura
+              </label>
+            </div>
           </div>
+
+          {richiedeFattura && (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+              <Field label="Nome ditta">
+                <input value={fatturaDitta} onChange={(e) => setFatturaDitta(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+              </Field>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ flex: 3 }}>
+                  <Field label="Indirizzo">
+                    <input value={fatturaIndirizzo} onChange={(e) => setFatturaIndirizzo(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="N. civico">
+                    <input maxLength={5} value={fatturaCivico} onChange={(e) => setFatturaCivico(e.target.value.toUpperCase().slice(0, 5))} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </Field>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ flex: 2 }}>
+                  <Field label="Città">
+                    <input value={fatturaCitta} onChange={(e) => setFatturaCitta(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Prov.">
+                    <input maxLength={2} value={fatturaProv} onChange={(e) => setFatturaProv(e.target.value.toUpperCase().slice(0, 2))} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Cap">
+                    <input maxLength={5} value={fatturaCap} onChange={(e) => setFatturaCap(e.target.value.slice(0, 5))} style={inputStyle} />
+                  </Field>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="P.IVA">
+                    <input value={fatturaPiva} onChange={(e) => setFatturaPiva(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Cod. Dest.">
+                    <input value={fatturaCodDest} onChange={(e) => setFatturaCodDest(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="PEC">
+                    <input value={fatturaPec} onChange={(e) => setFatturaPec(e.target.value)} style={inputStyle} />
+                  </Field>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
@@ -6614,16 +6717,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
                       <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, margin: "16px 0" }} />
 
-                      <div
-                        onClick={() => toggleRicontattato(i)}
-                        style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}
-                      >
-                        <input type="checkbox" checked={!!i.ricontattato} readOnly style={{ width: 20, height: 20, pointerEvents: "none" }} />
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, ...fontBody, fontSize: 14, color: NAVY }}>
                         Ricontattato
-                      </div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                        <span onClick={() => toggleRicontattato(i)} style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
-                        <span onClick={() => toggleRicontattato(i)} style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <span onClick={() => toggleRicontattato(i)} title="Non ricontattato" style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#E0E0E0" : "#C0392B", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                          <span onClick={() => toggleRicontattato(i)} title="Ricontattato" style={{ width: 20, height: 20, borderRadius: "50%", background: i.ricontattato ? "#2E7D32" : "#E0E0E0", border: "1px solid rgba(0,0,0,0.1)", cursor: "pointer" }} />
+                        </div>
                       </div>
                       <textarea
                         rows={2}
@@ -6632,6 +6731,23 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         onBlur={(e) => salvaNotaRicontatto(i.id, e.target.value.toUpperCase())}
                         style={{ ...inputStyle, marginTop: 10, fontSize: 8, textTransform: "uppercase", resize: "vertical", width: "100%", boxSizing: "border-box" }}
                       />
+
+                      {i.richiede_fattura && (
+                        // marginBottom generoso: "Eccezione diploma" più sotto
+                        // è posizionato in absolute (bottom:20) rispetto
+                        // all'intera colonna, quindi NON riserva da solo lo
+                        // spazio necessario nel flusso normale — senza questo
+                        // margine il testo di questo riquadro (specie con PEC)
+                        // finirebbe nascosto dietro al tasto/dettagli sotto
+                        <div style={{ marginTop: 12, marginBottom: 100, padding: 10, borderRadius: 8, background: BG_CHIARO, ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.6 }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4, textAlign: "center" }}>Dati fatturazione</div>
+                          <div>Ditta: {i.fattura_ditta || "—"}</div>
+                          <div>Ind. {i.fattura_indirizzo || "—"} n. {i.fattura_civico || "—"}</div>
+                          <div>Città {i.fattura_citta || "—"} prov {i.fattura_prov || "—"} cap {i.fattura_cap || "—"}</div>
+                          <div>P.IVA {i.fattura_piva || "—"} C.Dest {i.fattura_cod_dest || "—"}</div>
+                          {i.fattura_pec && <div>PEC {i.fattura_pec}</div>}
+                        </div>
+                      )}
 
                       {(() => {
                         const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
