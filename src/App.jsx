@@ -3625,13 +3625,16 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         {mostraOrario && (
           <>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-              <input type="checkbox" checked={!!modella.mattina} onChange={(e) => onSalva("mattina", e.target.checked)} />
+            {/* etichetta sopra il quadratino invece che affiancata: occupa
+                molto meno spazio in orizzontale, lasciandone di più al
+                campo Tel. che altrimenti veniva mozzato */}
+            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
               MAT
+              <input type="checkbox" checked={!!modella.mattina} onChange={(e) => onSalva("mattina", e.target.checked)} />
             </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-              <input type="checkbox" checked={!!modella.pomeriggio} onChange={(e) => onSalva("pomeriggio", e.target.checked)} />
+            <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
               POM
+              <input type="checkbox" checked={!!modella.pomeriggio} onChange={(e) => onSalva("pomeriggio", e.target.checked)} />
             </label>
           </>
         )}
@@ -3640,9 +3643,9 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           onBlur={() => { if (nome !== (modella.nome_modella || "")) onSalva("nome_modella", nome); }}
-          style={{ ...inputStyle, flex: "2 1 160px", padding: "6px 10px" }}
+          style={{ ...inputStyle, flex: "2 1 150px", padding: "6px 10px" }}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 110px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 140px" }}>
           <input
             placeholder="Tel."
             value={telefono}
@@ -3849,7 +3852,7 @@ function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
 function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
   const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
   return (
-    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "normal", textAlign: "center", lineHeight: 1.25, wordBreak: "keep-all", overflowWrap: "normal" }}>
+    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.25, wordBreak: "keep-all", overflowWrap: "normal" }}>
       {testo}
     </span>
   );
@@ -6036,7 +6039,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               onClick={apriGestioneClasse}
               style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
             >
-              <EtichettaAdattiva testo={mostraGestione ? "Esci da contabilità" : "Contabilità classe"} />
+              <EtichettaAdattiva testo={mostraGestione ? "Esci da\ncontabilità" : "Contabilità\nclasse"} />
             </button>
             {mostraGestione && (
               <button
@@ -6044,7 +6047,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 disabled={generandoDiplomi}
                 style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoDiplomi ? "default" : "pointer", opacity: generandoDiplomi ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
-                <EtichettaAdattiva testo={generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi"} />
+                <EtichettaAdattiva testo={generandoDiplomi ? "Genero i diplomi…" : "Stampa\ndiplomi"} />
               </button>
             )}
             {mostraGestione && (
@@ -6053,7 +6056,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 disabled={generandoSegnaposti}
                 style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: generandoSegnaposti ? "default" : "pointer", opacity: generandoSegnaposti ? 0.5 : 1, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
-                <EtichettaAdattiva testo={generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto"} />
+                <EtichettaAdattiva testo={generandoSegnaposti ? "Genero i segnaposti…" : "Stampa\nSegnaposto"} />
               </button>
             )}
             {mostraGestione && (
@@ -6061,7 +6064,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 onClick={() => setVista("modelle")}
                 style={{ ...fontDisplay, flex: 1, background: "transparent", border: "none", borderRadius: 26, padding: "10px 14px", fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}
               >
-                <EtichettaAdattiva testo="Assegna modelle" />
+                <EtichettaAdattiva testo={"Assegna\nmodelle"} />
               </button>
             )}
             {!mostraGestione && (
@@ -6779,7 +6782,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         // spazio necessario nel flusso normale — senza questo
                         // margine il testo di questo riquadro (specie con PEC)
                         // finirebbe nascosto dietro al tasto/dettagli sotto
-                        <div style={{ marginTop: 12, marginBottom: 100, padding: 10, borderRadius: 8, background: BG_CHIARO, ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.6 }}>
+                        <div style={{ marginTop: 12, marginBottom: 100, padding: 10, borderRadius: 8, background: "#fff", border: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.6 }}>
                           <div style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4, textAlign: "center" }}>Dati fatturazione</div>
                           <div>Ditta: {i.fattura_ditta || "—"}</div>
                           <div>Ind. {i.fattura_indirizzo || "—"} n. {i.fattura_civico || "—"}</div>
