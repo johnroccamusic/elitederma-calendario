@@ -1636,12 +1636,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
           ) : (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
               {caricoAssegnazioni.map((p) => (
-                <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "5px 12px 5px 5px", background: "#fff" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px 6px 6px", background: "#fff" }}>
+                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", ...fontScheda, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
                     {inizialiNomeLogo(p.nome)}
                   </div>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
-                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 6, minWidth: 20, textAlign: "center", padding: "2px 6px" }}>{p.n}</span>
+                  <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
+                  <span style={{ ...fontScheda, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
                 </div>
               ))}
             </div>
