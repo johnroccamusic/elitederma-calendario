@@ -3311,7 +3311,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
           <div key={c.nome} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, marginTop: idx > 0 ? 0 : 0 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <span style={{ width: 4, height: 22, borderRadius: 2, background: "#C9A26D", flexShrink: 0 }} />
+                <IconaPin size={20} />
                 <span style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>{toTitleCase(c.nome)}</span>
               </div>
               <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
