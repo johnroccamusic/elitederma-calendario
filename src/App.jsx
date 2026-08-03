@@ -51,7 +51,7 @@ function annoStagioneDaData(dataStr) {
   return mese >= 9 ? anno : anno - 1;
 }
 function stagioneCorrente() { return annoStagioneDaData(dataOggiStr()); }
-function etichettaStagione(annoInizio) { return `Stagione ${annoInizio}-${annoInizio + 1}`; }
+function etichettaStagione(annoInizio) { return `Stagione ${annoInizio}–${annoInizio + 1}`; }
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_ABBR = ["GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC"];
@@ -471,6 +471,45 @@ function DecorazioneOndeHero() {
       <path d="M70 180C120 140 140 100 120 30" stroke={GOLD} strokeWidth="1" opacity="0.4" />
       <path d="M100 180C150 140 170 100 150 20" stroke={GOLD} strokeWidth="1" opacity="0.3" />
       <path d="M130 180C180 140 200 100 180 10" stroke={GOLD} strokeWidth="1" opacity="0.2" />
+    </svg>
+  );
+}
+// icone della pagina "Assegnazione Master"
+function IconaLucchetto({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+function IconaSpuntaCerchio({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><path d="M8.5 12.3l2.4 2.4 5-5.2" />
+    </svg>
+  );
+}
+function IconaInfoCerchio({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><path d="M12 11v5.5" /><path d="M12 7.6h.01" />
+    </svg>
+  );
+}
+function IconaGrigliaTabella({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 10h18M9 4v16" />
+    </svg>
+  );
+}
+function IconaCalendarioLeve({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
     </svg>
   );
 }
@@ -1179,6 +1218,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const [filtroAssistente, setFiltroAssistente] = useState("");
   const [filtroLeva, setFiltroLeva] = useState("");
   const [apriFiltro, setApriFiltro] = useState(""); // quale tendina filtro è aperta, "" = nessuna
+  const [ricercaTesto, setRicercaTesto] = useState("");
 
   // stagione bloccata (persistita): se assente, la stagione mostrata segue
   // sempre la data odierna e passa automaticamente a quella nuova a
@@ -1222,6 +1262,18 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     .filter((cd) => !filtroMaster || cd.master_id === filtroMaster)
     .filter((cd) => !filtroAssistente || (cd.assistente_ids || []).includes(filtroAssistente))
     .filter((cd) => !filtroLeva || (cd.leva_ids || []).includes(filtroLeva))
+    .filter((cd) => {
+      const q = ricercaTesto.trim().toLowerCase();
+      if (!q) return true;
+      const nomiAssistenti = (cd.assistente_ids || []).map((id) => assistente.find((a) => a.id === id)?.nome || "");
+      const nomiLeve = (cd.leva_ids || []).map((id) => leva.find((l) => l.id === id)?.nome || "");
+      const campi = [
+        corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome,
+        master.find((m) => m.id === cd.master_id)?.nome,
+        ...nomiAssistenti, ...nomiLeve,
+      ];
+      return campi.some((c) => (c || "").toLowerCase().includes(q));
+    })
     .slice()
     .sort((a, b) =>
       a.data_inizio.localeCompare(b.data_inizio)
@@ -1239,18 +1291,29 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   });
   const chiaviMese = Object.keys(gruppiMese).sort();
 
-  // quanti corsi (tra le edizioni future della stagione vista, indipendentemente
-  // dagli altri filtri attivi) ha già ricevuto ciascuna master, per la barra
-  // riassuntiva in alto
-  const conteggioMaster = {};
+  // "Carico assegnazioni": quante volte ciascuna persona compare come
+  // master, assistente o leva (tra le edizioni future della stagione
+  // vista, indipendentemente dagli altri filtri attivi) — un'unica
+  // classifica del carico di lavoro complessivo, non solo delle master
+  const conteggioCarico = {};
   corsiDate
-    .filter((cd) => cd.data_fine >= dataOggiStr() && cd.master_id && annoStagioneDaData(cd.data_inizio) === stagioneVista)
+    .filter((cd) => cd.data_fine >= dataOggiStr() && annoStagioneDaData(cd.data_inizio) === stagioneVista)
     .forEach((cd) => {
-      conteggioMaster[cd.master_id] = (conteggioMaster[cd.master_id] || 0) + 1;
+      if (cd.master_id) {
+        const nome = master.find((m) => m.id === cd.master_id)?.nome;
+        if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
+      }
+      (cd.assistente_ids || []).forEach((id) => {
+        const nome = assistente.find((a) => a.id === id)?.nome;
+        if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
+      });
+      (cd.leva_ids || []).forEach((id) => {
+        const nome = leva.find((l) => l.id === id)?.nome;
+        if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
+      });
     });
-  const masterConteggi = Object.entries(conteggioMaster)
-    .map(([id, n]) => ({ nome: master.find((m) => m.id === id)?.nome, n }))
-    .filter((x) => x.nome)
+  const caricoAssegnazioni = Object.entries(conteggioCarico)
+    .map(([nome, n]) => ({ nome, n }))
     .sort((a, b) => b.n - a.n);
 
   async function salvaCampo(id, campo, valore) {
@@ -1308,20 +1371,20 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 
   const fontScheda = { fontFamily: "'Sofia Sans Condensed',sans-serif" };
   const bordoV = `1px solid ${CREAM_BORDER}`;
-  const celStyle = { padding: "6px 5px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontScheda, fontSize: 8, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: BG };
-  const campoStyle = { ...fontScheda, fontSize: 10, padding: "5px 6px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: "100%", boxSizing: "border-box", background: "#fff" };
+  const celStyle = { padding: "10px 8px", borderBottom: bordoV, verticalAlign: "middle" };
+  const thStyle = { ...celStyle, ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: "#F7F5EF", borderBottom: `1px solid ${CREAM_BORDER}` };
+  const campoStyle = { ...fontScheda, fontSize: 12, fontWeight: 600, padding: "7px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, width: "100%", boxSizing: "border-box", background: "#fff", color: NAVY };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
       style={{
-        ...fontScheda, fontSize: 9, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-        border: `1px solid ${attivo ? "#2E7D32" : "#C0392B"}`, borderRadius: 7,
-        padding: size === "piccolo" ? "4px 9px" : "5px 10px",
+        ...fontScheda, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        border: "none", borderRadius: 8,
+        padding: size === "piccolo" ? "5px 12px" : "6px 14px",
         background: attivo ? "#E8F5E9" : "#FDECEC", color: attivo ? "#2E7D32" : "#C0392B",
       }}
     >
-      {attivo ? "SI" : "NO"}
+      {attivo ? "Sì" : "NO"}
     </button>
   );
 
@@ -1391,16 +1454,23 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     );
   }
 
-  function filtroDropdown(chiave, etichetta, valore, setValore, opzioni) {
+  function filtroDropdown(chiave, etichetta, valore, setValore, opzioni, Icona) {
     return (
-      <div style={{ position: "relative" }}>
-        <Button
-          variant={valore ? "primary" : "ghost"}
-          style={fontScheda}
+      <div style={{ position: "relative", flex: "1 1 150px", minWidth: 130 }}>
+        <button
           onClick={() => setApriFiltro(apriFiltro === chiave ? "" : chiave)}
+          style={{
+            ...fontScheda, width: "100%", display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
+            padding: "10px 12px", borderRadius: 10, cursor: "pointer",
+            border: `1px solid ${valore ? NAVY : CREAM_BORDER}`, background: "#fff", color: NAVY,
+          }}
         >
-          {valore ? opzioni.find((o) => o.id === valore)?.nome?.toUpperCase() : etichetta}
-        </Button>
+          {Icona && <Icona size={16} color={valore ? NAVY : MUTED} />}
+          <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {valore ? opzioni.find((o) => o.id === valore)?.nome?.toUpperCase() : etichetta}
+          </span>
+          <IconaChevronGiuErp size={13} color={MUTED} />
+        </button>
         {apriFiltro === chiave && (
           <select
             autoFocus
@@ -1419,13 +1489,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 
   function tabellaMese(righeMese) {
     return (
-      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginBottom: 28 }}>
+      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, marginBottom: 28, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.2)" }}>
         <table style={{ borderCollapse: "collapse", width: larghezzaTabella, tableLayout: "fixed" }}>
           <colgroup>{COLONNE.map((c, i) => <col key={i} style={{ width: c.larghezza }} />)}</colgroup>
           <thead>
             <tr>
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
-                <th key={i} style={{ ...thStyle, position: "relative", borderRight: i === ETICHETTE_COLONNE_MASTER.length - 1 ? "none" : bordoV }}>
+                <th key={i} style={{ ...thStyle, position: "relative" }}>
                   {etichetta}
                   <div
                     onPointerDown={(e) => iniziaRidimensionamento(e, i)}
@@ -1478,8 +1548,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                   <td style={celStyle}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "nowrap" }}>
                       {semaforo(cd.viaggio_prenotato, () => salvaCampo(cd.id, "viaggio_prenotato", !cd.viaggio_prenotato), "piccolo")}
-                      <Button variant="ghost" onClick={() => copiaBiglietti(cd)} style={{ ...fontScheda, fontSize: 8, padding: "4px 6px" }}>Copia</Button>
-                      <label style={{ ...fontScheda, fontSize: 8, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "4px 6px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                      <button onClick={() => copiaBiglietti(cd)} style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: "#2563EB", background: "#fff", border: "1px solid #2563EB", borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>Copia</button>
+                      <label style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>
                         +
                         <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files); e.target.value = ""; }} />
                       </label>
@@ -1500,7 +1570,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                       {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                     </select>
                   </td>
-                  <td style={{ ...celStyle, borderRight: "none" }}>
+                  <td style={celStyle}>
                     <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
                   </td>
                 </tr>
@@ -1513,73 +1583,121 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Assegnazione Master" onBack={onBack} />
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 18 }}>
+          <div>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 4 }}>Team</div>
+            <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Assegnazione Master</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Organizza il team, gli assistenti e le trasferte per ogni corso</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <select
+              value={stagioneVista}
+              onChange={(e) => setStagioneVista(parseInt(e.target.value, 10))}
+              style={{ ...inputStyle, ...fontBody, fontWeight: 600, width: "auto", borderRadius: 10 }}
+            >
+              {stagioniDisponibili.map((anno) => (
+                <option key={anno} value={anno}>{etichettaStagione(anno)}</option>
+              ))}
+            </select>
+            {stagioneBloccata === stagioneVista ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 7, background: "#EEF1FA", border: "1px solid #D9DEF2", borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
+                <IconaSpuntaCerchio size={15} color="#2E7D32" /> Stagione di default
+              </div>
+            ) : (
+              <button
+                onClick={bloccaStagioneDiDefault}
+                style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                Imposta come default
+              </button>
+            )}
+            {stagioneBloccata != null && (
+              <button
+                onClick={sbloccaStagione}
+                style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 16px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <IconaLucchetto size={15} color="#fff" /> Sblocca
+              </button>
+            )}
+          </div>
+        </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", marginBottom: 10 }}>
-        <select
-          value={stagioneVista}
-          onChange={(e) => setStagioneVista(parseInt(e.target.value, 10))}
-          style={{ ...inputStyle, ...fontScheda, width: "auto" }}
-        >
-          {stagioniDisponibili.map((anno) => (
-            <option key={anno} value={anno}>{etichettaStagione(anno)}</option>
-          ))}
-        </select>
-        <Button variant="ghost" style={fontScheda} onClick={bloccaStagioneDiDefault}>
-          {stagioneBloccata === stagioneVista ? "Stagione di default ✓" : "Setta di default"}
-        </Button>
-        {stagioneBloccata != null && (
-          <Button variant="ghost" style={fontScheda} onClick={sbloccaStagione}>Sblocca</Button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#EEF1FA", border: "1px solid #D9DEF2", borderRadius: 10, padding: "11px 16px", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 24 }}>
+          <IconaInfoCerchio size={16} color="#4A5FBF" />
+          Solo le edizioni future · Le modifiche vengono salvate automaticamente
+        </div>
+
+        <div style={{ ...cardStyle, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.15)", marginBottom: 24 }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>Carico assegnazioni</div>
+          {caricoAssegnazioni.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assegnazione ancora.</div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {caricoAssegnazioni.map((p) => (
+                <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "5px 12px 5px 5px", background: "#fff" }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    {inizialiNomeLogo(p.nome)}
+                  </div>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
+                  <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 6, minWidth: 20, textAlign: "center", padding: "2px 6px" }}>{p.n}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ position: "relative", flex: "2 1 220px", minWidth: 180 }}>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", display: "flex", pointerEvents: "none" }}>
+              <IconaRicercaErp size={16} color={MUTED} />
+            </span>
+            <input
+              value={ricercaTesto}
+              onChange={(e) => setRicercaTesto(e.target.value)}
+              placeholder="Cerca corso, città o persona"
+              style={{ ...inputStyle, ...fontBody, fontSize: 13, paddingLeft: 36, borderRadius: 10, width: "100%", boxSizing: "border-box" }}
+            />
+          </div>
+          {filtroDropdown("corso", "Corso", filtroCorso, setFiltroCorso, corsi, IconaLaureaErp)}
+          {filtroDropdown("citta", "Città", filtroCitta, setFiltroCitta, location, IconaPin)}
+          {filtroDropdown("master", "Master", filtroMaster, setFiltroMaster, master, IconaMasterRiga)}
+          {filtroDropdown("assistente", "Assistente", filtroAssistente, setFiltroAssistente, assistente, IconaAssistentiRiga)}
+          {filtroDropdown("leva", "Leve", filtroLeva, setFiltroLeva, leva, IconaCalendarioLeve)}
+          {(filtriAttivi || ricercaTesto) && (
+            <button
+              onClick={() => { setFiltroCorso(""); setFiltroCitta(""); setFiltroMaster(""); setFiltroAssistente(""); setFiltroLeva(""); setApriFiltro(""); setRicercaTesto(""); }}
+              style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: GOLD, background: "transparent", border: "none", cursor: "pointer", whiteSpace: "nowrap", padding: "10px 4px" }}
+            >
+              Azzera filtri
+            </button>
+          )}
+        </div>
+
+        {chiaviMese.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Nessuna data in programmazione.</div>
         )}
-      </div>
-      <div style={{ ...fontScheda, fontSize: 13, color: MUTED, marginBottom: 18 }}>
-        Solo le edizioni future. Ogni modifica si salva da sola. Scorri lateralmente per vedere tutte le colonne.
-      </div>
-
-      <div
-        style={{
-          position: "sticky", top: 0, zIndex: 20, background: "#fff",
-          borderTop: `2px solid ${NAVY}`, borderBottom: `1px solid ${CREAM_BORDER}`,
-          padding: "10px 12px", marginBottom: 24, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center",
-        }}
-      >
-        <span style={{ ...fontScheda, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Corsi assegnati:</span>
-        {masterConteggi.length === 0 && <span style={{ ...fontScheda, fontSize: 13, color: MUTED }}>nessuno ancora</span>}
-        {masterConteggi.map((m) => (
-          <span key={m.nome} style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 8, padding: "4px 10px", whiteSpace: "nowrap" }}>
-            {m.nome.toUpperCase()} {m.n}
-          </span>
+        {chiaviMese.map((chiave) => (
+          <div key={chiave}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{gruppiMese[chiave].etichetta.toUpperCase()}</div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+                  {gruppiMese[chiave].righe.length} cors{gruppiMese[chiave].righe.length === 1 ? "o" : "i"} visibil{gruppiMese[chiave].righe.length === 1 ? "e" : "i"}
+                </div>
+              </div>
+              <div
+                title="Al momento è disponibile solo la vista tabella"
+                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", opacity: 0.6, cursor: "default", background: "#fff" }}
+              >
+                <IconaGrigliaTabella size={15} color={MUTED} /> Vista tabella <IconaChevronGiuErp size={12} color={MUTED} />
+              </div>
+            </div>
+            {tabellaMese(gruppiMese[chiave].righe)}
+          </div>
         ))}
       </div>
-
-      <div style={{ display: "flex", gap: 10, marginBottom: 24, flexWrap: "wrap" }}>
-        {filtroDropdown("corso", "Filtra per corso", filtroCorso, setFiltroCorso, corsi)}
-        {filtroDropdown("citta", "Filtra per città", filtroCitta, setFiltroCitta, location)}
-        {filtroDropdown("master", "Filtra per master", filtroMaster, setFiltroMaster, master)}
-        {filtroDropdown("assistente", "Filtra per assistente", filtroAssistente, setFiltroAssistente, assistente)}
-        {filtroDropdown("leva", "Filtra per leva", filtroLeva, setFiltroLeva, leva)}
-        {filtriAttivi && (
-          <Button
-            variant="ghost"
-            onClick={() => { setFiltroCorso(""); setFiltroCitta(""); setFiltroMaster(""); setFiltroAssistente(""); setFiltroLeva(""); setApriFiltro(""); }}
-          >
-            Cancella filtri
-          </Button>
-        )}
-      </div>
-
-      {chiaviMese.length === 0 && (
-        <div style={{ ...fontScheda, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Nessuna data in programmazione.</div>
-      )}
-      {chiaviMese.map((chiave) => (
-        <div key={chiave}>
-          <div style={{ ...fontScheda, fontSize: 20, fontWeight: 800, color: NAVY, textAlign: "left", marginBottom: 10 }}>
-            {gruppiMese[chiave].etichetta.toUpperCase()}
-          </div>
-          {tabellaMese(gruppiMese[chiave].righe)}
-        </div>
-      ))}
     </div>
   );
 }
