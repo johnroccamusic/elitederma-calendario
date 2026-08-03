@@ -225,6 +225,110 @@ function IconaDisponibilitaAccento({ size = 26, color = GOLD }) {
     </svg>
   );
 }
+// icone della pagina "Setting" (intestazione dei 3 gruppi + voci di lista)
+function IconaChevronDestra({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6l6 6-6 6" />
+    </svg>
+  );
+}
+function IconaGruppoTeam({ size = 22, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8" r="3.2" />
+      <path d="M2.7 20c0-3.8 2.8-6 6.3-6s6.3 2.2 6.3 6" />
+      <circle cx="17" cy="8.5" r="2.4" />
+      <path d="M15.2 14.3c2.9.3 5.8 2 5.8 5.7" />
+    </svg>
+  );
+}
+function IconaLeveRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3 3 8l9 5 9-5-9-5Z" />
+      <path d="M3 13l9 5 9-5" />
+      <path d="M3 18l9 5 9-5" />
+    </svg>
+  );
+}
+function IconaAssistentiRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8.5" cy="8" r="3" />
+      <path d="M2.5 20c0-3.6 2.7-5.7 6-5.7s6 2.1 6 5.7" />
+      <circle cx="16.3" cy="8.7" r="2.3" />
+      <path d="M14.7 14.5c2.7.3 5.3 1.9 5.3 5.3" />
+    </svg>
+  );
+}
+function IconaMasterRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="8" r="4" />
+      <path d="M3 20c0-4 3.1-6.5 7-6.5" />
+      <path d="M14 14.5a2.3 2.3 0 0 1 3.3-2.1" />
+      <path d="M20.3 15.4a2.3 2.3 0 0 1-3.3 2.1" />
+      <path d="M15.6 14.9l1.2 2.1" />
+    </svg>
+  );
+}
+function IconaGruppoSediCorsi({ size = 22, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="12" height="17" rx="1.5" />
+      <path d="M7 8h.01M11 8h.01M7 12h.01M11 12h.01M7 16h.01M11 16h.01" />
+      <path d="M15 21v-6a5 5 0 0 1 5 5v1" />
+      <circle cx="18.5" cy="14" r="0.6" fill={color} stroke="none" />
+    </svg>
+  );
+}
+function IconaCorsoRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5.5C10.5 4.3 8 3.7 3 4v14.5c5 0 7.5.6 9 1.5" />
+      <path d="M12 5.5C13.5 4.3 16 3.7 21 4v14.5c-5 0-7.5.6-9 1.5" />
+      <path d="M12 5.5v15" />
+    </svg>
+  );
+}
+function IconaHotelRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="1.5" />
+      <path d="M8 7h.01M13 7h.01M16 7h.01M8 11h.01M13 11h.01M16 11h.01M8 15h.01M13 15h.01M16 15h.01" />
+      <path d="M9 21v-3.5h6V21" />
+    </svg>
+  );
+}
+function IconaGruppoDocumenti({ size = 22, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2.5h9l3 3V17a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17V4A1.5 1.5 0 0 1 6 2.5Z" />
+      <path d="M8 7h6M8 10.5h6" />
+      <circle cx="9.5" cy="18" r="3" />
+      <path d="M7.9 20.6L7.2 23.5l2.3-1.3 2.3 1.3-.7-2.9" />
+    </svg>
+  );
+}
+function IconaDiplomaRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2.5h9l3 3V17a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 17V4A1.5 1.5 0 0 1 6 2.5Z" />
+      <path d="M8 7h6M8 10.5h6" />
+      <circle cx="9.5" cy="18" r="3" />
+      <path d="M7.9 20.6L7.2 23.5l2.3-1.3 2.3 1.3-.7-2.9" />
+    </svg>
+  );
+}
+function IconaFormeRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="9" r="6" />
+      <path d="M16.5 8l5 12h-11l6-12Z" />
+    </svg>
+  );
+}
 // data estesa in italiano, es. "27 luglio 2026" (usata per raggruppare le
 // ultime iscrizioni per giorno di inserimento)
 function fmtDataLunga(dataStr) {
@@ -1648,6 +1752,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 
 // ---------- Impostazioni ----------
 function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
+  const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
@@ -1777,32 +1882,71 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
     ricarica();
   }
 
+  const gruppiSetting = [
+    {
+      chiave: "team", titolo: "Team", coloreBg: "#F5E6C8", Icona: IconaGruppoTeam,
+      voci: [
+        { etichetta: "Definisci Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
+        { etichetta: "Definisci Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
+        { etichetta: "Definisci Master", Icona: IconaMasterRiga, onClick: () => setShowMasterModal(true) },
+      ],
+    },
+    {
+      chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
+      voci: [
+        { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => setShowCorsoModal(true) },
+        { etichetta: "Definisci Hotel", Icona: IconaHotelRiga, onClick: () => setShowHotelModal(true) },
+        { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
+        { etichetta: "Assegna Master", Icona: IconaMasterRiga, onClick: onApriAssegnazioneMaster },
+      ],
+    },
+    {
+      chiave: "documenti", titolo: "Documenti e brand", coloreBg: "#DCEEDD", Icona: IconaGruppoDocumenti,
+      voci: [
+        { etichetta: "Setting diplomi", Icona: IconaDiplomaRiga, onClick: onApriFontDiplomi },
+        { etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
+      ],
+    },
+  ];
+
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Setting" onBack={onBack} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 18 }}>
-        {[
-          { etichetta: "Definisci corsi", onClick: () => setShowCorsoModal(true) },
-          { etichetta: "Definisci Location", onClick: () => setShowLocModal(true) },
-          { etichetta: "Definisci Master", onClick: () => setShowMasterModal(true) },
-          { etichetta: "Definisci Hotel", onClick: () => setShowHotelModal(true) },
-          { etichetta: "Definisci Assistenti", onClick: () => setShowAssistenteModal(true) },
-          { etichetta: "Definisci Leve", onClick: () => setShowLevaModal(true) },
-          { etichetta: "Assegna Master", onClick: onApriAssegnazioneMaster },
-          { etichetta: "Setting diplomi", onClick: onApriFontDiplomi },
-          { etichetta: "Setting loghi", onClick: onApriSettingLoghi },
-        ].map(({ etichetta, onClick }) => (
-          <Button
-            key={etichetta}
-            onClick={onClick}
-            style={{ height: 64, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", whiteSpace: "normal", lineHeight: 1.25, padding: "6px 8px" }}
-          >
-            {etichetta}
-          </Button>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 18, alignItems: "start" }}>
+        {gruppiSetting.map((g) => (
+          <div key={g.chiave} style={{ ...cardStyle, padding: 20, marginBottom: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: g.coloreBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <g.Icona size={22} color={NAVY} />
+                </div>
+                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase" }}>{g.titolo}</div>
+              </div>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: BG, borderRadius: 8, padding: "3px 11px", flexShrink: 0 }}>{g.voci.length}</div>
+            </div>
+            <div style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+              {g.voci.map((v, i) => (
+                <button
+                  key={v.etichetta}
+                  onClick={v.onClick}
+                  style={{
+                    width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 0",
+                    border: "none", borderBottom: i < g.voci.length - 1 ? `1px solid ${CREAM_BORDER}` : "none",
+                    background: "transparent", cursor: "pointer", textAlign: "left",
+                  }}
+                >
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: "#F7EDDB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <v.Icona size={18} color={NAVY} />
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 14.5, fontWeight: 600, color: NAVY, flex: 1 }}>{v.etichetta}</div>
+                  <IconaChevronDestra size={16} color={MUTED} />
+                </button>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
-
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
 
