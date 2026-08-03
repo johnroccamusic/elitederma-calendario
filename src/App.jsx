@@ -881,21 +881,29 @@ function Gate({ onOk }) {
   const [err, setErr] = useState(false);
   const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(VITE_SUPABASE_URL non impostata)";
   return (
-    <div style={{ ...fontBody, maxWidth: 340, margin: "120px auto", textAlign: "center" }}>
-      <div style={{ ...fontDisplay, fontSize: 24, color: NAVY, letterSpacing: 0.5 }}>CALENDARIO CORSI</div>
-      <div style={{ ...fontDisplay, fontSize: 15, color: NAVY, marginBottom: 18, letterSpacing: 0.5 }}>ELITEDERMA</div>
-      <input
-        type="password"
-        placeholder="Codice d'accesso"
-        value={code}
-        onChange={(e) => { setCode(e.target.value); setErr(false); }}
-        style={{ ...inputStyle, textAlign: "center", marginBottom: 12 }}
-        onKeyDown={(e) => e.key === "Enter" && check()}
-      />
-      <Button onClick={check} style={{ width: "100%" }}>Entra</Button>
-      {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
-      <div style={{ fontSize: 10, color: MUTED, marginTop: 30, wordBreak: "break-all" }}>
-        Database collegato: {urlDebug}
+    <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", textAlign: "center" }}>
+      <div />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto", marginBottom: 30 }} />
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, letterSpacing: 0.5, marginBottom: 30 }}>Gestionale Academy</div>
+        <input
+          type="password"
+          placeholder="Codice d'accesso"
+          value={code}
+          onChange={(e) => { setCode(e.target.value); setErr(false); }}
+          style={{ ...inputStyle, width: "100%", textAlign: "center", marginBottom: 12 }}
+          onKeyDown={(e) => e.key === "Enter" && check()}
+        />
+        <Button onClick={check} style={{ width: "100%" }}>Entra</Button>
+        {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
+      </div>
+      <div>
+        <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
+          programmato da<br />GianLuca Rocca
+        </div>
+        <div style={{ fontSize: 10, color: MUTED, marginTop: 14, wordBreak: "break-all" }}>
+          Database collegato: {urlDebug}
+        </div>
       </div>
     </div>
   );
