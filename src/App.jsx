@@ -3267,9 +3267,22 @@ function BloccoCalibrazioneLogo({ titolo, prefisso, src, config, setConfig, aggi
             background: trascinato === "nome" ? "#2563EB22" : "transparent", touchAction: "none",
           }}
         >
-          <span style={{ fontSize: adattamento.fontSize * scalaAnteprima, letterSpacing: `${adattamento.spaziatura * scalaAnteprima}px`, color: coloreAnteprima, whiteSpace: "nowrap", userSelect: "none", pointerEvents: "none" }}>
-            {testoProvaNome}
-          </span>
+          <div style={{ display: "flex", userSelect: "none", pointerEvents: "none" }}>
+            {testoProvaNome.split("").map((ch, i) => (
+              <span
+                key={i}
+                style={{
+                  fontFamily: `"${famigliaNome || "sans-serif"}", sans-serif`,
+                  fontSize: adattamento.fontSize * scalaAnteprima,
+                  color: coloreAnteprima,
+                  whiteSpace: "pre",
+                  marginRight: i < testoProvaNome.length - 1 ? adattamento.spaziatura * scalaAnteprima : 0,
+                }}
+              >
+                {ch}
+              </span>
+            ))}
+          </div>
         </div>
 
         <div
@@ -3543,24 +3556,26 @@ function ottieniCtxMisuraLoghi() {
 // riempirlo; se è più LARGO, si rimpicciolisce il font finché non
 // rientra (senza spaziatura extra)
 function adattaNomeLogo(testo, fontSizeBase, famiglia, spazioDisponibilePx) {
-  if (!testo) return { fontSize: fontSizeBase, spaziatura: 0 };
+  if (!testo) return { fontSize: fontSizeBase, spaziatura: 0, larghezze: [] };
   const ctx = ottieniCtxMisuraLoghi();
   const famigliaSicura = famiglia || "sans-serif";
-  function larghezza(fontSize) {
+  function misura(fontSize) {
     ctx.font = `${fontSize}px "${famigliaSicura}", sans-serif`;
-    return testo.split("").reduce((s, ch) => s + ctx.measureText(ch).width, 0);
+    return testo.split("").map((ch) => ctx.measureText(ch).width);
   }
   let fontSize = fontSizeBase;
-  let larghezzaTesto = larghezza(fontSize);
+  let larghezze = misura(fontSize);
+  let larghezzaTesto = larghezze.reduce((s, w) => s + w, 0);
   if (larghezzaTesto > spazioDisponibilePx) {
     while (fontSize > 6 && larghezzaTesto > spazioDisponibilePx) {
       fontSize -= 0.5;
-      larghezzaTesto = larghezza(fontSize);
+      larghezze = misura(fontSize);
+      larghezzaTesto = larghezze.reduce((s, w) => s + w, 0);
     }
-    return { fontSize, spaziatura: 0 };
+    return { fontSize, spaziatura: 0, larghezze };
   }
   const spaziatura = testo.length > 1 ? (spazioDisponibilePx - larghezzaTesto) / (testo.length - 1) : 0;
-  return { fontSize, spaziatura };
+  return { fontSize, spaziatura, larghezze };
 }
 
 // disegna il nome centrato su centroX, lettera per lettera, con la
