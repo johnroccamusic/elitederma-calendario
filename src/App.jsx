@@ -2752,173 +2752,64 @@ const CATEGORIE_LOGO = [
   { chiave: "master", etichetta: "Master", richiedeBianco: false },
 ];
 
-// ---------- Costi operativi ----------
-// tassonomia fissa delle categorie di costo. "voci" sono le sotto-voci
-// inseribili a mano nella pagina "Costi operativi" (o come voce extra
-// taggata nel Riepilogo amministrativo) — ogni categoria ne ha sempre
-// almeno una di tipo "altre spese", come contenitore residuale. Alcune
-// categorie ricevono INOLTRE una o più righe calcolate automaticamente
-// sui dati già tracciati altrove (quota_venditore degli iscritti, costi
-// per edizione del Riepilogo amministrativo): quelle righe non sono
-// nell'array "voci" qui sotto, vengono aggiunte da datiCategoria() in
-// PaginaCostiOperativi. "tipo: automatico" è solo un'indicazione visiva
-// (badge "Automatico") per le categorie il cui importo principale non è
-// inserito a mano, non esclude la voce "altre spese" della categoria
-const CATEGORIE_COSTI = [
-  {
-    chiave: "agenzie", etichetta: "Agenzie e professionisti", tipo: "manuale",
-    voci: [
-      { chiave: "pubblicita", etichetta: "Pubblicità" },
-      { chiave: "professionisti", etichetta: "Professionisti e società esterne" },
-      { chiave: "altre_spese_agenzie", etichetta: "Altre spese agenzie e professionisti" },
-    ],
-  },
-  {
-    // "Trasporti extra" include anche "Rimborso taxi"/"Rimborso
-    // parcheggi" automatici per data di corso
-    chiave: "viaggi", etichetta: "Costo viaggi", tipo: "manuale",
-    voci: [
-      { chiave: "viaggio_master", etichetta: "Viaggio master", cittaConsigliata: true },
-      { chiave: "autostrada_carburante", etichetta: "Autostrada e carburante" },
-      { chiave: "trasporti_extra", etichetta: "Trasporti extra" },
-      { chiave: "altre_spese_viaggi", etichetta: "Altre spese viaggi" },
-    ],
-  },
-  {
-    // "Alloggio — hotel, case e appartamenti" include anche il "Costo
-    // appartamento/hotel" automatico per data di corso (stessa voce, un
-    // solo importo unificato)
-    chiave: "alloggi", etichetta: "Costo alloggi", tipo: "manuale",
-    voci: [
-      { chiave: "alloggio", etichetta: "Alloggio — hotel, case e appartamenti", cittaConsigliata: true },
-      { chiave: "altre_spese_alloggi", etichetta: "Altre spese alloggi" },
-    ],
-  },
-  {
-    // "Vitto Docenti e personale al corso" è interamente automatica (Costo
-    // pranzi + Rimborso cene + Rimborso colazioni e spesa per data di
-    // corso, dal Riepilogo amministrativo): non è inseribile a mano,
-    // l'unica voce manuale della categoria è il contenitore residuale
-    chiave: "vitto", etichetta: "Vitto", tipo: "manuale",
-    voci: [
-      { chiave: "altre_spese_vitto", etichetta: "Altre spese vitto" },
-    ],
-  },
-  {
-    chiave: "materiali", etichetta: "Materiali e forniture", tipo: "manuale",
-    voci: [
-      { chiave: "materiali_consumo", etichetta: "Materiali di consumo", cittaConsigliata: true },
-      { chiave: "materiali_didattici", etichetta: "Materiali didattici e da vendita" },
-      { chiave: "cibo_caffe_snack", etichetta: "Cibo, caffè, snack" },
-      { chiave: "stampa_diplomi_fotocopie", etichetta: "Stampa diplomi e fotocopie" },
-      { chiave: "stampa_libri_quaderni_etichette", etichetta: "Stampa libri, quaderni ed etichette" },
-      { chiave: "packaging_buste", etichetta: "Produzione packaging e buste" },
-      { chiave: "gadgettistica", etichetta: "Gadgettistica" },
-      { chiave: "altre_spese_materiali", etichetta: "Altre spese materiali e forniture" },
-    ],
-  },
-  {
-    chiave: "logistica", etichetta: "Corrieri e spedizioni", tipo: "manuale",
-    voci: [
-      { chiave: "spedizioni", etichetta: "Spedizioni" },
-      { chiave: "altre_spese_logistica", etichetta: "Altre spese corrieri e spedizioni" },
-    ],
-  },
-  {
-    // "Costo accademia" (automatico, per data di corso) confluisce qui
-    // come riga a parte, accanto alla voce manuale "Affitto sedi"
-    chiave: "sedi", etichetta: "Affitto sedi distaccate", tipo: "manuale",
-    voci: [
-      { chiave: "affitto_sedi", etichetta: "Affitto sedi", cittaConsigliata: true },
-      { chiave: "altre_spese_sedi", etichetta: "Altre spese affitto sedi distaccate" },
-    ],
-  },
-  {
-    chiave: "commerciale", etichetta: "Commerciale", tipo: "automatico",
-    voci: [
-      { chiave: "altre_spese_commerciale", etichetta: "Altre spese commerciali" },
-    ],
-  },
-  {
-    chiave: "eventi", etichetta: "Fiere ed Eventi", tipo: "manuale",
-    voci: [
-      { chiave: "partecipazione", etichetta: "Costo partecipazione" },
-      { chiave: "alloggio_eventi", etichetta: "Costo alloggio" },
-      { chiave: "viaggio_eventi", etichetta: "Costo viaggio e trasferimento" },
-      { chiave: "spedizione_eventi", etichetta: "Costo spedizione prodotti" },
-      { chiave: "personalizzazioni", etichetta: "Costo personalizzazioni e gadget" },
-      { chiave: "vitto_eventi", etichetta: "Costo vitto" },
-      { chiave: "altri_costi_eventi", etichetta: "Altri costi eventi" },
-    ],
-  },
-  {
-    chiave: "allestimento", etichetta: "Materiali per allestimento", tipo: "manuale",
-    voci: [
-      { chiave: "rollup", etichetta: "Rollup, banner" },
-      { chiave: "lettini", etichetta: "Lettini per le sale" },
-      { chiave: "carrellini", etichetta: "Carrellini" },
-      { chiave: "teli", etichetta: "Teli copri lettino" },
-      { chiave: "altro_allestimento", etichetta: "Altro materiale d'allestimento corsi" },
-    ],
-  },
-  {
-    chiave: "accademia_centrale", etichetta: "Spese Accademia centrale", tipo: "manuale",
-    voci: [
-      { chiave: "affitto_sede_centrale", etichetta: "Affitto sede" },
-      { chiave: "condominio", etichetta: "Condominio" },
-      { chiave: "lavori", etichetta: "Lavori" },
-      { chiave: "mobilio", etichetta: "Mobilio" },
-      { chiave: "altre_spese_accademia_centrale", etichetta: "Altre spese accademia centrale" },
-    ],
-  },
-  {
-    chiave: "utenze", etichetta: "Utenze", tipo: "manuale",
-    voci: [
-      { chiave: "luce", etichetta: "Luce" },
-      { chiave: "gas", etichetta: "Gas" },
-      { chiave: "tari", etichetta: "TARI" },
-      { chiave: "rai", etichetta: "Canone RAI" },
-      { chiave: "telefono", etichetta: "Telefono" },
-      { chiave: "altre_spese_utenze", etichetta: "Altre spese utenze" },
-    ],
-  },
-  {
-    // "Costo coordinatore" (automatico, per data di corso, dal Riepilogo
-    // amministrativo) confluisce qui come riga a parte, accanto alle voci manuali
-    chiave: "personale_accademia", etichetta: "Costo personale accademia", tipo: "manuale",
-    voci: [
-      { chiave: "stipendi_personale", etichetta: "Stipendi personale e amministratori" },
-      { chiave: "altre_spese_personale_accademia", etichetta: "Altre spese personale accademia" },
-    ],
-  },
-  {
-    // "Costo master" e "Costo assistenti" (automatici, per data di
-    // corso) sono le due righe principali, tenute separate; l'unica
-    // voce inseribile a mano è il contenitore residuale
-    chiave: "docenti_corsi", etichetta: "Costo docenti per i corsi", tipo: "automatico",
-    voci: [
-      { chiave: "altre_spese_docenti", etichetta: "Altre spese docenti" },
-    ],
-  },
-];
-// tutte le categorie sono taggabili/selezionabili a mano (ognuna ha
-// almeno una voce residuale "altre spese"): la lista non è più filtrata
-// per "tipo", che resta solo un'indicazione visiva nel dettaglio
-const CATEGORIE_COSTI_MANUALI = CATEGORIE_COSTI;
-// nel "+" del Riepilogo amministrativo (dentro la scheda di UNA data di
-// corso) ha senso taggare solo le categorie legate a quella specifica
-// edizione: le categorie di spesa "aziendale" (personale, utenze, sede
-// centrale, eventi/fiere, agenzie, sedi distaccate, commissioni
-// venditori) restano taggabili solo da "+ Nuova operazione"
-const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "utenze", "agenzie", "sedi", "eventi", "accademia_centrale", "commerciale"];
-const CATEGORIE_COSTI_RIEPILOGO = CATEGORIE_COSTI.filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.chiave));
-function categoriaCostoDi(chiave) {
-  return CATEGORIE_COSTI.find((c) => c.chiave === chiave) || null;
+// ---------- Analisi costi di gestione ----------
+// le 20 categorie + "Versamenti e adempimenti" e le loro sotto-voci ora
+// vivono nel database (costi_categorie/costi_sottocategorie, gestibili
+// dal "Catalogo delle categorie"), non più come costante fissa qui.
+// Questi sono solo piccoli helper di lookup che operano sugli array
+// caricati da fetchDati().
+function categoriaCostoDi(costiCategorie, id) {
+  return (costiCategorie || []).find((c) => c.id === id) || null;
 }
-function voceCostoDi(categoria, sottovoce) {
-  return categoriaCostoDi(categoria)?.voci.find((v) => v.chiave === sottovoce) || null;
+function sottocategoriaCostoDi(costiSottocategorie, id) {
+  return (costiSottocategorie || []).find((v) => v.id === id) || null;
 }
+function sottocategorieDiCategoria(costiSottocategorie, categoriaId) {
+  return (costiSottocategorie || [])
+    .filter((v) => v.categoria_id === categoriaId && v.attiva !== false)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+}
+// categorie "aziendali" (non legate a una singola classe): taggabili
+// solo da "+ Nuova operazione" nella dashboard, non dal "+" del
+// Riepilogo amministrativo di una singola data di corso
+const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "oneri_contributivi", "commerciale", "commissioni_pagamento", "pubblicita_acquisizione", "agenzie_consulenti", "affitto_aule_esterne", "struttura_centrale", "fiere_eventi", "prodotti_vendita", "versamenti_adempimenti"];
+
 const ALIQUOTE_IVA_COSTI = [22, 10, 4, 0];
+const STATI_SPESA = [
+  { chiave: "preventivata", etichetta: "Preventivata" },
+  { chiave: "impegnata", etichetta: "Impegnata" },
+  { chiave: "fatturata", etichetta: "Fatturata" },
+  { chiave: "pagata", etichetta: "Pagata" },
+  { chiave: "parzialmente_pagata", etichetta: "Parzialmente pagata" },
+  { chiave: "scaduta", etichetta: "Scaduta" },
+  { chiave: "annullata", etichetta: "Annullata" },
+];
+const AMBITI_SPESA = [
+  { chiave: "generale", etichetta: "Generale aziendale" },
+  { chiave: "struttura_centrale", etichetta: "Struttura centrale" },
+  { chiave: "sede", etichetta: "Sede" },
+  { chiave: "corso", etichetta: "Corso" },
+  { chiave: "classe", etichetta: "Classe specifica" },
+  { chiave: "evento", etichetta: "Evento o fiera" },
+];
+const RICORRENZA_OPZIONI = ["nessuna", "mensile", "bimestrale", "trimestrale", "semestrale", "annuale", "personalizzata"];
+const DIRETTO_INDIRETTO_OPZIONI = [{ chiave: "diretto", etichetta: "Diretto" }, { chiave: "indiretto", etichetta: "Indiretto" }];
+const FISSO_VARIABILE_OPZIONI = [{ chiave: "fisso", etichetta: "Fisso" }, { chiave: "variabile", etichetta: "Variabile" }, { chiave: "semivariabile", etichetta: "Semivariabile" }];
+const RICORRENTE_OCCASIONALE_OPZIONI = [{ chiave: "ricorrente", etichetta: "Ricorrente" }, { chiave: "occasionale", etichetta: "Occasionale" }];
+const NATURA_OPZIONI = [{ chiave: "operativo", etichetta: "Operativo" }, { chiave: "investimento", etichetta: "Investimento" }, { chiave: "straordinario", etichetta: "Straordinario" }];
+const CONTROLLABILITA_OPZIONI = [{ chiave: "controllabile", etichetta: "Controllabile" }, { chiave: "parzialmente_controllabile", etichetta: "Parzialmente controllabile" }, { chiave: "non_controllabile", etichetta: "Non controllabile" }];
+const RIDUCIBILITA_OPZIONI = [{ chiave: "alta", etichetta: "Alta" }, { chiave: "media", etichetta: "Media" }, { chiave: "bassa", etichetta: "Bassa" }];
+const ESSENZIALITA_OPZIONI = [{ chiave: "essenziale", etichetta: "Essenziale" }, { chiave: "utile", etichetta: "Utile" }, { chiave: "discrezionale", etichetta: "Discrezionale" }];
+const ORIGINE_OPZIONI = [{ chiave: "manuale", etichetta: "Manuale" }, { chiave: "automatico", etichetta: "Automatico" }, { chiave: "importato", etichetta: "Importato" }];
+function etichettaOpzione(lista, chiave) {
+  return lista.find((o) => o.chiave === chiave)?.etichetta || chiave || "—";
+}
+// scostamento % rispetto al budget: "N/D" se il budget è zero/assente,
+// invece di una percentuale infinita
+function scostamentoBudget(effettivo, budget) {
+  if (!budget) return null;
+  return round1Erp(((effettivo - budget) / budget) * 100);
+}
 
 const SIGLA_PAESE_LOGO = "IT";
 // due lettere iniziali di un nome completo: se ha più parole prende la
@@ -6052,7 +5943,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -6203,6 +6094,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
 
+  // solo le categorie legate a UNA classe hanno senso nel "+" del
+  // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
+  // solo da "+ Nuova operazione" nella dashboard)
+  const categorieRiepilogo = (costiCategorie || []).filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.id)).sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
   // il "+" apre una tendina con TUTTE le sotto-voci di "Costi operativi"
   // (raggruppate per categoria, come nel form "Nuova uscita"): la voce si
   // crea già taggata con categoria+sottovoce, così confluisce nella riga
@@ -7026,16 +6921,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       onClick={(e) => e.stopPropagation()}
                       style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 260, maxHeight: 320, overflowY: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)" }}
                     >
-                      {CATEGORIE_COSTI_RIEPILOGO.map((cat) => (
-                        <div key={cat.chiave}>
-                          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.etichetta}</div>
-                          {cat.voci.map((v) => (
+                      {categorieRiepilogo.map((cat) => (
+                        <div key={cat.id}>
+                          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.nome}</div>
+                          {sottocategorieDiCategoria(costiSottocategorie, cat.id).filter((v) => !v.automatico).map((v) => (
                             <button
-                              key={v.chiave}
-                              onClick={() => aggiungiVoceCosto(`${cat.chiave}::${v.chiave}`)}
+                              key={v.id}
+                              onClick={() => aggiungiVoceCosto(`${cat.id}::${v.id}`)}
                               style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", color: NAVY }}
                             >
-                              {v.etichetta}
+                              {v.nome}
                             </button>
                           ))}
                         </div>
@@ -7095,7 +6990,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   <div style={{ flex: "2 1 140px", minWidth: 0 }}>
                     {voce.categoria && (
                       <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>
-                        {voceCostoDi(voce.categoria, voce.sottovoce)?.etichetta || categoriaCostoDi(voce.categoria)?.etichetta || voce.categoria}
+                        {sottocategoriaCostoDi(costiSottocategorie, voce.sottovoce)?.nome || categoriaCostoDi(costiCategorie, voce.categoria)?.nome || voce.categoria}
                       </div>
                     )}
                     <Field label="Voce di costo"><input style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Titolo" value={voce.titolo} onChange={(e) => modificaVoceCosto(idx, "titolo", e.target.value.toUpperCase())} /></Field>
@@ -8353,21 +8248,33 @@ function variazionePctErp(attuale, precedente) {
 // ricavi/costi/allievi/riempimento/cash flow/crediti di un insieme di
 // edizioni filtrate per periodo + sede — riusata sia per i KPI del
 // periodo corrente/precedente sia per ogni riga di "Andamento per sede"
-function calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio, fine, sedeId, corsoById, locById }) {
+function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio, fine, sedeId, corsoById, locById }) {
   const cdFiltrate = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
   const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
   const iscrittiFiltrati = iscritti.filter((i) => idsCd.has(i.corso_data_id));
   const ricavi = round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
   const costiClasse = round2(cdFiltrate.reduce((s, cd) => s + costoClasseErp(cd), 0));
   const quoteVenditore = round2(iscrittiFiltrati.reduce((s, i) => s + (i.quota_venditore || 0), 0));
-  // voci manuali di "Costi operativi" (categorie 1-6, 8-9): sull'imponibile,
-  // coerente coi ricavi (sempre al netto di IVA) — le voci extra taggate
-  // del Riepilogo amministrativo sono già incluse in costiClasse sopra
+  // spese di "Analisi costi di gestione": sull'imponibile, coerente coi
+  // ricavi (sempre al netto di IVA) — le voci extra taggate del
+  // Riepilogo amministrativo sono già incluse in costiClasse sopra
   // (fanno parte di costi_extra di ogni edizione), quindi qui si somma
-  // solo la tabella separata, senza rischio di doppio conteggio
-  const costiManuali = round2((costiOperativiVoci || [])
-    .filter((v) => v.data >= inizio && v.data <= fine && (!sedeId || v.location_id === sedeId))
-    .reduce((s, v) => s + (v.imponibile || 0), 0));
+  // solo la tabella "spese", senza rischio di doppio conteggio. Esclude
+  // le spese marcate fuori analisi (per-spesa o per l'intera categoria,
+  // es. "Versamenti e adempimenti")
+  const corsiDateById = Object.fromEntries(corsiDate.map((cd) => [cd.id, cd]));
+  const speseValide = (spese || []).filter((s) => {
+    if (s.includi_analisi_costi === false) return false;
+    const cat = costiCategorieById?.[s.categoria_id];
+    if (cat && cat.includi_analisi_costi === false) return false;
+    const data = s.data_documento || s.data_pagamento;
+    if (!data || data < inizio || data > fine) return false;
+    if (!sedeId) return true;
+    if (s.sede_id === sedeId) return true;
+    if (s.classe_id && corsiDateById[s.classe_id]?.location_id === sedeId) return true;
+    return false;
+  });
+  const costiManuali = round2(speseValide.reduce((s, v) => s + (v.imponibile || 0), 0));
   const costi = round2(costiClasse + quoteVenditore + costiManuali);
   const utile = round2(ricavi - costi);
   const riempimenti = cdFiltrate
@@ -8455,7 +8362,7 @@ function GaugeMargineErp({ percentuale }) {
 // data/città/descrizione, imponibile/IVA (selezionabile)/totale, e il
 // metodo di pagamento con lo stesso meccanismo IVA della scheda iscritti
 // (scegliendo "Cash no iva" l'aliquota si azzera e si blocca)
-function ModaleNuovaUscita({ location, onClose, onSalvato }) {
+function ModaleNuovaUscita({ location, costiCategorie, costiSottocategorie, onClose, onSalvato }) {
   const [sottovoceScelta, setSottovoceScelta] = useState("");
   const [data, setData] = useState(dataOggiStr());
   const [citta, setCitta] = useState("");
@@ -8508,15 +8415,17 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
     if (!imp) { setMsg("Inserisci un imponibile."); return; }
     const [categoria, sottovoce] = sottovoceScelta.split("::");
     setSalvando(true);
-    const { error } = await supabase.from("costi_operativi_voci").insert({
-      categoria, sottovoce,
+    const { error } = await supabase.from("spese").insert({
+      categoria_id: categoria, sottocategoria_id: sottovoce,
       descrizione: descrizione.trim() || null,
-      location_id: citta || null,
+      tipo_ambito: citta ? "sede" : "generale",
+      sede_id: citta || null,
       imponibile: imp,
       iva_percentuale: ivaEffettiva,
       totale: totale === "" ? imp : round2(parseNum(totale)),
-      data,
+      data_documento: data, data_pagamento: data,
       metodo_pagamento: metodo || null,
+      origine: "manuale", stato: "pagata",
     });
     setSalvando(false);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -8528,10 +8437,10 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
       <Field label="Voce di costo">
         <select style={inputStyle} value={sottovoceScelta} onChange={(e) => setSottovoceScelta(e.target.value)}>
           <option value="">— scegli —</option>
-          {CATEGORIE_COSTI_MANUALI.map((cat) => (
-            <optgroup key={cat.chiave} label={cat.etichetta}>
-              {cat.voci.map((v) => (
-                <option key={v.chiave} value={`${cat.chiave}::${v.chiave}`}>{v.etichetta}</option>
+          {[...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((cat) => (
+            <optgroup key={cat.id} label={cat.nome}>
+              {sottocategorieDiCategoria(costiSottocategorie, cat.id).filter((v) => !v.automatico).map((v) => (
+                <option key={v.id} value={`${cat.id}::${v.id}`}>{v.nome}</option>
               ))}
             </optgroup>
           ))}
@@ -8605,15 +8514,15 @@ function annoScolasticoDi(dataStr) {
   const [anno, mese] = dataStr.split("-").map(Number);
   return mese >= 9 ? anno : anno - 1;
 }
-function PannelloConfrontoAnnuale({ corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById, onClose }) {
+function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieById, sedeSel, corsoById, locById, onClose }) {
   const isMobile = useIsMobile();
   const annoScolasticoCorrente = annoScolasticoDi(dataOggiStr());
   const anniScolasticiDisponibili = useMemo(() => {
     const anni = new Set([annoScolasticoCorrente]);
     corsiDate.forEach((cd) => { if (cd.data_inizio) anni.add(annoScolasticoDi(cd.data_inizio)); });
-    costiOperativiVoci.forEach((v) => { if (v.data) anni.add(annoScolasticoDi(v.data)); });
+    spese.forEach((v) => { const d = v.data_documento || v.data_pagamento; if (d) anni.add(annoScolasticoDi(d)); });
     return [...anni].sort((a, b) => b - a);
-  }, [corsiDate, costiOperativiVoci, annoScolasticoCorrente]);
+  }, [corsiDate, spese, annoScolasticoCorrente]);
 
   const confronto = useMemo(() => anniScolasticiDisponibili.map((annoIniziale) => {
     const mesi = ORDINE_MESI_SCOLASTICO.map((mese0) => {
@@ -8621,13 +8530,13 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, costiOperativiVoci, sed
       const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
       const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
       const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
-      const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
       return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
     });
     const totaleRicavi = round2(mesi.reduce((s, m) => s + m.ricavi, 0));
     const totaleCosti = round2(mesi.reduce((s, m) => s + m.costi, 0));
     return { annoIniziale, etichetta: `${annoIniziale}/${annoIniziale + 1}`, mesi, totaleRicavi, totaleCosti, totaleUtile: round2(totaleRicavi - totaleCosti) };
-  }), [anniScolasticiDisponibili, corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById]);
+  }), [anniScolasticiDisponibili, corsiDate, iscritti, spese, costiCategorieById, sedeSel, corsoById, locById]);
 
   const massimoGlobale = Math.max(1, ...confronto.flatMap((a) => a.mesi.flatMap((m) => [m.ricavi, m.costi])));
 
@@ -8681,7 +8590,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, costiOperativiVoci, sed
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativiVoci, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
@@ -8691,17 +8600,18 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const costiCategorieById = useMemo(() => Object.fromEntries((costiCategorie || []).map((c) => [c.id, c])), [costiCategorie]);
 
   const range = rangePeriodoErp(periodo);
   const rangePrec = rangePrecedenteErp(range);
 
   const kpi = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
-    [corsiDate, iscritti, range.inizio, range.fine, sedeSel, corsoById, locById]
+    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
+    [corsiDate, iscritti, spese, costiCategorieById, range.inizio, range.fine, sedeSel, corsoById, locById]
   );
   const kpiPrec = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
-    [corsiDate, iscritti, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
+    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
+    [corsiDate, iscritti, spese, costiCategorieById, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
   );
 
   const varRicavi = variazionePctErp(kpi.ricavi, kpiPrec.ricavi);
@@ -8729,7 +8639,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
     const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
     const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
     const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
-    const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+    const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
     return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
   });
   const maxBarra = Math.max(1, ...andamentoMensile.flatMap((m) => [m.ricavi, m.costi]));
@@ -8737,8 +8647,8 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
   const sediConDati = location.filter((l) => corsiDate.some((cd) => cd.location_id === l.id && cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine));
   const righeSedi = (sediConDati.length ? sediConDati : location)
     .map((l) => {
-      const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
-      const kPrec = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
+      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
+      const kPrec = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
       return { location: l, ...k, trend: variazionePctErp(k.ricavi, kPrec.ricavi) };
     })
     .sort((a, b) => b.ricavi - a.ricavi);
@@ -8868,12 +8778,12 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
         </div>
 
         {modaleUscitaAperta && (
-          <ModaleNuovaUscita location={location} onClose={() => setModaleUscitaAperta(false)} onSalvato={() => { setModaleUscitaAperta(false); ricarica(); }} />
+          <ModaleNuovaUscita location={location} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} onClose={() => setModaleUscitaAperta(false)} onSalvato={() => { setModaleUscitaAperta(false); ricarica(); }} />
         )}
 
         {confrontoAnnualeAperto && (
           <PannelloConfrontoAnnuale
-            corsiDate={corsiDate} iscritti={iscritti} costiOperativiVoci={costiOperativiVoci}
+            corsiDate={corsiDate} iscritti={iscritti} spese={spese} costiCategorieById={costiCategorieById}
             sedeSel={sedeSel} corsoById={corsoById} locById={locById}
             onClose={() => setConfrontoAnnualeAperto(false)}
           />
@@ -9253,273 +9163,552 @@ function RigaPerformanceSede({ pos, dato }) {
     </div>
   );
 }
-// drill-down per categoria della card "Costi operativi" dell'ERP: 10
-// categorie fisse, alcune manuali (form imponibile/IVA/totale, aliquota
-// scelta riga per riga) e alcune automatiche (commissioni venditori dagli
-// iscritti, costi per edizione dal Riepilogo amministrativo). Il totale
-// generale coincide sempre esattamente con "costi" di calcolaKpiErp per
-// lo stesso periodo/sede: le voci extra taggate del Riepilogo
-// amministrativo sono già dentro costoClasseErp, quindi qui vengono
-// solo "riattribuite" alla categoria giusta per il drill-down, non
-// sommate una seconda volta nel totale
-function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOperativiVoci, onBack }) {
+
+// ---------- Analisi costi di gestione ----------
+// una spesa "conta" per l'ambito richiesto (sede/corso/classe/evento) o
+// direttamente sui campi tipo_ambito/sede_id/corso_id/classe_id/evento_id
+// della spesa stessa (caso comune, un solo ambito), oppure — se la spesa
+// è stata ripartita — tramite le righe di spese_attribuzioni che
+// combaciano, sommando solo la porzione (importo) di competenza
+function corrispondeAmbitoDiretto(s, filtri, corsiDateById) {
+  if (filtri.sedeId) {
+    if (s.sede_id === filtri.sedeId) return true;
+    if (s.classe_id && corsiDateById[s.classe_id]?.location_id === filtri.sedeId) return true;
+    return false;
+  }
+  if (filtri.corsoId) {
+    if (s.corso_id === filtri.corsoId) return true;
+    if (s.classe_id && corsiDateById[s.classe_id]?.corso_id === filtri.corsoId) return true;
+    return false;
+  }
+  if (filtri.classeId) return s.classe_id === filtri.classeId;
+  if (filtri.eventoId) return s.evento_id === filtri.eventoId;
+  return true;
+}
+// le sotto-categorie marcate "automatico" (Compensi Master/assistenti,
+// Costo pranzi, Rimborso cene, Hotel, Quota accademia, Costo
+// coordinatore, Rimborso taxi/parcheggi...) non sono righe della
+// tabella "spese": sono già tracciate sui campi di corsi_date compilati
+// dal pannello "Riepilogo amministrativo". Le trasforma in voci
+// "virtuali" con la stessa forma di una spesa reale, così il resto
+// dell'aggregazione (filtri, ambito, drill-down) le tratta allo stesso
+// modo senza bisogno di casi speciali sparsi ovunque
+function generaVociAutomaticheDaCorsiDate(corsiDate, costiSottocategorie) {
+  const automatiche = (costiSottocategorie || []).filter((v) => v.automatico && v.campo_automatico);
+  const voci = [];
+  (corsiDate || []).forEach((cd) => {
+    automatiche.forEach((v) => {
+      const valore = cd[v.campo_automatico];
+      if (valore) {
+        voci.push({
+          id: `auto__${cd.id}__${v.id}`, categoria_id: v.categoria_id, sottocategoria_id: v.id,
+          imponibile: valore, data_documento: cd.data_inizio, data_pagamento: cd.data_inizio, competenza_da: cd.data_inizio, competenza_a: cd.data_inizio,
+          tipo_ambito: "classe", classe_id: cd.id, origine: "automatico", stato: "pagata", includi_analisi_costi: true,
+        });
+      }
+    });
+  });
+  return voci;
+}
+// commissioni venditori: automatiche dalla quota_venditore di ogni
+// iscritto, raggruppate per classe (stessa data della classe)
+function generaVociCommissioniVenditori(corsiDate, iscritti) {
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const perClasse = {};
+  (iscritti || []).forEach((i) => { if (i.quota_venditore) perClasse[i.corso_data_id] = round2((perClasse[i.corso_data_id] || 0) + i.quota_venditore); });
+  return Object.entries(perClasse).map(([classeId, tot]) => {
+    const cd = corsiDateById[classeId];
+    if (!cd) return null;
+    return {
+      id: `auto__commissioni__${classeId}`, categoria_id: "commerciale", sottocategoria_id: "commerciale__commissioni_venditori",
+      imponibile: tot, data_documento: cd.data_inizio, data_pagamento: cd.data_inizio, competenza_da: cd.data_inizio, competenza_a: cd.data_inizio,
+      tipo_ambito: "classe", classe_id: classeId, origine: "automatico", stato: "pagata", includi_analisi_costi: true,
+    };
+  }).filter(Boolean);
+}
+// le voci extra del Riepilogo amministrativo (corsi_date.costi_extra,
+// jsonb) usano ancora le chiavi della VECCHIA tassonomia a 13
+// categorie: questa mappa le porta sulla nuova, così anche queste
+// confluiscono nel totale invece di sparire silenziosamente (la stessa
+// somma è già dentro costoClasseErp/calcolaKpiErp, quindi qui serve solo
+// per non far scendere il totale di "Analisi costi di gestione" sotto
+// quello della dashboard ERP)
+const MAPPA_VECCHIA_CATEGORIA_COSTI = {
+  agenzie: "agenzie_consulenti", viaggi: "viaggi_corsi", alloggi: "alloggi_corsi", vitto: "vitto_corsi",
+  materiali: "materiali_didattici_corsi", logistica: "corrieri_spedizioni", sedi: "affitto_aule_esterne",
+  commerciale: "commerciale", eventi: "fiere_eventi", allestimento: "allestimento_immagine_sale",
+  accademia_centrale: "struttura_centrale", utenze: "struttura_centrale", personale_accademia: "personale_accademia",
+  docenti_corsi: "docenti_corsi",
+};
+function generaVociDaCostiExtra(corsiDate, costiSottocategorie) {
+  const voci = [];
+  (corsiDate || []).forEach((cd) => {
+    (Array.isArray(cd.costi_extra) ? cd.costi_extra : []).forEach((extra, idx) => {
+      const valore = Number(extra.valore) || 0;
+      if (!valore) return;
+      const categoriaId = MAPPA_VECCHIA_CATEGORIA_COSTI[extra.categoria] || null;
+      const sottocategoriaMatch = categoriaId ? (costiSottocategorie || []).find((v) => v.id === extra.sottovoce && v.categoria_id === categoriaId) : null;
+      const catchAll = categoriaId ? (costiSottocategorie || []).find((v) => v.categoria_id === categoriaId && /altre_spese|altri_/.test(v.id)) : null;
+      voci.push({
+        id: `extra__${cd.id}__${idx}`, categoria_id: categoriaId, sottocategoria_id: (sottocategoriaMatch || catchAll)?.id || null,
+        descrizione: extra.titolo || null, imponibile: valore,
+        data_documento: cd.data_inizio, data_pagamento: cd.data_inizio, competenza_da: cd.data_inizio, competenza_a: cd.data_inizio,
+        tipo_ambito: "classe", classe_id: cd.id, origine: "automatico", stato: "pagata", includi_analisi_costi: true,
+      });
+    });
+  });
+  return voci;
+}
+// spese reali + voci automatiche generate dai dati già tracciati: la
+// base comune usata da tutta l'aggregazione di "Analisi costi di gestione"
+function speseComplete(spese, corsiDate, iscritti, costiSottocategorie) {
+  return [
+    ...(spese || []),
+    ...generaVociAutomaticheDaCorsiDate(corsiDate, costiSottocategorie),
+    ...generaVociCommissioniVenditori(corsiDate, iscritti),
+    ...generaVociDaCostiExtra(corsiDate, costiSottocategorie),
+  ];
+}
+// somma le spese che rispettano periodo/filtri, per il calcolo di KPI,
+// grafici e tabelle: ritorna sia il totale sia l'elenco delle "voci
+// incluse" (spesa + importo effettivamente contato), utile per i
+// drill-down e per i raggruppamenti per categoria/sede/ecc.
+function calcolaTotaleSpese(spese, speseAttribuzioni, costiCategorieById, corsiDateById, inizio, fine, filtri = {}) {
+  const attribPerSpesa = {};
+  (speseAttribuzioni || []).forEach((a) => { (attribPerSpesa[a.spesa_id] ||= []).push(a); });
+  let totale = 0;
+  const vociIncluse = [];
+  for (const s of (spese || [])) {
+    if (s.includi_analisi_costi === false) continue;
+    const cat = costiCategorieById?.[s.categoria_id];
+    if (cat && cat.includi_analisi_costi === false) continue;
+    if (cat && cat.attiva === false && !filtri.includiCategorieDisattivate) continue;
+    const data = s.competenza_da || s.data_documento || s.data_pagamento;
+    if (!data || data < inizio || data > fine) continue;
+    if (filtri.categoriaId && s.categoria_id !== filtri.categoriaId) continue;
+    if (filtri.sottocategoriaId && s.sottocategoria_id !== filtri.sottocategoriaId) continue;
+    if (filtri.fornitoreId && s.fornitore_id !== filtri.fornitoreId) continue;
+    if (filtri.stato && s.stato !== filtri.stato) continue;
+    if (filtri.fissoVariabile && s.fisso_variabile !== filtri.fissoVariabile) continue;
+    if (filtri.ricorrenteOccasionale && s.ricorrente_occasionale !== filtri.ricorrenteOccasionale) continue;
+    if (filtri.natura && s.natura !== filtri.natura) continue;
+    if (filtri.riducibilita && s.riducibilita !== filtri.riducibilita) continue;
+    if (filtri.origine && s.origine !== filtri.origine) continue;
+
+    const haFiltroAmbito = filtri.sedeId || filtri.corsoId || filtri.classeId || filtri.eventoId;
+    const attrib = attribPerSpesa[s.id];
+    let importo;
+    if (attrib && attrib.length) {
+      importo = haFiltroAmbito
+        ? round2(attrib.filter((a) => corrispondeAmbitoDiretto(a, filtri, corsiDateById)).reduce((sum, a) => sum + (a.importo || 0), 0))
+        : round2(attrib.reduce((sum, a) => sum + (a.importo || 0), 0));
+    } else {
+      importo = (!haFiltroAmbito || corrispondeAmbitoDiretto(s, filtri, corsiDateById)) ? (s.imponibile || 0) : 0;
+    }
+    if (importo > 0) { totale += importo; vociIncluse.push({ spesa: s, importo }); }
+  }
+  return { totale: round2(totale), vociIncluse };
+}
+// range di periodo standard (mese/trimestre/semestre/anno/personalizzato)
+function rangePeriodoAnalisiCosti(periodo, personalizzato) {
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (periodo === "mese") {
+    return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth(), 1)), fine: fmt(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0)) };
+  }
+  if (periodo === "trimestre") {
+    const meseInizio = Math.floor(oggi.getMonth() / 3) * 3;
+    return { inizio: fmt(new Date(oggi.getFullYear(), meseInizio, 1)), fine: fmt(new Date(oggi.getFullYear(), meseInizio + 3, 0)) };
+  }
+  if (periodo === "semestre") {
+    const meseInizio = oggi.getMonth() < 6 ? 0 : 6;
+    return { inizio: fmt(new Date(oggi.getFullYear(), meseInizio, 1)), fine: fmt(new Date(oggi.getFullYear(), meseInizio + 6, 0)) };
+  }
+  if (periodo === "personalizzato") return { inizio: personalizzato?.da || fmt(oggi), fine: personalizzato?.a || fmt(oggi) };
+  return { inizio: `${oggi.getFullYear()}-01-01`, fine: `${oggi.getFullYear()}-12-31` };
+}
+function rangeConfrontoAnalisiCosti(range, tipo) {
+  const [aI, mI, gI] = range.inizio.split("-").map(Number);
+  const [aF, mF, gF] = range.fine.split("-").map(Number);
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (tipo === "annoprecedente") {
+    return { inizio: fmt(new Date(aI - 1, mI - 1, gI)), fine: fmt(new Date(aF - 1, mF - 1, gF)) };
+  }
+  // "periodoprecedente" (default): stesso numero di giorni, subito prima
+  const inizio = new Date(aI, mI - 1, gI);
+  const fine = new Date(aF, mF - 1, gF);
+  const giorni = Math.round((fine - inizio) / 86400000) + 1;
+  const finePrec = new Date(aI, mI - 1, gI - 1);
+  const inizioPrec = new Date(finePrec.getFullYear(), finePrec.getMonth(), finePrec.getDate() - giorni + 1);
+  return { inizio: fmt(inizioPrec), fine: fmt(finePrec) };
+}
+// KPI principali del cruscotto: costi totali, incidenza sui ricavi,
+// voce con maggiore incidenza, categoria con maggiore aumento, costi
+// ricorrenti, costi riducibili — calcolati una sola volta sui dati già
+// filtrati, così cruscotto/grafici/tabella restano sempre coerenti tra loro
+function calcolaKpiAnalisiCosti({ spese, speseAttribuzioni, costiCategorie, costiSottocategorie, corsiDate, iscritti, location, inizio, fine, rangeConfronto, filtri }) {
+  const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const tutteLeSpese = speseComplete(spese, corsiDate, iscritti, costiSottocategorie);
+
+  const { totale, vociIncluse } = calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, inizio, fine, filtri);
+  const confronto = rangeConfronto ? calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, rangeConfronto.inizio, rangeConfronto.fine, filtri) : null;
+
+  const cdFiltrate = (corsiDate || []).filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine
+    && (!filtri.sedeId || cd.location_id === filtri.sedeId) && (!filtri.corsoId || cd.corso_id === filtri.corsoId) && (!filtri.classeId || cd.id === filtri.classeId));
+  const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
+  const ricavi = round2((iscritti || []).filter((i) => idsCd.has(i.corso_data_id)).reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+  const incidenzaRicavi = ricavi > 0 ? round1Erp((totale / ricavi) * 100) : null;
+  const variazione = confronto ? variazionePctErp(totale, confronto.totale) : null;
+
+  const perCategoria = {};
+  vociIncluse.forEach(({ spesa, importo }) => { perCategoria[spesa.categoria_id] = round2((perCategoria[spesa.categoria_id] || 0) + importo); });
+  const categorieOrdinate = Object.entries(perCategoria)
+    .map(([id, tot]) => ({ categoria: costiCategorieById[id], totale: tot }))
+    .filter((c) => c.categoria)
+    .sort((a, b) => b.totale - a.totale);
+  const voceMaggiore = categorieOrdinate[0] ? { ...categorieOrdinate[0], pct: totale > 0 ? round1Erp((categorieOrdinate[0].totale / totale) * 100) : 0 } : null;
+
+  let categoriaMaggiorAumento = null;
+  if (confronto) {
+    const perCategoriaPrec = {};
+    confronto.vociIncluse.forEach(({ spesa, importo }) => { perCategoriaPrec[spesa.categoria_id] = round2((perCategoriaPrec[spesa.categoria_id] || 0) + importo); });
+    const aumenti = categorieOrdinate
+      .map((c) => ({ categoria: c.categoria, totale: c.totale, aumento: variazionePctErp(c.totale, perCategoriaPrec[c.categoria.id] || 0) }))
+      .filter((c) => c.aumento != null)
+      .sort((a, b) => b.aumento - a.aumento);
+    categoriaMaggiorAumento = aumenti[0] || null;
+  }
+
+  const ricorrenti = round2(vociIncluse.filter((v) => v.spesa.ricorrente_occasionale === "ricorrente").reduce((s, v) => s + v.importo, 0));
+  const riducibiliAlta = round2(vociIncluse.filter((v) => v.spesa.riducibilita === "alta").reduce((s, v) => s + v.importo, 0));
+
+  const perSede = (location || []).map((l) => {
+    const t = calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, inizio, fine, { ...filtri, sedeId: l.id });
+    return { sede: l, totale: t.totale };
+  }).filter((r) => r.totale > 0).sort((a, b) => b.totale - a.totale);
+
+  const perFissoVariabile = { fisso: 0, variabile: 0, semivariabile: 0, nd: 0 };
+  vociIncluse.forEach(({ spesa, importo }) => {
+    const k = ["fisso", "variabile", "semivariabile"].includes(spesa.fisso_variabile) ? spesa.fisso_variabile : "nd";
+    perFissoVariabile[k] = round2(perFissoVariabile[k] + importo);
+  });
+  const perRicorrenzaNatura = { ricorrente: 0, occasionale: 0, investimento: 0, straordinario: 0 };
+  vociIncluse.forEach(({ spesa, importo }) => {
+    if (spesa.natura === "investimento") perRicorrenzaNatura.investimento = round2(perRicorrenzaNatura.investimento + importo);
+    else if (spesa.natura === "straordinario") perRicorrenzaNatura.straordinario = round2(perRicorrenzaNatura.straordinario + importo);
+    else if (spesa.ricorrente_occasionale === "ricorrente") perRicorrenzaNatura.ricorrente = round2(perRicorrenzaNatura.ricorrente + importo);
+    else if (spesa.ricorrente_occasionale === "occasionale") perRicorrenzaNatura.occasionale = round2(perRicorrenzaNatura.occasionale + importo);
+  });
+
+  return {
+    totale, ricavi, incidenzaRicavi, variazione, voceMaggiore, categoriaMaggiorAumento,
+    ricorrenti, riducibiliAlta, categorieOrdinate, perSede, perFissoVariabile, perRicorrenzaNatura, vociIncluse,
+    pctRicorrenti: totale > 0 ? round1Erp((ricorrenti / totale) * 100) : 0,
+    pctRiducibili: totale > 0 ? round1Erp((riducibiliAlta / totale) * 100) : 0,
+  };
+}
+
+// tendina ricercabile compatta (bottone + <select> a comparsa), usata
+// per ogni filtro della barra di "Analisi costi di gestione": evita la
+// lunga fila di pulsanti-città vietata dal brief
+function FiltroRicercabile({ chiave, etichetta, valore, setValore, opzioni, apriChiave, setApriChiave, larghezza }) {
+  const aperto = apriChiave === chiave;
+  return (
+    <div style={{ position: "relative", flex: `1 1 ${larghezza || 150}px`, minWidth: 130 }}>
+      <button
+        onClick={() => setApriChiave(aperto ? "" : chiave)}
+        style={{
+          ...fontBody, width: "100%", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, fontWeight: 600,
+          padding: "9px 11px", borderRadius: 10, cursor: "pointer",
+          border: `1px solid ${valore ? NAVY : CREAM_BORDER}`, background: "#fff", color: NAVY,
+        }}
+      >
+        <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {valore ? (opzioni.find((o) => o.id === valore)?.nome || valore) : etichetta}
+        </span>
+        <IconaChevronGiuErp size={12} color={MUTED} />
+      </button>
+      {aperto && (
+        <select
+          autoFocus
+          style={{ ...inputStyle, ...fontBody, fontSize: 12.5, position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20, width: "auto" }}
+          value={valore}
+          onChange={(e) => { setValore(e.target.value); setApriChiave(""); }}
+          onBlur={() => setApriChiave("")}
+        >
+          <option value="">Tutti</option>
+          {opzioni.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+// grafico Pareto: barre ordinate dalla categoria più costosa alla meno
+// costosa (grigie oltre l'80% cumulato) + linea della percentuale cumulata
+function GraficoParetoCosti({ categorie }) {
+  if (!categorie.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo nel periodo.</div>;
+  const top = categorie.slice(0, 8);
+  const totaleGenerale = categorie.reduce((s, c) => s + c.totale, 0);
+  let cum = 0;
+  const punti = top.map((c) => { cum += c.totale; return { ...c, cumulPct: totaleGenerale > 0 ? round1Erp((cum / totaleGenerale) * 100) : 0 }; });
+  const massimo = Math.max(1, ...punti.map((p) => p.totale));
+  const larghezza = 600, altezza = 220, padSx = 44, padDx = 40, padAlto = 14, padBasso = 46;
+  const n = punti.length;
+  const stepX = (larghezza - padSx - padDx) / n;
+  const xCentro = (i) => padSx + stepX * i + stepX / 2;
+  const yBar = (v) => altezza - padBasso - (v / massimo) * (altezza - padAlto - padBasso);
+  const yLinea = (pct) => padAlto + (1 - pct / 100) * (altezza - padAlto - padBasso);
+  const path = punti.map((p, i) => `${i === 0 ? "M" : "L"}${xCentro(i).toFixed(1)},${yLinea(p.cumulPct).toFixed(1)}`).join(" ");
+  const idx80 = punti.findIndex((p) => p.cumulPct >= 80);
+  return (
+    <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+      <line x1={padSx} y1={yLinea(80)} x2={larghezza - padDx} y2={yLinea(80)} stroke={GOLD} strokeDasharray="3 3" strokeWidth="1" />
+      <text x={larghezza - padDx + 4} y={yLinea(80) + 3} fontSize="9" fill={GOLD} fontFamily="'Roboto',sans-serif">80%</text>
+      {punti.map((p, i) => (
+        <rect key={p.categoria.id} x={xCentro(i) - stepX * 0.28} y={yBar(p.totale)} width={stepX * 0.56} height={Math.max(1, altezza - padBasso - yBar(p.totale))}
+          fill={idx80 >= 0 && i <= idx80 ? NAVY : "#C7CBD6"} rx="3" />
+      ))}
+      <path d={path} fill="none" stroke={GOLD} strokeWidth="2" />
+      {punti.map((p, i) => <circle key={`c${p.categoria.id}`} cx={xCentro(i)} cy={yLinea(p.cumulPct)} r="2.5" fill={GOLD} />)}
+      {punti.map((p, i) => (
+        <text key={`t${p.categoria.id}`} x={xCentro(i)} y={altezza - padBasso + 16} fontSize="9.5" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">
+          {p.categoria.nome.length > 12 ? `${p.categoria.nome.slice(0, 11)}…` : p.categoria.nome}
+        </text>
+      ))}
+    </svg>
+  );
+}
+// barra comparativa generica (fisso/variabile/semivariabile, oppure
+// ricorrente/occasionale/investimento/straordinario)
+function BarraComparativaCosti({ voci }) {
+  const totale = voci.reduce((s, v) => s + v.valore, 0);
+  return (
+    <div>
+      <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", marginBottom: 10, background: BG }}>
+        {totale > 0 && voci.filter((v) => v.valore > 0).map((v) => (
+          <div key={v.etichetta} style={{ width: `${(v.valore / totale) * 100}%`, background: v.colore }} title={`${v.etichetta}: ${fmtEuroErp(v.valore)}`} />
+        ))}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+        {voci.map((v) => (
+          <div key={v.etichetta} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: NAVY }}>
+            <span style={{ width: 9, height: 9, borderRadius: 2, background: v.colore, display: "inline-block", flexShrink: 0 }} />
+            {v.etichetta} <b>{fmtEuroErp(v.valore)}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// cruscotto principale: filtri, KPI, grafici, tabella "Voci di spesa
+// principali", segnalazioni gestionali, drill-down — legge SOLO dati
+// reali già tracciati nel gestionale più il registro "spese"
+function PaginaAnalisiCosti({
+  corsi, location, master, corsiDate, iscritti, costiCategorie, costiSottocategorie, eventi, fornitori,
+  spese, speseAttribuzioni, costiBudget, costiSoglieAllerta, ricarica, onBack,
+  onApriCatalogo, onApriNuovaSpesa, onApriBudget, onApriModificaSpesa,
+}) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
-  const [sedeSel, setSedeSel] = useState("");
-  const [categoriaAperta, setCategoriaAperta] = useState("");
+  const [confronto, setConfronto] = useState("periodoprecedente");
+  const [apriFiltro, setApriFiltro] = useState("");
+  const [sedeId, setSedeId] = useState("");
+  const [corsoId, setCorsoId] = useState("");
+  const [classeId, setClasseId] = useState("");
+  const [eventoId, setEventoId] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
+  const [sottocategoriaId, setSottocategoriaId] = useState("");
+  const [fornitoreId, setFornitoreId] = useState("");
+  const [fissoVariabile, setFissoVariabile] = useState("");
+  const [ricorrenteOccasionale, setRicorrenteOccasionale] = useState("");
+  const [natura, setNatura] = useState("");
+  const [riducibilita, setRiducibilita] = useState("");
+  const [stato, setStato] = useState("");
+  const [origine, setOrigine] = useState("");
+  const [drillDown, setDrillDown] = useState(null);
+  const [segnalazioniAperte, setSegnalazioniAperte] = useState(true);
+  const [importCsvAperto, setImportCsvAperto] = useState(false);
 
-  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const range = rangePeriodoCosti(periodo, { da: customDa, a: customA });
+  const range = rangePeriodoAnalisiCosti(periodo, { da: customDa, a: customA });
+  const rangeConfronto = (confronto === "nessuno" || confronto === "budget") ? null : rangeConfrontoAnalisiCosti(range, confronto);
+  const filtri = useMemo(() => ({ sedeId, corsoId, classeId, eventoId, categoriaId, sottocategoriaId, fornitoreId, fissoVariabile, ricorrenteOccasionale, natura, riducibilita, stato, origine }),
+    [sedeId, corsoId, classeId, eventoId, categoriaId, sottocategoriaId, fornitoreId, fissoVariabile, ricorrenteOccasionale, natura, riducibilita, stato, origine]);
 
-  const cdPeriodo = useMemo(
-    () => corsiDate.filter((cd) => cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine && (!sedeSel || cd.location_id === sedeSel)),
-    [corsiDate, range.inizio, range.fine, sedeSel]
+  const kpi = useMemo(
+    () => calcolaKpiAnalisiCosti({ spese, speseAttribuzioni, costiCategorie, costiSottocategorie, corsiDate, iscritti, location, inizio: range.inizio, fine: range.fine, rangeConfronto, filtri }),
+    [spese, speseAttribuzioni, costiCategorie, costiSottocategorie, corsiDate, iscritti, location, range.inizio, range.fine, rangeConfronto, filtri]
   );
-  const idsCdPeriodo = useMemo(() => new Set(cdPeriodo.map((cd) => cd.id)), [cdPeriodo]);
-  const iscrittiPeriodo = useMemo(() => iscritti.filter((i) => idsCdPeriodo.has(i.corso_data_id)), [iscritti, idsCdPeriodo]);
-  const vociManualiPeriodo = useMemo(
-    () => costiOperativiVoci.filter((v) => v.data >= range.inizio && v.data <= range.fine && (!sedeSel || v.location_id === sedeSel)),
-    [costiOperativiVoci, range.inizio, range.fine, sedeSel]
-  );
 
-  const totaleCommissioniVenditori = round2(iscrittiPeriodo.reduce((s, i) => s + (i.quota_venditore || 0), 0));
-  const totaleCostoMaster = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_master || 0), 0));
-  const totaleCostoAssistenti = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_assistenti || 0), 0));
-  const totaleHotelRiepilogo = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_hotel || 0), 0));
-  const totaleAccademia = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_accademia || 0), 0));
-  const totalePranzi = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_pranzi || 0), 0));
-  const totaleCostoCoordinatore = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_coordinatore || 0), 0));
-  const totaleRimborsoCene = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_cene || 0), 0));
-  const totaleRimborsoColazioniSpesa = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_colazioni_spesa || 0), 0));
-  const totaleRimborsoTaxi = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_taxi || 0), 0));
-  const totaleRimborsoParcheggi = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_parcheggi || 0), 0));
-  // voci extra del Riepilogo amministrativo mai taggate a nessuna
-  // categoria (dati precedenti alla scelta obbligatoria): non hanno una
-  // categoria "vera" a cui appartenere, quindi restano un'unica riga a
-  // parte invece di sparire dal totale
-  const totaleExtraNonCategorizzate = round2(cdPeriodo.reduce((s, cd) => {
-    const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => !c.categoria).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
-    return s + extra;
-  }, 0));
+  const budgetPeriodo = useMemo(() => {
+    const [annoIni, meseIni] = range.inizio.split("-").map(Number);
+    const [annoFin, meseFin] = range.fine.split("-").map(Number);
+    return (costiBudget || []).filter((b) => {
+      if (filtri.categoriaId && b.categoria_id && b.categoria_id !== filtri.categoriaId) return false;
+      if (filtri.sedeId && b.sede_id && b.sede_id !== filtri.sedeId) return false;
+      if (filtri.corsoId && b.corso_id && b.corso_id !== filtri.corsoId) return false;
+      if (b.mese) {
+        const dataBudget = b.anno * 12 + (b.mese - 1);
+        return dataBudget >= (annoIni * 12 + meseIni - 1) && dataBudget <= (annoFin * 12 + meseFin - 1);
+      }
+      return b.anno >= annoIni && b.anno <= annoFin;
+    }).reduce((s, b) => s + (b.importo_budget || 0), 0);
+  }, [costiBudget, range.inizio, range.fine, filtri]);
+  const scostamentoBudgetPeriodo = scostamentoBudget(kpi.totale, budgetPeriodo);
 
-  // percorso comune a tutte le categorie: voci manuali inserite a mano
-  // per quella categoria, più eventuali voci extra del Riepilogo
-  // amministrativo taggate a questa categoria E a una sua sottovoce
-  // precisa (confluiscono nella riga giusta, non in un generico
-  // "extra" di categoria); solo le voci extra taggate alla categoria ma
-  // senza una sottovoce riconosciuta (dati inseriti prima che la scelta
-  // della sottovoce fosse possibile) restano un "extra" a parte. Alcune
-  // categorie ricevono INOLTRE una o più righe automatiche per data di
-  // corso, aggiunte dopo il calcolo generico (vedi commento su
-  // CATEGORIE_COSTI)
-  function datiCategoria(cat) {
-    const vociCat = vociManualiPeriodo.filter((v) => v.categoria === cat.chiave);
-    const chiaviValide = new Set(cat.voci.map((v) => v.chiave));
-    const sottovoci = cat.voci.map((v) => {
-      const totaleManuale = vociCat.filter((x) => x.sottovoce === v.chiave).reduce((s, x) => s + (x.imponibile || 0), 0);
-      const totaleExtraTaggata = cdPeriodo.reduce((s, cd) => {
-        const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => c.categoria === cat.chiave && c.sottovoce === v.chiave).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
-        return s + extra;
-      }, 0);
-      return { chiave: v.chiave, etichetta: v.etichetta, totale: round2(totaleManuale + totaleExtraTaggata) };
-    });
-    const extraSenzaSottovoce = round2(cdPeriodo.reduce((s, cd) => {
-      const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => c.categoria === cat.chiave && !chiaviValide.has(c.sottovoce)).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
-      return s + extra;
-    }, 0));
-    if (extraSenzaSottovoce > 0) sottovoci.push({ chiave: "__extra__", etichetta: "Voci extra dal Riepilogo amministrativo", totale: extraSenzaSottovoce });
-
-    if (cat.chiave === "alloggi") {
-      // il "Costo appartamento/hotel" automatico confluisce nella stessa
-      // riga manuale, non come riga separata
-      const alloggio = sottovoci.find((v) => v.chiave === "alloggio");
-      if (alloggio) alloggio.totale = round2(alloggio.totale + totaleHotelRiepilogo);
+  // "Andamento dei costi": bucket mensili del periodo, confrontati con
+  // lo stesso bucket del periodo di confronto (stesso meccanismo già
+  // collaudato in PannelloConfrontoAnnuale/PaginaErp)
+  const bucketsMensili = useMemo(() => {
+    const [aI, mI] = range.inizio.split("-").map(Number);
+    const [aF, mF] = range.fine.split("-").map(Number);
+    const risultato = [];
+    let anno = aI, mese = mI;
+    while (anno < aF || (anno === aF && mese <= mF)) {
+      const inizioMese = `${anno}-${String(mese).padStart(2, "0")}-01`;
+      const ultimoGiorno = new Date(anno, mese, 0).getDate();
+      const fineMese = `${anno}-${String(mese).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
+      risultato.push({ etichetta: MESI_ABBR[mese - 1], inizio: inizioMese, fine: fineMese });
+      mese += 1;
+      if (mese > 12) { mese = 1; anno += 1; }
     }
-    if (cat.chiave === "viaggi") {
-      // "Rimborso taxi"/"Rimborso parcheggi" automatici confluiscono in
-      // "Trasporti extra", non come righe separate
-      const trasportiExtra = sottovoci.find((v) => v.chiave === "trasporti_extra");
-      if (trasportiExtra) trasportiExtra.totale = round2(trasportiExtra.totale + totaleRimborsoTaxi + totaleRimborsoParcheggi);
+    return risultato;
+  }, [range.inizio, range.fine]);
+  const andamentoMensile = useMemo(() => bucketsMensili.map((b, idx) => {
+    const kA = calcolaKpiAnalisiCosti({ spese, speseAttribuzioni, costiCategorie, costiSottocategorie, corsiDate, iscritti, location, inizio: b.inizio, fine: b.fine, rangeConfronto: null, filtri });
+    let precedente = null;
+    if (rangeConfronto) {
+      const giorniOffset = Math.round((new Date(range.inizio) - new Date(rangeConfronto.inizio)) / 86400000);
+      const dInizio = new Date(b.inizio); dInizio.setDate(dInizio.getDate() - giorniOffset);
+      const dFine = new Date(b.fine); dFine.setDate(dFine.getDate() - giorniOffset);
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      const kP = calcolaKpiAnalisiCosti({ spese, speseAttribuzioni, costiCategorie, costiSottocategorie, corsiDate, iscritti, location, inizio: fmt(dInizio), fine: fmt(dFine), rangeConfronto: null, filtri });
+      precedente = kP.totale;
     }
-    if (cat.chiave === "vitto") {
-      // interamente automatica: Costo pranzi + Rimborso cene + Rimborso
-      // colazioni e spesa, dal Riepilogo amministrativo, nessuna voce manuale
-      sottovoci.unshift({ chiave: "vitto_docenti_personale", etichetta: "Vitto Docenti e personale al corso", totale: round2(totalePranzi + totaleRimborsoCene + totaleRimborsoColazioniSpesa) });
-    }
-    if (cat.chiave === "sedi") {
-      sottovoci.splice(1, 0, { chiave: "costo_accademia", etichetta: "Costo accademia", totale: totaleAccademia });
-    }
-    if (cat.chiave === "commerciale") {
-      sottovoci.unshift({ chiave: "commissioni_venditori", etichetta: "Commissioni venditori", totale: totaleCommissioniVenditori });
-    }
-    if (cat.chiave === "docenti_corsi") {
-      sottovoci.unshift(
-        { chiave: "costo_assistenti", etichetta: "Costo assistenti", totale: totaleCostoAssistenti },
-        { chiave: "costo_master", etichetta: "Costo master", totale: totaleCostoMaster },
-      );
-    }
-    if (cat.chiave === "personale_accademia") {
-      sottovoci.unshift({ chiave: "costo_coordinatore", etichetta: "Costo coordinatore", totale: totaleCostoCoordinatore });
-    }
+    return { etichetta: b.etichetta, corrente: kA.totale, precedente };
+  }), [bucketsMensili, spese, speseAttribuzioni, costiCategorie, costiSottocategorie, corsiDate, iscritti, location, rangeConfronto, range.inizio, filtri]);
 
-    return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci };
-  }
-
-  const categorieConDati = CATEGORIE_COSTI.map((cat) => ({ ...cat, ...datiCategoria(cat) }));
-  // voci extra "orfane" (mai taggate a nessuna categoria): non è una
-  // categoria selezionabile, è solo una riga di trasparenza per non
-  // perdere quell'importo dal totale generale
-  if (totaleExtraNonCategorizzate > 0) {
-    categorieConDati.push({
-      chiave: "non_categorizzato", etichetta: "Non categorizzato", tipo: "automatico",
-      totale: totaleExtraNonCategorizzate,
-      sottovoci: [{ chiave: "extra_non_categorizzate", etichetta: "Voci extra non categorizzate (dal Riepilogo amministrativo)", totale: totaleExtraNonCategorizzate }],
-    });
-  }
-  const totaleGenerale = round2(categorieConDati.reduce((s, c) => s + c.totale, 0));
-  const ricaviPeriodo = round2(iscrittiPeriodo.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
-
-  // dashboard "Analisi costi di gestione": KPI, andamento, incidenza per
-  // categoria, e confronto/performance di TUTTE le sedi (a prescindere
-  // dal filtro "Sede" qui sopra, che serve solo a filtrare il dettaglio
-  // per categoria più sotto) — riusa calcolaKpiErp, già verificato
-  // coincidere esattamente con totaleGenerale per lo stesso periodo/sede
-  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const rangePrec = rangePrecedenteErp(range);
-  const kpiPrecedente = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById });
-  const variazioneCosti = variazionePctErp(totaleGenerale, kpiPrecedente.costi);
-
-  const categorieOrdinate = [...categorieConDati].filter((c) => c.totale > 0).sort((a, b) => b.totale - a.totale);
-  const voceMaggiore = categorieOrdinate[0] || null;
-
-  const performancePerSede = location.map((l) => {
-    const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
-    return { sede: l, ricavi: k.ricavi, costi: k.costi, utile: k.utile, margine: k.ricavi > 0 ? round1Erp((k.utile / k.ricavi) * 100) : null };
-  });
-  const totaleCostiSedi = round2(performancePerSede.reduce((s, p) => s + p.costi, 0));
-  const sedeCostiOrdinate = [...performancePerSede].filter((p) => p.costi > 0).sort((a, b) => b.costi - a.costi);
-  const sedePerformanceOrdinata = [...performancePerSede].filter((p) => p.ricavi > 0).sort((a, b) => (b.margine ?? -Infinity) - (a.margine ?? -Infinity));
-  const sedePiuCostosa = sedeCostiOrdinate[0] || null;
-
-  const donutDati = (() => {
-    const top = categorieOrdinate.slice(0, 4);
-    const restoTotale = round2(categorieOrdinate.slice(4).reduce((s, c) => s + c.totale, 0));
-    const voci = top.map((c) => ({ etichetta: c.etichetta, totale: c.totale }));
+  const donutDati = useMemo(() => {
+    const top = kpi.categorieOrdinate.slice(0, 4);
+    const restoTotale = round2(kpi.categorieOrdinate.slice(4).reduce((s, c) => s + c.totale, 0));
+    const voci = top.map((c) => ({ etichetta: c.categoria.nome, totale: c.totale }));
     if (restoTotale > 0) voci.push({ etichetta: "Altro", totale: restoTotale });
-    return voci.map((v) => ({ ...v, pct: totaleGenerale > 0 ? round1Erp((v.totale / totaleGenerale) * 100) : 0 }));
-  })();
+    return voci.map((v) => ({ ...v, pct: kpi.totale > 0 ? round1Erp((v.totale / kpi.totale) * 100) : 0 }));
+  }, [kpi.categorieOrdinate, kpi.totale]);
 
-  const bucketsAttuali = bucketizzaPeriodoCosti(range.inizio, range.fine);
-  const bucketsPrecedenti = bucketizzaPeriodoCosti(rangePrec.inizio, rangePrec.fine);
-  const andamentoCosti = bucketsAttuali.map((b, idx) => {
-    const kA = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: b.da, fine: b.a, sedeId: sedeSel, corsoById, locById });
-    const bp = bucketsPrecedenti[idx];
-    const kP = bp ? calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: bp.da, fine: bp.a, sedeId: sedeSel, corsoById, locById }) : null;
-    return { etichetta: b.etichetta, corrente: kA.costi, precedente: kP ? kP.costi : null };
-  });
-
-  // solo lettura, ordinato dalla spesa più importante alla minore: le
-  // uscite si inseriscono esclusivamente da "+ Nuova operazione" nella
-  // dashboard, qui non c'è alcuna possibilità di aggiungere né eliminare
-  const categorieOrdinateComplete = [...categorieConDati].sort((a, b) => b.totale - a.totale);
-  const massimoCategoria = Math.max(1, ...categorieOrdinateComplete.map((c) => c.totale));
-  // stesse voci "spacchettate" dalle categorie, appiattite e riordinate
-  // per costo assoluto: la colonna "per voce di costo" a fianco, che
-  // risponde a "quali sono le spese più pesanti in assoluto", non "quale
-  // categoria pesa di più"
-  const vociFlatOrdinate = categorieConDati
-    .flatMap((cat) => cat.sottovoci.map((v) => ({ ...v, categoria: cat.etichetta })))
-    .filter((v) => v.totale > 0)
-    .sort((a, b) => b.totale - a.totale);
-  const massimoVoce = Math.max(1, ...vociFlatOrdinate.map((v) => v.totale));
+  const opzioniSede = location.map((l) => ({ id: l.id, nome: l.nome.toUpperCase() }));
+  const opzioniCorso = corsi.map((c) => ({ id: c.id, nome: c.nome.toUpperCase() }));
+  const opzioniClasse = corsiDate.map((cd) => ({ id: cd.id, nome: `${fmtData(cd.data_inizio)} — ${corsi.find((c) => c.id === cd.corso_id)?.nome || ""}`.toUpperCase() }));
+  const opzioniEvento = eventi.map((e) => ({ id: e.id, nome: e.nome.toUpperCase() }));
+  const opzioniCategoria = [...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => ({ id: c.id, nome: c.nome }));
+  const opzioniSottocategoria = sottocategorieDiCategoria(costiSottocategorie, categoriaId).map((v) => ({ id: v.id, nome: v.nome }));
+  const opzioniFornitore = fornitori.map((f) => ({ id: f.id, nome: f.nome.toUpperCase() }));
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
-      <div style={{ maxWidth: 1120, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-            <IconaFrecciaSinistra size={20} />
-          </button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
-        </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Analisi costi di gestione</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Controlla l'andamento dei costi, l'incidenza e le performance di ogni sede.</div>
-
-        <div style={{ display: "flex", marginBottom: 12, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
-            {[
-              { v: "ultimomese", l: "Ultimo mese" },
-              { v: "mesescorso", l: "Mese precedente" },
-              { v: "trimestre", l: "Trimestre" },
-              { v: "anno", l: "Anno" },
-              { v: "personalizzato", l: "Personalizzato" },
-            ].map((p) => (
-              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
-                {p.l}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {periodo === "personalizzato" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-            <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
-            <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
-          </div>
-        )}
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Sede</div>
-          <button onClick={() => setSedeSel("")} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === "" ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === "" ? NAVY : "#fff", color: sedeSel === "" ? "#fff" : NAVY, cursor: "pointer" }}>
-            Tutte le sedi
-          </button>
-          {location.map((l) => (
-            <button key={l.id} onClick={() => setSedeSel(l.id)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === l.id ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === l.id ? NAVY : "#fff", color: sedeSel === l.id ? "#fff" : NAVY, cursor: "pointer" }}>
-              {l.nome}
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+              <IconaFrecciaSinistra size={20} />
             </button>
-          ))}
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
+            <button onClick={() => esportaCsvSpese(kpi.vociIncluse, Object.fromEntries(costiCategorie.map((c) => [c.id, c])), Object.fromEntries(costiSottocategorie.map((v) => [v.id, v])))} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
+            <button onClick={() => window.print()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta PDF</button>
+            <button onClick={onApriBudget} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Budget</button>
+            <button onClick={onApriCatalogo} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Catalogo categorie</button>
+            <button onClick={onApriNuovaSpesa} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}>+ Nuova spesa</button>
+          </div>
+        </div>
+        {importCsvAperto && (
+          <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
+        )}
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Analisi costi di gestione</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Quanto spendiamo, dove incide di più, cosa sta crescendo, cosa possiamo ridurre.</div>
+
+        {/* barra filtri */}
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+              {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "semestre", l: "Semestre" }, { v: "anno", l: "Anno" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
+                <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 12px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>{p.l}</button>
+              ))}
+            </div>
+            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+              {[{ v: "periodoprecedente", l: "Vs periodo prec." }, { v: "annoprecedente", l: "Vs anno prec." }, { v: "budget", l: "Vs budget" }, { v: "nessuno", l: "Nessun confronto" }].map((p) => (
+                <button key={p.v} onClick={() => setConfronto(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 12px", borderRadius: 16, border: "none", background: confronto === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>{p.l}</button>
+              ))}
+            </div>
+          </div>
+          {periodo === "personalizzato" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
+              <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
+            </div>
+          )}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <FiltroRicercabile chiave="sede" etichetta="Sede" valore={sedeId} setValore={setSedeId} opzioni={opzioniSede} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="corso" etichetta="Corso" valore={corsoId} setValore={setCorsoId} opzioni={opzioniCorso} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="classe" etichetta="Classe" valore={classeId} setValore={setClasseId} opzioni={opzioniClasse} apriChiave={apriFiltro} setApriChiave={setApriFiltro} larghezza={200} />
+            <FiltroRicercabile chiave="evento" etichetta="Evento" valore={eventoId} setValore={setEventoId} opzioni={opzioniEvento} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="categoria" etichetta="Categoria" valore={categoriaId} setValore={(v) => { setCategoriaId(v); setSottocategoriaId(""); }} opzioni={opzioniCategoria} apriChiave={apriFiltro} setApriChiave={setApriFiltro} larghezza={180} />
+            <FiltroRicercabile chiave="sottocategoria" etichetta="Sotto-categoria" valore={sottocategoriaId} setValore={setSottocategoriaId} opzioni={opzioniSottocategoria} apriChiave={apriFiltro} setApriChiave={setApriFiltro} larghezza={180} />
+            <FiltroRicercabile chiave="fornitore" etichetta="Fornitore" valore={fornitoreId} setValore={setFornitoreId} opzioni={opzioniFornitore} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="fissovar" etichetta="Fisso/variabile" valore={fissoVariabile} setValore={setFissoVariabile} opzioni={FISSO_VARIABILE_OPZIONI.map((o) => ({ id: o.chiave, nome: o.etichetta }))} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="ricorroccas" etichetta="Ricorrente/occasionale" valore={ricorrenteOccasionale} setValore={setRicorrenteOccasionale} opzioni={RICORRENTE_OCCASIONALE_OPZIONI.map((o) => ({ id: o.chiave, nome: o.etichetta }))} apriChiave={apriFiltro} setApriChiave={setApriFiltro} larghezza={190} />
+            <FiltroRicercabile chiave="natura" etichetta="Operativo/investimento" valore={natura} setValore={setNatura} opzioni={NATURA_OPZIONI.map((o) => ({ id: o.chiave, nome: o.etichetta }))} apriChiave={apriFiltro} setApriChiave={setApriFiltro} larghezza={190} />
+            <FiltroRicercabile chiave="riducibilita" etichetta="Riducibilità" valore={riducibilita} setValore={setRiducibilita} opzioni={RIDUCIBILITA_OPZIONI.map((o) => ({ id: o.chiave, nome: o.etichetta }))} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="stato" etichetta="Stato pagamento" valore={stato} setValore={setStato} opzioni={STATI_SPESA.map((o) => ({ id: o.chiave, nome: o.etichetta }))} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+            <FiltroRicercabile chiave="origine" etichetta="Origine" valore={origine} setValore={setOrigine} opzioni={ORIGINE_OPZIONI.map((o) => ({ id: o.chiave, nome: o.etichetta }))} apriChiave={apriFiltro} setApriChiave={setApriFiltro} />
+          </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr) minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
-          <CardKpiErp
-            titolo="Costi totali" valore={fmtEuroErp(totaleGenerale)}
-            sub={ricaviPeriodo > 0 ? `${fmtPctErp(round1Erp((totaleGenerale / ricaviPeriodo) * 100))} dei ricavi` : "—"}
-            Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1"
-          />
+        {/* KPI */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr) minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 14 }}>
+          <CardKpiErp titolo="Costi totali" valore={fmtEuroErp(kpi.totale)} variazione={kpi.variazione} variazioneInvertita sub="vs periodo di confronto" Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
+          <CardKpiErp titolo="Incidenza sui ricavi" valore={kpi.incidenzaRicavi == null ? "N/D" : fmtPctErp(kpi.incidenzaRicavi)} sub={`Ricavi periodo: ${fmtEuroErp(kpi.ricavi)}`} Icona={IconaBanconota} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
           <div style={{ ...cardStyle, padding: 18, marginBottom: 0, background: "#FBF3E0", border: "1px solid #EEDCB4" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F3E3C0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <IconaTortaCostiErp size={19} color={GOLD} />
-              </div>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F3E3C0", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
+              <IconaTortaCostiErp size={19} color={GOLD} />
             </div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: "#9C7C3E", marginBottom: 4 }}>Voce più incidente</div>
-            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.25 }}>{voceMaggiore?.etichetta || "—"}</div>
-            {voceMaggiore && (
-              <div style={{ display: "inline-block", ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "3px 9px" }}>
-                {fmtPctErp(round1Erp((voceMaggiore.totale / totaleGenerale) * 100))} del totale
+            <div style={{ ...fontBody, fontSize: 12.5, color: "#9C7C3E", marginBottom: 4 }}>Voce con maggiore incidenza</div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.25 }}>{kpi.voceMaggiore?.categoria.nome || "—"}</div>
+            {kpi.voceMaggiore && <div style={{ display: "inline-block", ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "3px 9px" }}>{fmtEuroErp(kpi.voceMaggiore.totale)} · {fmtPctErp(kpi.voceMaggiore.pct)}</div>}
+          </div>
+          <CardKpiErp
+            titolo="Categoria con maggiore aumento"
+            valore={kpi.categoriaMaggiorAumento?.categoria.nome || "—"}
+            sub={kpi.categoriaMaggiorAumento ? `${kpi.categoriaMaggiorAumento.aumento >= 0 ? "+" : ""}${fmtPctErp(kpi.categoriaMaggiorAumento.aumento)} vs confronto` : "Nessun confronto disponibile"}
+            Icona={IconaTrendCostiErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1"
+          />
+          <CardKpiErp titolo="Costi ricorrenti" valore={fmtEuroErp(kpi.ricorrenti)} sub={`${fmtPctErp(kpi.pctRicorrenti)} dei costi totali`} Icona={IconaSedeCostiErp} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
+          <CardKpiErp titolo="Costi potenzialmente riducibili" valore={fmtEuroErp(kpi.riducibiliAlta)} sub={`${fmtPctErp(kpi.pctRiducibili)} dei costi totali`} Icona={IconaScatolaErp} coloreIcona="#B7791F" coloreBgIcona="#FBF0DD" />
+        </div>
+
+        {confronto === "budget" && (
+          <div style={{ ...cardStyle, padding: 16, marginBottom: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Budget del periodo</div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{budgetPeriodo > 0 ? fmtEuroErp(budgetPeriodo) : "Non impostato"}</div>
+            {budgetPeriodo > 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: scostamentoBudgetPeriodo != null && scostamentoBudgetPeriodo > 0 ? "#C0392B" : "#2E7D32", background: scostamentoBudgetPeriodo != null && scostamentoBudgetPeriodo > 0 ? "#FBE4E1" : "#E3F3E5", borderRadius: 8, padding: "4px 10px" }}>
+                Scostamento: {scostamentoBudgetPeriodo == null ? "N/D" : `${scostamentoBudgetPeriodo >= 0 ? "+" : ""}${fmtPctErp(scostamentoBudgetPeriodo)}`}
               </div>
             )}
           </div>
-          <CardKpiErp
-            titolo="Sede più costosa" valore={sedePiuCostosa?.sede.nome || "—"}
-            sub={sedePiuCostosa && totaleCostiSedi > 0 ? `${fmtPctErp(round1Erp((sedePiuCostosa.costi / totaleCostiSedi) * 100))} dei costi` : "—"}
-            Icona={IconaSedeCostiErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9"
-          />
-          <CardKpiErp
-            titolo="Variazione periodo" valore={variazioneCosti == null ? "—" : `${variazioneCosti >= 0 ? "+" : ""}${fmtPctErp(variazioneCosti)}`}
-            sub="Rispetto al periodo precedente"
-            Icona={IconaTrendCostiErp}
-            coloreIcona={variazioneCosti == null ? MUTED : variazioneCosti <= 0 ? "#2E7D32" : "#C0392B"}
-            coloreBgIcona={variazioneCosti == null ? BG : variazioneCosti <= 0 ? "#E3F3E5" : "#FBE4E1"}
-          />
-        </div>
+        )}
 
+        {/* grafici */}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.4fr) minmax(0,1fr)", gap: 14, marginBottom: 14 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Andamento dei costi</div>
-            <GraficoAndamentoCosti punti={andamentoCosti} />
+            <GraficoAndamentoCosti punti={andamentoMensile} />
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Incidenza per categoria</div>
@@ -9539,79 +9728,1055 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginBottom: 14 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Costi per sede</div>
-            <BarraCostiPerSede dati={sedeCostiOrdinate} totale={totaleCostiSedi} />
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Pareto dei costi</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 10 }}>Le categorie che generano l'80% dei costi (barre blu)</div>
+            <GraficoParetoCosti categorie={kpi.categorieOrdinate} />
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Indice di performance per sede</div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 10 }}>Margine utile sugli incassi di ogni sede, al netto dei costi che sostiene</div>
-            {sedePerformanceOrdinata.map((d, i) => <RigaPerformanceSede key={d.sede.id} pos={i + 1} dato={d} />)}
-            {sedePerformanceOrdinata.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun incasso registrato nel periodo.</div>}
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Costi per sede</div>
+            <BarraCostiPerSede dati={kpi.perSede} totale={kpi.perSede.reduce((s, r) => s + r.totale, 0)} />
+            {kpi.perSede.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo registrato per sede nel periodo.</div>}
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginBottom: 18 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Dettaglio per categoria</div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Dalla spesa più importante alla minore — clicca una voce per vedere cosa la compone.</div>
-            {categorieOrdinateComplete.map((cat, i) => (
-              <div key={cat.chiave} style={{ padding: "14px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                <div
-                  onClick={() => setCategoriaAperta((c) => (c === cat.chiave ? "" : cat.chiave))}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8, cursor: "pointer" }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cat.etichetta}</div>
-                    {cat.tipo === "automatico" && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Automatico</div>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(cat.totale)}</div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.chiave ? "rotate(180deg)" : "none", flexShrink: 0 }}>
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </div>
-                </div>
-                <div style={{ height: 8, borderRadius: 5, background: BG, overflow: "hidden" }}>
-                  <div style={{ width: `${Math.min(100, (cat.totale / massimoCategoria) * 100)}%`, height: "100%", borderRadius: 5, background: i === 0 && cat.totale > 0 ? GOLD : NAVY }} />
-                </div>
-                {categoriaAperta === cat.chiave && (
-                  <div style={{ marginTop: 10 }}>
-                    {[...cat.sottovoci].sort((a, b) => b.totale - a.totale).map((v) => (
-                      <div key={v.chiave} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                        <span>{v.etichetta}</span>
-                        <span style={{ fontWeight: 700 }}>{fmtEuroErp(v.totale)}</span>
-                      </div>
-                    ))}
-                  </div>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Costi fissi e variabili</div>
+            <BarraComparativaCosti voci={[
+              { etichetta: "Fisso", valore: kpi.perFissoVariabile.fisso, colore: NAVY },
+              { etichetta: "Variabile", valore: kpi.perFissoVariabile.variabile, colore: GOLD },
+              { etichetta: "Semivariabile", valore: kpi.perFissoVariabile.semivariabile, colore: "#7C8DA6" },
+              { etichetta: "Non classificato", valore: kpi.perFissoVariabile.nd, colore: "#D9D4C4" },
+            ]} />
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Ricorrenti, occasionali e investimenti</div>
+            <BarraComparativaCosti voci={[
+              { etichetta: "Ricorrenti", valore: kpi.perRicorrenzaNatura.ricorrente, colore: NAVY },
+              { etichetta: "Occasionali", valore: kpi.perRicorrenzaNatura.occasionale, colore: GOLD },
+              { etichetta: "Investimenti", valore: kpi.perRicorrenzaNatura.investimento, colore: "#2563EB" },
+              { etichetta: "Straordinari", valore: kpi.perRicorrenzaNatura.straordinario, colore: "#C0392B" },
+            ]} />
+          </div>
+        </div>
+
+        <PannelloSegnalazioniGestionali
+          aperto={segnalazioniAperte} onToggle={() => setSegnalazioniAperte((v) => !v)}
+          spese={spese} speseAttribuzioni={speseAttribuzioni} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} costiSoglieAllerta={costiSoglieAllerta}
+          corsiDate={corsiDate} iscritti={iscritti} location={location} range={range} rangeConfronto={rangeConfronto}
+        />
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 4 }}>Voci di spesa principali</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Le categorie più rilevanti del periodo — clicca una riga per il dettaglio.</div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+              <thead>
+                <tr>
+                  {["Categoria", "Importo", "Incidenza", "Ricorrente", "Riducibilità", "Azione"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {kpi.categorieOrdinate.slice(0, 10).map((c, i) => {
+                  const vociCategoria = kpi.vociIncluse.filter((v) => v.spesa.categoria_id === c.categoria.id);
+                  const nRicorrenti = vociCategoria.filter((v) => v.spesa.ricorrente_occasionale === "ricorrente").length;
+                  const nRiducibiliAlta = vociCategoria.filter((v) => v.spesa.riducibilita === "alta").length;
+                  const pct = kpi.totale > 0 ? round1Erp((c.totale / kpi.totale) * 100) : 0;
+                  return (
+                    <tr key={c.categoria.id} style={{ cursor: "pointer" }} onClick={() => setDrillDown({ tipo: "categoria", categoria: c.categoria })}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                        {i === 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
+                        {c.categoria.nome}
+                      </td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(c.totale)}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, minWidth: 130 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden", minWidth: 50 }}>
+                            <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", background: i === 0 ? GOLD : NAVY }} />
+                          </div>
+                          <span style={{ ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>{fmtPctErp(pct)}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{nRicorrenti}/{vociCategoria.length}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{nRiducibiliAlta}/{vociCategoria.length}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                        <button onClick={(e) => { e.stopPropagation(); setDrillDown({ tipo: "categoria", categoria: c.categoria }); }} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "transparent", border: "none", cursor: "pointer" }}>Apri dettaglio →</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {kpi.categorieOrdinate.length === 0 && (
+                  <tr><td colSpan={6} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna spesa registrata in questo periodo.</td></tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {drillDown && (
+          <PannelloDrillDownCosti
+            drillDown={drillDown} onClose={() => setDrillDown(null)}
+            kpi={kpi} range={range} rangeConfronto={rangeConfronto} location={location} corsi={corsi} corsiDate={corsiDate}
+            fornitori={fornitori} costiSottocategorie={costiSottocategorie}
+            onApriModificaSpesa={onApriModificaSpesa} ricarica={ricarica}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// pannello "Segnalazioni gestionali": alert calcolati dai dati reali,
+// non da soglie inventate — ogni riga cita l'importo/percentuale vera
+function PannelloSegnalazioniGestionali({ aperto, onToggle, spese, speseAttribuzioni, costiCategorie, costiSottocategorie, costiSoglieAllerta, corsiDate, iscritti, location, range, rangeConfronto }) {
+  const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const tutteLeSpese = speseComplete(spese, corsiDate, iscritti, costiSottocategorie);
+  const segnalazioni = useMemo(() => {
+    const righe = [];
+    const attuale = calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, range.inizio, range.fine, {});
+    const perCategoriaAttuale = {};
+    attuale.vociIncluse.forEach(({ spesa, importo }) => { perCategoriaAttuale[spesa.categoria_id] = round2((perCategoriaAttuale[spesa.categoria_id] || 0) + importo); });
+
+    // crescita categoria oltre il 10% rispetto al confronto
+    if (rangeConfronto) {
+      const precedente = calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, rangeConfronto.inizio, rangeConfronto.fine, {});
+      const perCategoriaPrec = {};
+      precedente.vociIncluse.forEach(({ spesa, importo }) => { perCategoriaPrec[spesa.categoria_id] = round2((perCategoriaPrec[spesa.categoria_id] || 0) + importo); });
+      Object.entries(perCategoriaAttuale).forEach(([catId, tot]) => {
+        const prec = perCategoriaPrec[catId] || 0;
+        if (prec > 0) {
+          const variazione = round1Erp(((tot - prec) / prec) * 100);
+          if (variazione > 10) righe.push({ tipo: "crescita", testo: `"${costiCategorieById[catId]?.nome}" è cresciuta del ${fmtPctErp(variazione)} rispetto al periodo di confronto.` });
+        }
+      });
+    }
+
+    // concentrazione: quante categorie generano l'80% dei costi
+    const ordinate = Object.entries(perCategoriaAttuale).map(([id, tot]) => ({ id, tot })).sort((a, b) => b.tot - a.tot);
+    const totaleGenerale = ordinate.reduce((s, c) => s + c.tot, 0);
+    if (totaleGenerale > 0) {
+      let cum = 0, n = 0;
+      for (const c of ordinate) { cum += c.tot; n++; if (cum / totaleGenerale >= 0.8) break; }
+      if (n > 0 && n <= 5) righe.push({ tipo: "concentrazione", testo: `Il ${round1Erp((cum / totaleGenerale) * 100)}% dei costi è concentrato in ${n} categori${n === 1 ? "a" : "e"}.` });
+    }
+
+    // sede con rapporto costi/ricavi più alto
+    const cdPeriodo = (corsiDate || []).filter((cd) => cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine);
+    const rapportiSede = (location || []).map((l) => {
+      const idsCd = new Set(cdPeriodo.filter((cd) => cd.location_id === l.id).map((cd) => cd.id));
+      const ricaviSede = round2((iscritti || []).filter((i) => idsCd.has(i.corso_data_id)).reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+      const costiSede = calcolaTotaleSpese(tutteLeSpese, speseAttribuzioni, costiCategorieById, corsiDateById, range.inizio, range.fine, { sedeId: l.id }).totale;
+      return { sede: l, ricavi: ricaviSede, costi: costiSede, rapporto: ricaviSede > 0 ? round1Erp((costiSede / ricaviSede) * 100) : null };
+    }).filter((r) => r.rapporto != null && r.costi > 0).sort((a, b) => b.rapporto - a.rapporto);
+    if (rapportiSede[0] && rapportiSede[0].rapporto > 50) righe.push({ tipo: "sede", testo: `La sede di ${rapportiSede[0].sede.nome} presenta il rapporto costi/ricavi più elevato (${fmtPctErp(rapportiSede[0].rapporto)}).` });
+
+    // fatture scadute
+    const scadute = attuale.vociIncluse.filter((v) => v.spesa.stato === "scaduta");
+    if (scadute.length > 0) righe.push({ tipo: "scadute", testo: `${scadute.length} fattur${scadute.length === 1 ? "a" : "e"} risulta${scadute.length === 1 ? "" : "no"} scadut${scadute.length === 1 ? "a" : "e"}, per un totale di ${fmtEuroErp(scadute.reduce((s, v) => s + v.importo, 0))}.` });
+
+    // ambito richiesto ma mancante
+    const senzaAmbito = attuale.vociIncluse.filter(({ spesa }) => {
+      if (spesa.tipo_ambito === "sede" && !spesa.sede_id) return true;
+      if (spesa.tipo_ambito === "corso" && !spesa.corso_id) return true;
+      if (spesa.tipo_ambito === "evento" && !spesa.evento_id) return true;
+      return false;
+    });
+    if (senzaAmbito.length > 0) righe.push({ tipo: "ambito", testo: `${senzaAmbito.length} spes${senzaAmbito.length === 1 ? "a" : "e"} indica${senzaAmbito.length === 1 ? "" : "no"} un ambito (sede/corso/evento) senza averlo selezionato.` });
+
+    // possibili duplicati: stesso fornitore + stesso importo entro 3 giorni
+    const perFornitore = {};
+    attuale.vociIncluse.forEach(({ spesa }) => { if (spesa.fornitore_id) (perFornitore[spesa.fornitore_id] ||= []).push(spesa); });
+    let duplicati = 0;
+    Object.values(perFornitore).forEach((lista) => {
+      for (let a = 0; a < lista.length; a++) {
+        for (let b = a + 1; b < lista.length; b++) {
+          if (lista[a].totale === lista[b].totale && lista[a].data_documento && lista[b].data_documento) {
+            const diff = Math.abs(new Date(lista[a].data_documento) - new Date(lista[b].data_documento)) / 86400000;
+            if (diff <= 3) duplicati++;
+          }
+        }
+      }
+    });
+    if (duplicati > 0) righe.push({ tipo: "duplicati", testo: `Sono presenti ${duplicati} possibil${duplicati === 1 ? "e" : "i"} registrazion${duplicati === 1 ? "e" : "i"} duplicat${duplicati === 1 ? "a" : "e"} (stesso fornitore, stesso importo, a pochi giorni di distanza).` });
+
+    // commissioni piattaforma sopra soglia (soglia configurata o 5% di default)
+    const sogliaCommissioni = (costiSoglieAllerta || []).find((s) => s.tipo_indicatore === "commissioni_piattaforma" && s.attiva !== false)?.soglia ?? 5;
+    const commissioni = attuale.vociIncluse.filter((v) => v.spesa.categoria_id === "commissioni_pagamento" && v.spesa.percentuale_commissione_effettiva != null);
+    commissioni.forEach(({ spesa }) => {
+      if (spesa.percentuale_commissione_effettiva > sogliaCommissioni) {
+        righe.push({ tipo: "commissioni", testo: `Le commissioni ${spesa.piattaforma_pagamento || "di pagamento"} sono al ${fmtPctErp(spesa.percentuale_commissione_effettiva)}, sopra la soglia del ${fmtPctErp(sogliaCommissioni)}.` });
+      }
+    });
+
+    // soglie di allerta configurate manualmente (per categoria)
+    (costiSoglieAllerta || []).filter((s) => s.attiva !== false && s.tipo_indicatore === "incidenza_categoria" && s.categoria_id).forEach((s) => {
+      const tot = perCategoriaAttuale[s.categoria_id] || 0;
+      const pctSuTotale = totaleGenerale > 0 ? (tot / totaleGenerale) * 100 : 0;
+      const superata = s.operatore === "<" ? pctSuTotale < s.soglia : pctSuTotale > s.soglia;
+      if (superata && tot > 0) righe.push({ tipo: "soglia", testo: `"${costiCategorieById[s.categoria_id]?.nome}" ha superato la soglia impostata (${fmtPctErp(pctSuTotale)} contro ${fmtPctErp(s.soglia)}).` });
+    });
+
+    return righe;
+  }, [spese, speseAttribuzioni, costiCategorieById, corsiDateById, costiSoglieAllerta, corsiDate, iscritti, location, range.inizio, range.fine, rangeConfronto]);
+
+  return (
+    <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginBottom: 14 }}>
+      <div onClick={onToggle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 20px", cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Segnalazioni gestionali</div>
+          {segnalazioni.length > 0 && (
+            <div style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{segnalazioni.length}</div>
+          )}
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: aperto ? "rotate(180deg)" : "none" }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </div>
+      {aperto && (
+        <div style={{ padding: "0 20px 18px" }}>
+          {segnalazioni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna criticità rilevata nel periodo selezionato.</div>}
+          {segnalazioni.map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#C0392B", marginTop: 6, flexShrink: 0 }} />
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{s.testo}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// pannello laterale di drill-down: dettaglio di una categoria (totale,
+// andamento, per sede, elenco spese, allegati)
+function PannelloDrillDownCosti({ drillDown, onClose, kpi, range, location, corsi, corsiDate, fornitori, costiSottocategorie, onApriModificaSpesa, ricarica }) {
+  const categoria = drillDown.categoria;
+  const vociCategoria = kpi.vociIncluse.filter((v) => v.spesa.categoria_id === categoria.id);
+  const totale = round2(vociCategoria.reduce((s, v) => s + v.importo, 0));
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
+  const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const sottocategorieById = Object.fromEntries((costiSottocategorie || []).map((v) => [v.id, v]));
+
+  const perSottocategoria = {};
+  vociCategoria.forEach(({ spesa, importo }) => { perSottocategoria[spesa.sottocategoria_id] = round2((perSottocategoria[spesa.sottocategoria_id] || 0) + importo); });
+  const sottocategorieOrdinate = Object.entries(perSottocategoria).map(([id, tot]) => ({ sottocategoria: sottocategorieById[id], totale: tot })).filter((s) => s.sottocategoria).sort((a, b) => b.totale - a.totale);
+
+  const perSede = {};
+  vociCategoria.forEach(({ spesa, importo }) => {
+    const sedeId = spesa.sede_id || (spesa.classe_id && corsiDateById[spesa.classe_id]?.location_id) || null;
+    if (sedeId) perSede[sedeId] = round2((perSede[sedeId] || 0) + importo);
+  });
+  const perSedeOrdinato = Object.entries(perSede).map(([id, tot]) => ({ sede: location.find((l) => l.id === id), totale: tot })).filter((s) => s.sede).sort((a, b) => b.totale - a.totale);
+
+  async function eliminaSpesa(id) {
+    if (!window.confirm("Eliminare questa spesa?")) return;
+    const { error } = await supabase.from("spese").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "flex-end", zIndex: 1000 }} onClick={onClose}>
+      <div style={{ background: "#fff", width: "min(520px, 100%)", height: "100%", overflowY: "auto", padding: 24 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+          <div>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>{fmtData(range.inizio)} — {fmtData(range.fine)}</div>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{categoria.nome}</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4 }} aria-label="Chiudi">×</button>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 4 }}>{fmtEuroErp(totale)}</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>{kpi.totale > 0 ? `${fmtPctErp(round1Erp((totale / kpi.totale) * 100))} dei costi totali del periodo` : "—"}</div>
+
+        {sottocategorieOrdinate.length > 0 && (
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Composizione</div>
+            {sottocategorieOrdinate.map((s) => (
+              <div key={s.sottocategoria.id} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>
+                <span>{s.sottocategoria.nome}</span>
+                <span style={{ fontWeight: 700 }}>{fmtEuroErp(s.totale)}</span>
               </div>
             ))}
           </div>
+        )}
 
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Dettaglio per voce di costo</div>
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Tutte le voci di spesa in ordine di costo, indipendentemente dalla categoria.</div>
-            {vociFlatOrdinate.map((v, i) => (
-              <div key={`${v.categoria}-${v.chiave}`} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{v.etichetta}</div>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{v.categoria}</div>
+        {perSedeOrdinato.length > 0 && (
+          <div style={{ marginBottom: 22 }}>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Per sede</div>
+            <BarraCostiPerSede dati={perSedeOrdinato} totale={perSedeOrdinato.reduce((s, r) => s + r.totale, 0)} />
+          </div>
+        )}
+
+        <div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Elenco spese ({vociCategoria.length})</div>
+          {vociCategoria.map(({ spesa, importo }) => (
+            <div key={spesa.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategorieById[spesa.sottocategoria_id]?.nome || "Spesa"}</div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                    {spesa.data_documento ? fmtData(spesa.data_documento) : "—"}
+                    {spesa.fornitore_id ? ` · ${fornitoriById[spesa.fornitore_id]?.nome}` : ""}
+                    {" · "}{etichettaOpzione(STATI_SPESA, spesa.stato)}
+                    {spesa.classe_id && corsiDateById[spesa.classe_id] ? ` · ${corsiById[corsiDateById[spesa.classe_id].corso_id]?.nome || ""}` : ""}
                   </div>
-                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(v.totale)}</div>
                 </div>
-                <div style={{ height: 6, borderRadius: 4, background: BG, overflow: "hidden" }}>
-                  <div style={{ width: `${Math.min(100, (v.totale / massimoVoce) * 100)}%`, height: "100%", borderRadius: 4, background: i === 0 ? GOLD : NAVY }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(importo)}</span>
+                  {spesa.allegato_path && (
+                    <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri allegato" style={{ display: "flex", color: NAVY }}>
+                      <IconaCopiaFile size={14} />
+                    </a>
+                  )}
+                  {onApriModificaSpesa && (
+                    <button onClick={() => onApriModificaSpesa(spesa.id)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                    </button>
+                  )}
+                  <button onClick={() => eliminaSpesa(spesa.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                  </button>
                 </div>
               </div>
-            ))}
-            {vociFlatOrdinate.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo registrato nel periodo.</div>}
+            </div>
+          ))}
+          {vociCategoria.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna spesa in questo periodo.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function slugificaCosti(testo) {
+  return testo.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+// amministrazione delle categorie/sotto-categorie (ora in database, non
+// più una costante fissa nel codice): aggiungi/rinomina/riordina/
+// disattiva, blocco cancellazione se già usata da qualche spesa, più le
+// soglie di allerta configurabili
+function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spese, costiSoglieAllerta, ricarica, onBack }) {
+  const [categoriaAperta, setCategoriaAperta] = useState("");
+  const [nuovaCategoria, setNuovaCategoria] = useState("");
+  const [testoNuovaSottocategoria, setTestoNuovaSottocategoria] = useState({});
+  const [msg, setMsg] = useState("");
+  const [nuovaSoglia, setNuovaSoglia] = useState({ tipo_indicatore: "incidenza_categoria", categoria_id: "", soglia: "", operatore: ">" });
+
+  const categorieOrdinate = [...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+  const conteggioUsoCategoria = (id) => spese.filter((s) => s.categoria_id === id).length;
+  const conteggioUsoSottocategoria = (id) => spese.filter((s) => s.sottocategoria_id === id).length;
+
+  async function aggiungiCategoria() {
+    const nome = nuovaCategoria.trim();
+    if (!nome) return;
+    const id = slugificaCosti(nome);
+    if (costiCategorie.some((c) => c.id === id)) { setMsg("Esiste già una categoria con questo nome."); return; }
+    const ordine = Math.max(0, ...costiCategorie.map((c) => c.ordine || 0)) + 1;
+    const { error } = await supabase.from("costi_categorie").insert({ id, nome, ordine });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNuovaCategoria(""); setMsg(""); ricarica();
+  }
+  async function rinominaCategoria(id, nome) { await supabase.from("costi_categorie").update({ nome }).eq("id", id); ricarica(); }
+  async function disattivaCategoria(cat) { await supabase.from("costi_categorie").update({ attiva: !cat.attiva }).eq("id", cat.id); ricarica(); }
+  async function eliminaCategoria(cat) {
+    if (conteggioUsoCategoria(cat.id) > 0) { window.alert("Questa categoria è già usata da alcune spese: disattivala invece di eliminarla."); return; }
+    if (!window.confirm(`Eliminare la categoria "${cat.nome}"?`)) return;
+    await supabase.from("costi_categorie").delete().eq("id", cat.id);
+    ricarica();
+  }
+  async function spostaCategoria(cat, direzione) {
+    const idx = categorieOrdinate.findIndex((c) => c.id === cat.id);
+    const altro = categorieOrdinate[idx + direzione];
+    if (!altro) return;
+    await Promise.all([
+      supabase.from("costi_categorie").update({ ordine: altro.ordine ?? 0 }).eq("id", cat.id),
+      supabase.from("costi_categorie").update({ ordine: cat.ordine ?? 0 }).eq("id", altro.id),
+    ]);
+    ricarica();
+  }
+
+  async function aggiungiSottocategoria(categoriaId) {
+    const nome = (testoNuovaSottocategoria[categoriaId] || "").trim();
+    if (!nome) return;
+    const id = `${categoriaId}__${slugificaCosti(nome)}`;
+    if (costiSottocategorie.some((v) => v.id === id)) { setMsg("Esiste già una sotto-voce con questo nome in questa categoria."); return; }
+    const esistenti = sottocategorieDiCategoria(costiSottocategorie, categoriaId);
+    const ordine = Math.max(0, ...esistenti.map((v) => v.ordine || 0)) + 1;
+    const { error } = await supabase.from("costi_sottocategorie").insert({ id, categoria_id: categoriaId, nome, ordine });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setTestoNuovaSottocategoria((prev) => ({ ...prev, [categoriaId]: "" }));
+    setMsg(""); ricarica();
+  }
+  async function rinominaSottocategoria(id, nome) { await supabase.from("costi_sottocategorie").update({ nome }).eq("id", id); ricarica(); }
+  async function disattivaSottocategoria(v) { await supabase.from("costi_sottocategorie").update({ attiva: !v.attiva }).eq("id", v.id); ricarica(); }
+  async function eliminaSottocategoria(v) {
+    if (conteggioUsoSottocategoria(v.id) > 0) { window.alert("Questa sotto-voce è già usata da alcune spese: disattivala invece di eliminarla."); return; }
+    if (!window.confirm(`Eliminare "${v.nome}"?`)) return;
+    await supabase.from("costi_sottocategorie").delete().eq("id", v.id);
+    ricarica();
+  }
+  async function spostaSottocategoria(v, direzione) {
+    const lista = sottocategorieDiCategoria(costiSottocategorie, v.categoria_id);
+    const idx = lista.findIndex((x) => x.id === v.id);
+    const altro = lista[idx + direzione];
+    if (!altro) return;
+    await Promise.all([
+      supabase.from("costi_sottocategorie").update({ ordine: altro.ordine ?? 0 }).eq("id", v.id),
+      supabase.from("costi_sottocategorie").update({ ordine: v.ordine ?? 0 }).eq("id", altro.id),
+    ]);
+    ricarica();
+  }
+
+  async function aggiungiSoglia() {
+    if (!nuovaSoglia.soglia || !nuovaSoglia.categoria_id) return;
+    const { error } = await supabase.from("costi_soglie_allerta").insert({ ...nuovaSoglia, soglia: parseNum(nuovaSoglia.soglia) });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNuovaSoglia({ tipo_indicatore: "incidenza_categoria", categoria_id: "", soglia: "", operatore: ">" });
+    ricarica();
+  }
+  async function eliminaSoglia(id) { await supabase.from("costi_soglie_allerta").delete().eq("id", id); ricarica(); }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+      <div style={{ maxWidth: 800, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Catalogo delle categorie</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Aggiungi, rinomina, riordina o disattiva le categorie e le sotto-voci di "Analisi costi di gestione".</div>
+
+        <div style={{ ...cardStyle, display: "flex", gap: 10 }}>
+          <input style={inputStyle} placeholder="Nome della nuova categoria" value={nuovaCategoria} onChange={(e) => setNuovaCategoria(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungiCategoria()} />
+          <Button onClick={aggiungiCategoria}>+ Categoria</Button>
+        </div>
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 14 }}>{msg}</div>}
+
+        {categorieOrdinate.map((cat, i) => (
+          <div key={cat.id} style={{ ...cardStyle, padding: 0, overflow: "hidden", opacity: cat.attiva === false ? 0.55 : 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", cursor: "pointer" }} onClick={() => setCategoriaAperta((c) => (c === cat.id ? "" : cat.id))}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <input
+                  style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, border: "none", background: "transparent", width: "100%", padding: 0 }}
+                  value={cat.nome} onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => rinominaCategoria(cat.id, e.target.value)}
+                />
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{conteggioUsoCategoria(cat.id)} spese{cat.attiva === false ? " · disattivata" : ""}</div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                <button onClick={() => spostaCategoria(cat, -1)} disabled={i === 0} title="Sposta su" style={{ border: "none", background: "none", cursor: i === 0 ? "default" : "pointer", color: i === 0 ? "#D8D3C4" : NAVY, padding: 4 }}>↑</button>
+                <button onClick={() => spostaCategoria(cat, 1)} disabled={i === categorieOrdinate.length - 1} title="Sposta giù" style={{ border: "none", background: "none", cursor: i === categorieOrdinate.length - 1 ? "default" : "pointer", color: i === categorieOrdinate.length - 1 ? "#D8D3C4" : NAVY, padding: 4 }}>↓</button>
+                <button onClick={() => disattivaCategoria(cat)} title={cat.attiva === false ? "Riattiva" : "Disattiva"} style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", borderRadius: 8, cursor: "pointer", color: NAVY, padding: "5px 9px", ...fontBody, fontSize: 11.5 }}>{cat.attiva === false ? "Riattiva" : "Disattiva"}</button>
+                <button onClick={() => eliminaCategoria(cat)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                </button>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.id ? "rotate(180deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+              </div>
+            </div>
+            {categoriaAperta === cat.id && (
+              <div style={{ padding: "0 18px 16px" }}>
+                {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v, j, lista) => (
+                  <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}`, opacity: v.attiva === false ? 0.55 : 1 }}>
+                    <input style={{ ...fontBody, fontSize: 13, color: NAVY, border: "none", background: "transparent", flex: 1, padding: 0 }} value={v.nome} onChange={(e) => rinominaSottocategoria(v.id, e.target.value)} />
+                    <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, whiteSpace: "nowrap" }}>{conteggioUsoSottocategoria(v.id)} spese</span>
+                    <button onClick={() => spostaSottocategoria(v, -1)} disabled={j === 0} title="Su" style={{ border: "none", background: "none", cursor: j === 0 ? "default" : "pointer", color: j === 0 ? "#D8D3C4" : NAVY, padding: 3, fontSize: 12 }}>↑</button>
+                    <button onClick={() => spostaSottocategoria(v, 1)} disabled={j === lista.length - 1} title="Giù" style={{ border: "none", background: "none", cursor: j === lista.length - 1 ? "default" : "pointer", color: j === lista.length - 1 ? "#D8D3C4" : NAVY, padding: 3, fontSize: 12 }}>↓</button>
+                    <button onClick={() => disattivaSottocategoria(v)} style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", borderRadius: 6, cursor: "pointer", color: NAVY, padding: "3px 7px", ...fontBody, fontSize: 10.5, whiteSpace: "nowrap" }}>{v.attiva === false ? "Riattiva" : "Disattiva"}</button>
+                    <button onClick={() => eliminaSottocategoria(v)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 3, display: "flex" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                    </button>
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <input style={{ ...inputStyle, fontSize: 13 }} placeholder="Nuova sotto-voce" value={testoNuovaSottocategoria[cat.id] || ""} onChange={(e) => setTestoNuovaSottocategoria((p) => ({ ...p, [cat.id]: e.target.value }))} onKeyDown={(e) => e.key === "Enter" && aggiungiSottocategoria(cat.id)} />
+                  <button onClick={() => aggiungiSottocategoria(cat.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 14px", borderRadius: 8, border: "none", background: NAVY, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}>+ Aggiungi</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 8 }}>Soglie di allerta</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Genera una segnalazione quando una categoria supera la percentuale indicata sul totale dei costi.</div>
+        <div style={{ ...cardStyle }}>
+          {(costiSoglieAllerta || []).map((s) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{categoriaCostoDi(costiCategorie, s.categoria_id)?.nome || "—"}</span>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{s.operatore} {s.soglia}%</span>
+              <button onClick={() => eliminaSoglia(s.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+              </button>
+            </div>
+          ))}
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <select style={{ ...inputStyle, flex: "1 1 180px" }} value={nuovaSoglia.categoria_id} onChange={(e) => setNuovaSoglia((p) => ({ ...p, categoria_id: e.target.value }))}>
+              <option value="">Scegli categoria…</option>
+              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <select style={{ ...inputStyle, flex: "0 1 70px" }} value={nuovaSoglia.operatore} onChange={(e) => setNuovaSoglia((p) => ({ ...p, operatore: e.target.value }))}>
+              <option value=">">&gt;</option>
+              <option value="<">&lt;</option>
+            </select>
+            <input style={{ ...inputStyle, flex: "0 1 100px" }} inputMode="decimal" placeholder="Soglia %" value={nuovaSoglia.soglia} onChange={(e) => setNuovaSoglia((p) => ({ ...p, soglia: e.target.value }))} />
+            <Button onClick={aggiungiSoglia}>+ Aggiungi soglia</Button>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// form completo "Nuova spesa"/"Modifica spesa": tutti i campi del
+// brief (identificativi, stato, ambito con ripartizione multi-ambito,
+// classificazione gestionale, ricorrenza, budget/soglia per-spesa,
+// allegato). Pagina intera (non modale) vista la quantità di campi
+function PaginaSpesaForm({ spesaId, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, spese, speseAttribuzioni, ricarica, onBack }) {
+  const spesaEsistente = spesaId ? spese.find((s) => s.id === spesaId) : null;
+  const attribuzioniEsistenti = spesaId ? speseAttribuzioni.filter((a) => a.spesa_id === spesaId) : [];
+
+  const [descrizione, setDescrizione] = useState(spesaEsistente?.descrizione || "");
+  const [categoriaId, setCategoriaId] = useState(spesaEsistente?.categoria_id || "");
+  const [sottocategoriaId, setSottocategoriaId] = useState(spesaEsistente?.sottocategoria_id || "");
+  const [fornitoreId, setFornitoreId] = useState(spesaEsistente?.fornitore_id || "");
+  const [nuovoFornitore, setNuovoFornitore] = useState("");
+  const [numeroDocumento, setNumeroDocumento] = useState(spesaEsistente?.numero_documento || "");
+  const [dataDocumento, setDataDocumento] = useState(spesaEsistente?.data_documento || dataOggiStr());
+  const [dataPagamento, setDataPagamento] = useState(spesaEsistente?.data_pagamento || "");
+  const [competenzaDa, setCompetenzaDa] = useState(spesaEsistente?.competenza_da || "");
+  const [competenzaA, setCompetenzaA] = useState(spesaEsistente?.competenza_a || "");
+  const [imponibile, setImponibile] = useState(spesaEsistente?.imponibile != null ? String(spesaEsistente.imponibile) : "");
+  const [totale, setTotale] = useState(spesaEsistente?.totale != null ? String(spesaEsistente.totale) : "");
+  const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? 22);
+  const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : false);
+  const [stato, setStato] = useState(spesaEsistente?.stato || "pagata");
+  const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || "");
+  const [note, setNote] = useState(spesaEsistente?.note || "");
+
+  const [tipoAmbito, setTipoAmbito] = useState(spesaEsistente?.tipo_ambito || "generale");
+  const [sedeId, setSedeId] = useState(spesaEsistente?.sede_id || "");
+  const [corsoId, setCorsoId] = useState(spesaEsistente?.corso_id || "");
+  const [classeId, setClasseId] = useState(spesaEsistente?.classe_id || "");
+  const [eventoId, setEventoId] = useState(spesaEsistente?.evento_id || "");
+  const [ripartisci, setRipartisci] = useState(attribuzioniEsistenti.length > 0);
+  const [righeRipartizione, setRigheRipartizione] = useState(
+    attribuzioniEsistenti.length > 0
+      ? attribuzioniEsistenti.map((a) => ({ tipoAmbito: a.tipo_ambito, sedeId: a.sede_id || "", corsoId: a.corso_id || "", classeId: a.classe_id || "", eventoId: a.evento_id || "", percentuale: String(a.percentuale) }))
+      : [{ tipoAmbito: "sede", sedeId: "", corsoId: "", classeId: "", eventoId: "", percentuale: "100" }]
+  );
+
+  const [direttoIndiretto, setDirettoIndiretto] = useState(spesaEsistente?.diretto_indiretto || "");
+  const [fissoVariabile, setFissoVariabile] = useState(spesaEsistente?.fisso_variabile || "");
+  const [ricorrenteOccasionale, setRicorrenteOccasionale] = useState(spesaEsistente?.ricorrente_occasionale || "");
+  const [natura, setNatura] = useState(spesaEsistente?.natura || "operativo");
+  const [beneDurevole, setBeneDurevole] = useState(spesaEsistente?.bene_durevole || false);
+  const [controllabilita, setControllabilita] = useState(spesaEsistente?.controllabilita || "");
+  const [riducibilita, setRiducibilita] = useState(spesaEsistente?.riducibilita || "");
+  const [essenzialita, setEssenzialita] = useState(spesaEsistente?.essenzialita || "");
+  const [origine, setOrigine] = useState(spesaEsistente?.origine || "manuale");
+  const [includiAnalisiCosti, setIncludiAnalisiCosti] = useState(spesaEsistente?.includi_analisi_costi !== false);
+  const [ricorrenza, setRicorrenza] = useState(spesaEsistente?.ricorrenza || "nessuna");
+
+  const [budgetPrevisto, setBudgetPrevisto] = useState(spesaEsistente?.budget_previsto != null ? String(spesaEsistente.budget_previsto) : "");
+  const [sogliaPersonalizzata, setSogliaPersonalizzata] = useState(spesaEsistente?.soglia_allerta_personalizzata != null ? String(spesaEsistente.soglia_allerta_personalizzata) : "");
+  const [responsabileCosto, setResponsabileCosto] = useState(spesaEsistente?.responsabile_costo || "");
+
+  const [piattaformaPagamento, setPiattaformaPagamento] = useState(spesaEsistente?.piattaforma_pagamento || "");
+  const [numeroTransazioni, setNumeroTransazioni] = useState(spesaEsistente?.numero_transazioni != null ? String(spesaEsistente.numero_transazioni) : "");
+  const [incassatoPiattaforma, setIncassatoPiattaforma] = useState(spesaEsistente?.incassato_tramite_piattaforma != null ? String(spesaEsistente.incassato_tramite_piattaforma) : "");
+  const [percentualeCommissione, setPercentualeCommissione] = useState(spesaEsistente?.percentuale_commissione_effettiva != null ? String(spesaEsistente.percentuale_commissione_effettiva) : "");
+
+  const [allegatoFile, setAllegatoFile] = useState(null);
+  const [allegatoPathEsistente, setAllegatoPathEsistente] = useState(spesaEsistente?.allegato_path || "");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const ivaBloccata = esenteIva;
+  const ivaEffettiva = ivaBloccata ? 0 : iva;
+  function totaleDaImponibile(v, ivaPct) { return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100))); }
+  function imponibileDaTotale(v, ivaPct) { return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100))); }
+  function onImponibileChange(v) { setImponibile(v); setTotale(ivaBloccata ? v : totaleDaImponibile(v, ivaEffettiva)); }
+  function onTotaleChange(v) { setTotale(v); setImponibile(ivaBloccata ? v : imponibileDaTotale(v, ivaEffettiva)); }
+  function onIvaChange(v) { setIva(v); if (!ivaBloccata) setTotale(totaleDaImponibile(imponibile, v)); }
+  function onEsenteChange(checked) { setEsenteIva(checked); setTotale(checked ? imponibile : totaleDaImponibile(imponibile, iva)); }
+
+  const sottocategorieDisponibili = sottocategorieDiCategoria(costiSottocategorie, categoriaId);
+  const opzioniSede = location.map((l) => ({ id: l.id, nome: l.nome.toUpperCase() }));
+  const opzioniCorso = corsi.map((c) => ({ id: c.id, nome: c.nome.toUpperCase() }));
+  const opzioniClasse = corsiDate.map((cd) => ({ id: cd.id, nome: `${fmtData(cd.data_inizio)} — ${corsi.find((c) => c.id === cd.corso_id)?.nome || ""}`.toUpperCase() }));
+  const opzioniEvento = eventi.map((e) => ({ id: e.id, nome: e.nome.toUpperCase() }));
+
+  function selettoreAmbito(tipo, sedeVal, setSedeVal, corsoVal, setCorsoVal, classeVal, setClasseVal, eventoVal, setEventoVal) {
+    if (tipo === "sede") return <select style={inputStyle} value={sedeVal} onChange={(e) => setSedeVal(e.target.value)}><option value="">— scegli sede —</option>{opzioniSede.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    if (tipo === "corso") return <select style={inputStyle} value={corsoVal} onChange={(e) => setCorsoVal(e.target.value)}><option value="">— scegli corso —</option>{opzioniCorso.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    if (tipo === "classe") return <select style={inputStyle} value={classeVal} onChange={(e) => setClasseVal(e.target.value)}><option value="">— scegli classe —</option>{opzioniClasse.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    if (tipo === "evento") return <select style={inputStyle} value={eventoVal} onChange={(e) => setEventoVal(e.target.value)}><option value="">— scegli evento —</option>{opzioniEvento.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    return null;
+  }
+
+  function aggiungiRigaRipartizione() { setRigheRipartizione((p) => [...p, { tipoAmbito: "sede", sedeId: "", corsoId: "", classeId: "", eventoId: "", percentuale: "" }]); }
+  function modificaRigaRipartizione(idx, campo, valore) { setRigheRipartizione((p) => p.map((r, i) => (i === idx ? { ...r, [campo]: valore } : r))); }
+  function rimuoviRigaRipartizione(idx) { setRigheRipartizione((p) => p.filter((_, i) => i !== idx)); }
+  const sommaPercentuali = round2(righeRipartizione.reduce((s, r) => s + (parseNum(r.percentuale) || 0), 0));
+
+  async function salva() {
+    if (!categoriaId || !sottocategoriaId) { setMsg("Scegli categoria e sotto-categoria."); return; }
+    const imp = parseNum(imponibile);
+    if (!imp) { setMsg("Inserisci un imponibile."); return; }
+    if (ripartisci && sommaPercentuali !== 100) { setMsg(`Le percentuali di ripartizione devono sommare 100% (ora ${sommaPercentuali}%).`); return; }
+
+    setSalvando(true);
+    let fornitoreIdFinale = fornitoreId;
+    if (!fornitoreIdFinale && nuovoFornitore.trim()) {
+      const { data, error } = await supabase.from("fornitori").insert({ nome: nuovoFornitore.trim() }).select().single();
+      if (error) { setMsg("Errore fornitore: " + error.message); setSalvando(false); return; }
+      fornitoreIdFinale = data.id;
+    }
+
+    let allegatoPath = allegatoPathEsistente;
+    if (allegatoFile) {
+      const nomeFile = `${Date.now()}-${allegatoFile.name}`;
+      const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nomeFile, allegatoFile);
+      if (erroreUpload) { setMsg("Errore allegato: " + erroreUpload.message); setSalvando(false); return; }
+      const { data: pubData } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
+      allegatoPath = pubData.publicUrl;
+    }
+
+    const payload = {
+      descrizione: descrizione.trim() || null,
+      categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
+      fornitore_id: fornitoreIdFinale || null,
+      numero_documento: numeroDocumento.trim() || null,
+      data_documento: dataDocumento || null, data_pagamento: dataPagamento || null,
+      competenza_da: competenzaDa || null, competenza_a: competenzaA || null,
+      imponibile: imp, iva_percentuale: ivaEffettiva, totale: totale === "" ? imp : round2(parseNum(totale)),
+      allegato_path: allegatoPath || null, note: note.trim() || null,
+      stato, metodo_pagamento: metodoPagamento || null,
+      tipo_ambito: ripartisci ? "generale" : tipoAmbito,
+      sede_id: ripartisci ? null : (tipoAmbito === "sede" ? sedeId || null : null),
+      corso_id: ripartisci ? null : (tipoAmbito === "corso" ? corsoId || null : null),
+      classe_id: ripartisci ? null : (tipoAmbito === "classe" ? classeId || null : null),
+      evento_id: ripartisci ? null : (tipoAmbito === "evento" ? eventoId || null : null),
+      diretto_indiretto: direttoIndiretto || null, fisso_variabile: fissoVariabile || null,
+      ricorrente_occasionale: ricorrenteOccasionale || null, natura: natura || null,
+      bene_durevole: beneDurevole, controllabilita: controllabilita || null,
+      riducibilita: riducibilita || null, essenzialita: essenzialita || null,
+      origine, includi_analisi_costi: includiAnalisiCosti, ricorrenza,
+      budget_previsto: budgetPrevisto === "" ? null : parseNum(budgetPrevisto),
+      soglia_allerta_personalizzata: sogliaPersonalizzata === "" ? null : parseNum(sogliaPersonalizzata),
+      responsabile_costo: responsabileCosto.trim() || null,
+      piattaforma_pagamento: piattaformaPagamento.trim() || null,
+      numero_transazioni: numeroTransazioni === "" ? null : parseInt(numeroTransazioni, 10),
+      incassato_tramite_piattaforma: incassatoPiattaforma === "" ? null : parseNum(incassatoPiattaforma),
+      percentuale_commissione_effettiva: percentualeCommissione === "" ? null : parseNum(percentualeCommissione),
+    };
+
+    let idSpesa = spesaId;
+    if (spesaId) {
+      const { error } = await supabase.from("spese").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", spesaId);
+      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+    } else {
+      const { data, error } = await supabase.from("spese").insert(payload).select().single();
+      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      idSpesa = data.id;
+    }
+
+    await supabase.from("spese_attribuzioni").delete().eq("spesa_id", idSpesa);
+    if (ripartisci) {
+      const righe = righeRipartizione.filter((r) => parseNum(r.percentuale) > 0).map((r) => ({
+        spesa_id: idSpesa, tipo_ambito: r.tipoAmbito,
+        sede_id: r.tipoAmbito === "sede" ? r.sedeId || null : null,
+        corso_id: r.tipoAmbito === "corso" ? r.corsoId || null : null,
+        classe_id: r.tipoAmbito === "classe" ? r.classeId || null : null,
+        evento_id: r.tipoAmbito === "evento" ? r.eventoId || null : null,
+        percentuale: parseNum(r.percentuale), importo: round2(imp * (parseNum(r.percentuale) / 100)),
+      }));
+      if (righe.length) await supabase.from("spese_attribuzioni").insert(righe);
+    }
+
+    setSalvando(false);
+    ricarica();
+    onBack();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Identificativi</div>
+          <Field label="Descrizione"><input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} /></Field>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Categoria">
+                <select style={inputStyle} value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setSottocategoriaId(""); }}>
+                  <option value="">— scegli —</option>
+                  {[...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Sotto-categoria">
+                <select style={inputStyle} value={sottocategoriaId} onChange={(e) => setSottocategoriaId(e.target.value)} disabled={!categoriaId}>
+                  <option value="">— scegli —</option>
+                  {sottocategorieDisponibili.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Fornitore">
+                <select style={inputStyle} value={fornitoreId} onChange={(e) => setFornitoreId(e.target.value)}>
+                  <option value="">— nessuno —</option>
+                  {fornitori.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Nuovo fornitore (opzionale)"><input style={inputStyle} placeholder="Nome fornitore" value={nuovoFornitore} onChange={(e) => setNuovoFornitore(e.target.value)} disabled={!!fornitoreId} /></Field>
+            </div>
+          </div>
+          <Field label="Numero documento/fattura"><input style={inputStyle} value={numeroDocumento} onChange={(e) => setNumeroDocumento(e.target.value)} /></Field>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 140px" }}><Field label="Data documento"><input type="date" style={inputStyle} value={dataDocumento} onChange={(e) => setDataDocumento(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px" }}><Field label="Data pagamento"><input type="date" style={inputStyle} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px" }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px" }}><Field label="Competenza al"><input type="date" style={inputStyle} value={competenzaA} onChange={(e) => setCompetenzaA(e.target.value)} /></Field></div>
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "12px 0 6px" }}>
+            <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} /> Importo esente IVA
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}>
+              <Field label="IVA">
+                <select style={{ ...inputStyle, background: ivaBloccata ? "#EFEFEF" : "#fff", color: ivaBloccata ? MUTED : NAVY }} disabled={ivaBloccata} value={ivaEffettiva} onChange={(e) => onIvaChange(Number(e.target.value))}>
+                  {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}><Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field></div>
+          </div>
+
+          <Field label="Stato">
+            <select style={inputStyle} value={stato} onChange={(e) => setStato(e.target.value)}>
+              {STATI_SPESA.map((s) => <option key={s.chiave} value={s.chiave}>{s.etichetta}</option>)}
+            </select>
+          </Field>
+          <Field label="Metodo di pagamento">
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+              {["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"].map((opz) => (
+                <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                  <input type="radio" name="metodo-spesa" checked={metodoPagamento === opz} onChange={() => setMetodoPagamento(opz)} /> {opz}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <Field label="Allegato (fattura/ricevuta)">
+            <input type="file" onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
+            {allegatoPathEsistente && !allegatoFile && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Allegato già presente — scegli un file per sostituirlo.</div>}
+          </Field>
+          <Field label="Note"><textarea style={{ ...inputStyle, minHeight: 60 }} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        </div>
+
+        {categoriaId === "commissioni_pagamento" && (
+          <div style={{ ...cardStyle }}>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Commissioni di pagamento</div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 160px" }}><Field label="Piattaforma"><input style={inputStyle} value={piattaformaPagamento} onChange={(e) => setPiattaformaPagamento(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 140px" }}><Field label="N. transazioni"><input style={inputStyle} inputMode="numeric" value={numeroTransazioni} onChange={(e) => setNumeroTransazioni(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 160px" }}><Field label="Incassato tramite piattaforma"><input style={inputStyle} inputMode="decimal" value={incassatoPiattaforma} onChange={(e) => setIncassatoPiattaforma(e.target.value)} /></Field></div>
+              <div style={{ flex: "1 1 140px" }}><Field label="% commissione effettiva"><input style={inputStyle} inputMode="decimal" value={percentualeCommissione} onChange={(e) => setPercentualeCommissione(e.target.value)} /></Field></div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Ambito di attribuzione</div>
+          {!ripartisci && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Ambito">
+                  <select style={inputStyle} value={tipoAmbito} onChange={(e) => setTipoAmbito(e.target.value)}>
+                    {AMBITI_SPESA.map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
+                  </select>
+                </Field>
+              </div>
+              {["sede", "corso", "classe", "evento"].includes(tipoAmbito) && (
+                <div style={{ flex: 1 }}>
+                  <Field label={AMBITI_SPESA.find((a) => a.chiave === tipoAmbito)?.etichetta}>
+                    {selettoreAmbito(tipoAmbito, sedeId, setSedeId, corsoId, setCorsoId, classeId, setClasseId, eventoId, setEventoId)}
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "8px 0" }}>
+            <input type="checkbox" checked={ripartisci} onChange={(e) => setRipartisci(e.target.checked)} /> Ripartisci questa spesa su più ambiti
+          </label>
+          {ripartisci && (
+            <div>
+              {righeRipartizione.map((r, idx) => (
+                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <Field label="Ambito">
+                      <select style={inputStyle} value={r.tipoAmbito} onChange={(e) => modificaRigaRipartizione(idx, "tipoAmbito", e.target.value)}>
+                        {AMBITI_SPESA.filter((a) => ["sede", "corso", "classe", "evento"].includes(a.chiave)).map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div style={{ flex: "1 1 160px" }}>
+                    <Field label="Selezione">
+                      {selettoreAmbito(r.tipoAmbito,
+                        r.sedeId, (v) => modificaRigaRipartizione(idx, "sedeId", v),
+                        r.corsoId, (v) => modificaRigaRipartizione(idx, "corsoId", v),
+                        r.classeId, (v) => modificaRigaRipartizione(idx, "classeId", v),
+                        r.eventoId, (v) => modificaRigaRipartizione(idx, "eventoId", v))}
+                    </Field>
+                  </div>
+                  <div style={{ flex: "0 1 90px" }}>
+                    <Field label="%"><input style={inputStyle} inputMode="decimal" value={r.percentuale} onChange={(e) => modificaRigaRipartizione(idx, "percentuale", e.target.value)} /></Field>
+                  </div>
+                  <button onClick={() => rimuoviRigaRipartizione(idx)} title="Rimuovi" style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button onClick={aggiungiRigaRipartizione} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: "none", cursor: "pointer" }}>+ Aggiungi riga</button>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: sommaPercentuali === 100 ? "#2E7D32" : "#C0392B" }}>Totale: {sommaPercentuali}%</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Classificazione gestionale</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
+            <Field label="Diretto/indiretto"><select style={inputStyle} value={direttoIndiretto} onChange={(e) => setDirettoIndiretto(e.target.value)}><option value="">—</option>{DIRETTO_INDIRETTO_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Fisso/variabile"><select style={inputStyle} value={fissoVariabile} onChange={(e) => setFissoVariabile(e.target.value)}><option value="">—</option>{FISSO_VARIABILE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Ricorrente/occasionale"><select style={inputStyle} value={ricorrenteOccasionale} onChange={(e) => setRicorrenteOccasionale(e.target.value)}><option value="">—</option>{RICORRENTE_OCCASIONALE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Natura"><select style={inputStyle} value={natura} onChange={(e) => setNatura(e.target.value)}>{NATURA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Controllabilità"><select style={inputStyle} value={controllabilita} onChange={(e) => setControllabilita(e.target.value)}><option value="">—</option>{CONTROLLABILITA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Riducibilità"><select style={inputStyle} value={riducibilita} onChange={(e) => setRiducibilita(e.target.value)}><option value="">—</option>{RIDUCIBILITA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Essenzialità"><select style={inputStyle} value={essenzialita} onChange={(e) => setEssenzialita(e.target.value)}><option value="">—</option>{ESSENZIALITA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Origine"><select style={inputStyle} value={origine} onChange={(e) => setOrigine(e.target.value)}>{ORIGINE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+            <Field label="Ricorrenza"><select style={inputStyle} value={ricorrenza} onChange={(e) => setRicorrenza(e.target.value)}>{RICORRENZA_OPZIONI.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}</select></Field>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "10px 0 4px" }}>
+            <input type="checkbox" checked={beneDurevole} onChange={(e) => setBeneDurevole(e.target.checked)} /> Bene durevole
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 4 }}>
+            <input type="checkbox" checked={includiAnalisiCosti} onChange={(e) => setIncludiAnalisiCosti(e.target.checked)} /> Incluso nell'analisi dei costi
+          </label>
+        </div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Budget e controllo</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 160px" }}><Field label="Budget previsto"><input style={inputStyle} inputMode="decimal" value={budgetPrevisto} onChange={(e) => setBudgetPrevisto(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px" }}><Field label="Soglia di allerta personalizzata"><input style={inputStyle} inputMode="decimal" value={sogliaPersonalizzata} onChange={(e) => setSogliaPersonalizzata(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px" }}><Field label="Responsabile del costo"><input style={inputStyle} value={responsabileCosto} onChange={(e) => setResponsabileCosto(e.target.value)} /></Field></div>
+          </div>
+        </div>
+
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+        <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : spesaId ? "Salva modifiche" : "Salva spesa"}</Button>
+      </div>
+    </div>
+  );
+}
+
+// gestione budget: importo previsto per categoria/mese-o-anno/sede/corso
+function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricarica, onBack }) {
+  const [anno, setAnno] = useState(new Date().getFullYear());
+  const [mese, setMese] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
+  const [sedeId, setSedeId] = useState("");
+  const [corsoId, setCorsoId] = useState("");
+  const [importo, setImporto] = useState("");
+  const [msg, setMsg] = useState("");
+
+  const categorieOrdinate = [...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+
+  async function aggiungiBudget() {
+    if (!categoriaId || !importo) { setMsg("Scegli una categoria e un importo."); return; }
+    const { error } = await supabase.from("costi_budget").insert({
+      anno, mese: mese === "" ? null : Number(mese), categoria_id: categoriaId,
+      sede_id: sedeId || null, corso_id: corsoId || null, importo_budget: parseNum(importo),
+    });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setImporto(""); setMsg(""); ricarica();
+  }
+  async function eliminaBudget(id) { await supabase.from("costi_budget").delete().eq("id", id); ricarica(); }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>Budget</div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 100px" }}><Field label="Anno"><input style={inputStyle} inputMode="numeric" value={anno} onChange={(e) => setAnno(Number(e.target.value) || anno)} /></Field></div>
+            <div style={{ flex: "1 1 120px" }}>
+              <Field label="Mese (vuoto = annuale)">
+                <select style={inputStyle} value={mese} onChange={(e) => setMese(e.target.value)}>
+                  <option value="">Tutto l'anno</option>
+                  {MESI.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 180px" }}>
+              <Field label="Categoria">
+                <select style={inputStyle} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
+                  <option value="">— scegli —</option>
+                  {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
+              <Field label="Sede (opzionale)">
+                <select style={inputStyle} value={sedeId} onChange={(e) => setSedeId(e.target.value)}>
+                  <option value="">Tutte</option>
+                  {location.map((l) => <option key={l.id} value={l.id}>{l.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 140px" }}>
+              <Field label="Corso (opzionale)">
+                <select style={inputStyle} value={corsoId} onChange={(e) => setCorsoId(e.target.value)}>
+                  <option value="">Tutti</option>
+                  {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 140px" }}><Field label="Importo budget"><input style={inputStyle} inputMode="decimal" value={importo} onChange={(e) => setImporto(e.target.value)} /></Field></div>
+          </div>
+          {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>{msg}</div>}
+          <Button onClick={aggiungiBudget}>+ Aggiungi budget</Button>
+        </div>
+
+        <div style={{ ...cardStyle }}>
+          {[...costiBudget].sort((a, b) => (b.anno - a.anno) || ((b.mese || 0) - (a.mese || 0))).map((b) => (
+            <div key={b.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, minWidth: 90 }}>{b.mese ? `${MESI[b.mese - 1]} ${b.anno}` : `Anno ${b.anno}`}</span>
+              <span style={{ flex: 1, ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>
+                {categoriaCostoDi(costiCategorie, b.categoria_id)?.nome || "—"}
+                {b.sede_id ? ` · ${location.find((l) => l.id === b.sede_id)?.nome || ""}` : ""}
+                {b.corso_id ? ` · ${corsi.find((c) => c.id === b.corso_id)?.nome || ""}` : ""}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(b.importo_budget)}</span>
+              <button onClick={() => eliminaBudget(b.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+              </button>
+            </div>
+          ))}
+          {costiBudget.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun budget impostato.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// esporta le spese incluse nel periodo/filtri correnti come CSV (con
+// BOM, così Excel lo apre correttamente senza problemi di accenti)
+function esportaCsvSpese(vociIncluse, costiCategorieById, costiSottocategorieById) {
+  const intestazione = ["Data documento", "Categoria", "Sotto-categoria", "Descrizione", "Fornitore", "Imponibile", "Stato"];
+  const righe = vociIncluse.map(({ spesa, importo }) => [
+    spesa.data_documento || "", costiCategorieById[spesa.categoria_id]?.nome || "", costiSottocategorieById[spesa.sottocategoria_id]?.nome || "",
+    spesa.descrizione || "", "", importo, etichettaOpzione(STATI_SPESA, spesa.stato),
+  ]);
+  const csv = [intestazione, ...righe].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `analisi-costi-${dataOggiStr()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+// parsing minimale di un CSV con intestazione: descrizione,categoria_id,sottocategoria_id,imponibile,iva_percentuale,data_documento,fornitore
+function parseCsvSpese(testo) {
+  const righe = testo.split(/\r?\n/).filter((r) => r.trim() !== "");
+  if (righe.length < 2) return [];
+  const intestazione = righe[0].split(",").map((h) => h.trim().toLowerCase());
+  return righe.slice(1).map((riga) => {
+    const valori = riga.split(",").map((v) => v.trim().replace(/^"|"$/g, ""));
+    const obj = {};
+    intestazione.forEach((h, i) => { obj[h] = valori[i] || ""; });
+    return obj;
+  });
+}
+// pannello di import CSV: anteprima + controllo duplicati (stesso
+// imponibile e stessa data già presenti) prima di confermare l'inserimento
+function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose, ricarica }) {
+  const [righe, setRighe] = useState([]);
+  const [msg, setMsg] = useState("");
+  const [importando, setImportando] = useState(false);
+
+  function onFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const parsate = parseCsvSpese(String(reader.result));
+      const conDuplicato = parsate.map((r) => ({
+        ...r,
+        possibileDuplicato: spese.some((s) => String(s.imponibile) === r.imponibile && s.data_documento === r.data_documento),
+      }));
+      setRighe(conDuplicato);
+    };
+    reader.readAsText(file);
+  }
+  async function confermaImport() {
+    const daImportare = righe.filter((r) => !r.possibileDuplicato && r.categoria_id && r.imponibile);
+    if (daImportare.length === 0) { setMsg("Nessuna riga valida da importare."); return; }
+    setImportando(true);
+    const { error } = await supabase.from("spese").insert(daImportare.map((r) => ({
+      descrizione: r.descrizione || null, categoria_id: r.categoria_id, sottocategoria_id: r.sottocategoria_id || null,
+      imponibile: parseNum(r.imponibile), iva_percentuale: r.iva_percentuale ? parseNum(r.iva_percentuale) : 22,
+      totale: round2(parseNum(r.imponibile) * (1 + (r.iva_percentuale ? parseNum(r.iva_percentuale) : 22) / 100)),
+      data_documento: r.data_documento || null, origine: "importato", stato: "pagata",
+    })));
+    setImportando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+    onClose();
+  }
+
+  return (
+    <Modal title="Importa spese da CSV" onClose={onClose}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+        Colonne attese: descrizione, categoria_id, sottocategoria_id, imponibile, iva_percentuale, data_documento
+      </div>
+      <input type="file" accept=".csv" onChange={onFile} style={{ marginBottom: 14 }} />
+      {righe.length > 0 && (
+        <div style={{ maxHeight: 280, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginBottom: 14 }}>
+          {righe.map((r, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 12px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: r.possibileDuplicato ? MUTED : NAVY }}>
+              <span>{r.descrizione || r.categoria_id}{r.possibileDuplicato ? " — possibile duplicato, escluso" : ""}</span>
+              <span style={{ fontWeight: 700 }}>{r.imponibile}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={confermaImport} disabled={importando || righe.length === 0} style={{ width: "100%" }}>{importando ? "Importo…" : `Importa ${righe.filter((r) => !r.possibileDuplicato).length} righe`}</Button>
+    </Modal>
   );
 }
 
@@ -9650,7 +10815,16 @@ export default function App() {
   const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
   const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
   const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
-  const [costiOperativiVoci, setCostiOperativiVoci] = useState([]); // voci di costo manuali (categorie 1-6, 8-9 di "Costi operativi")
+  // "Analisi costi di gestione": catalogo categorie/sotto-categorie (amministrabile), registro spese, ripartizioni multi-ambito, budget, soglie di allerta, ambiti evento/fornitore
+  const [costiCategorie, setCostiCategorie] = useState([]);
+  const [costiSottocategorie, setCostiSottocategorie] = useState([]);
+  const [eventi, setEventi] = useState([]);
+  const [fornitori, setFornitori] = useState([]);
+  const [spese, setSpese] = useState([]);
+  const [speseAttribuzioni, setSpeseAttribuzioni] = useState([]);
+  const [costiBudget, setCostiBudget] = useState([]);
+  const [costiSoglieAllerta, setCostiSoglieAllerta] = useState([]);
+  const [spesaInModifica, setSpesaInModifica] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -9677,7 +10851,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cov] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -9691,7 +10865,14 @@ export default function App() {
       supabase.from("segnaposti_config").select("*").limit(1),
       supabase.from("loghi_impostazioni").select("*").limit(1),
       supabase.from("loghi_categorie").select("*"),
-      supabase.from("costi_operativi_voci").select("*").order("data", { ascending: false }),
+      supabase.from("costi_categorie").select("*").order("ordine"),
+      supabase.from("costi_sottocategorie").select("*").order("ordine"),
+      supabase.from("eventi").select("*").order("data_inizio", { ascending: false }),
+      supabase.from("fornitori").select("*").order("nome"),
+      supabase.from("spese").select("*").order("data_documento", { ascending: false }),
+      supabase.from("spese_attribuzioni").select("*"),
+      supabase.from("costi_budget").select("*"),
+      supabase.from("costi_soglie_allerta").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -9706,7 +10887,14 @@ export default function App() {
     setSegnaposti(sg.data?.[0] || null);
     setLoghiImpostazioni(li.data?.[0] || null);
     setLoghiCategorie(lc.data || []);
-    setCostiOperativiVoci(cov.data || []);
+    setCostiCategorie(cc.data || []);
+    setCostiSottocategorie(cs.data || []);
+    setEventi(ev.data || []);
+    setFornitori(fo.data || []);
+    setSpese(sp.data || []);
+    setSpeseAttribuzioni(sa.data || []);
+    setCostiBudget(cb.data || []);
+    setCostiSoglieAllerta(csa.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -9863,6 +11051,10 @@ export default function App() {
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   function apriErp() { apriViewProtetta("erp"); }
   function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
+  function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
+  function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
+  function apriNuovaSpesa() { setSpesaInModifica(null); apriViewProtetta("spesaform"); }
+  function apriModificaSpesa(id) { setSpesaInModifica(id); apriViewProtetta("spesaform"); }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -10068,7 +11260,7 @@ export default function App() {
       {view === "erp" && (
         <PaginaErp
           corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
-          costiOperativiVoci={costiOperativiVoci}
+          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           onApriGestioneDate={apriGestioneDate}
@@ -10079,10 +11271,37 @@ export default function App() {
       )}
 
       {view === "costioperativi" && (
-        <PaginaCostiOperativi
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          costiOperativiVoci={costiOperativiVoci}
-          onBack={() => setView("erp")}
+        <PaginaAnalisiCosti
+          corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} eventi={eventi} fornitori={fornitori}
+          spese={spese} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
+          ricarica={fetchDati} onBack={() => setView("erp")}
+          onApriCatalogo={apriCatalogoCategorieCosti} onApriBudget={apriBudgetCosti}
+          onApriNuovaSpesa={apriNuovaSpesa} onApriModificaSpesa={apriModificaSpesa}
+        />
+      )}
+
+      {view === "catalogocategoriecosti" && (
+        <PaginaCatalogoCategorieCosti
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} costiSoglieAllerta={costiSoglieAllerta}
+          ricarica={fetchDati} onBack={() => setView("costioperativi")}
+        />
+      )}
+
+      {view === "budgetcosti" && (
+        <PaginaBudgetCosti
+          costiCategorie={costiCategorie} location={location} corsi={corsi} costiBudget={costiBudget}
+          ricarica={fetchDati} onBack={() => setView("costioperativi")}
+        />
+      )}
+
+      {view === "spesaform" && (
+        <PaginaSpesaForm
+          spesaId={spesaInModifica}
+          corsi={corsi} location={location} corsiDate={corsiDate} eventi={eventi} fornitori={fornitori}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          spese={spese} speseAttribuzioni={speseAttribuzioni}
+          ricarica={fetchDati} onBack={() => setView("costioperativi")}
         />
       )}
 
@@ -10142,6 +11361,8 @@ export default function App() {
           fontDiplomi={fontDiplomi}
           diplomaEccezioni={diplomaEccezioni}
           segnaposti={segnaposti}
+          costiCategorie={costiCategorie}
+          costiSottocategorie={costiSottocategorie}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
