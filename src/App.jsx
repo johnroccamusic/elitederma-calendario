@@ -9030,13 +9030,12 @@ function RigaPerformanceSede({ pos, dato }) {
 // amministrativo sono già dentro costoClasseErp, quindi qui vengono
 // solo "riattribuite" alla categoria giusta per il drill-down, non
 // sommate una seconda volta nel totale
-function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOperativiVoci, ricarica, onBack }) {
+function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOperativiVoci, onBack }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
   const [sedeSel, setSedeSel] = useState("");
-  const [categoriaAperta, setCategoriaAperta] = useState("");
 
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const range = rangePeriodoCosti(periodo, { da: customDa, a: customA });
@@ -9132,12 +9131,11 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
     return { etichetta: b.etichetta, corrente: kA.costi, precedente: kP ? kP.costi : null };
   });
 
-  async function eliminaVoce(id) {
-    if (!window.confirm("Eliminare questa voce di costo?")) return;
-    const { error } = await supabase.from("costi_operativi_voci").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
+  // solo lettura, ordinato dalla spesa più importante alla minore: le
+  // uscite si inseriscono esclusivamente da "+ Nuova operazione" nella
+  // dashboard, qui non c'è alcuna possibilità di aggiungere né eliminare
+  const categorieOrdinateComplete = [...categorieConDati].sort((a, b) => b.totale - a.totale);
+  const massimoCategoria = Math.max(1, ...categorieOrdinateComplete.map((c) => c.totale));
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
@@ -9257,71 +9255,24 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
         </div>
 
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Dettaglio per categoria</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Voci di spesa principali, per categoria — filtrate per la sede scelta sopra.</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Dalla spesa più importante alla minore — filtrate per la sede scelta sopra.</div>
 
-        {categorieConDati.map((cat) => (
-          <div key={cat.chiave} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-            <div
-              onClick={() => setCategoriaAperta((c) => (c === cat.chiave ? "" : cat.chiave))}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 20px", cursor: "pointer" }}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cat.etichetta}</div>
-                {cat.tipo === "automatico" && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Automatico</div>}
+        <div style={{ ...cardStyle }}>
+          {categorieOrdinateComplete.map((cat, i) => (
+            <div key={cat.chiave} style={{ padding: "14px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cat.etichetta}</div>
+                  {cat.tipo === "automatico" && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Automatico</div>}
+                </div>
+                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(cat.totale)}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(cat.totale)}</div>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.chiave ? "rotate(180deg)" : "none" }}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+              <div style={{ height: 8, borderRadius: 5, background: BG, overflow: "hidden" }}>
+                <div style={{ width: `${Math.min(100, (cat.totale / massimoCategoria) * 100)}%`, height: "100%", borderRadius: 5, background: i === 0 && cat.totale > 0 ? GOLD : NAVY }} />
               </div>
             </div>
-            {categoriaAperta === cat.chiave && (
-              <div style={{ padding: "0 20px 20px" }}>
-                {cat.sottovoci.map((v) => (
-                  <div key={v.chiave} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>
-                    <span>{v.etichetta}</span>
-                    <span style={{ fontWeight: 700 }}>{fmtEuroErp(v.totale)}</span>
-                  </div>
-                ))}
-                {cat.tipo === "manuale" && (
-                  <>
-                    {cat.vociManuali.length > 0 && (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Voci inserite</div>
-                        {cat.vociManuali.map((v) => (
-                          <div key={v.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ fontWeight: 600 }}>
-                                {cat.voci.find((x) => x.chiave === v.sottovoce)?.etichetta || v.sottovoce}{v.descrizione ? ` — ${v.descrizione}` : ""}
-                              </div>
-                              <div style={{ color: MUTED, fontSize: 11 }}>
-                                {fmtData(v.data)}{v.location_id ? ` · ${locById[v.location_id]?.nome || ""}` : ""} · IVA {v.iva_percentuale}%
-                              </div>
-                            </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                              <span style={{ fontWeight: 700 }}>{fmtEuroErp(v.imponibile)}</span>
-                              <button onClick={() => eliminaVoce(v.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {cat.vociManuali.length === 0 && (
-                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                        Nessuna voce in questo periodo. Le uscite si aggiungono da "+ Nuova operazione" nella dashboard.
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -9794,7 +9745,6 @@ export default function App() {
         <PaginaCostiOperativi
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           costiOperativiVoci={costiOperativiVoci}
-          ricarica={fetchDati}
           onBack={() => setView("erp")}
         />
       )}
