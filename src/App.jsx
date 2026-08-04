@@ -2750,6 +2750,99 @@ const CATEGORIE_LOGO = [
   { chiave: "master", etichetta: "Master", richiedeBianco: false },
 ];
 
+// ---------- Costi operativi ----------
+// tassonomia fissa delle 10 categorie di costo. "manuale" = voci inserite
+// a mano nella nuova pagina "Costi operativi" (o come voce extra taggata
+// nel Riepilogo amministrativo); "automatico" = calcolate sui dati già
+// tracciati altrove (quota_venditore degli iscritti, costi per edizione
+// del Riepilogo amministrativo), mai modificabili qui
+const CATEGORIE_COSTI = [
+  {
+    chiave: "agenzie", etichetta: "Agenzie e professionisti", tipo: "manuale",
+    voci: [
+      { chiave: "pubblicita", etichetta: "Pubblicità" },
+      { chiave: "professionisti", etichetta: "Professionisti e società esterne" },
+    ],
+  },
+  {
+    chiave: "trasferte", etichetta: "Trasferte", tipo: "manuale",
+    voci: [
+      { chiave: "alloggio", etichetta: "Alloggio — hotel, B&B", cittaConsigliata: true },
+      { chiave: "viaggio_master", etichetta: "Viaggio master", cittaConsigliata: true },
+      { chiave: "autostrada_carburante", etichetta: "Autostrada e carburante" },
+      { chiave: "trasporti_extra", etichetta: "Trasporti extra" },
+    ],
+  },
+  {
+    chiave: "vitto", etichetta: "Vitto", tipo: "manuale",
+    voci: [
+      { chiave: "vitto_personale", etichetta: "Vitto insegnanti e personale" },
+    ],
+  },
+  {
+    chiave: "materiali", etichetta: "Materiali e forniture", tipo: "manuale",
+    voci: [
+      { chiave: "materiali_consumo", etichetta: "Materiali di consumo", cittaConsigliata: true },
+      { chiave: "materiali_didattici", etichetta: "Materiali didattici e da vendita" },
+      { chiave: "forniture_sede", etichetta: "Forniture sede" },
+    ],
+  },
+  {
+    chiave: "logistica", etichetta: "Logistica", tipo: "manuale",
+    voci: [
+      { chiave: "spedizioni", etichetta: "Spedizioni" },
+      { chiave: "lavori_edili", etichetta: "Lavori edili" },
+    ],
+  },
+  {
+    chiave: "sedi", etichetta: "Sedi", tipo: "manuale",
+    voci: [
+      { chiave: "affitto_sedi", etichetta: "Affitto sedi", cittaConsigliata: true },
+    ],
+  },
+  {
+    chiave: "commerciale", etichetta: "Commerciale", tipo: "automatico",
+    voci: [
+      { chiave: "commissioni_venditori", etichetta: "Commissioni venditori" },
+    ],
+  },
+  {
+    chiave: "eventi", etichetta: "Eventi", tipo: "manuale",
+    voci: [
+      { chiave: "partecipazione", etichetta: "Costo partecipazione" },
+      { chiave: "alloggio_eventi", etichetta: "Costo alloggio" },
+      { chiave: "viaggio_eventi", etichetta: "Costo viaggio e trasferimento" },
+      { chiave: "spedizione_eventi", etichetta: "Costo spedizione prodotti" },
+      { chiave: "personalizzazioni", etichetta: "Costo personalizzazioni e gadget" },
+      { chiave: "vitto_eventi", etichetta: "Costo vitto" },
+    ],
+  },
+  {
+    chiave: "allestimento", etichetta: "Materiali per allestimento", tipo: "manuale",
+    voci: [
+      { chiave: "rollup", etichetta: "Rollup, banner" },
+      { chiave: "lettini", etichetta: "Lettini per le sale" },
+      { chiave: "carrellini", etichetta: "Carrellini" },
+      { chiave: "teli", etichetta: "Teli copri lettino" },
+      { chiave: "altro_allestimento", etichetta: "Altro materiale d'allestimento corsi" },
+    ],
+  },
+  {
+    chiave: "personale_riepilogo", etichetta: "Personale e trasferte (dal Riepilogo amministrativo)", tipo: "automatico",
+    voci: [
+      { chiave: "master_assistenti", etichetta: "Costo master e assistenti" },
+      { chiave: "hotel_riepilogo", etichetta: "Costo hotel" },
+      { chiave: "accademia", etichetta: "Costo accademia" },
+      { chiave: "pranzi", etichetta: "Costo pranzi" },
+    ],
+  },
+];
+const CATEGORIE_COSTI_MANUALI = CATEGORIE_COSTI.filter((c) => c.tipo === "manuale");
+function categoriaCostoDi(chiave) {
+  return CATEGORIE_COSTI.find((c) => c.chiave === chiave) || null;
+}
+const ALIQUOTE_IVA_COSTI = [22, 10, 4, 0];
+
 const SIGLA_PAESE_LOGO = "IT";
 // due lettere iniziali di un nome completo: se ha più parole prende la
 // prima lettera della prima e dell'ultima parola (ignora eventuali nomi
@@ -5959,9 +6052,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [costoHotel, setCostoHotel] = useState(corsoData.costo_hotel != null ? String(corsoData.costo_hotel) : "");
   // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
   const [costiExtra, setCostiExtra] = useState(
-    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "" })) : []
+    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "" })) : []
   );
   const [salvandoCosti, setSalvandoCosti] = useState(false);
+  const [sceltaCategoriaCosto, setSceltaCategoriaCosto] = useState(false);
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -6026,9 +6120,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
 
-  function aggiungiVoceCosto() {
-    setCostiExtra((prev) => [...prev, { titolo: "", valore: "" }]);
+  // il "+" ora apre prima una tendina con le categorie principali di
+  // "Costi operativi" (solo manuali): la voce si crea già taggata con
+  // quella categoria, così viene contata nel posto giusto nel drill-down
+  function aggiungiVoceCosto(categoria) {
+    setCostiExtra((prev) => [...prev, { titolo: "", valore: "", categoria }]);
     setCostiAperto(true);
+    setSceltaCategoriaCosto(false);
   }
   function modificaVoceCosto(idx, campo, valore) {
     setCostiExtra((prev) => prev.map((c, i) => (i === idx ? { ...c, [campo]: valore } : c)));
@@ -6044,7 +6142,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       costo_assistenti: costoAssistenti === "" ? null : parseNum(costoAssistenti),
       costo_pranzi: costoPranzi === "" ? null : parseNum(costoPranzi),
       costo_hotel: costoHotel === "" ? null : parseNum(costoHotel),
-      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore) })),
+      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null })),
     }).eq("id", corsoData.id);
     setSalvandoCosti(false);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -6825,13 +6923,29 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
               {costiAperto && (
-                <button
-                  title="Aggiungi voce di costo"
-                  onClick={(e) => { e.stopPropagation(); aggiungiVoceCosto(); }}
-                  style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
-                >
-                  +
-                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    title="Aggiungi voce di costo"
+                    onClick={(e) => { e.stopPropagation(); setSceltaCategoriaCosto((v) => !v); }}
+                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
+                  >
+                    +
+                  </button>
+                  {sceltaCategoriaCosto && (
+                    <select
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => { if (e.target.value) aggiungiVoceCosto(e.target.value); }}
+                      onBlur={() => setSceltaCategoriaCosto(false)}
+                      style={{ ...inputStyle, ...fontBody, fontSize: 13, position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 240 }}
+                    >
+                      <option value="">Scegli una categoria di costo…</option>
+                      {CATEGORIE_COSTI_MANUALI.map((c) => (
+                        <option key={c.chiave} value={c.chiave}>{c.etichetta}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               )}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: costiAperto ? "rotate(180deg)" : "none" }}>
                 <polyline points="6 9 12 15 18 9" />
@@ -6877,6 +6991,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               {costiExtra.map((voce, idx) => (
                 <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
                   <div style={{ flex: "2 1 140px", minWidth: 0 }}>
+                    {voce.categoria && (
+                      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>
+                        {categoriaCostoDi(voce.categoria)?.etichetta || voce.categoria}
+                      </div>
+                    )}
                     <Field label="Voce di costo"><input style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Titolo" value={voce.titolo} onChange={(e) => modificaVoceCosto(idx, "titolo", e.target.value.toUpperCase())} /></Field>
                   </div>
                   <div style={{ flex: "1 1 90px", minWidth: 0 }}>
@@ -8106,14 +8225,22 @@ function variazionePctErp(attuale, precedente) {
 // ricavi/costi/allievi/riempimento/cash flow/crediti di un insieme di
 // edizioni filtrate per periodo + sede — riusata sia per i KPI del
 // periodo corrente/precedente sia per ogni riga di "Andamento per sede"
-function calcolaKpiErp({ corsiDate, iscritti, inizio, fine, sedeId, corsoById, locById }) {
+function calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio, fine, sedeId, corsoById, locById }) {
   const cdFiltrate = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
   const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
   const iscrittiFiltrati = iscritti.filter((i) => idsCd.has(i.corso_data_id));
   const ricavi = round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
   const costiClasse = round2(cdFiltrate.reduce((s, cd) => s + costoClasseErp(cd), 0));
   const quoteVenditore = round2(iscrittiFiltrati.reduce((s, i) => s + (i.quota_venditore || 0), 0));
-  const costi = round2(costiClasse + quoteVenditore);
+  // voci manuali di "Costi operativi" (categorie 1-6, 8-9): sull'imponibile,
+  // coerente coi ricavi (sempre al netto di IVA) — le voci extra taggate
+  // del Riepilogo amministrativo sono già incluse in costiClasse sopra
+  // (fanno parte di costi_extra di ogni edizione), quindi qui si somma
+  // solo la tabella separata, senza rischio di doppio conteggio
+  const costiManuali = round2((costiOperativiVoci || [])
+    .filter((v) => v.data >= inizio && v.data <= fine && (!sedeId || v.location_id === sedeId))
+    .reduce((s, v) => s + (v.imponibile || 0), 0));
+  const costi = round2(costiClasse + quoteVenditore + costiManuali);
   const utile = round2(ricavi - costi);
   const riempimenti = cdFiltrate
     .map((cd) => {
@@ -8133,10 +8260,13 @@ function calcolaKpiErp({ corsiDate, iscritti, inizio, fine, sedeId, corsoById, l
   return { ricavi, costi, utile, nAllievi: iscrittiFiltrati.length, riempimentoMedio, cashFlow, creditiDaIncassare, pagamentiAperti, cdFiltrate, iscrittiFiltrati };
 }
 
-function CardKpiErp({ titolo, valore, variazione, variazioneInvertita, sub, Icona, coloreIcona, coloreBgIcona, scuro }) {
+function CardKpiErp({ titolo, valore, variazione, variazioneInvertita, sub, Icona, coloreIcona, coloreBgIcona, scuro, onClick }) {
   const positivo = variazione == null ? null : variazioneInvertita ? variazione <= 0 : variazione >= 0;
   return (
-    <div style={{ ...cardStyle, padding: 18, background: scuro ? NAVY : "#fff", marginBottom: 0 }}>
+    <div
+      onClick={onClick}
+      style={{ ...cardStyle, padding: 18, background: scuro ? NAVY : "#fff", marginBottom: 0, cursor: onClick ? "pointer" : "default" }}
+    >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ width: 38, height: 38, borderRadius: 10, background: coloreBgIcona, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <Icona size={19} color={coloreIcona} />
@@ -8198,7 +8328,7 @@ function GaugeMargineErp({ percentuale }) {
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativiVoci, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
@@ -8210,11 +8340,11 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApr
   const rangePrec = rangePrecedenteErp(range);
 
   const kpi = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
+    () => calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
     [corsiDate, iscritti, range.inizio, range.fine, sedeSel, corsoById, locById]
   );
   const kpiPrec = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
+    () => calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
     [corsiDate, iscritti, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
   );
 
@@ -8243,7 +8373,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApr
     const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
     const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
     const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
-    const k = calcolaKpiErp({ corsiDate, iscritti, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+    const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
     return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
   });
   const maxBarra = Math.max(1, ...andamentoMensile.flatMap((m) => [m.ricavi, m.costi]));
@@ -8251,8 +8381,8 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApr
   const sediConDati = location.filter((l) => corsiDate.some((cd) => cd.location_id === l.id && cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine));
   const righeSedi = (sediConDati.length ? sediConDati : location)
     .map((l) => {
-      const k = calcolaKpiErp({ corsiDate, iscritti, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
-      const kPrec = calcolaKpiErp({ corsiDate, iscritti, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
+      const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
+      const kPrec = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
       return { location: l, ...k, trend: variazionePctErp(k.ricavi, kPrec.ricavi) };
     })
     .sort((a, b) => b.ricavi - a.ricavi);
@@ -8282,7 +8412,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApr
     { chiave: "crm", etichetta: "CRM & vendite", attiva: false },
     { chiave: "sedi", etichetta: "Sedi", attiva: true, onClick: onApriImpostazioni },
     { chiave: "team", etichetta: "Team", attiva: true, onClick: onApriImpostazioni },
-    { chiave: "contabilita", etichetta: "Contabilità", attiva: false },
+    { chiave: "contabilita", etichetta: "Contabilità", attiva: true, onClick: onApriCostiOperativi },
     { chiave: "magazzino", etichetta: "Magazzino", attiva: false },
     { chiave: "report", etichetta: "Report", attiva: false },
   ];
@@ -8376,7 +8506,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApr
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)", gap: 14, marginBottom: 18 }}>
           <CardKpiErp titolo="Ricavi totali" valore={fmtEuroKErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
-          <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
+          <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" onClick={onApriCostiOperativi} />
           <CardKpiErp titolo="Utile netto" valore={fmtEuroKErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
         </div>
@@ -8518,6 +8648,274 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, onBack, onApr
   );
 }
 
+// ---------- Costi operativi ----------
+// drill-down per categoria della card "Costi operativi" dell'ERP: 10
+// categorie fisse, alcune manuali (form imponibile/IVA/totale, aliquota
+// scelta riga per riga) e alcune automatiche (commissioni venditori dagli
+// iscritti, costi per edizione dal Riepilogo amministrativo). Il totale
+// generale coincide sempre esattamente con "costi" di calcolaKpiErp per
+// lo stesso periodo/sede: le voci extra taggate del Riepilogo
+// amministrativo sono già dentro costoClasseErp, quindi qui vengono
+// solo "riattribuite" alla categoria giusta per il drill-down, non
+// sommate una seconda volta nel totale
+function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOperativiVoci, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("anno");
+  const [sedeSel, setSedeSel] = useState("");
+  const [categoriaAperta, setCategoriaAperta] = useState("");
+  const [formCategoria, setFormCategoria] = useState("");
+  const [formSottovoce, setFormSottovoce] = useState("");
+  const [formDescrizione, setFormDescrizione] = useState("");
+  const [formCitta, setFormCitta] = useState("");
+  const [formImponibile, setFormImponibile] = useState("");
+  const [formIva, setFormIva] = useState(22);
+  const [formData, setFormData] = useState(dataOggiStr());
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const range = rangePeriodoErp(periodo);
+
+  const cdPeriodo = useMemo(
+    () => corsiDate.filter((cd) => cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine && (!sedeSel || cd.location_id === sedeSel)),
+    [corsiDate, range.inizio, range.fine, sedeSel]
+  );
+  const idsCdPeriodo = useMemo(() => new Set(cdPeriodo.map((cd) => cd.id)), [cdPeriodo]);
+  const iscrittiPeriodo = useMemo(() => iscritti.filter((i) => idsCdPeriodo.has(i.corso_data_id)), [iscritti, idsCdPeriodo]);
+  const vociManualiPeriodo = useMemo(
+    () => costiOperativiVoci.filter((v) => v.data >= range.inizio && v.data <= range.fine && (!sedeSel || v.location_id === sedeSel)),
+    [costiOperativiVoci, range.inizio, range.fine, sedeSel]
+  );
+
+  const totaleCommissioniVenditori = round2(iscrittiPeriodo.reduce((s, i) => s + (i.quota_venditore || 0), 0));
+  const totaleMasterAssistenti = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_master || 0) + (cd.costo_assistenti || 0), 0));
+  const totaleHotelRiepilogo = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_hotel || 0), 0));
+  const totaleAccademia = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_accademia || 0), 0));
+  const totalePranzi = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_pranzi || 0), 0));
+  const totaleExtraNonCategorizzate = round2(cdPeriodo.reduce((s, cd) => {
+    const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => !c.categoria).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
+    return s + extra;
+  }, 0));
+
+  function datiCategoria(cat) {
+    if (cat.chiave === "commerciale") {
+      return { totale: totaleCommissioniVenditori, sottovoci: [{ chiave: "commissioni_venditori", etichetta: "Commissioni venditori", totale: totaleCommissioniVenditori }] };
+    }
+    if (cat.chiave === "personale_riepilogo") {
+      const sottovoci = [
+        { chiave: "master_assistenti", etichetta: "Costo master e assistenti", totale: totaleMasterAssistenti },
+        { chiave: "hotel_riepilogo", etichetta: "Costo hotel", totale: totaleHotelRiepilogo },
+        { chiave: "accademia", etichetta: "Costo accademia", totale: totaleAccademia },
+        { chiave: "pranzi", etichetta: "Costo pranzi", totale: totalePranzi },
+      ];
+      if (totaleExtraNonCategorizzate > 0) sottovoci.push({ chiave: "extra_non_categorizzate", etichetta: "Voci extra non categorizzate", totale: totaleExtraNonCategorizzate });
+      return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci };
+    }
+    const vociCat = vociManualiPeriodo.filter((v) => v.categoria === cat.chiave);
+    const sottovoci = cat.voci.map((v) => ({
+      chiave: v.chiave, etichetta: v.etichetta,
+      totale: round2(vociCat.filter((x) => x.sottovoce === v.chiave).reduce((s, x) => s + (x.imponibile || 0), 0)),
+    }));
+    const extraTaggate = round2(cdPeriodo.reduce((s, cd) => {
+      const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => c.categoria === cat.chiave).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
+      return s + extra;
+    }, 0));
+    if (extraTaggate > 0) sottovoci.push({ chiave: "__extra__", etichetta: "Voci extra dal Riepilogo amministrativo", totale: extraTaggate });
+    return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci, vociManuali: vociCat };
+  }
+
+  const categorieConDati = CATEGORIE_COSTI.map((cat) => ({ ...cat, ...datiCategoria(cat) }));
+  const totaleGenerale = round2(categorieConDati.reduce((s, c) => s + c.totale, 0));
+  const ricaviPeriodo = round2(iscrittiPeriodo.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+
+  function apriForm(categoria) {
+    setFormCategoria(categoria);
+    setFormSottovoce(categoriaCostoDi(categoria)?.voci?.[0]?.chiave || "");
+    setFormDescrizione("");
+    setFormCitta("");
+    setFormImponibile("");
+    setFormIva(22);
+    setFormData(dataOggiStr());
+    setMsg("");
+  }
+
+  async function salvaVoceManuale() {
+    if (!formSottovoce) { setMsg("Scegli una voce."); return; }
+    const imp = parseNum(formImponibile);
+    if (!imp) { setMsg("Inserisci un imponibile."); return; }
+    setSalvando(true);
+    const totale = round2(imp * (1 + formIva / 100));
+    const { error } = await supabase.from("costi_operativi_voci").insert({
+      categoria: formCategoria,
+      sottovoce: formSottovoce,
+      descrizione: formDescrizione.trim() || null,
+      location_id: formCitta || null,
+      imponibile: imp,
+      iva_percentuale: formIva,
+      totale,
+      data: formData,
+    });
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setFormCategoria("");
+    ricarica();
+  }
+
+  async function eliminaVoce(id) {
+    if (!window.confirm("Eliminare questa voce di costo?")) return;
+    const { error } = await supabase.from("costi_operativi_voci").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+            <IconaFrecciaSinistra size={20} />
+          </button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Costi operativi</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le voci di costo dell'azienda, per categoria.</div>
+
+        <div style={{ display: "flex", marginBottom: 16 }}>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                {p.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Sede</div>
+          <button onClick={() => setSedeSel("")} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === "" ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === "" ? NAVY : "#fff", color: sedeSel === "" ? "#fff" : NAVY, cursor: "pointer" }}>
+            Tutte le sedi
+          </button>
+          {location.map((l) => (
+            <button key={l.id} onClick={() => setSedeSel(l.id)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === l.id ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === l.id ? NAVY : "#fff", color: sedeSel === l.id ? "#fff" : NAVY, cursor: "pointer" }}>
+              {l.nome}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ ...cardStyle, background: NAVY, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.3)" }}>
+          <div style={{ ...fontBody, fontSize: 12.5, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>Totale costi operativi (imponibile)</div>
+          <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{fmtEuroErp(totaleGenerale)}</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>
+            {ricaviPeriodo > 0 ? `${round1Erp((totaleGenerale / ricaviPeriodo) * 100)}% dei ricavi del periodo` : "—"}
+          </div>
+        </div>
+
+        {categorieConDati.map((cat) => (
+          <div key={cat.chiave} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            <div
+              onClick={() => setCategoriaAperta((c) => (c === cat.chiave ? "" : cat.chiave))}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "16px 20px", cursor: "pointer" }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cat.etichetta}</div>
+                {cat.tipo === "automatico" && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Automatico</div>}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(cat.totale)}</div>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.chiave ? "rotate(180deg)" : "none" }}>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </div>
+            </div>
+            {categoriaAperta === cat.chiave && (
+              <div style={{ padding: "0 20px 20px" }}>
+                {cat.sottovoci.map((v) => (
+                  <div key={v.chiave} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>
+                    <span>{v.etichetta}</span>
+                    <span style={{ fontWeight: 700 }}>{fmtEuroErp(v.totale)}</span>
+                  </div>
+                ))}
+                {cat.tipo === "manuale" && (
+                  <>
+                    {cat.vociManuali.length > 0 && (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Voci inserite</div>
+                        {cat.vociManuali.map((v) => (
+                          <div key={v.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 600 }}>
+                                {cat.voci.find((x) => x.chiave === v.sottovoce)?.etichetta || v.sottovoce}{v.descrizione ? ` — ${v.descrizione}` : ""}
+                              </div>
+                              <div style={{ color: MUTED, fontSize: 11 }}>
+                                {fmtData(v.data)}{v.location_id ? ` · ${locById[v.location_id]?.nome || ""}` : ""} · IVA {v.iva_percentuale}%
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                              <span style={{ fontWeight: 700 }}>{fmtEuroErp(v.imponibile)}</span>
+                              <button onClick={() => eliminaVoce(v.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {formCategoria === cat.chiave ? (
+                      <div style={{ marginTop: 14, padding: 14, background: BG_CHIARO, borderRadius: 10 }}>
+                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                          <Field label="Voce">
+                            <select style={inputStyle} value={formSottovoce} onChange={(e) => setFormSottovoce(e.target.value)}>
+                              {cat.voci.map((v) => <option key={v.chiave} value={v.chiave}>{v.etichetta}</option>)}
+                            </select>
+                          </Field>
+                          <Field label="Città (opzionale)">
+                            <select style={inputStyle} value={formCitta} onChange={(e) => setFormCitta(e.target.value)}>
+                              <option value="">—</option>
+                              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+                            </select>
+                          </Field>
+                        </div>
+                        <Field label="Descrizione/fornitore (opzionale)">
+                          <input style={inputStyle} value={formDescrizione} onChange={(e) => setFormDescrizione(e.target.value)} />
+                        </Field>
+                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 10, marginTop: 10, alignItems: "end" }}>
+                          <Field label="Imponibile">
+                            <input style={inputStyle} inputMode="decimal" value={formImponibile} onChange={(e) => setFormImponibile(e.target.value)} />
+                          </Field>
+                          <Field label="IVA">
+                            <select style={inputStyle} value={formIva} onChange={(e) => setFormIva(Number(e.target.value))}>
+                              {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
+                            </select>
+                          </Field>
+                          <Field label="Totale">
+                            <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} disabled value={formImponibile ? round2(parseNum(formImponibile) * (1 + formIva / 100)) : ""} />
+                          </Field>
+                          <Field label="Data">
+                            <input type="date" style={inputStyle} value={formData} onChange={(e) => setFormData(e.target.value)} />
+                          </Field>
+                        </div>
+                        {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
+                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                          <Button onClick={salvaVoceManuale} disabled={salvando}>{salvando ? "Salvo…" : "Aggiungi"}</Button>
+                          <Button variant="ghost" onClick={() => setFormCategoria("")}>Annulla</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button variant="ghost" onClick={() => apriForm(cat.chiave)} style={{ marginTop: 14 }}>+ Aggiungi voce</Button>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
@@ -8553,6 +8951,7 @@ export default function App() {
   const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
   const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
   const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
+  const [costiOperativiVoci, setCostiOperativiVoci] = useState([]); // voci di costo manuali (categorie 1-6, 8-9 di "Costi operativi")
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -8579,7 +8978,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cov] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -8593,6 +8992,7 @@ export default function App() {
       supabase.from("segnaposti_config").select("*").limit(1),
       supabase.from("loghi_impostazioni").select("*").limit(1),
       supabase.from("loghi_categorie").select("*"),
+      supabase.from("costi_operativi_voci").select("*").order("data", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -8607,6 +9007,7 @@ export default function App() {
     setSegnaposti(sg.data?.[0] || null);
     setLoghiImpostazioni(li.data?.[0] || null);
     setLoghiCategorie(lc.data || []);
+    setCostiOperativiVoci(cov.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -8762,6 +9163,7 @@ export default function App() {
   function apriImpostazioni() { apriViewProtetta("impostazioni"); }
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   function apriErp() { apriViewProtetta("erp"); }
+  function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -8967,10 +9369,21 @@ export default function App() {
       {view === "erp" && (
         <PaginaErp
           corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
+          costiOperativiVoci={costiOperativiVoci}
           onBack={() => setView("home")}
           onApriGestioneDate={apriGestioneDate}
           onApriImpostazioni={apriImpostazioni}
           onApriCercaIscritto={() => setView("cercaiscritto")}
+          onApriCostiOperativi={apriCostiOperativi}
+        />
+      )}
+
+      {view === "costioperativi" && (
+        <PaginaCostiOperativi
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          costiOperativiVoci={costiOperativiVoci}
+          ricarica={fetchDati}
+          onBack={() => setView("erp")}
         />
       )}
 

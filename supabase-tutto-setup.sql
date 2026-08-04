@@ -451,4 +451,25 @@ alter table public.corsi_date add column if not exists viaggio_assistente_prenot
 alter table public.corsi_date add column if not exists viaggio_assistente_file text[];
 
 
+-- ---------------------------------------------------------
+-- 20) "Costi operativi": voci di costo manuali (categorie 1-6, 8-9), con
+-- imponibile/IVA/totale separati e aliquota IVA scelta riga per riga
+-- ---------------------------------------------------------
+create table if not exists public.costi_operativi_voci (
+  id uuid primary key default gen_random_uuid(),
+  categoria text not null,
+  sottovoce text not null,
+  descrizione text,
+  location_id uuid references public.location(id) on delete set null,
+  imponibile numeric not null default 0,
+  iva_percentuale numeric not null default 22,
+  totale numeric not null default 0,
+  data date not null default current_date,
+  ts timestamptz not null default now()
+);
+alter table public.costi_operativi_voci enable row level security;
+drop policy if exists "accesso interno costi_operativi_voci" on public.costi_operativi_voci;
+create policy "accesso interno costi_operativi_voci" on public.costi_operativi_voci for all to anon using (true) with check (true);
+
+
 notify pgrst, 'reload schema';
