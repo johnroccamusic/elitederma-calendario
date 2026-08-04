@@ -488,4 +488,20 @@ set categoria = 'accademia_centrale', sottovoce = 'lavori'
 where categoria = 'logistica' and sottovoce = 'lavori_edili';
 
 
+-- ---------------------------------------------------------
+-- 23) Rimborsi standard in "Riepilogo amministrativo": Rimborso cene e
+-- colazioni, Rimborso taxi, Rimborso parcheggi (in detrazione dal cash
+-- del corso come gli altri costi fissi della classe). "Vitto insegnanti
+-- e personale" diventa "Vitto Docenti e personale al corso", automatica
+-- (Costo pranzi + Rimborso cene e colazioni), non più manuale
+-- ---------------------------------------------------------
+alter table public.corsi_date add column if not exists rimborso_cene_colazioni numeric;
+alter table public.corsi_date add column if not exists rimborso_taxi numeric;
+alter table public.corsi_date add column if not exists rimborso_parcheggi numeric;
+
+update public.costi_operativi_voci
+set sottovoce = 'altre_spese_vitto'
+where categoria = 'vitto' and sottovoce = 'vitto_personale';
+
+
 notify pgrst, 'reload schema';
