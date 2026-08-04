@@ -2753,32 +2753,45 @@ const CATEGORIE_LOGO = [
 ];
 
 // ---------- Costi operativi ----------
-// tassonomia fissa delle 10 categorie di costo. "manuale" = voci inserite
-// a mano nella nuova pagina "Costi operativi" (o come voce extra taggata
-// nel Riepilogo amministrativo); "automatico" = calcolate sui dati già
-// tracciati altrove (quota_venditore degli iscritti, costi per edizione
-// del Riepilogo amministrativo), mai modificabili qui
+// tassonomia fissa delle categorie di costo. "voci" sono le sotto-voci
+// inseribili a mano nella pagina "Costi operativi" (o come voce extra
+// taggata nel Riepilogo amministrativo) — ogni categoria ne ha sempre
+// almeno una di tipo "altre spese", come contenitore residuale. Alcune
+// categorie ricevono INOLTRE una o più righe calcolate automaticamente
+// sui dati già tracciati altrove (quota_venditore degli iscritti, costi
+// per edizione del Riepilogo amministrativo): quelle righe non sono
+// nell'array "voci" qui sotto, vengono aggiunte da datiCategoria() in
+// PaginaCostiOperativi. "tipo: automatico" è solo un'indicazione visiva
+// (badge "Automatico") per le categorie il cui importo principale non è
+// inserito a mano, non esclude la voce "altre spese" della categoria
 const CATEGORIE_COSTI = [
   {
     chiave: "agenzie", etichetta: "Agenzie e professionisti", tipo: "manuale",
     voci: [
       { chiave: "pubblicita", etichetta: "Pubblicità" },
       { chiave: "professionisti", etichetta: "Professionisti e società esterne" },
+      { chiave: "altre_spese_agenzie", etichetta: "Altre spese agenzie e professionisti" },
     ],
   },
   {
+    // "Alloggio — hotel, B&B" include anche il "Costo hotel" automatico
+    // per data di corso (stessa voce, un solo importo unificato)
     chiave: "trasferte", etichetta: "Trasferte", tipo: "manuale",
     voci: [
       { chiave: "alloggio", etichetta: "Alloggio — hotel, B&B", cittaConsigliata: true },
       { chiave: "viaggio_master", etichetta: "Viaggio master", cittaConsigliata: true },
       { chiave: "autostrada_carburante", etichetta: "Autostrada e carburante" },
       { chiave: "trasporti_extra", etichetta: "Trasporti extra" },
+      { chiave: "altre_spese_trasferte", etichetta: "Altre spese trasferte" },
     ],
   },
   {
+    // "Costo pranzi" (automatico, per data di corso) confluisce qui come
+    // riga a parte, accanto alla voce manuale
     chiave: "vitto", etichetta: "Vitto", tipo: "manuale",
     voci: [
       { chiave: "vitto_personale", etichetta: "Vitto insegnanti e personale" },
+      { chiave: "altre_spese_vitto", etichetta: "Altre spese vitto" },
     ],
   },
   {
@@ -2787,25 +2800,29 @@ const CATEGORIE_COSTI = [
       { chiave: "materiali_consumo", etichetta: "Materiali di consumo", cittaConsigliata: true },
       { chiave: "materiali_didattici", etichetta: "Materiali didattici e da vendita" },
       { chiave: "cibo_caffe_snack", etichetta: "Cibo, caffè, snack" },
+      { chiave: "altre_spese_materiali", etichetta: "Altre spese materiali e forniture" },
     ],
   },
   {
-    chiave: "logistica", etichetta: "Logistica", tipo: "manuale",
+    chiave: "logistica", etichetta: "Corrieri e spedizioni", tipo: "manuale",
     voci: [
       { chiave: "spedizioni", etichetta: "Spedizioni" },
-      { chiave: "lavori_edili", etichetta: "Lavori edili" },
+      { chiave: "altre_spese_logistica", etichetta: "Altre spese corrieri e spedizioni" },
     ],
   },
   {
-    chiave: "sedi", etichetta: "Sedi", tipo: "manuale",
+    // "Costo accademia" (automatico, per data di corso) confluisce qui
+    // come riga a parte, accanto alla voce manuale "Affitto sedi"
+    chiave: "sedi", etichetta: "Affitto sedi distaccate", tipo: "manuale",
     voci: [
       { chiave: "affitto_sedi", etichetta: "Affitto sedi", cittaConsigliata: true },
+      { chiave: "altre_spese_sedi", etichetta: "Altre spese affitto sedi distaccate" },
     ],
   },
   {
     chiave: "commerciale", etichetta: "Commerciale", tipo: "automatico",
     voci: [
-      { chiave: "commissioni_venditori", etichetta: "Commissioni venditori" },
+      { chiave: "altre_spese_commerciale", etichetta: "Altre spese commerciali" },
     ],
   },
   {
@@ -2817,6 +2834,7 @@ const CATEGORIE_COSTI = [
       { chiave: "spedizione_eventi", etichetta: "Costo spedizione prodotti" },
       { chiave: "personalizzazioni", etichetta: "Costo personalizzazioni e gadget" },
       { chiave: "vitto_eventi", etichetta: "Costo vitto" },
+      { chiave: "altri_costi_eventi", etichetta: "Altri costi eventi" },
     ],
   },
   {
@@ -2830,16 +2848,47 @@ const CATEGORIE_COSTI = [
     ],
   },
   {
-    chiave: "personale_riepilogo", etichetta: "Personale e trasferte (dal Riepilogo amministrativo)", tipo: "automatico",
+    chiave: "accademia_centrale", etichetta: "Spese Accademia centrale", tipo: "manuale",
     voci: [
-      { chiave: "master_assistenti", etichetta: "Costo master e assistenti" },
-      { chiave: "hotel_riepilogo", etichetta: "Costo hotel" },
-      { chiave: "accademia", etichetta: "Costo accademia" },
-      { chiave: "pranzi", etichetta: "Costo pranzi" },
+      { chiave: "affitto_sede_centrale", etichetta: "Affitto sede" },
+      { chiave: "condominio", etichetta: "Condominio" },
+      { chiave: "lavori", etichetta: "Lavori" },
+      { chiave: "mobilio", etichetta: "Mobilio" },
+      { chiave: "altre_spese_accademia_centrale", etichetta: "Altre spese accademia centrale" },
+    ],
+  },
+  {
+    chiave: "utenze", etichetta: "Utenze", tipo: "manuale",
+    voci: [
+      { chiave: "luce", etichetta: "Luce" },
+      { chiave: "gas", etichetta: "Gas" },
+      { chiave: "tari", etichetta: "TARI" },
+      { chiave: "rai", etichetta: "Canone RAI" },
+      { chiave: "telefono", etichetta: "Telefono" },
+      { chiave: "altre_spese_utenze", etichetta: "Altre spese utenze" },
+    ],
+  },
+  {
+    chiave: "personale_accademia", etichetta: "Costo personale accademia", tipo: "manuale",
+    voci: [
+      { chiave: "stipendi_personale", etichetta: "Stipendi personale e amministratori" },
+      { chiave: "altre_spese_personale_accademia", etichetta: "Altre spese personale accademia" },
+    ],
+  },
+  {
+    // "Costo master" e "Costo assistenti" (automatici, per data di
+    // corso) sono le due righe principali, tenute separate; l'unica
+    // voce inseribile a mano è il contenitore residuale
+    chiave: "docenti_corsi", etichetta: "Costo docenti per i corsi", tipo: "automatico",
+    voci: [
+      { chiave: "altre_spese_docenti", etichetta: "Altre spese docenti" },
     ],
   },
 ];
-const CATEGORIE_COSTI_MANUALI = CATEGORIE_COSTI.filter((c) => c.tipo === "manuale");
+// tutte le categorie sono taggabili/selezionabili a mano (ognuna ha
+// almeno una voce residuale "altre spese"): la lista non è più filtrata
+// per "tipo", che resta solo un'indicazione visiva nel dettaglio
+const CATEGORIE_COSTI_MANUALI = CATEGORIE_COSTI;
 function categoriaCostoDi(chiave) {
   return CATEGORIE_COSTI.find((c) => c.chiave === chiave) || null;
 }
@@ -9184,29 +9233,26 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
   );
 
   const totaleCommissioniVenditori = round2(iscrittiPeriodo.reduce((s, i) => s + (i.quota_venditore || 0), 0));
-  const totaleMasterAssistenti = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_master || 0) + (cd.costo_assistenti || 0), 0));
+  const totaleCostoMaster = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_master || 0), 0));
+  const totaleCostoAssistenti = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_assistenti || 0), 0));
   const totaleHotelRiepilogo = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_hotel || 0), 0));
   const totaleAccademia = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_accademia || 0), 0));
   const totalePranzi = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_pranzi || 0), 0));
+  // voci extra del Riepilogo amministrativo inserite prima che la scelta
+  // della categoria fosse obbligatoria: non hanno una categoria "vera" a
+  // cui appartenere, quindi restano un'unica riga a parte invece di
+  // sparire dal totale
   const totaleExtraNonCategorizzate = round2(cdPeriodo.reduce((s, cd) => {
     const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => !c.categoria).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
     return s + extra;
   }, 0));
 
+  // percorso comune a tutte le categorie: voci manuali inserite a mano
+  // per quella categoria, più eventuali voci extra del Riepilogo
+  // amministrativo taggate a questa categoria. Alcune categorie
+  // ricevono INOLTRE una o più righe automatiche per data di corso,
+  // aggiunte dopo il calcolo generico (vedi commento su CATEGORIE_COSTI)
   function datiCategoria(cat) {
-    if (cat.chiave === "commerciale") {
-      return { totale: totaleCommissioniVenditori, sottovoci: [{ chiave: "commissioni_venditori", etichetta: "Commissioni venditori", totale: totaleCommissioniVenditori }] };
-    }
-    if (cat.chiave === "personale_riepilogo") {
-      const sottovoci = [
-        { chiave: "master_assistenti", etichetta: "Costo master e assistenti", totale: totaleMasterAssistenti },
-        { chiave: "hotel_riepilogo", etichetta: "Costo hotel", totale: totaleHotelRiepilogo },
-        { chiave: "accademia", etichetta: "Costo accademia", totale: totaleAccademia },
-        { chiave: "pranzi", etichetta: "Costo pranzi", totale: totalePranzi },
-      ];
-      if (totaleExtraNonCategorizzate > 0) sottovoci.push({ chiave: "extra_non_categorizzate", etichetta: "Voci extra non categorizzate", totale: totaleExtraNonCategorizzate });
-      return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci };
-    }
     const vociCat = vociManualiPeriodo.filter((v) => v.categoria === cat.chiave);
     const sottovoci = cat.voci.map((v) => ({
       chiave: v.chiave, etichetta: v.etichetta,
@@ -9217,10 +9263,43 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
       return s + extra;
     }, 0));
     if (extraTaggate > 0) sottovoci.push({ chiave: "__extra__", etichetta: "Voci extra dal Riepilogo amministrativo", totale: extraTaggate });
-    return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci, vociManuali: vociCat };
+
+    if (cat.chiave === "trasferte") {
+      // il "Costo hotel" automatico confluisce nella stessa riga manuale,
+      // non come riga separata
+      const alloggio = sottovoci.find((v) => v.chiave === "alloggio");
+      if (alloggio) alloggio.totale = round2(alloggio.totale + totaleHotelRiepilogo);
+    }
+    if (cat.chiave === "vitto") {
+      sottovoci.splice(1, 0, { chiave: "costo_pranzi", etichetta: "Costo pranzi", totale: totalePranzi });
+    }
+    if (cat.chiave === "sedi") {
+      sottovoci.splice(1, 0, { chiave: "costo_accademia", etichetta: "Costo accademia", totale: totaleAccademia });
+    }
+    if (cat.chiave === "commerciale") {
+      sottovoci.unshift({ chiave: "commissioni_venditori", etichetta: "Commissioni venditori", totale: totaleCommissioniVenditori });
+    }
+    if (cat.chiave === "docenti_corsi") {
+      sottovoci.unshift(
+        { chiave: "costo_assistenti", etichetta: "Costo assistenti", totale: totaleCostoAssistenti },
+        { chiave: "costo_master", etichetta: "Costo master", totale: totaleCostoMaster },
+      );
+    }
+
+    return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci };
   }
 
   const categorieConDati = CATEGORIE_COSTI.map((cat) => ({ ...cat, ...datiCategoria(cat) }));
+  // voci extra "orfane" (mai taggate a nessuna categoria): non è una
+  // categoria selezionabile, è solo una riga di trasparenza per non
+  // perdere quell'importo dal totale generale
+  if (totaleExtraNonCategorizzate > 0) {
+    categorieConDati.push({
+      chiave: "non_categorizzato", etichetta: "Non categorizzato", tipo: "automatico",
+      totale: totaleExtraNonCategorizzate,
+      sottovoci: [{ chiave: "extra_non_categorizzate", etichetta: "Voci extra non categorizzate (dal Riepilogo amministrativo)", totale: totaleExtraNonCategorizzate }],
+    });
+  }
   const totaleGenerale = round2(categorieConDati.reduce((s, c) => s + c.totale, 0));
   const ricaviPeriodo = round2(iscrittiPeriodo.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
 

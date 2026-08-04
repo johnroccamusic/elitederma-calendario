@@ -478,4 +478,14 @@ create policy "accesso interno costi_operativi_voci" on public.costi_operativi_v
 alter table public.costi_operativi_voci add column if not exists metodo_pagamento text;
 
 
+-- ---------------------------------------------------------
+-- 22) Ristrutturazione categorie "Costi operativi": "Logistica" (ora
+-- "Corrieri e spedizioni") perde "Lavori edili", spostata sotto la
+-- nuova categoria "Spese Accademia centrale" > "Lavori"
+-- ---------------------------------------------------------
+update public.costi_operativi_voci
+set categoria = 'accademia_centrale', sottovoce = 'lavori'
+where categoria = 'logistica' and sottovoce = 'lavori_edili';
+
+
 notify pgrst, 'reload schema';
