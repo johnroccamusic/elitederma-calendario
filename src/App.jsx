@@ -2784,7 +2784,7 @@ const CATEGORIE_COSTI = [
     voci: [
       { chiave: "materiali_consumo", etichetta: "Materiali di consumo", cittaConsigliata: true },
       { chiave: "materiali_didattici", etichetta: "Materiali didattici e da vendita" },
-      { chiave: "forniture_sede", etichetta: "Forniture sede" },
+      { chiave: "cibo_caffe_snack", etichetta: "Cibo, caffè, snack" },
     ],
   },
   {
