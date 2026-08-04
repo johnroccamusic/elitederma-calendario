@@ -2905,6 +2905,13 @@ const CATEGORIE_COSTI = [
 // almeno una voce residuale "altre spese"): la lista non è più filtrata
 // per "tipo", che resta solo un'indicazione visiva nel dettaglio
 const CATEGORIE_COSTI_MANUALI = CATEGORIE_COSTI;
+// nel "+" del Riepilogo amministrativo (dentro la scheda di UNA data di
+// corso) ha senso taggare solo le categorie legate a quella specifica
+// edizione: le categorie di spesa "aziendale" (personale, utenze, sede
+// centrale, eventi/fiere, agenzie, sedi distaccate, commissioni
+// venditori) restano taggabili solo da "+ Nuova operazione"
+const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "utenze", "agenzie", "sedi", "eventi", "accademia_centrale", "commerciale"];
+const CATEGORIE_COSTI_RIEPILOGO = CATEGORIE_COSTI.filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.chiave));
 function categoriaCostoDi(chiave) {
   return CATEGORIE_COSTI.find((c) => c.chiave === chiave) || null;
 }
@@ -7015,22 +7022,25 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                     +
                   </button>
                   {sceltaCategoriaCosto && (
-                    <select
-                      autoFocus
+                    <div
                       onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => { if (e.target.value) aggiungiVoceCosto(e.target.value); }}
-                      onBlur={() => setSceltaCategoriaCosto(false)}
-                      style={{ ...inputStyle, ...fontBody, fontSize: 13, position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 240 }}
+                      style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 260, maxHeight: 320, overflowY: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)" }}
                     >
-                      <option value="">Scegli una voce di costo…</option>
-                      {CATEGORIE_COSTI_MANUALI.map((cat) => (
-                        <optgroup key={cat.chiave} label={cat.etichetta}>
+                      {CATEGORIE_COSTI_RIEPILOGO.map((cat) => (
+                        <div key={cat.chiave}>
+                          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.etichetta}</div>
                           {cat.voci.map((v) => (
-                            <option key={v.chiave} value={`${cat.chiave}::${v.chiave}`}>{v.etichetta}</option>
+                            <button
+                              key={v.chiave}
+                              onClick={() => aggiungiVoceCosto(`${cat.chiave}::${v.chiave}`)}
+                              style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", color: NAVY }}
+                            >
+                              {v.etichetta}
+                            </button>
                           ))}
-                        </optgroup>
+                        </div>
                       ))}
-                    </select>
+                    </div>
                   )}
                 </div>
               )}
