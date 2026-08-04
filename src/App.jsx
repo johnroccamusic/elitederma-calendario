@@ -2774,24 +2774,31 @@ const CATEGORIE_COSTI = [
     ],
   },
   {
-    // "Alloggio — hotel, B&B" include anche il "Costo hotel" automatico
-    // per data di corso (stessa voce, un solo importo unificato);
     // "Trasporti extra" include anche "Rimborso taxi"/"Rimborso
     // parcheggi" automatici per data di corso
-    chiave: "trasferte", etichetta: "Trasferte", tipo: "manuale",
+    chiave: "viaggi", etichetta: "Costo viaggi", tipo: "manuale",
     voci: [
-      { chiave: "alloggio", etichetta: "Alloggio — hotel, B&B", cittaConsigliata: true },
       { chiave: "viaggio_master", etichetta: "Viaggio master", cittaConsigliata: true },
       { chiave: "autostrada_carburante", etichetta: "Autostrada e carburante" },
       { chiave: "trasporti_extra", etichetta: "Trasporti extra" },
-      { chiave: "altre_spese_trasferte", etichetta: "Altre spese trasferte" },
+      { chiave: "altre_spese_viaggi", etichetta: "Altre spese viaggi" },
+    ],
+  },
+  {
+    // "Alloggio — hotel, case e appartamenti" include anche il "Costo
+    // appartamento/hotel" automatico per data di corso (stessa voce, un
+    // solo importo unificato)
+    chiave: "alloggi", etichetta: "Costo alloggi", tipo: "manuale",
+    voci: [
+      { chiave: "alloggio", etichetta: "Alloggio — hotel, case e appartamenti", cittaConsigliata: true },
+      { chiave: "altre_spese_alloggi", etichetta: "Altre spese alloggi" },
     ],
   },
   {
     // "Vitto Docenti e personale al corso" è interamente automatica (Costo
-    // pranzi + Rimborso cene e colazioni per data di corso, dal Riepilogo
-    // amministrativo): non è inseribile a mano, l'unica voce manuale della
-    // categoria è il contenitore residuale
+    // pranzi + Rimborso cene + Rimborso colazioni e spesa per data di
+    // corso, dal Riepilogo amministrativo): non è inseribile a mano,
+    // l'unica voce manuale della categoria è il contenitore residuale
     chiave: "vitto", etichetta: "Vitto", tipo: "manuale",
     voci: [
       { chiave: "altre_spese_vitto", etichetta: "Altre spese vitto" },
@@ -2803,6 +2810,10 @@ const CATEGORIE_COSTI = [
       { chiave: "materiali_consumo", etichetta: "Materiali di consumo", cittaConsigliata: true },
       { chiave: "materiali_didattici", etichetta: "Materiali didattici e da vendita" },
       { chiave: "cibo_caffe_snack", etichetta: "Cibo, caffè, snack" },
+      { chiave: "stampa_diplomi_fotocopie", etichetta: "Stampa diplomi e fotocopie" },
+      { chiave: "stampa_libri_quaderni_etichette", etichetta: "Stampa libri, quaderni ed etichette" },
+      { chiave: "packaging_buste", etichetta: "Produzione packaging e buste" },
+      { chiave: "gadgettistica", etichetta: "Gadgettistica" },
       { chiave: "altre_spese_materiali", etichetta: "Altre spese materiali e forniture" },
     ],
   },
@@ -2829,7 +2840,7 @@ const CATEGORIE_COSTI = [
     ],
   },
   {
-    chiave: "eventi", etichetta: "Eventi", tipo: "manuale",
+    chiave: "eventi", etichetta: "Fiere ed Eventi", tipo: "manuale",
     voci: [
       { chiave: "partecipazione", etichetta: "Costo partecipazione" },
       { chiave: "alloggio_eventi", etichetta: "Costo alloggio" },
@@ -2872,6 +2883,8 @@ const CATEGORIE_COSTI = [
     ],
   },
   {
+    // "Costo coordinatore" (automatico, per data di corso, dal Riepilogo
+    // amministrativo) confluisce qui come riga a parte, accanto alle voci manuali
     chiave: "personale_accademia", etichetta: "Costo personale accademia", tipo: "manuale",
     voci: [
       { chiave: "stipendi_personale", etichetta: "Stipendi personale e amministratori" },
@@ -2894,6 +2907,9 @@ const CATEGORIE_COSTI = [
 const CATEGORIE_COSTI_MANUALI = CATEGORIE_COSTI;
 function categoriaCostoDi(chiave) {
   return CATEGORIE_COSTI.find((c) => c.chiave === chiave) || null;
+}
+function voceCostoDi(categoria, sottovoce) {
+  return categoriaCostoDi(categoria)?.voci.find((v) => v.chiave === sottovoce) || null;
 }
 const ALIQUOTE_IVA_COSTI = [22, 10, 4, 0];
 
@@ -6103,13 +6119,15 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [costoMaster, setCostoMaster] = useState(corsoData.costo_master != null ? String(corsoData.costo_master) : "");
   const [costoAssistenti, setCostoAssistenti] = useState(corsoData.costo_assistenti != null ? String(corsoData.costo_assistenti) : "");
   const [costoPranzi, setCostoPranzi] = useState(corsoData.costo_pranzi != null ? String(corsoData.costo_pranzi) : "");
+  const [rimborsoCene, setRimborsoCene] = useState(corsoData.rimborso_cene != null ? String(corsoData.rimborso_cene) : "");
+  const [rimborsoColazioniSpesa, setRimborsoColazioniSpesa] = useState(corsoData.rimborso_colazioni_spesa != null ? String(corsoData.rimborso_colazioni_spesa) : "");
   const [costoHotel, setCostoHotel] = useState(corsoData.costo_hotel != null ? String(corsoData.costo_hotel) : "");
-  const [rimborsoCene, setRimborsoCene] = useState(corsoData.rimborso_cene_colazioni != null ? String(corsoData.rimborso_cene_colazioni) : "");
+  const [costoCoordinatore, setCostoCoordinatore] = useState(corsoData.costo_coordinatore != null ? String(corsoData.costo_coordinatore) : "");
   const [rimborsoTaxi, setRimborsoTaxi] = useState(corsoData.rimborso_taxi != null ? String(corsoData.rimborso_taxi) : "");
   const [rimborsoParcheggi, setRimborsoParcheggi] = useState(corsoData.rimborso_parcheggi != null ? String(corsoData.rimborso_parcheggi) : "");
   // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
   const [costiExtra, setCostiExtra] = useState(
-    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "" })) : []
+    Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "", sottovoce: c.sottovoce || "" })) : []
   );
   const [salvandoCosti, setSalvandoCosti] = useState(false);
   const [sceltaCategoriaCosto, setSceltaCategoriaCosto] = useState(false);
@@ -6172,17 +6190,19 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
   const totaleCostiClasse = round2(
     quoteVenditoreClasse + parseNum(costoAccademia) + parseNum(costoMaster) + parseNum(costoAssistenti) +
-    parseNum(costoPranzi) + parseNum(costoHotel) +
-    parseNum(rimborsoCene) + parseNum(rimborsoTaxi) + parseNum(rimborsoParcheggi) +
+    parseNum(costoPranzi) + parseNum(costoHotel) + parseNum(costoCoordinatore) +
+    parseNum(rimborsoCene) + parseNum(rimborsoColazioniSpesa) + parseNum(rimborsoTaxi) + parseNum(rimborsoParcheggi) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
 
-  // il "+" ora apre prima una tendina con le categorie principali di
-  // "Costi operativi" (solo manuali): la voce si crea già taggata con
-  // quella categoria, così viene contata nel posto giusto nel drill-down
-  function aggiungiVoceCosto(categoria) {
-    setCostiExtra((prev) => [...prev, { titolo: "", valore: "", categoria }]);
+  // il "+" apre una tendina con TUTTE le sotto-voci di "Costi operativi"
+  // (raggruppate per categoria, come nel form "Nuova uscita"): la voce si
+  // crea già taggata con categoria+sottovoce, così confluisce nella riga
+  // giusta del drill-down invece che in un generico "extra" di categoria
+  function aggiungiVoceCosto(valoreCombinato) {
+    const [categoria, sottovoce] = valoreCombinato.split("::");
+    setCostiExtra((prev) => [...prev, { titolo: "", valore: "", categoria, sottovoce }]);
     setCostiAperto(true);
     setSceltaCategoriaCosto(false);
   }
@@ -6200,10 +6220,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       costo_assistenti: costoAssistenti === "" ? null : parseNum(costoAssistenti),
       costo_pranzi: costoPranzi === "" ? null : parseNum(costoPranzi),
       costo_hotel: costoHotel === "" ? null : parseNum(costoHotel),
-      rimborso_cene_colazioni: rimborsoCene === "" ? null : parseNum(rimborsoCene),
+      costo_coordinatore: costoCoordinatore === "" ? null : parseNum(costoCoordinatore),
+      rimborso_cene: rimborsoCene === "" ? null : parseNum(rimborsoCene),
+      rimborso_colazioni_spesa: rimborsoColazioniSpesa === "" ? null : parseNum(rimborsoColazioniSpesa),
       rimborso_taxi: rimborsoTaxi === "" ? null : parseNum(rimborsoTaxi),
       rimborso_parcheggi: rimborsoParcheggi === "" ? null : parseNum(rimborsoParcheggi),
-      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null })),
+      costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null, sottovoce: c.sottovoce || null })),
     }).eq("id", corsoData.id);
     setSalvandoCosti(false);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -7000,9 +7022,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       onBlur={() => setSceltaCategoriaCosto(false)}
                       style={{ ...inputStyle, ...fontBody, fontSize: 13, position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 240 }}
                     >
-                      <option value="">Scegli una categoria di costo…</option>
-                      {CATEGORIE_COSTI_MANUALI.map((c) => (
-                        <option key={c.chiave} value={c.chiave}>{c.etichetta}</option>
+                      <option value="">Scegli una voce di costo…</option>
+                      {CATEGORIE_COSTI_MANUALI.map((cat) => (
+                        <optgroup key={cat.chiave} label={cat.etichetta}>
+                          {cat.voci.map((v) => (
+                            <option key={v.chiave} value={`${cat.chiave}::${v.chiave}`}>{v.etichetta}</option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   )}
@@ -7046,8 +7072,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 <Field label="Costo master"><input style={inputStyle} inputMode="decimal" value={costoMaster} onChange={(e) => setCostoMaster(e.target.value)} /></Field>
                 <Field label="Costo assistenti"><input style={inputStyle} inputMode="decimal" value={costoAssistenti} onChange={(e) => setCostoAssistenti(e.target.value)} /></Field>
                 <Field label="Costo pranzi"><input style={inputStyle} inputMode="decimal" value={costoPranzi} onChange={(e) => setCostoPranzi(e.target.value)} /></Field>
-                <Field label="Costo hotel"><input style={inputStyle} inputMode="decimal" value={costoHotel} onChange={(e) => setCostoHotel(e.target.value)} /></Field>
-                <Field label="Rimborso cene e colazioni"><input style={inputStyle} inputMode="decimal" value={rimborsoCene} onChange={(e) => setRimborsoCene(e.target.value)} /></Field>
+                <Field label="Rimborso cene"><input style={inputStyle} inputMode="decimal" value={rimborsoCene} onChange={(e) => setRimborsoCene(e.target.value)} /></Field>
+                <Field label="Rimborso colazioni e spesa"><input style={inputStyle} inputMode="decimal" value={rimborsoColazioniSpesa} onChange={(e) => setRimborsoColazioniSpesa(e.target.value)} /></Field>
+                <Field label="Costo appartamento/hotel"><input style={inputStyle} inputMode="decimal" value={costoHotel} onChange={(e) => setCostoHotel(e.target.value)} /></Field>
+                <Field label="Costo coordinatore"><input style={inputStyle} inputMode="decimal" value={costoCoordinatore} onChange={(e) => setCostoCoordinatore(e.target.value)} /></Field>
                 <Field label="Rimborso taxi"><input style={inputStyle} inputMode="decimal" value={rimborsoTaxi} onChange={(e) => setRimborsoTaxi(e.target.value)} /></Field>
                 <Field label="Rimborso parcheggi"><input style={inputStyle} inputMode="decimal" value={rimborsoParcheggi} onChange={(e) => setRimborsoParcheggi(e.target.value)} /></Field>
               </div>
@@ -7057,7 +7085,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   <div style={{ flex: "2 1 140px", minWidth: 0 }}>
                     {voce.categoria && (
                       <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>
-                        {categoriaCostoDi(voce.categoria)?.etichetta || voce.categoria}
+                        {voceCostoDi(voce.categoria, voce.sottovoce)?.etichetta || categoriaCostoDi(voce.categoria)?.etichetta || voce.categoria}
                       </div>
                     )}
                     <Field label="Voce di costo"><input style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Titolo" value={voce.titolo} onChange={(e) => modificaVoceCosto(idx, "titolo", e.target.value.toUpperCase())} /></Field>
@@ -8236,8 +8264,8 @@ function VistaBiglietti({ param, tipo }) {
 // libere aggiunte in "Riepilogo amministrativo" (Contabilità classe)
 function costoClasseErp(cd) {
   const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.reduce((s, c) => s + (Number(c.valore) || 0), 0) : 0;
-  return (cd.costo_accademia || 0) + (cd.costo_master || 0) + (cd.costo_assistenti || 0) + (cd.costo_pranzi || 0) + (cd.costo_hotel || 0)
-    + (cd.rimborso_cene_colazioni || 0) + (cd.rimborso_taxi || 0) + (cd.rimborso_parcheggi || 0) + extra;
+  return (cd.costo_accademia || 0) + (cd.costo_master || 0) + (cd.costo_assistenti || 0) + (cd.costo_pranzi || 0) + (cd.costo_hotel || 0) + (cd.costo_coordinatore || 0)
+    + (cd.rimborso_cene || 0) + (cd.rimborso_colazioni_spesa || 0) + (cd.rimborso_taxi || 0) + (cd.rimborso_parcheggi || 0) + extra;
 }
 function fmtEuroErp(n) {
   return `${Math.round(n || 0).toLocaleString("it-IT")} €`;
@@ -9252,13 +9280,15 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
   const totaleHotelRiepilogo = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_hotel || 0), 0));
   const totaleAccademia = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_accademia || 0), 0));
   const totalePranzi = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_pranzi || 0), 0));
-  const totaleRimborsoCene = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_cene_colazioni || 0), 0));
+  const totaleCostoCoordinatore = round2(cdPeriodo.reduce((s, cd) => s + (cd.costo_coordinatore || 0), 0));
+  const totaleRimborsoCene = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_cene || 0), 0));
+  const totaleRimborsoColazioniSpesa = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_colazioni_spesa || 0), 0));
   const totaleRimborsoTaxi = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_taxi || 0), 0));
   const totaleRimborsoParcheggi = round2(cdPeriodo.reduce((s, cd) => s + (cd.rimborso_parcheggi || 0), 0));
-  // voci extra del Riepilogo amministrativo inserite prima che la scelta
-  // della categoria fosse obbligatoria: non hanno una categoria "vera" a
-  // cui appartenere, quindi restano un'unica riga a parte invece di
-  // sparire dal totale
+  // voci extra del Riepilogo amministrativo mai taggate a nessuna
+  // categoria (dati precedenti alla scelta obbligatoria): non hanno una
+  // categoria "vera" a cui appartenere, quindi restano un'unica riga a
+  // parte invece di sparire dal totale
   const totaleExtraNonCategorizzate = round2(cdPeriodo.reduce((s, cd) => {
     const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => !c.categoria).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
     return s + extra;
@@ -9266,34 +9296,47 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
 
   // percorso comune a tutte le categorie: voci manuali inserite a mano
   // per quella categoria, più eventuali voci extra del Riepilogo
-  // amministrativo taggate a questa categoria. Alcune categorie
-  // ricevono INOLTRE una o più righe automatiche per data di corso,
-  // aggiunte dopo il calcolo generico (vedi commento su CATEGORIE_COSTI)
+  // amministrativo taggate a questa categoria E a una sua sottovoce
+  // precisa (confluiscono nella riga giusta, non in un generico
+  // "extra" di categoria); solo le voci extra taggate alla categoria ma
+  // senza una sottovoce riconosciuta (dati inseriti prima che la scelta
+  // della sottovoce fosse possibile) restano un "extra" a parte. Alcune
+  // categorie ricevono INOLTRE una o più righe automatiche per data di
+  // corso, aggiunte dopo il calcolo generico (vedi commento su
+  // CATEGORIE_COSTI)
   function datiCategoria(cat) {
     const vociCat = vociManualiPeriodo.filter((v) => v.categoria === cat.chiave);
-    const sottovoci = cat.voci.map((v) => ({
-      chiave: v.chiave, etichetta: v.etichetta,
-      totale: round2(vociCat.filter((x) => x.sottovoce === v.chiave).reduce((s, x) => s + (x.imponibile || 0), 0)),
-    }));
-    const extraTaggate = round2(cdPeriodo.reduce((s, cd) => {
-      const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => c.categoria === cat.chiave).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
+    const chiaviValide = new Set(cat.voci.map((v) => v.chiave));
+    const sottovoci = cat.voci.map((v) => {
+      const totaleManuale = vociCat.filter((x) => x.sottovoce === v.chiave).reduce((s, x) => s + (x.imponibile || 0), 0);
+      const totaleExtraTaggata = cdPeriodo.reduce((s, cd) => {
+        const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => c.categoria === cat.chiave && c.sottovoce === v.chiave).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
+        return s + extra;
+      }, 0);
+      return { chiave: v.chiave, etichetta: v.etichetta, totale: round2(totaleManuale + totaleExtraTaggata) };
+    });
+    const extraSenzaSottovoce = round2(cdPeriodo.reduce((s, cd) => {
+      const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.filter((c) => c.categoria === cat.chiave && !chiaviValide.has(c.sottovoce)).reduce((s2, c) => s2 + (Number(c.valore) || 0), 0) : 0;
       return s + extra;
     }, 0));
-    if (extraTaggate > 0) sottovoci.push({ chiave: "__extra__", etichetta: "Voci extra dal Riepilogo amministrativo", totale: extraTaggate });
+    if (extraSenzaSottovoce > 0) sottovoci.push({ chiave: "__extra__", etichetta: "Voci extra dal Riepilogo amministrativo", totale: extraSenzaSottovoce });
 
-    if (cat.chiave === "trasferte") {
-      // il "Costo hotel" automatico confluisce nella stessa riga manuale
-      // "Alloggio", "Rimborso taxi"/"Rimborso parcheggi" in "Trasporti
-      // extra": nessuna riga separata
+    if (cat.chiave === "alloggi") {
+      // il "Costo appartamento/hotel" automatico confluisce nella stessa
+      // riga manuale, non come riga separata
       const alloggio = sottovoci.find((v) => v.chiave === "alloggio");
       if (alloggio) alloggio.totale = round2(alloggio.totale + totaleHotelRiepilogo);
+    }
+    if (cat.chiave === "viaggi") {
+      // "Rimborso taxi"/"Rimborso parcheggi" automatici confluiscono in
+      // "Trasporti extra", non come righe separate
       const trasportiExtra = sottovoci.find((v) => v.chiave === "trasporti_extra");
       if (trasportiExtra) trasportiExtra.totale = round2(trasportiExtra.totale + totaleRimborsoTaxi + totaleRimborsoParcheggi);
     }
     if (cat.chiave === "vitto") {
-      // interamente automatica: Costo pranzi + Rimborso cene e colazioni,
-      // dal Riepilogo amministrativo, nessuna voce manuale
-      sottovoci.unshift({ chiave: "vitto_docenti_personale", etichetta: "Vitto Docenti e personale al corso", totale: round2(totalePranzi + totaleRimborsoCene) });
+      // interamente automatica: Costo pranzi + Rimborso cene + Rimborso
+      // colazioni e spesa, dal Riepilogo amministrativo, nessuna voce manuale
+      sottovoci.unshift({ chiave: "vitto_docenti_personale", etichetta: "Vitto Docenti e personale al corso", totale: round2(totalePranzi + totaleRimborsoCene + totaleRimborsoColazioniSpesa) });
     }
     if (cat.chiave === "sedi") {
       sottovoci.splice(1, 0, { chiave: "costo_accademia", etichetta: "Costo accademia", totale: totaleAccademia });
@@ -9306,6 +9349,9 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
         { chiave: "costo_assistenti", etichetta: "Costo assistenti", totale: totaleCostoAssistenti },
         { chiave: "costo_master", etichetta: "Costo master", totale: totaleCostoMaster },
       );
+    }
+    if (cat.chiave === "personale_accademia") {
+      sottovoci.unshift({ chiave: "costo_coordinatore", etichetta: "Costo coordinatore", totale: totaleCostoCoordinatore });
     }
 
     return { totale: round2(sottovoci.reduce((s, v) => s + v.totale, 0)), sottovoci };
