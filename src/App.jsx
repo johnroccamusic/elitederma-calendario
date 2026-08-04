@@ -8492,76 +8492,81 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
   );
 }
 
-// pannello aperto cliccando la card "Ricavi e costi": confronto anno su
-// anno mese per mese, raggruppato per mese (non per anno) e in ordine
-// di anno scolastico (settembre -> agosto), così scorrendo verso il
-// basso si passa da un mese al successivo e, dentro ogni mese, si
-// confronta subito lo stesso mese sugli anni disponibili (più recente
-// in alto). La scala delle barre è calcolata PER MESE (non globale),
-// così il confronto tra anni dello stesso mese resta leggibile
+// pannello aperto cliccando la card "Ricavi e costi": confronto anno
+// scolastico su anno scolastico (settembre -> agosto), UNA RIGA PER
+// ANNO, con i 12 mesi in orizzontale dentro la riga (stesso stile a
+// barre della card "Ricavi e costi" della dashboard) — scorrendo verso
+// il basso si passa dall'anno scolastico corrente ai precedenti, e la
+// scala delle barre è GLOBALE (stesso massimo per tutte le righe) così
+// il confronto tra un anno e l'altro si vede subito anche solo
+// guardando l'altezza delle barre nella stessa colonna (stesso mese)
+function annoScolasticoDi(dataStr) {
+  const [anno, mese] = dataStr.split("-").map(Number);
+  return mese >= 9 ? anno : anno - 1;
+}
 function PannelloConfrontoAnnuale({ corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById, onClose }) {
-  const annoCorrente = new Date().getFullYear();
-  const anniDisponibili = useMemo(() => {
-    const anni = new Set([annoCorrente]);
-    corsiDate.forEach((cd) => { if (cd.data_inizio) anni.add(Number(cd.data_inizio.slice(0, 4))); });
-    costiOperativiVoci.forEach((v) => { if (v.data) anni.add(Number(v.data.slice(0, 4))); });
+  const isMobile = useIsMobile();
+  const annoScolasticoCorrente = annoScolasticoDi(dataOggiStr());
+  const anniScolasticiDisponibili = useMemo(() => {
+    const anni = new Set([annoScolasticoCorrente]);
+    corsiDate.forEach((cd) => { if (cd.data_inizio) anni.add(annoScolasticoDi(cd.data_inizio)); });
+    costiOperativiVoci.forEach((v) => { if (v.data) anni.add(annoScolasticoDi(v.data)); });
     return [...anni].sort((a, b) => b - a);
-  }, [corsiDate, costiOperativiVoci, annoCorrente]);
+  }, [corsiDate, costiOperativiVoci, annoScolasticoCorrente]);
 
-  const confronto = useMemo(() => ORDINE_MESI_SCOLASTICO.map((mese0) => {
-    const righe = anniDisponibili.map((anno) => {
+  const confronto = useMemo(() => anniScolasticiDisponibili.map((annoIniziale) => {
+    const mesi = ORDINE_MESI_SCOLASTICO.map((mese0) => {
+      const anno = mese0 >= 8 ? annoIniziale : annoIniziale + 1; // SET-DIC (indici 8-11) nell'anno iniziale, GEN-AGO (0-7) in quello successivo
       const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
       const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
       const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
       const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
-      return { anno, ricavi: k.ricavi, costi: k.costi, utile: k.utile };
+      return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
     });
-    const massimo = Math.max(1, ...righe.flatMap((r) => [r.ricavi, r.costi]));
-    return { etichetta: MESI[mese0], massimo, righe };
-  }), [anniDisponibili, corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById]);
+    const totaleRicavi = round2(mesi.reduce((s, m) => s + m.ricavi, 0));
+    const totaleCosti = round2(mesi.reduce((s, m) => s + m.costi, 0));
+    return { annoIniziale, etichetta: `${annoIniziale}/${annoIniziale + 1}`, mesi, totaleRicavi, totaleCosti, totaleUtile: round2(totaleRicavi - totaleCosti) };
+  }), [anniScolasticiDisponibili, corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById]);
+
+  const massimoGlobale = Math.max(1, ...confronto.flatMap((a) => a.mesi.flatMap((m) => [m.ricavi, m.costi])));
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }} onClick={onClose}>
-      <div style={{ ...cardStyle, maxWidth: 640, width: "100%", height: "fit-content", marginBottom: 0 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...cardStyle, maxWidth: 820, width: "100%", height: "fit-content", marginBottom: 0 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Ricavi e costi, anno su anno</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>Da settembre ad agosto — ogni mese confrontato sugli anni disponibili.</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>Un anno scolastico per riga (settembre → agosto) — scorri per confrontare gli anni precedenti.</div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4, flexShrink: 0 }} aria-label="Chiudi">×</button>
         </div>
+        <div style={{ display: "flex", gap: 14, marginTop: 10, ...fontBody, fontSize: 12, color: MUTED }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: NAVY, display: "inline-block" }} />Ricavi</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: GOLD, display: "inline-block" }} />Costi</span>
+        </div>
 
-        {confronto.map((m) => (
-          <div key={m.etichetta} style={{ marginTop: 22, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>{m.etichetta}</div>
-            {m.righe.map((r) => (
-              <div key={r.anno} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
-                    {r.anno}{r.anno === annoCorrente && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 6 }}>QUEST'ANNO</span>}
-                  </div>
-                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: r.utile >= 0 ? "#2E7D32" : "#C0392B", background: r.utile >= 0 ? "#E3F3E5" : "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>
-                    Utile {r.utile >= 0 ? "+" : ""}{fmtEuroErp(r.utile)}
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, width: 56, flexShrink: 0 }}>Ricavi</div>
-                    <div style={{ flex: 1, height: 7, borderRadius: 4, background: BG, overflow: "hidden" }}>
-                      <div style={{ width: `${Math.min(100, (r.ricavi / m.massimo) * 100)}%`, height: "100%", borderRadius: 4, background: NAVY }} />
-                    </div>
-                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, width: 68, flexShrink: 0, textAlign: "right" }}>{fmtEuroErp(r.ricavi)}</div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, width: 56, flexShrink: 0 }}>Costi</div>
-                    <div style={{ flex: 1, height: 7, borderRadius: 4, background: BG, overflow: "hidden" }}>
-                      <div style={{ width: `${Math.min(100, (r.costi / m.massimo) * 100)}%`, height: "100%", borderRadius: 4, background: GOLD }} />
-                    </div>
-                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, width: 68, flexShrink: 0, textAlign: "right" }}>{fmtEuroErp(r.costi)}</div>
-                  </div>
-                </div>
+        {confronto.map((a) => (
+          <div key={a.annoIniziale} style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                {a.etichetta}
+                {a.annoIniziale === annoScolasticoCorrente && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 8 }}>ANNO CORRENTE</span>}
               </div>
-            ))}
+              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: a.totaleUtile >= 0 ? "#2E7D32" : "#C0392B", background: a.totaleUtile >= 0 ? "#E3F3E5" : "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>
+                Utile {a.totaleUtile >= 0 ? "+" : ""}{fmtEuroErp(a.totaleUtile)}
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 10 : 16, height: 130, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10, overflowX: "auto" }}>
+              {a.mesi.map((m, idx) => (
+                <div key={`${m.etichetta}-${idx}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 24 }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
+                    <div title={`Ricavi ${m.etichetta}: ${fmtEuroErp(m.ricavi)}`} style={{ width: isMobile ? 7 : 10, height: `${Math.max(2, (m.ricavi / massimoGlobale) * 100)}px`, background: NAVY, borderRadius: 3 }} />
+                    <div title={`Costi ${m.etichetta}: ${fmtEuroErp(m.costi)}`} style={{ width: isMobile ? 7 : 10, height: `${Math.max(2, (m.costi / massimoGlobale) * 100)}px`, background: GOLD, borderRadius: 3 }} />
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{m.etichetta}</div>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
