@@ -9036,6 +9036,7 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
   const [sedeSel, setSedeSel] = useState("");
+  const [categoriaAperta, setCategoriaAperta] = useState("");
 
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const range = rangePeriodoCosti(periodo, { da: customDa, a: customA });
@@ -9136,6 +9137,15 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
   // dashboard, qui non c'è alcuna possibilità di aggiungere né eliminare
   const categorieOrdinateComplete = [...categorieConDati].sort((a, b) => b.totale - a.totale);
   const massimoCategoria = Math.max(1, ...categorieOrdinateComplete.map((c) => c.totale));
+  // stesse voci "spacchettate" dalle categorie, appiattite e riordinate
+  // per costo assoluto: la colonna "per voce di costo" a fianco, che
+  // risponde a "quali sono le spese più pesanti in assoluto", non "quale
+  // categoria pesa di più"
+  const vociFlatOrdinate = categorieConDati
+    .flatMap((cat) => cat.sottovoci.map((v) => ({ ...v, categoria: cat.etichetta })))
+    .filter((v) => v.totale > 0)
+    .sort((a, b) => b.totale - a.totale);
+  const massimoVoce = Math.max(1, ...vociFlatOrdinate.map((v) => v.totale));
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
@@ -9254,24 +9264,63 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           </div>
         </div>
 
-        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Dettaglio per categoria</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Dalla spesa più importante alla minore — filtrate per la sede scelta sopra.</div>
-
-        <div style={{ ...cardStyle }}>
-          {categorieOrdinateComplete.map((cat, i) => (
-            <div key={cat.chiave} style={{ padding: "14px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cat.etichetta}</div>
-                  {cat.tipo === "automatico" && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Automatico</div>}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, alignItems: "start" }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Dettaglio per categoria</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Dalla spesa più importante alla minore — clicca una voce per vedere cosa la compone.</div>
+            {categorieOrdinateComplete.map((cat, i) => (
+              <div key={cat.chiave} style={{ padding: "14px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <div
+                  onClick={() => setCategoriaAperta((c) => (c === cat.chiave ? "" : cat.chiave))}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8, cursor: "pointer" }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{cat.etichetta}</div>
+                    {cat.tipo === "automatico" && <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Automatico</div>}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(cat.totale)}</div>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.chiave ? "rotate(180deg)" : "none", flexShrink: 0 }}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </div>
                 </div>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(cat.totale)}</div>
+                <div style={{ height: 8, borderRadius: 5, background: BG, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.min(100, (cat.totale / massimoCategoria) * 100)}%`, height: "100%", borderRadius: 5, background: i === 0 && cat.totale > 0 ? GOLD : NAVY }} />
+                </div>
+                {categoriaAperta === cat.chiave && (
+                  <div style={{ marginTop: 10 }}>
+                    {[...cat.sottovoci].sort((a, b) => b.totale - a.totale).map((v) => (
+                      <div key={v.chiave} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        <span>{v.etichetta}</span>
+                        <span style={{ fontWeight: 700 }}>{fmtEuroErp(v.totale)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{ height: 8, borderRadius: 5, background: BG, overflow: "hidden" }}>
-                <div style={{ width: `${Math.min(100, (cat.totale / massimoCategoria) * 100)}%`, height: "100%", borderRadius: 5, background: i === 0 && cat.totale > 0 ? GOLD : NAVY }} />
+            ))}
+          </div>
+
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Dettaglio per voce di costo</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Tutte le voci di spesa in ordine di costo, indipendentemente dalla categoria.</div>
+            {vociFlatOrdinate.map((v, i) => (
+              <div key={`${v.categoria}-${v.chiave}`} style={{ padding: "10px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{v.etichetta}</div>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{v.categoria}</div>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(v.totale)}</div>
+                </div>
+                <div style={{ height: 6, borderRadius: 4, background: BG, overflow: "hidden" }}>
+                  <div style={{ width: `${Math.min(100, (v.totale / massimoVoce) * 100)}%`, height: "100%", borderRadius: 4, background: i === 0 ? GOLD : NAVY }} />
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+            {vociFlatOrdinate.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo registrato nel periodo.</div>}
+          </div>
         </div>
       </div>
     </div>
