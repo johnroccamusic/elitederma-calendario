@@ -8358,13 +8358,46 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
   const [citta, setCitta] = useState("");
   const [descrizione, setDescrizione] = useState("");
   const [imponibile, setImponibile] = useState("");
+  const [totale, setTotale] = useState("");
   const [iva, setIva] = useState(22);
+  const [esenteIva, setEsenteIva] = useState(false);
   const [metodo, setMetodo] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
-  const ivaEffettiva = metodo === "Cash no iva" ? 0 : iva;
-  const totale = imponibile ? round2(parseNum(imponibile) * (1 + ivaEffettiva / 100)) : "";
+  const ivaBloccata = esenteIva || metodo === "Cash no iva";
+  const ivaEffettiva = ivaBloccata ? 0 : iva;
+
+  function totaleDaImponibile(v, ivaPct) {
+    return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100)));
+  }
+  function imponibileDaTotale(v, ivaPct) {
+    return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100)));
+  }
+
+  function onImponibileChange(v) {
+    setImponibile(v);
+    setTotale(ivaBloccata ? v : totaleDaImponibile(v, ivaEffettiva));
+  }
+  function onTotaleChange(v) {
+    setTotale(v);
+    setImponibile(ivaBloccata ? v : imponibileDaTotale(v, ivaEffettiva));
+  }
+  function onIvaChange(v) {
+    setIva(v);
+    if (!ivaBloccata) setTotale(totaleDaImponibile(imponibile, v));
+  }
+  function ricalcolaBlocco(nuovaBloccata) {
+    setTotale(nuovaBloccata ? imponibile : totaleDaImponibile(imponibile, iva));
+  }
+  function onEsenteChange(checked) {
+    setEsenteIva(checked);
+    ricalcolaBlocco(checked || metodo === "Cash no iva");
+  }
+  function onMetodoChange(opz) {
+    setMetodo(opz);
+    ricalcolaBlocco(esenteIva || opz === "Cash no iva");
+  }
 
   async function salva() {
     if (!sottovoceScelta) { setMsg("Scegli una voce di costo."); return; }
@@ -8378,7 +8411,7 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
       location_id: citta || null,
       imponibile: imp,
       iva_percentuale: ivaEffettiva,
-      totale: round2(imp * (1 + ivaEffettiva / 100)),
+      totale: totale === "" ? imp : round2(parseNum(totale)),
       data,
       metodo_pagamento: metodo || null,
     });
@@ -8417,31 +8450,35 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
       <Field label="Descrizione/fornitore (opzionale)">
         <input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
       </Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 6 }}>
+        <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} />
+        Importo esente iva
+      </label>
       <div style={{ display: "flex", gap: 8 }}>
         <div style={{ flex: 1 }}>
-          <Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => setImponibile(e.target.value)} /></Field>
+          <Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field>
         </div>
         <div style={{ flex: 1 }}>
           <Field label="IVA">
             <select
-              style={{ ...inputStyle, background: metodo === "Cash no iva" ? "#EFEFEF" : "#fff", color: metodo === "Cash no iva" ? MUTED : NAVY }}
-              disabled={metodo === "Cash no iva"}
+              style={{ ...inputStyle, background: ivaBloccata ? "#EFEFEF" : "#fff", color: ivaBloccata ? MUTED : NAVY }}
+              disabled={ivaBloccata}
               value={ivaEffettiva}
-              onChange={(e) => setIva(Number(e.target.value))}
+              onChange={(e) => onIvaChange(Number(e.target.value))}
             >
               {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
             </select>
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Totale"><input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} disabled value={totale} /></Field>
+          <Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field>
         </div>
       </div>
       <Field label="Metodo di pagamento">
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
           {["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"].map((opz) => (
             <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-              <input type="radio" name="metodo-uscita" checked={metodo === opz} onChange={() => setMetodo(opz)} />
+              <input type="radio" name="metodo-uscita" checked={metodo === opz} onChange={() => onMetodoChange(opz)} />
               {opz}
             </label>
           ))}
