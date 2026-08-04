@@ -8476,7 +8476,7 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
       </div>
       <Field label="Metodo di pagamento">
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-          {["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"].map((opz) => (
+          {["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"].map((opz) => (
             <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
               <input type="radio" name="metodo-uscita" checked={metodo === opz} onChange={() => onMetodoChange(opz)} />
               {opz}
