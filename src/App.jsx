@@ -8556,14 +8556,14 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, costiOperativiVoci, sed
                 Utile {a.totaleUtile >= 0 ? "+" : ""}{fmtEuroErp(a.totaleUtile)}
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 10 : 16, height: 130, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10, overflowX: "auto" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 4 : 16, height: 130, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10, overflowX: "auto" }}>
               {a.mesi.map((m, idx) => (
-                <div key={`${m.etichetta}-${idx}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 24 }}>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100 }}>
-                    <div title={`Ricavi ${m.etichetta}: ${fmtEuroErp(m.ricavi)}`} style={{ width: isMobile ? 7 : 10, height: `${Math.max(2, (m.ricavi / massimoGlobale) * 100)}px`, background: NAVY, borderRadius: 3 }} />
-                    <div title={`Costi ${m.etichetta}: ${fmtEuroErp(m.costi)}`} style={{ width: isMobile ? 7 : 10, height: `${Math.max(2, (m.costi / massimoGlobale) * 100)}px`, background: GOLD, borderRadius: 3 }} />
+                <div key={`${m.etichetta}-${idx}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? 4 : 6, minWidth: isMobile ? 14 : 24 }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 2 : 3, height: 100 }}>
+                    <div title={`Ricavi ${m.etichetta}: ${fmtEuroErp(m.ricavi)}`} style={{ width: isMobile ? 5 : 10, height: `${Math.max(2, (m.ricavi / massimoGlobale) * 100)}px`, background: NAVY, borderRadius: 3 }} />
+                    <div title={`Costi ${m.etichetta}: ${fmtEuroErp(m.costi)}`} style={{ width: isMobile ? 5 : 10, height: `${Math.max(2, (m.costi / massimoGlobale) * 100)}px`, background: GOLD, borderRadius: 3 }} />
                   </div>
-                  <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{m.etichetta}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 8.5 : 10, color: MUTED }}>{m.etichetta}</div>
                 </div>
               ))}
             </div>
@@ -8793,14 +8793,14 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
           </button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)", gap: 14, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
           <CardKpiErp titolo="Ricavi totali" valore={fmtEuroKErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
           <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" onClick={onApriCostiOperativi} />
           <CardKpiErp titolo="Utile netto" valore={fmtEuroKErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 14, marginBottom: 18, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,2fr) minmax(0,1fr)", gap: 14, marginBottom: 18, alignItems: "start" }}>
           <div
             onClick={() => setConfrontoAnnualeAperto(true)}
             title="Clicca per confrontare i mesi anno su anno"
@@ -8824,14 +8824,14 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
                 </span>
               )}
             </div>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 10 : 18, height: 160, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10, overflowX: "auto" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 5 : 18, height: 160, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 10, overflowX: "auto" }}>
               {andamentoMensile.map((m, idx) => (
-                <div key={`${m.etichetta}-${idx}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, minWidth: 24 }}>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 130 }}>
-                    <div title={`Ricavi: ${fmtEuroErp(m.ricavi)}`} style={{ width: isMobile ? 8 : 12, height: `${Math.max(2, (m.ricavi / maxBarra) * 130)}px`, background: NAVY, borderRadius: 3 }} />
-                    <div title={`Costi: ${fmtEuroErp(m.costi)}`} style={{ width: isMobile ? 8 : 12, height: `${Math.max(2, (m.costi / maxBarra) * 130)}px`, background: GOLD, borderRadius: 3 }} />
+                <div key={`${m.etichetta}-${idx}`} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? 4 : 6, minWidth: isMobile ? 15 : 24 }}>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 2 : 3, height: 130 }}>
+                    <div title={`Ricavi: ${fmtEuroErp(m.ricavi)}`} style={{ width: isMobile ? 6 : 12, height: `${Math.max(2, (m.ricavi / maxBarra) * 130)}px`, background: NAVY, borderRadius: 3 }} />
+                    <div title={`Costi: ${fmtEuroErp(m.costi)}`} style={{ width: isMobile ? 6 : 12, height: `${Math.max(2, (m.costi / maxBarra) * 130)}px`, background: GOLD, borderRadius: 3 }} />
                   </div>
-                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{m.etichetta}</div>
+                  <div style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, color: MUTED }}>{m.etichetta}</div>
                 </div>
               ))}
             </div>
@@ -8860,56 +8860,89 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: 14, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.4fr) minmax(0,1fr)", gap: 14, alignItems: "start" }}>
           <div style={{ ...cardStyle, padding: 20 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Performance</div>
               <button disabled title="Non ancora disponibile" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C7C9D4", background: "transparent", border: "none", cursor: "not-allowed" }}>Report completo →</button>
             </div>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Andamento per sede</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Sede", "Ricavi", "Utile", "Riempimento", "Trend"].map((th) => (
-                      <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {righeSedi.map((r) => (
-                    <tr key={r.location.id}>
-                      <td style={{ padding: "10px 8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ width: 26, height: 26, borderRadius: 8, background: BG, ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                            {r.location.nome.slice(0, 2).toUpperCase()}
-                          </div>
-                          <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{r.location.nome}</span>
+            {isMobile ? (
+              <div>
+                {righeSedi.map((r) => (
+                  <div key={r.location.id} style={{ padding: "12px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: 7, background: BG, ...fontBody, fontSize: 10, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {r.location.nome.slice(0, 2).toUpperCase()}
                         </div>
-                      </td>
-                      <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.ricavi)}</td>
-                      <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.utile)}</td>
-                      <td style={{ padding: "10px 8px", minWidth: 100 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden", minWidth: 40 }}>
-                            <div style={{ width: `${Math.min(100, r.riempimentoMedio)}%`, height: "100%", background: GOLD }} />
-                          </div>
-                          <span style={{ ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>{r.riempimentoMedio.toFixed(0)}%</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
-                        {r.trend != null ? (
-                          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: r.trend >= 0 ? "#2E7D32" : "#C0392B" }}>{r.trend >= 0 ? "↗" : "↘"} {fmtPctErp(r.trend)}</span>
-                        ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
-                      </td>
+                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                      </div>
+                      {r.trend != null ? (
+                        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: r.trend >= 0 ? "#2E7D32" : "#C0392B", flexShrink: 0 }}>{r.trend >= 0 ? "↗" : "↘"} {fmtPctErp(r.trend)}</span>
+                      ) : <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>—</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 11.5 }}>
+                      <div><span style={{ color: MUTED }}>Ricavi </span><span style={{ color: NAVY, fontWeight: 700 }}>{fmtEuroErp(r.ricavi)}</span></div>
+                      <div><span style={{ color: MUTED }}>Utile </span><span style={{ color: NAVY, fontWeight: 700 }}>{fmtEuroErp(r.utile)}</span></div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ width: `${Math.min(100, r.riempimentoMedio)}%`, height: "100%", background: GOLD }} />
+                      </div>
+                      <span style={{ ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>{r.riempimentoMedio.toFixed(0)}%</span>
+                    </div>
+                  </div>
+                ))}
+                {righeSedi.length === 0 && (
+                  <div style={{ padding: "16px 0", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna data in questo periodo.</div>
+                )}
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      {["Sede", "Ricavi", "Utile", "Riempimento", "Trend"].map((th) => (
+                        <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                      ))}
                     </tr>
-                  ))}
-                  {righeSedi.length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: "16px 8px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna data in questo periodo.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {righeSedi.map((r) => (
+                      <tr key={r.location.id}>
+                        <td style={{ padding: "10px 8px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 26, height: 26, borderRadius: 8, background: BG, ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                              {r.location.nome.slice(0, 2).toUpperCase()}
+                            </div>
+                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{r.location.nome}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.ricavi)}</td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.utile)}</td>
+                        <td style={{ padding: "10px 8px", minWidth: 100 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: BG, borderRadius: 3, overflow: "hidden", minWidth: 40 }}>
+                              <div style={{ width: `${Math.min(100, r.riempimentoMedio)}%`, height: "100%", background: GOLD }} />
+                            </div>
+                            <span style={{ ...fontBody, fontSize: 12, color: NAVY, whiteSpace: "nowrap" }}>{r.riempimentoMedio.toFixed(0)}%</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "10px 8px", whiteSpace: "nowrap" }}>
+                          {r.trend != null ? (
+                            <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: r.trend >= 0 ? "#2E7D32" : "#C0392B" }}>{r.trend >= 0 ? "↗" : "↘"} {fmtPctErp(r.trend)}</span>
+                          ) : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {righeSedi.length === 0 && (
+                      <tr><td colSpan={5} style={{ padding: "16px 8px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna data in questo periodo.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div style={{ ...cardStyle, padding: 20 }}>
@@ -9292,7 +9325,7 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 14, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr) minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
           <CardKpiErp
             titolo="Costi totali" valore={fmtEuroErp(totaleGenerale)}
             sub={ricaviPeriodo > 0 ? `${fmtPctErp(round1Erp((totaleGenerale / ricaviPeriodo) * 100))} dei ricavi` : "—"}
@@ -9326,7 +9359,7 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.4fr) minmax(0,1fr)", gap: 14, marginBottom: 14 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Andamento dei costi</div>
             <GraficoAndamentoCosti punti={andamentoCosti} />
@@ -9349,7 +9382,7 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, marginBottom: 18 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Costi per sede</div>
             <BarraCostiPerSede dati={sedeCostiOrdinate} totale={totaleCostiSedi} />
@@ -9362,7 +9395,7 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14, alignItems: "start" }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Dettaglio per categoria</div>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Dalla spesa più importante alla minore — clicca una voce per vedere cosa la compone.</div>
