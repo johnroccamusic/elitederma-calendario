@@ -5755,6 +5755,133 @@ function SelettoreDataDiploma({ valore, dataInizio, dataFine, onCambia }) {
   );
 }
 
+// riga "etichetta / importo / metodo" della sezione Pagamenti: da mobile
+// importo e metodo scendono sulla stessa riga sotto l'etichetta (3
+// colonne fisse non ci stanno), da desktop restano affiancati
+function rigaPagamentoIscritto(label, valore, metodo, isMobile) {
+  if (isMobile) {
+    return (
+      <>
+        <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
+        <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", gap: 10, paddingBottom: 10 }}>
+          <span style={{ minWidth: 0, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</span>
+          <span style={{ minWidth: 0, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", textAlign: "right" }}>{metodo}</span>
+        </div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
+      <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+      <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{metodo}</div>
+    </>
+  );
+}
+
+// pacchetto/kit, totale pattuito/pagato, pagamenti, modelle, taglia divisa,
+// accordi commerciali, allegati: stesso blocco riusato sia nella colonna
+// destra di "Contabilità classe" (mostraQuotaVenditore=true, solo admin)
+// sia nella scheda verticale del link pubblico per le master
+// (mostraQuotaVenditore=false, la quota venditore resta un dato riservato)
+function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) {
+  return (
+    <>
+      {i.pacchetto_kit && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: NAVY }}>{i.pacchetto_kit}</div>
+        </div>
+      )}
+
+      {(i.totale_pattuito != null || i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null || (mostraQuotaVenditore && i.quota_venditore != null)) && (() => {
+        const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
+        const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
+        const celle = [
+          i.totale_pattuito != null && { chiave: "pattuito", label: "Totale pattuito", valore: `${i.totale_pattuito} €` },
+          (i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && { chiave: "pagato", label: "Totale pagato", valore: conRate !== netto ? `${conRate} €` : `${netto} €` },
+          mostraQuotaVenditore && i.quota_venditore != null && { chiave: "venditore", label: "Quota venditore", valore: `${i.quota_venditore} €` },
+        ].filter(Boolean);
+        return (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, 1fr)`, marginBottom: 18 }}>
+            {celle.map((c, ci) => (
+              <div key={c.chiave} style={{ minWidth: 0, paddingLeft: ci > 0 ? 12 : 0, paddingRight: 10, borderLeft: ci > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                <div style={{ fontSize: 12, color: NAVY, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</div>
+                <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.valore}</div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 9ch 9ch", columnGap: 14 }}>
+        {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
+          <div style={{ gridColumn: "1 / -1", fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
+        )}
+        {i.acconto_totale != null && rigaPagamentoIscritto(
+          "Pagato in acconto",
+          `${totQuota(i, "acconto")} €${i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}`,
+          i.acconto_metodo || "?",
+          isMobile
+        )}
+        {i.precorso_totale != null && rigaPagamentoIscritto(
+          "Pagato pre corso",
+          `${totQuota(i, "precorso")} €${i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}`,
+          i.precorso_metodo || "?",
+          isMobile
+        )}
+        {i.saldo_totale != null && rigaPagamentoIscritto(
+          "Importo da pagare al corso",
+          `${i.saldo_totale} €`,
+          i.saldo_metodo || "?",
+          isMobile
+        )}
+        {i.richiede_modelle && i.numero_modelle != null && (
+          <>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Modelle da pagare</div>
+            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
+          </>
+        )}
+        {i.taglia_divisa && (
+          <>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Taglia divisa</div>
+            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 22, color: NAVY }}>{i.taglia_divisa}</div>
+          </>
+        )}
+        {i.accordi_commerciali && (
+          <>
+            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Accordi commerciali</div>
+            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
+          </>
+        )}
+        {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
+          <div style={{ gridColumn: "1 / -1", paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 4 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Allegati</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {[
+                i.file_iscrizione && { percorso: i.file_iscrizione, etichetta: "Modulo iscrizione" },
+                i.file_screen_acconto && { percorso: i.file_screen_acconto, etichetta: "Screen acconto" },
+                i.file_screen_recap && { percorso: i.file_screen_recap, etichetta: "Screen recap" },
+              ].filter(Boolean).map((f) => (
+                <div key={f.etichetta} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                  <AllegatoLink percorso={f.percorso} etichetta={f.etichetta} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {i.totale_pattuito == null && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
+        <div style={{ color: MUTED }}>Nessun dato di vendita registrato per questo iscritto.</div>
+      )}
+    </>
+  );
+}
+
 function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -6585,31 +6712,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const soloLettura = !!(modificandoId && !adminSbloccato);
 
   // riga "etichetta / importo / metodo" della sezione Pagamenti: da
-  // desktop importo e metodo restano in due colonne fisse (allineate
-  // riga per riga e scheda per scheda); da mobile non c'è spazio per 3
-  // colonne, quindi importo e metodo vanno appaiati sulla stessa riga
-  // sotto l'etichetta
-  function rigaPagamento(label, valore, metodo) {
-    if (isMobile) {
-      return (
-        <>
-          <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
-          <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", gap: 10, paddingBottom: 10 }}>
-            <span style={{ minWidth: 0, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</span>
-            <span style={{ minWidth: 0, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", textAlign: "right" }}>{metodo}</span>
-          </div>
-        </>
-      );
-    }
-    return (
-      <>
-        <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
-        <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
-        <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{metodo}</div>
-      </>
-    );
-  }
-
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
       {msgErrore && (
@@ -7353,8 +7455,13 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       celle di tabella, garantito su ogni browser da
                       prima che esistessero flexbox e grid - lo sfondo
                       della colonna sinistra deve arrivare fino in fondo
-                      alla scheda, non fermarsi al suo contenuto */}
-                  <div style={{ display: "table", width: "100%", tableLayout: "fixed" }}>
+                      alla scheda, non fermarsi al suo contenuto.
+                      minWidth+overflowX sul contenitore: sotto quella
+                      soglia la scheda scorre lateralmente invece di
+                      schiacciare le 2 colonne e diventare illeggibile
+                      su cellulare */}
+                  <div style={{ overflowX: "auto" }}>
+                  <div style={{ display: "table", width: "100%", minWidth: 580, tableLayout: "fixed" }}>
                     {/* colonna sinistra: anagrafica e ricontatto */}
                     <div style={{ display: "table-cell", position: "relative", width: "33.333%", verticalAlign: "top", background: "#F6F6F8", padding: 20 }}>
                       <div onClick={() => apriModificaCompleta(i)} title="Clicca per vedere i dati dell'iscritto" style={{ cursor: "pointer" }}>
@@ -7450,110 +7557,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
                     <div style={{ display: "table-cell", width: "66.667%", verticalAlign: "top", padding: 20, ...fontBody, fontSize: 14, color: NAVY }}>
-                      {i.pacchetto_kit && (
-                        <div style={{ marginBottom: 18 }}>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: NAVY }}>{i.pacchetto_kit}</div>
-                        </div>
-                      )}
-
-                      {(i.totale_pattuito != null || i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null || i.quota_venditore != null) && (() => {
-                        const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
-                        const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
-                        const celle = [
-                          i.totale_pattuito != null && { chiave: "pattuito", label: "Totale pattuito", valore: `${i.totale_pattuito} €` },
-                          (i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && { chiave: "pagato", label: "Totale pagato", valore: conRate !== netto ? `${conRate} €` : `${netto} €` },
-                          i.quota_venditore != null && { chiave: "venditore", label: "Quota venditore", valore: `${i.quota_venditore} €` },
-                        ].filter(Boolean);
-                        return (
-                          // grid a colonne fisse (mai una sotto l'altra): con
-                          // flex-wrap "quota venditore" andava a capo perché
-                          // lo spazio finiva, con grid ogni colonna prende
-                          // esattamente 1/N dello spazio disponibile
-                          <div style={{ display: "grid", gridTemplateColumns: `repeat(${celle.length}, 1fr)`, marginBottom: 18 }}>
-                            {celle.map((c, ci) => (
-                              <div key={c.chiave} style={{ minWidth: 0, paddingLeft: ci > 0 ? 12 : 0, paddingRight: 10, borderLeft: ci > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                                <div style={{ fontSize: 12, color: NAVY, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.label}</div>
-                                <div style={{ fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.valore}</div>
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })()}
-
-                      {/* un'unica griglia per tutte le righe sotto, così
-                          l'importo e il metodo restano nella stessa colonna
-                          riga per riga invece di rincorrere la lunghezza
-                          dell'etichetta a sinistra. Le colonne importo/metodo
-                          usano una larghezza FISSA (in "ch", non "auto"):
-                          "auto" si dimensiona sul contenuto più lungo di
-                          ogni singola scheda, quindi schede diverse (una con
-                          "0 €", un'altra con "353.8 €") finiscono con le
-                          colonne disallineate tra loro anche se le schede
-                          hanno la stessa larghezza. Da mobile lo spazio non
-                          basta per 3 colonne fisse: importo e metodo vanno
-                          allora sulla stessa riga, sotto l'etichetta */}
-                      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 9ch 9ch", columnGap: 14 }}>
-                        {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                          <div style={{ gridColumn: "1 / -1", fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
-                        )}
-                        {i.acconto_totale != null && rigaPagamento(
-                          "Pagato in acconto",
-                          `${totQuota(i, "acconto")} €${i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}`,
-                          i.acconto_metodo || "?"
-                        )}
-                        {i.precorso_totale != null && rigaPagamento(
-                          "Pagato pre corso",
-                          `${totQuota(i, "precorso")} €${i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}`,
-                          i.precorso_metodo || "?"
-                        )}
-                        {i.saldo_totale != null && rigaPagamento(
-                          "Importo da pagare al corso",
-                          `${i.saldo_totale} €`,
-                          i.saldo_metodo || "?"
-                        )}
-                        {i.richiede_modelle && i.numero_modelle != null && (
-                          <>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Modelle da pagare</div>
-                            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
-                          </>
-                        )}
-                        {i.taglia_divisa && (
-                          <>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Taglia divisa</div>
-                            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 22, color: NAVY }}>{i.taglia_divisa}</div>
-                          </>
-                        )}
-                        {i.accordi_commerciali && (
-                          <>
-                            <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>Accordi commerciali</div>
-                            <div style={{ gridColumn: isMobile ? "1 / -1" : "2 / -1", minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{i.accordi_commerciali}</div>
-                          </>
-                        )}
-                        {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
-                          <div style={{ gridColumn: "1 / -1", paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 4 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Allegati</div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              {[
-                                i.file_iscrizione && { percorso: i.file_iscrizione, etichetta: "Modulo iscrizione" },
-                                i.file_screen_acconto && { percorso: i.file_screen_acconto, etichetta: "Screen acconto" },
-                                i.file_screen_recap && { percorso: i.file_screen_recap, etichetta: "Screen recap" },
-                              ].filter(Boolean).map((f) => (
-                                <div key={f.etichetta} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                                  </svg>
-                                  <AllegatoLink percorso={f.percorso} etichetta={f.etichetta} />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {i.totale_pattuito == null && i.acconto_totale == null && i.precorso_totale == null && i.saldo_totale == null && !i.accordi_commerciali && !i.file_iscrizione && (
-                        <div style={{ color: MUTED }}>Nessun dato di vendita registrato per questo iscritto.</div>
-                      )}
+                      <RiepilogoVenditaIscritto i={i} isMobile={isMobile} mostraQuotaVenditore={true} />
 
                       {/* "Da incassare" resta dentro la colonna bianca,
                           allineato come Pagamenti/Allegati: il celeste
@@ -7587,6 +7591,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         </div>
                       )}
                     </div>
+                  </div>
                   </div>
 
                   {eccezioneApertaId === i.id && (
@@ -7715,6 +7720,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 function VistaMaster({ param }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     async function carica() {
@@ -7812,62 +7818,10 @@ function VistaMaster({ param }) {
               </div>
               {i.note_ricontatto && <div style={{ fontSize: 12, color: MUTED, marginBottom: 8, fontStyle: "italic" }}>"{i.note_ricontatto}"</div>}
 
-              <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, fontSize: 13, color: MUTED }}>
-                {i.pacchetto_kit && (
-                  <div style={{ marginBottom: 6 }}><b style={{ color: NAVY }}>Pacchetto/Kit:</b> {i.pacchetto_kit}</div>
-                )}
-                {i.totale_pattuito != null && (
-                  <div style={{ marginBottom: 6 }}>
-                    <b style={{ color: NAVY }}>Totale pattuito:</b> {i.totale_pattuito} €{i.quota_venditore != null && ` — quota venditore: ${i.quota_venditore} €`}
-                  </div>
-                )}
-                {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (() => {
-                  const netto = round2((i.acconto_totale || 0) + (i.precorso_totale || 0) + (i.saldo_totale || 0));
-                  const conRate = round2(totQuota(i, "acconto") + totQuota(i, "precorso") + (i.saldo_totale || 0));
-                  return (
-                    <div style={{ marginBottom: 10 }}>
-                      <b style={{ color: NAVY }}>Totale pagato:</b> {netto} €{conRate !== netto && <> — <b style={{ color: NAVY }}>totale con interessi:</b> {conRate} €</>}
-                    </div>
-                  );
-                })()}
-                {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
-                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Pagamenti</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                      {i.acconto_totale != null && <div><b style={{ color: NAVY }}>Pagato in acconto:</b> {totQuota(i, "acconto")} € ({i.acconto_metodo || "?"}{i.acconto_interessi ? `, interessi ${i.acconto_interessi} €` : ""})</div>}
-                      {i.precorso_totale != null && <div><b style={{ color: NAVY }}>Pagato pre corso:</b> {totQuota(i, "precorso")} € ({i.precorso_metodo || "?"}{i.precorso_interessi ? `, interessi ${i.precorso_interessi} €` : ""})</div>}
-                      {i.saldo_totale != null && <div><b style={{ color: NAVY }}>Importo da pagare al corso:</b> {i.saldo_totale} € ({i.saldo_metodo || "?"})</div>}
-                    </div>
-                  </div>
-                )}
-                {i.richiede_modelle && (
-                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Modelle</div>
-                    {i.numero_modelle != null && (
-                      <div><b style={{ color: NAVY }}>Modelle da pagare:</b> {i.numero_modelle} modell{i.numero_modelle === 1 ? "a" : "e"} → {modelleTotaleDi(i)} €{i.prezzo_speciale_modelle != null ? " (prezzo speciale)" : ""}</div>
-                    )}
-                  </div>
-                )}
-                {i.taglia_divisa && (
-                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}><b style={{ color: NAVY }}>Taglia divisa:</b> {i.taglia_divisa}</div>
-                )}
-                {i.accordi_commerciali && (
-                  <div style={{ marginBottom: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                    <b style={{ color: NAVY }}>Accordi commerciali:</b> {i.accordi_commerciali}
-                  </div>
-                )}
-                {(i.file_iscrizione || i.file_screen_acconto || i.file_screen_recap) && (
-                  <div style={{ paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Allegati</div>
-                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                      {i.file_iscrizione && <AllegatoLink percorso={i.file_iscrizione} etichetta="Modulo iscrizione" />}
-                      {i.file_screen_acconto && <AllegatoLink percorso={i.file_screen_acconto} etichetta="Screen acconto" />}
-                      {i.file_screen_recap && <AllegatoLink percorso={i.file_screen_recap} etichetta="Screen recap" />}
-                    </div>
-                  </div>
-                )}
+              <div style={{ marginTop: 8, padding: "12px 14px", background: BG_CHIARO, borderRadius: 8, ...fontBody, fontSize: 14, color: NAVY }}>
+                <RiepilogoVenditaIscritto i={i} isMobile={isMobile} mostraQuotaVenditore={false} />
                 {i.note && (
-                  <div style={{ paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ paddingTop: 10, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}` }}>
                     <b style={{ color: NAVY }}>Note:</b> {i.note}
                   </div>
                 )}
