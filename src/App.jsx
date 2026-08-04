@@ -55,6 +55,8 @@ function etichettaStagione(annoInizio) { return `Stagione ${annoInizio}–${anno
 
 const MESI = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 const MESI_ABBR = ["GEN","FEB","MAR","APR","MAG","GIU","LUG","AGO","SET","OTT","NOV","DIC"];
+// ordine "anno scolastico" (settembre -> agosto), come indici 0-based in MESI/MESI_ABBR
+const ORDINE_MESI_SCOLASTICO = [8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7];
 // data compatta per le liste: "11 OTT", "11–16 OTT", "29 SET–4 OTT"
 function fmtDataCompatta(inizio, fine) {
   const [, mi, gi] = inizio.split("-").map(Number);
@@ -8490,6 +8492,83 @@ function ModaleNuovaUscita({ location, onClose, onSalvato }) {
   );
 }
 
+// pannello aperto cliccando la card "Ricavi e costi": confronto anno su
+// anno mese per mese, raggruppato per mese (non per anno) e in ordine
+// di anno scolastico (settembre -> agosto), così scorrendo verso il
+// basso si passa da un mese al successivo e, dentro ogni mese, si
+// confronta subito lo stesso mese sugli anni disponibili (più recente
+// in alto). La scala delle barre è calcolata PER MESE (non globale),
+// così il confronto tra anni dello stesso mese resta leggibile
+function PannelloConfrontoAnnuale({ corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById, onClose }) {
+  const annoCorrente = new Date().getFullYear();
+  const anniDisponibili = useMemo(() => {
+    const anni = new Set([annoCorrente]);
+    corsiDate.forEach((cd) => { if (cd.data_inizio) anni.add(Number(cd.data_inizio.slice(0, 4))); });
+    costiOperativiVoci.forEach((v) => { if (v.data) anni.add(Number(v.data.slice(0, 4))); });
+    return [...anni].sort((a, b) => b - a);
+  }, [corsiDate, costiOperativiVoci, annoCorrente]);
+
+  const confronto = useMemo(() => ORDINE_MESI_SCOLASTICO.map((mese0) => {
+    const righe = anniDisponibili.map((anno) => {
+      const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
+      const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
+      const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
+      const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+      return { anno, ricavi: k.ricavi, costi: k.costi, utile: k.utile };
+    });
+    const massimo = Math.max(1, ...righe.flatMap((r) => [r.ricavi, r.costi]));
+    return { etichetta: MESI[mese0], massimo, righe };
+  }), [anniDisponibili, corsiDate, iscritti, costiOperativiVoci, sedeSel, corsoById, locById]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }} onClick={onClose}>
+      <div style={{ ...cardStyle, maxWidth: 640, width: "100%", height: "fit-content", marginBottom: 0 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Ricavi e costi, anno su anno</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>Da settembre ad agosto — ogni mese confrontato sugli anni disponibili.</div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: MUTED, padding: 4, flexShrink: 0 }} aria-label="Chiudi">×</button>
+        </div>
+
+        {confronto.map((m) => (
+          <div key={m.etichetta} style={{ marginTop: 22, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>{m.etichetta}</div>
+            {m.righe.map((r) => (
+              <div key={r.anno} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+                    {r.anno}{r.anno === annoCorrente && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, marginLeft: 6 }}>QUEST'ANNO</span>}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: r.utile >= 0 ? "#2E7D32" : "#C0392B", background: r.utile >= 0 ? "#E3F3E5" : "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>
+                    Utile {r.utile >= 0 ? "+" : ""}{fmtEuroErp(r.utile)}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, width: 56, flexShrink: 0 }}>Ricavi</div>
+                    <div style={{ flex: 1, height: 7, borderRadius: 4, background: BG, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, (r.ricavi / m.massimo) * 100)}%`, height: "100%", borderRadius: 4, background: NAVY }} />
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, width: 68, flexShrink: 0, textAlign: "right" }}>{fmtEuroErp(r.ricavi)}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED, width: 56, flexShrink: 0 }}>Costi</div>
+                    <div style={{ flex: 1, height: 7, borderRadius: 4, background: BG, overflow: "hidden" }}>
+                      <div style={{ width: `${Math.min(100, (r.costi / m.massimo) * 100)}%`, height: "100%", borderRadius: 4, background: GOLD }} />
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY, width: 68, flexShrink: 0, textAlign: "right" }}>{fmtEuroErp(r.costi)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // dashboard direzionale: riepiloga ricavi/costi/utile/allievi/andamento
 // per sede usando SOLO i dati già tracciati dal gestionale (iscritti,
 // costi per edizione, quota venditore, incassato, sede confermata).
@@ -8502,6 +8581,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
   const [sedeSel, setSedeSel] = useState("");
   const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
   const [modaleUscitaAperta, setModaleUscitaAperta] = useState(false);
+  const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -8685,6 +8765,14 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
           <ModaleNuovaUscita location={location} onClose={() => setModaleUscitaAperta(false)} onSalvato={() => { setModaleUscitaAperta(false); ricarica(); }} />
         )}
 
+        {confrontoAnnualeAperto && (
+          <PannelloConfrontoAnnuale
+            corsiDate={corsiDate} iscritti={iscritti} costiOperativiVoci={costiOperativiVoci}
+            sedeSel={sedeSel} corsoById={corsoById} locById={locById}
+            onClose={() => setConfrontoAnnualeAperto(false)}
+          />
+        )}
+
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Analisi sede</div>
           <button onClick={() => setSedeSel("")} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "7px 14px", borderRadius: 16, border: sedeSel === "" ? "none" : `1px solid ${CREAM_BORDER}`, background: sedeSel === "" ? NAVY : "#fff", color: sedeSel === "" ? "#fff" : NAVY, cursor: "pointer" }}>
@@ -8708,13 +8796,18 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 14, marginBottom: 18, alignItems: "start" }}>
-          <div style={{ ...cardStyle, padding: 20 }}>
+          <div
+            onClick={() => setConfrontoAnnualeAperto(true)}
+            title="Clicca per confrontare i mesi anno su anno"
+            style={{ ...cardStyle, padding: 20, cursor: "pointer" }}
+          >
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Andamento economico</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
               <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Ricavi e costi</div>
-              <div style={{ display: "flex", gap: 14, ...fontBody, fontSize: 12, color: MUTED }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, ...fontBody, fontSize: 12, color: MUTED }}>
                 <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: NAVY, display: "inline-block" }} />Ricavi</span>
                 <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: GOLD, display: "inline-block" }} />Costi</span>
+                <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD }}>Confronta anni →</span>
               </div>
             </div>
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Risultato del periodo</div>
