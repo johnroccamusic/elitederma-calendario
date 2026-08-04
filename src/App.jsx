@@ -8218,6 +8218,31 @@ function rangePrecedenteErp(range) {
   const inizioPrec = new Date(finePrec.getFullYear(), finePrec.getMonth(), finePrec.getDate() - giorni + 1);
   return { inizio: fmt(inizioPrec), fine: fmt(finePrec) };
 }
+// periodi della pagina "Costi operativi" (diversi da quelli della
+// dashboard ERP: qui servono "ultimo mese"/"mese precedente" come mesi
+// di calendario interi, non gli ultimi 30 giorni)
+function rangePeriodoCosti(periodo, personalizzato) {
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (periodo === "ultimomese") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth(), 1);
+    const fine = new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0);
+    return { inizio: fmt(inizio), fine: fmt(fine) };
+  }
+  if (periodo === "mesescorso") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() - 1, 1);
+    const fine = new Date(oggi.getFullYear(), oggi.getMonth(), 0);
+    return { inizio: fmt(inizio), fine: fmt(fine) };
+  }
+  if (periodo === "trimestre") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1);
+    return { inizio: fmt(inizio), fine: fmt(oggi) };
+  }
+  if (periodo === "personalizzato") {
+    return { inizio: personalizzato?.da || fmt(oggi), fine: personalizzato?.a || fmt(oggi) };
+  }
+  return { inizio: `${oggi.getFullYear()}-01-01`, fine: `${oggi.getFullYear()}-12-31` };
+}
 function variazionePctErp(attuale, precedente) {
   if (!precedente) return attuale ? null : 0;
   return ((attuale - precedente) / Math.abs(precedente)) * 100;
@@ -8322,16 +8347,124 @@ function GaugeMargineErp({ percentuale }) {
   );
 }
 
+// form "+ Nuova operazione" → "Uscita": un'unica tendina con tutte le voci
+// di costo manuali (raggruppate per categoria con <optgroup>), poi
+// data/città/descrizione, imponibile/IVA (selezionabile)/totale, e il
+// metodo di pagamento con lo stesso meccanismo IVA della scheda iscritti
+// (scegliendo "Cash no iva" l'aliquota si azzera e si blocca)
+function ModaleNuovaUscita({ location, onClose, onSalvato }) {
+  const [sottovoceScelta, setSottovoceScelta] = useState("");
+  const [data, setData] = useState(dataOggiStr());
+  const [citta, setCitta] = useState("");
+  const [descrizione, setDescrizione] = useState("");
+  const [imponibile, setImponibile] = useState("");
+  const [iva, setIva] = useState(22);
+  const [metodo, setMetodo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const ivaEffettiva = metodo === "Cash no iva" ? 0 : iva;
+  const totale = imponibile ? round2(parseNum(imponibile) * (1 + ivaEffettiva / 100)) : "";
+
+  async function salva() {
+    if (!sottovoceScelta) { setMsg("Scegli una voce di costo."); return; }
+    const imp = parseNum(imponibile);
+    if (!imp) { setMsg("Inserisci un imponibile."); return; }
+    const [categoria, sottovoce] = sottovoceScelta.split("::");
+    setSalvando(true);
+    const { error } = await supabase.from("costi_operativi_voci").insert({
+      categoria, sottovoce,
+      descrizione: descrizione.trim() || null,
+      location_id: citta || null,
+      imponibile: imp,
+      iva_percentuale: ivaEffettiva,
+      totale: round2(imp * (1 + ivaEffettiva / 100)),
+      data,
+      metodo_pagamento: metodo || null,
+    });
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    onSalvato();
+  }
+
+  return (
+    <Modal title="Nuova uscita" onClose={onClose}>
+      <Field label="Voce di costo">
+        <select style={inputStyle} value={sottovoceScelta} onChange={(e) => setSottovoceScelta(e.target.value)}>
+          <option value="">— scegli —</option>
+          {CATEGORIE_COSTI_MANUALI.map((cat) => (
+            <optgroup key={cat.chiave} label={cat.etichetta}>
+              {cat.voci.map((v) => (
+                <option key={v.chiave} value={`${cat.chiave}::${v.chiave}`}>{v.etichetta}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </Field>
+      <div style={{ display: "flex", gap: 14 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Città (opzionale)">
+            <select style={inputStyle} value={citta} onChange={(e) => setCitta(e.target.value)}>
+              <option value="">—</option>
+              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <Field label="Descrizione/fornitore (opzionale)">
+        <input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
+      </Field>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => setImponibile(e.target.value)} /></Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="IVA">
+            <select
+              style={{ ...inputStyle, background: metodo === "Cash no iva" ? "#EFEFEF" : "#fff", color: metodo === "Cash no iva" ? MUTED : NAVY }}
+              disabled={metodo === "Cash no iva"}
+              value={ivaEffettiva}
+              onChange={(e) => setIva(Number(e.target.value))}
+            >
+              {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Totale"><input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} disabled value={totale} /></Field>
+        </div>
+      </div>
+      <Field label="Metodo di pagamento">
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+          {["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"].map((opz) => (
+            <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+              <input type="radio" name="metodo-uscita" checked={metodo === opz} onChange={() => setMetodo(opz)} />
+              {opz}
+            </label>
+          ))}
+        </div>
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : "Salva uscita"}</Button>
+    </Modal>
+  );
+}
+
 // dashboard direzionale: riepiloga ricavi/costi/utile/allievi/andamento
 // per sede usando SOLO i dati già tracciati dal gestionale (iscritti,
 // costi per edizione, quota venditore, incassato, sede confermata).
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativiVoci, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativiVoci, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
+  const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
+  const [modaleUscitaAperta, setModaleUscitaAperta] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -8484,10 +8617,36 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
               </button>
             ))}
           </div>
-          <button disabled title="Non ancora disponibile" style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: "#C7C9D4", color: "#fff", cursor: "not-allowed" }}>
-            + Nuova operazione
-          </button>
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setMenuNuovaOperazione((v) => !v)}
+              style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}
+            >
+              + Nuova operazione
+            </button>
+            {menuNuovaOperazione && (
+              <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)", overflow: "hidden", minWidth: 160 }}>
+                <button
+                  onClick={() => { setMenuNuovaOperazione(false); setModaleUscitaAperta(true); }}
+                  style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", background: "transparent", color: NAVY, cursor: "pointer" }}
+                >
+                  Uscita
+                </button>
+                <button
+                  disabled
+                  title="Non ancora disponibile"
+                  style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, background: "transparent", color: "#C7C9D4", cursor: "not-allowed" }}
+                >
+                  Entrata
+                </button>
+              </div>
+            )}
+          </div>
         </div>
+
+        {modaleUscitaAperta && (
+          <ModaleNuovaUscita location={location} onClose={() => setModaleUscitaAperta(false)} onSalvato={() => { setModaleUscitaAperta(false); ricarica(); }} />
+        )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Analisi sede</div>
@@ -8661,20 +8820,13 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
 function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOperativiVoci, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
+  const [customDa, setCustomDa] = useState(dataOggiStr());
+  const [customA, setCustomA] = useState(dataOggiStr());
   const [sedeSel, setSedeSel] = useState("");
   const [categoriaAperta, setCategoriaAperta] = useState("");
-  const [formCategoria, setFormCategoria] = useState("");
-  const [formSottovoce, setFormSottovoce] = useState("");
-  const [formDescrizione, setFormDescrizione] = useState("");
-  const [formCitta, setFormCitta] = useState("");
-  const [formImponibile, setFormImponibile] = useState("");
-  const [formIva, setFormIva] = useState(22);
-  const [formData, setFormData] = useState(dataOggiStr());
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
 
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const range = rangePeriodoErp(periodo);
+  const range = rangePeriodoCosti(periodo, { da: customDa, a: customA });
 
   const cdPeriodo = useMemo(
     () => corsiDate.filter((cd) => cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine && (!sedeSel || cd.location_id === sedeSel)),
@@ -8728,39 +8880,6 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
   const totaleGenerale = round2(categorieConDati.reduce((s, c) => s + c.totale, 0));
   const ricaviPeriodo = round2(iscrittiPeriodo.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
 
-  function apriForm(categoria) {
-    setFormCategoria(categoria);
-    setFormSottovoce(categoriaCostoDi(categoria)?.voci?.[0]?.chiave || "");
-    setFormDescrizione("");
-    setFormCitta("");
-    setFormImponibile("");
-    setFormIva(22);
-    setFormData(dataOggiStr());
-    setMsg("");
-  }
-
-  async function salvaVoceManuale() {
-    if (!formSottovoce) { setMsg("Scegli una voce."); return; }
-    const imp = parseNum(formImponibile);
-    if (!imp) { setMsg("Inserisci un imponibile."); return; }
-    setSalvando(true);
-    const totale = round2(imp * (1 + formIva / 100));
-    const { error } = await supabase.from("costi_operativi_voci").insert({
-      categoria: formCategoria,
-      sottovoce: formSottovoce,
-      descrizione: formDescrizione.trim() || null,
-      location_id: formCitta || null,
-      imponibile: imp,
-      iva_percentuale: formIva,
-      totale,
-      data: formData,
-    });
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setFormCategoria("");
-    ricarica();
-  }
-
   async function eliminaVoce(id) {
     if (!window.confirm("Eliminare questa voce di costo?")) return;
     const { error } = await supabase.from("costi_operativi_voci").delete().eq("id", id);
@@ -8780,15 +8899,28 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Costi operativi</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le voci di costo dell'azienda, per categoria.</div>
 
-        <div style={{ display: "flex", marginBottom: 16 }}>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
-              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+        <div style={{ display: "flex", marginBottom: 12, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+            {[
+              { v: "ultimomese", l: "Ultimo mese" },
+              { v: "mesescorso", l: "Mese precedente" },
+              { v: "trimestre", l: "Trimestre" },
+              { v: "anno", l: "Anno" },
+              { v: "personalizzato", l: "Personalizzato" },
+            ].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
                 {p.l}
               </button>
             ))}
           </div>
         </div>
+
+        {periodo === "personalizzato" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
+            <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
+          </div>
+        )}
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginRight: 4, whiteSpace: "nowrap" }}>Sede</div>
@@ -8862,48 +8994,10 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
                         ))}
                       </div>
                     )}
-                    {formCategoria === cat.chiave ? (
-                      <div style={{ marginTop: 14, padding: 14, background: BG_CHIARO, borderRadius: 10 }}>
-                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                          <Field label="Voce">
-                            <select style={inputStyle} value={formSottovoce} onChange={(e) => setFormSottovoce(e.target.value)}>
-                              {cat.voci.map((v) => <option key={v.chiave} value={v.chiave}>{v.etichetta}</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Città (opzionale)">
-                            <select style={inputStyle} value={formCitta} onChange={(e) => setFormCitta(e.target.value)}>
-                              <option value="">—</option>
-                              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-                            </select>
-                          </Field>
-                        </div>
-                        <Field label="Descrizione/fornitore (opzionale)">
-                          <input style={inputStyle} value={formDescrizione} onChange={(e) => setFormDescrizione(e.target.value)} />
-                        </Field>
-                        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr 1fr", gap: 10, marginTop: 10, alignItems: "end" }}>
-                          <Field label="Imponibile">
-                            <input style={inputStyle} inputMode="decimal" value={formImponibile} onChange={(e) => setFormImponibile(e.target.value)} />
-                          </Field>
-                          <Field label="IVA">
-                            <select style={inputStyle} value={formIva} onChange={(e) => setFormIva(Number(e.target.value))}>
-                              {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
-                            </select>
-                          </Field>
-                          <Field label="Totale">
-                            <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} disabled value={formImponibile ? round2(parseNum(formImponibile) * (1 + formIva / 100)) : ""} />
-                          </Field>
-                          <Field label="Data">
-                            <input type="date" style={inputStyle} value={formData} onChange={(e) => setFormData(e.target.value)} />
-                          </Field>
-                        </div>
-                        {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 8 }}>{msg}</div>}
-                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                          <Button onClick={salvaVoceManuale} disabled={salvando}>{salvando ? "Salvo…" : "Aggiungi"}</Button>
-                          <Button variant="ghost" onClick={() => setFormCategoria("")}>Annulla</Button>
-                        </div>
+                    {cat.vociManuali.length === 0 && (
+                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        Nessuna voce in questo periodo. Le uscite si aggiungono da "+ Nuova operazione" nella dashboard.
                       </div>
-                    ) : (
-                      <Button variant="ghost" onClick={() => apriForm(cat.chiave)} style={{ marginTop: 14 }}>+ Aggiungi voce</Button>
                     )}
                   </>
                 )}
@@ -9370,6 +9464,7 @@ export default function App() {
         <PaginaErp
           corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
           costiOperativiVoci={costiOperativiVoci}
+          ricarica={fetchDati}
           onBack={() => setView("home")}
           onApriGestioneDate={apriGestioneDate}
           onApriImpostazioni={apriImpostazioni}

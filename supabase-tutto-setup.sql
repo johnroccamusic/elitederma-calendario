@@ -472,4 +472,10 @@ drop policy if exists "accesso interno costi_operativi_voci" on public.costi_ope
 create policy "accesso interno costi_operativi_voci" on public.costi_operativi_voci for all to anon using (true) with check (true);
 
 
+-- ---------------------------------------------------------
+-- 21) "Nuova operazione" (Uscita): metodo di pagamento dell'uscita
+-- ---------------------------------------------------------
+alter table public.costi_operativi_voci add column if not exists metodo_pagamento text;
+
+
 notify pgrst, 'reload schema';
