@@ -8845,6 +8845,182 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, costiOperativ
 }
 
 // ---------- Costi operativi ----------
+function IconaTortaCostiErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+    </svg>
+  );
+}
+function IconaSedeCostiErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 21h18" /><path d="M5 21V7l7-4 7 4v14" />
+      <path d="M9 9h1M14 9h1M9 13h1M14 13h1M9 21v-4h6v4" />
+    </svg>
+  );
+}
+function IconaTrendCostiErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
+    </svg>
+  );
+}
+// divide un range di date in "bucket" per il grafico "Andamento dei
+// costi": giornalieri se il periodo è breve (≲45gg, es. un mese),
+// settimanali se medio (≲120gg, es. un trimestre), mensili altrimenti
+// (es. un anno) — così il grafico resta leggibile qualunque periodo/
+// intervallo personalizzato scelga l'utente
+function bucketizzaPeriodoCosti(inizio, fine) {
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const [aI, mI, gI] = inizio.split("-").map(Number);
+  const [aF, mF, gF] = fine.split("-").map(Number);
+  const dIn = new Date(aI, mI - 1, gI);
+  const dFin = new Date(aF, mF - 1, gF);
+  const giorni = Math.max(1, Math.round((dFin - dIn) / 86400000) + 1);
+
+  if (giorni <= 45) {
+    const buckets = [];
+    for (let i = 0; i < giorni; i++) {
+      const d = new Date(aI, mI - 1, gI + i);
+      buckets.push({ etichetta: String(d.getDate()), da: fmt(d), a: fmt(d) });
+    }
+    return buckets;
+  }
+  if (giorni <= 120) {
+    const buckets = [];
+    let n = 1;
+    for (let i = 0; i < giorni; i += 7) {
+      const dA = new Date(aI, mI - 1, gI + i);
+      const dB = new Date(aI, mI - 1, gI + Math.min(i + 6, giorni - 1));
+      buckets.push({ etichetta: `S${n}`, da: fmt(dA), a: fmt(dB) });
+      n++;
+    }
+    return buckets;
+  }
+  const buckets = [];
+  let cursoreAnno = aI, cursoreMese = mI - 1;
+  while (cursoreAnno < aF || (cursoreAnno === aF && cursoreMese <= mF - 1)) {
+    const primoDelMese = new Date(cursoreAnno, cursoreMese, 1);
+    const ultimoDelMese = new Date(cursoreAnno, cursoreMese + 1, 0);
+    const da = primoDelMese < dIn ? dIn : primoDelMese;
+    const a = ultimoDelMese > dFin ? dFin : ultimoDelMese;
+    buckets.push({ etichetta: MESI_ABBR[cursoreMese], da: fmt(da), a: fmt(a) });
+    cursoreMese++;
+    if (cursoreMese > 11) { cursoreMese = 0; cursoreAnno++; }
+  }
+  return buckets;
+}
+const COLORI_DONUT_COSTI = [NAVY, GOLD, "#7C8DA6", "#C9BFA0", "#D9D4C4"];
+function DonutIncidenzaCosti({ dati }) {
+  const raggio = 56, spessore = 22, cx = 74, cy = 74, circonferenza = 2 * Math.PI * raggio;
+  let cumulato = 0;
+  return (
+    <svg width={148} height={148} viewBox="0 0 148 148" style={{ flexShrink: 0 }}>
+      <circle cx={cx} cy={cy} r={raggio} fill="none" stroke={BG} strokeWidth={spessore} />
+      {dati.map((d, i) => {
+        const dash = (d.pct / 100) * circonferenza;
+        const el = (
+          <circle
+            key={d.etichetta}
+            cx={cx} cy={cy} r={raggio} fill="none"
+            stroke={COLORI_DONUT_COSTI[i % COLORI_DONUT_COSTI.length]}
+            strokeWidth={spessore}
+            strokeDasharray={`${dash} ${circonferenza - dash}`}
+            strokeDashoffset={-cumulato}
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        );
+        cumulato += dash;
+        return el;
+      })}
+    </svg>
+  );
+}
+// linea "andamento dei costi": periodo corrente (piena) vs stesso numero
+// di bucket del periodo precedente (tratteggiata), scala automatica sul
+// valore massimo tra le due serie
+function GraficoAndamentoCosti({ punti }) {
+  if (punti.length === 0) return null;
+  const larghezza = 560, altezza = 200, padSx = 46, padDx = 12, padAlto = 14, padBasso = 26;
+  const valori = punti.flatMap((p) => [p.corrente, p.precedente]).filter((v) => v != null);
+  const massimo = Math.max(1, ...valori);
+  const scalaX = (i) => padSx + (i / Math.max(1, punti.length - 1)) * (larghezza - padSx - padDx);
+  const scalaY = (v) => padAlto + (1 - v / massimo) * (altezza - padAlto - padBasso);
+  const puntiA = punti.map((p, i) => [scalaX(i), scalaY(p.corrente)]);
+  const puntiP = punti.filter((p) => p.precedente != null).map((p, i) => [scalaX(i), scalaY(p.precedente)]);
+  const path = (pts) => pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const righeGriglia = 4;
+  const saltoEtichette = punti.length <= 12 ? 1 : Math.ceil(punti.length / 8);
+  return (
+    <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+      {Array.from({ length: righeGriglia + 1 }).map((_, i) => {
+        const y = padAlto + (i / righeGriglia) * (altezza - padAlto - padBasso);
+        const valore = Math.round(massimo * (1 - i / righeGriglia));
+        return (
+          <g key={i}>
+            <line x1={padSx} y1={y} x2={larghezza - padDx} y2={y} stroke={CREAM_BORDER} strokeWidth="1" />
+            <text x={0} y={y + 4} fontSize="10" fill={MUTED} fontFamily="'Roboto',sans-serif">{fmtEuroKErp(valore)}</text>
+          </g>
+        );
+      })}
+      {puntiP.length > 1 && <path d={path(puntiP)} fill="none" stroke={GOLD} strokeWidth="2" strokeDasharray="4 4" />}
+      <path d={path(puntiA)} fill="none" stroke={NAVY} strokeWidth="2.5" />
+      {puntiA.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2.5" fill={NAVY} />)}
+      {punti.map((p, i) => (
+        i % saltoEtichette === 0 ? (
+          <text key={i} x={scalaX(i)} y={altezza - 6} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text>
+        ) : null
+      ))}
+    </svg>
+  );
+}
+function BarraCostiPerSede({ dati, totale }) {
+  if (dati.length === 0) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo registrato nel periodo.</div>;
+  return (
+    <div>
+      {dati.map((d, i) => {
+        const pct = totale > 0 ? (d.costi / totale) * 100 : 0;
+        return (
+          <div key={d.sede.id} style={{ marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, ...fontBody, fontSize: 12.5, color: NAVY, fontWeight: 600 }}>
+              <span>{d.sede.nome}</span>
+              <span>{fmtPctErp(pct)}</span>
+            </div>
+            <div style={{ height: 10, borderRadius: 6, background: BG, overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, pct)}%`, height: "100%", borderRadius: 6, background: i === 0 ? GOLD : NAVY }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+// indice di performance per sede: margine (utile/ricavi) del periodo,
+// che tiene conto sia di quanto costa gestire la sede sia di quanto
+// incassa — non solo "quanto costa" ma "quanto rende rispetto a quanto
+// costa", che è la richiesta esplicita dell'utente
+function RigaPerformanceSede({ pos, dato }) {
+  const margine = dato.margine;
+  const buono = margine != null && margine >= 15;
+  const negativo = margine != null && margine < 0;
+  const colore = margine == null ? MUTED : negativo ? "#C0392B" : buono ? "#2E7D32" : "#B7791F";
+  const bg = margine == null ? BG : negativo ? "#FBE4E1" : buono ? "#E3F3E5" : "#FBF0DD";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: MUTED, width: 20, flexShrink: 0 }}>{pos}°</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{dato.sede.nome}</div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{fmtEuroErp(dato.ricavi)} incassati · {fmtEuroErp(dato.costi)} di costi</div>
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: colore, background: bg, borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap", flexShrink: 0 }}>
+        {margine == null ? "—" : `${margine >= 0 ? "+" : ""}${fmtPctErp(margine)}`}
+      </div>
+    </div>
+  );
+}
 // drill-down per categoria della card "Costi operativi" dell'ERP: 10
 // categorie fisse, alcune manuali (form imponibile/IVA/totale, aliquota
 // scelta riga per riga) e alcune automatiche (commissioni venditori dagli
@@ -8917,6 +9093,45 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
   const totaleGenerale = round2(categorieConDati.reduce((s, c) => s + c.totale, 0));
   const ricaviPeriodo = round2(iscrittiPeriodo.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
 
+  // dashboard "Analisi costi di gestione": KPI, andamento, incidenza per
+  // categoria, e confronto/performance di TUTTE le sedi (a prescindere
+  // dal filtro "Sede" qui sopra, che serve solo a filtrare il dettaglio
+  // per categoria più sotto) — riusa calcolaKpiErp, già verificato
+  // coincidere esattamente con totaleGenerale per lo stesso periodo/sede
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const rangePrec = rangePrecedenteErp(range);
+  const kpiPrecedente = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById });
+  const variazioneCosti = variazionePctErp(totaleGenerale, kpiPrecedente.costi);
+
+  const categorieOrdinate = [...categorieConDati].filter((c) => c.totale > 0).sort((a, b) => b.totale - a.totale);
+  const voceMaggiore = categorieOrdinate[0] || null;
+
+  const performancePerSede = location.map((l) => {
+    const k = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
+    return { sede: l, ricavi: k.ricavi, costi: k.costi, utile: k.utile, margine: k.ricavi > 0 ? round1Erp((k.utile / k.ricavi) * 100) : null };
+  });
+  const totaleCostiSedi = round2(performancePerSede.reduce((s, p) => s + p.costi, 0));
+  const sedeCostiOrdinate = [...performancePerSede].filter((p) => p.costi > 0).sort((a, b) => b.costi - a.costi);
+  const sedePerformanceOrdinata = [...performancePerSede].filter((p) => p.ricavi > 0).sort((a, b) => (b.margine ?? -Infinity) - (a.margine ?? -Infinity));
+  const sedePiuCostosa = sedeCostiOrdinate[0] || null;
+
+  const donutDati = (() => {
+    const top = categorieOrdinate.slice(0, 4);
+    const restoTotale = round2(categorieOrdinate.slice(4).reduce((s, c) => s + c.totale, 0));
+    const voci = top.map((c) => ({ etichetta: c.etichetta, totale: c.totale }));
+    if (restoTotale > 0) voci.push({ etichetta: "Altro", totale: restoTotale });
+    return voci.map((v) => ({ ...v, pct: totaleGenerale > 0 ? round1Erp((v.totale / totaleGenerale) * 100) : 0 }));
+  })();
+
+  const bucketsAttuali = bucketizzaPeriodoCosti(range.inizio, range.fine);
+  const bucketsPrecedenti = bucketizzaPeriodoCosti(rangePrec.inizio, rangePrec.fine);
+  const andamentoCosti = bucketsAttuali.map((b, idx) => {
+    const kA = calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: b.da, fine: b.a, sedeId: sedeSel, corsoById, locById });
+    const bp = bucketsPrecedenti[idx];
+    const kP = bp ? calcolaKpiErp({ corsiDate, iscritti, costiOperativiVoci, inizio: bp.da, fine: bp.a, sedeId: sedeSel, corsoById, locById }) : null;
+    return { etichetta: b.etichetta, corrente: kA.costi, precedente: kP ? kP.costi : null };
+  });
+
   async function eliminaVoce(id) {
     if (!window.confirm("Eliminare questa voce di costo?")) return;
     const { error } = await supabase.from("costi_operativi_voci").delete().eq("id", id);
@@ -8926,15 +9141,15 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1120, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
             <IconaFrecciaSinistra size={20} />
           </button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Costi operativi</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le voci di costo dell'azienda, per categoria.</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Analisi costi di gestione</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Controlla l'andamento dei costi, l'incidenza e le performance di ogni sede.</div>
 
         <div style={{ display: "flex", marginBottom: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
@@ -8971,13 +9186,78 @@ function PaginaCostiOperativi({ corsi, location, corsiDate, iscritti, costiOpera
           ))}
         </div>
 
-        <div style={{ ...cardStyle, background: NAVY, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.3)" }}>
-          <div style={{ ...fontBody, fontSize: 12.5, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>Totale costi operativi (imponibile)</div>
-          <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{fmtEuroErp(totaleGenerale)}</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: "rgba(255,255,255,0.6)" }}>
-            {ricaviPeriodo > 0 ? `${round1Erp((totaleGenerale / ricaviPeriodo) * 100)}% dei ricavi del periodo` : "—"}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, 1fr)", gap: 14, marginBottom: 18 }}>
+          <CardKpiErp
+            titolo="Costi totali" valore={fmtEuroErp(totaleGenerale)}
+            sub={ricaviPeriodo > 0 ? `${fmtPctErp(round1Erp((totaleGenerale / ricaviPeriodo) * 100))} dei ricavi` : "—"}
+            Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1"
+          />
+          <div style={{ ...cardStyle, padding: 18, marginBottom: 0, background: "#FBF3E0", border: "1px solid #EEDCB4" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F3E3C0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconaTortaCostiErp size={19} color={GOLD} />
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: "#9C7C3E", marginBottom: 4 }}>Voce più incidente</div>
+            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, marginBottom: 8, lineHeight: 1.25 }}>{voceMaggiore?.etichetta || "—"}</div>
+            {voceMaggiore && (
+              <div style={{ display: "inline-block", ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 8, padding: "3px 9px" }}>
+                {fmtPctErp(round1Erp((voceMaggiore.totale / totaleGenerale) * 100))} del totale
+              </div>
+            )}
+          </div>
+          <CardKpiErp
+            titolo="Sede più costosa" valore={sedePiuCostosa?.sede.nome || "—"}
+            sub={sedePiuCostosa && totaleCostiSedi > 0 ? `${fmtPctErp(round1Erp((sedePiuCostosa.costi / totaleCostiSedi) * 100))} dei costi` : "—"}
+            Icona={IconaSedeCostiErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9"
+          />
+          <CardKpiErp
+            titolo="Variazione periodo" valore={variazioneCosti == null ? "—" : `${variazioneCosti >= 0 ? "+" : ""}${fmtPctErp(variazioneCosti)}`}
+            sub="Rispetto al periodo precedente"
+            Icona={IconaTrendCostiErp}
+            coloreIcona={variazioneCosti == null ? MUTED : variazioneCosti <= 0 ? "#2E7D32" : "#C0392B"}
+            coloreBgIcona={variazioneCosti == null ? BG : variazioneCosti <= 0 ? "#E3F3E5" : "#FBE4E1"}
+          />
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.4fr 1fr", gap: 14, marginBottom: 14 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Andamento dei costi</div>
+            <GraficoAndamentoCosti punti={andamentoCosti} />
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Incidenza per categoria</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+              <DonutIncidenzaCosti dati={donutDati} />
+              <div style={{ flex: 1, minWidth: 140 }}>
+                {donutDati.map((d, i) => (
+                  <div key={d.etichetta} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                    <div style={{ width: 9, height: 9, borderRadius: "50%", background: COLORI_DONUT_COSTI[i % COLORI_DONUT_COSTI.length], flexShrink: 0 }} />
+                    <span style={{ flex: 1 }}>{d.etichetta}</span>
+                    <span style={{ fontWeight: 700 }}>{fmtPctErp(d.pct)}</span>
+                  </div>
+                ))}
+                {donutDati.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun costo nel periodo.</div>}
+              </div>
+            </div>
           </div>
         </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 18 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Costi per sede</div>
+            <BarraCostiPerSede dati={sedeCostiOrdinate} totale={totaleCostiSedi} />
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Indice di performance per sede</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 10 }}>Margine utile sugli incassi di ogni sede, al netto dei costi che sostiene</div>
+            {sedePerformanceOrdinata.map((d, i) => <RigaPerformanceSede key={d.sede.id} pos={i + 1} dato={d} />)}
+            {sedePerformanceOrdinata.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun incasso registrato nel periodo.</div>}
+          </div>
+        </div>
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Dettaglio per categoria</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Voci di spesa principali, per categoria — filtrate per la sede scelta sopra.</div>
 
         {categorieConDati.map((cat) => (
           <div key={cat.chiave} style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
