@@ -9269,6 +9269,7 @@ const COLONNE_MAGAZZINO = [
   { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc" },
   { label: "Giacenza", campo: "giacenza", direzioneIniziale: "desc" },
   { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc" },
+  { label: "Stato", campo: "esaurito", direzioneIniziale: "desc" },
   { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc" },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc" },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc" },
@@ -9276,14 +9277,159 @@ const COLONNE_MAGAZZINO = [
   { label: "Fatturato", campo: "fatturato", direzioneIniziale: "desc" },
 ];
 
+// range di date per ciascun periodo, ancorato all'anno scelto: se
+// l'anno selezionato è quello corrente, "oggi" fa da riferimento (es.
+// "Mensile" = il mese in corso); se è un anno passato, il riferimento
+// diventa il 31 dicembre di quell'anno (es. "Mensile" = dicembre)
+function rangeMagazzino(periodo, anno) {
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const riferimento = anno === oggi.getFullYear() ? oggi : new Date(anno, 11, 31);
+  if (periodo === "annuale") return { inizio: `${anno}-01-01`, fine: `${anno}-12-31` };
+  if (periodo === "semestrale") {
+    const meseInizio = riferimento.getMonth() < 6 ? 0 : 6;
+    return { inizio: fmt(new Date(anno, meseInizio, 1)), fine: fmt(new Date(anno, meseInizio + 6, 0)) };
+  }
+  if (periodo === "trimestrale") {
+    const meseInizio = Math.floor(riferimento.getMonth() / 3) * 3;
+    return { inizio: fmt(new Date(anno, meseInizio, 1)), fine: fmt(new Date(anno, meseInizio + 3, 0)) };
+  }
+  if (periodo === "mensile") {
+    return { inizio: fmt(new Date(anno, riferimento.getMonth(), 1)), fine: fmt(new Date(anno, riferimento.getMonth() + 1, 0)) };
+  }
+  // settimanale: lunedì-domenica della settimana del riferimento
+  const giornoSett = riferimento.getDay();
+  const offsetLunedi = giornoSett === 0 ? -6 : 1 - giornoSett;
+  const lunedi = new Date(anno, riferimento.getMonth(), riferimento.getDate() + offsetLunedi);
+  const domenica = new Date(lunedi.getFullYear(), lunedi.getMonth(), lunedi.getDate() + 6);
+  return { inizio: fmt(lunedi), fine: fmt(domenica) };
+}
+
+// grafico a barre affiancate (periodo selezionato vs periodo di
+// confronto) per bucket — usato per "Andamento" quantità/fatturato
+function GraficoBarreVendite({ punti }) {
+  if (!punti.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dato nel periodo.</div>;
+  const larghezza = 640, altezza = 220, padSx = 46, padDx = 12, padAlto = 14, padBasso = 30;
+  const massimo = Math.max(1, ...punti.flatMap((p) => [p.selezionato || 0, p.precedente || 0]));
+  const n = punti.length;
+  const stepX = (larghezza - padSx - padDx) / n;
+  const yBar = (v) => altezza - padBasso - (v / massimo) * (altezza - padAlto - padBasso);
+  const saltoEtichette = n <= 12 ? 1 : Math.ceil(n / 10);
+  return (
+    <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const y = padAlto + (i / 4) * (altezza - padAlto - padBasso);
+        const valore = Math.round(massimo * (1 - i / 4));
+        return (
+          <g key={i}>
+            <line x1={padSx} y1={y} x2={larghezza - padDx} y2={y} stroke={CREAM_BORDER} strokeWidth="1" />
+            <text x={0} y={y + 4} fontSize="10" fill={MUTED} fontFamily="'Roboto',sans-serif">{valore >= 1000 ? `${Math.round(valore / 1000)}k` : valore}</text>
+          </g>
+        );
+      })}
+      {punti.map((p, i) => {
+        const xCentro = padSx + stepX * i + stepX / 2;
+        const largBarra = Math.min(16, stepX * 0.32);
+        return (
+          <g key={i}>
+            <rect x={xCentro - largBarra - 2} y={yBar(p.selezionato || 0)} width={largBarra} height={Math.max(1, altezza - padBasso - yBar(p.selezionato || 0))} fill={NAVY} rx="2" />
+            {p.precedente != null && <rect x={xCentro + 2} y={yBar(p.precedente)} width={largBarra} height={Math.max(1, altezza - padBasso - yBar(p.precedente))} fill={GOLD} rx="2" />}
+            {i % saltoEtichette === 0 && <text x={xCentro} y={altezza - 8} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text>}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+// linea semplice (una sola serie) — usata per "Carrello medio nel tempo"
+function GraficoLineaSemplice({ punti }) {
+  if (!punti.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dato nel periodo.</div>;
+  const larghezza = 560, altezza = 160, padSx = 46, padDx = 12, padAlto = 14, padBasso = 26;
+  const valori = punti.map((p) => p.valore).filter((v) => v != null);
+  const massimo = Math.max(1, ...valori);
+  const scalaX = (i) => padSx + (i / Math.max(1, punti.length - 1)) * (larghezza - padSx - padDx);
+  const scalaY = (v) => padAlto + (1 - v / massimo) * (altezza - padAlto - padBasso);
+  const pts = punti.map((p, i) => [scalaX(i), p.valore != null ? scalaY(p.valore) : null]).filter(([, y]) => y != null);
+  const path = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const saltoEtichette = punti.length <= 12 ? 1 : Math.ceil(punti.length / 8);
+  return (
+    <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+      {Array.from({ length: 4 }).map((_, i) => {
+        const y = padAlto + (i / 3) * (altezza - padAlto - padBasso);
+        const valore = Math.round(massimo * (1 - i / 3));
+        return (
+          <g key={i}>
+            <line x1={padSx} y1={y} x2={larghezza - padDx} y2={y} stroke={CREAM_BORDER} strokeWidth="1" />
+            <text x={0} y={y + 4} fontSize="10" fill={MUTED} fontFamily="'Roboto',sans-serif">{valore} €</text>
+          </g>
+        );
+      })}
+      {pts.length > 1 && <path d={path} fill="none" stroke={NAVY} strokeWidth="2.5" />}
+      {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2.5" fill={GOLD} />)}
+      {punti.map((p, i) => (i % saltoEtichette === 0 ? <text key={i} x={scalaX(i)} y={altezza - 6} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text> : null))}
+    </svg>
+  );
+}
+const COLORI_TREND_CATEGORIE = [NAVY, GOLD, "#4A7C59", "#C0392B", "#7C8DA6", "#8E5A9E"];
+// multi-linea (una serie per categoria) — usata per "Trend per categoria"
+function GraficoTrendCategorie({ punti, serie }) {
+  if (!punti.length || !serie.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dato nel periodo.</div>;
+  const larghezza = 560, altezza = 200, padSx = 40, padDx = 12, padAlto = 14, padBasso = 26;
+  const massimo = Math.max(1, ...punti.flatMap((p) => serie.map((s) => p.valori[s] || 0)));
+  const scalaX = (i) => padSx + (i / Math.max(1, punti.length - 1)) * (larghezza - padSx - padDx);
+  const scalaY = (v) => padAlto + (1 - v / massimo) * (altezza - padAlto - padBasso);
+  const saltoEtichette = punti.length <= 12 ? 1 : Math.ceil(punti.length / 8);
+  return (
+    <div>
+      <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+        {Array.from({ length: 4 }).map((_, i) => {
+          const y = padAlto + (i / 3) * (altezza - padAlto - padBasso);
+          const valore = Math.round(massimo * (1 - i / 3));
+          return (
+            <g key={i}>
+              <line x1={padSx} y1={y} x2={larghezza - padDx} y2={y} stroke={CREAM_BORDER} strokeWidth="1" />
+              <text x={0} y={y + 4} fontSize="9.5" fill={MUTED} fontFamily="'Roboto',sans-serif">{valore}</text>
+            </g>
+          );
+        })}
+        {serie.map((nomeCat, si) => {
+          const pts = punti.map((p, i) => [scalaX(i), scalaY(p.valori[nomeCat] || 0)]);
+          const path = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+          const colore = COLORI_TREND_CATEGORIE[si % COLORI_TREND_CATEGORIE.length];
+          return (
+            <g key={nomeCat}>
+              <path d={path} fill="none" stroke={colore} strokeWidth="2" />
+              {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2" fill={colore} />)}
+            </g>
+          );
+        })}
+        {punti.map((p, i) => (i % saltoEtichette === 0 ? <text key={i} x={scalaX(i)} y={altezza - 6} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text> : null))}
+      </svg>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
+        {serie.map((nomeCat, si) => (
+          <div key={nomeCat} style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 11.5, color: NAVY }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: COLORI_TREND_CATEGORIE[si % COLORI_TREND_CATEGORIE.length], flexShrink: 0 }} />
+            {nomeCat}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("anno");
-  const [personalizzatoDa, setPersonalizzatoDa] = useState("");
-  const [personalizzatoA, setPersonalizzatoA] = useState("");
+  const oggi = new Date();
+  const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
+  const [periodo, setPeriodo] = useState("annuale");
+  const [anno, setAnno] = useState(oggi.getFullYear());
+  const [confrontoTipo, setConfrontoTipo] = useState("periodoprecedente");
+  const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
   const [categoriaSel, setCategoriaSel] = useState("");
+  const [categoriaTrendSel, setCategoriaTrendSel] = useState("");
+  const [ricercaProdotto, setRicercaProdotto] = useState("");
+  const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
-  const [segnalazioniAperte, setSegnalazioniAperte] = useState(false);
   const [prodottoModifica, setProdottoModifica] = useState(null);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
@@ -9302,32 +9448,55 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     ricarica();
   }
 
-  const range = rangePeriodoAnalisiCosti(periodo, { da: personalizzatoDa, a: personalizzatoA });
+  const range = rangeMagazzino(periodo, anno);
+  const rangePrecedente = rangeConfrontoAnalisiCosti(range, confrontoTipo);
+  const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
 
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
-  (prodottiCategorie || []).forEach((pc) => {
-    (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id);
-  });
+  (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  const categorieIdPerNomeProdotto = {};
+  (prodottiShop || []).forEach((p) => { categorieIdPerNomeProdotto[(p.nome || "").trim().toLowerCase()] = categorieIdPerProdottoId[p.id] || []; });
 
-  // vendite del periodo selezionato, aggregate per nome prodotto
-  // (il collegamento vendita<->prodotto è per nome: vendite_shop non ha
-  // un riferimento diretto al prodotto, solo la descrizione della riga)
-  const venditePerNome = {};
+  // il collegamento vendita<->prodotto è per nome: vendite_shop non ha
+  // un riferimento diretto al prodotto, solo la descrizione della riga
+  function aggregaVenditePerNome(inizio, fine) {
+    const mappa = {};
+    (venditeShop || []).forEach((v) => {
+      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+      if (!d || d < inizio || d > fine) return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+        const chiave = (p.nome || "").trim().toLowerCase();
+        if (!chiave) return;
+        if (!mappa[chiave]) mappa[chiave] = { quantita: 0, fatturato: 0 };
+        mappa[chiave].quantita += Number(p.quantita) || 0;
+        mappa[chiave].fatturato += Number(p.totale_riga) || 0;
+      });
+    });
+    return mappa;
+  }
+  const venditePerNome = aggregaVenditePerNome(range.inizio, range.fine);
+  const venditePerNomePrecedente = aggregaVenditePerNome(rangePrecedente.inizio, rangePrecedente.fine);
+
+  // "fermi da oltre 90 giorni": guarda TUTTO lo storico vendite, non solo il periodo selezionato
+  const mappaUltimaVendita = {};
   (venditeShop || []).forEach((v) => {
-    const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
-    if (data && (data < range.inizio || data > range.fine)) return;
-    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+    const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    if (!d || !Array.isArray(v.prodotti)) return;
+    v.prodotti.forEach((p) => {
       const chiave = (p.nome || "").trim().toLowerCase();
       if (!chiave) return;
-      if (!venditePerNome[chiave]) venditePerNome[chiave] = { quantita: 0, fatturato: 0 };
-      venditePerNome[chiave].quantita += Number(p.quantita) || 0;
-      venditePerNome[chiave].fatturato += Number(p.totale_riga) || 0;
+      if (!mappaUltimaVendita[chiave] || d > mappaUltimaVendita[chiave]) mappaUltimaVendita[chiave] = d;
     });
   });
+  function giorniFermo(nome) {
+    const ultima = mappaUltimaVendita[(nome || "").trim().toLowerCase()];
+    if (!ultima) return Infinity;
+    return Math.round((new Date(oggiStr) - new Date(ultima)) / 86400000);
+  }
 
-  const prodottiArricchiti = (prodottiShop || []).map((p) => {
+  const prodottiConStato = (prodottiShop || []).filter((p) => p.attivo !== false).map((p) => {
     const chiave = (p.nome || "").trim().toLowerCase();
     const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
     const margine = p.costo_acquisto != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - p.costo_acquisto) / p.prezzo_vendita) * 100) : null;
@@ -9339,23 +9508,103 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       margine,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
+      giorniFermo: giorniFermo(p.nome),
+      sottoScorta: p.scorta_minima != null && (p.giacenza || 0) < p.scorta_minima,
+      esaurito: (p.giacenza || 0) <= 0,
     };
   });
 
-  const prodottiAttivi = prodottiArricchiti.filter((p) => p.attivo !== false);
-  const prodottiVisti = categoriaSel ? prodottiAttivi.filter((p) => p.categorieIds.includes(categoriaSel)) : prodottiAttivi;
+  const sottoScorta = prodottiConStato.filter((p) => p.sottoScorta);
+  const senzaCosto = prodottiConStato.filter((p) => p.costo_acquisto == null);
+  const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
+  const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
 
-  const piuVendutoQuantita = [...prodottiAttivi].filter((p) => p.quantitaVenduta > 0).sort((a, b) => b.quantitaVenduta - a.quantitaVenduta)[0] || null;
-  const piuVendutoFatturato = [...prodottiAttivi].filter((p) => p.fatturato > 0).sort((a, b) => b.fatturato - a.fatturato)[0] || null;
-  const migliorMargine = [...prodottiAttivi].filter((p) => p.margine != null).sort((a, b) => b.margine - a.margine)[0] || null;
-  const invenduti = prodottiAttivi.filter((p) => p.quantitaVenduta === 0);
-  const sottoScorta = prodottiAttivi.filter((p) => p.scorta_minima != null && (p.giacenza || 0) < p.scorta_minima);
-  const prodottiSenzaCosto = prodottiAttivi.filter((p) => p.costo_acquisto == null).length;
-  const valoreGiacenzaCosto = round2(prodottiAttivi.reduce((s, p) => s + (p.costo_acquisto != null ? (p.giacenza || 0) * p.costo_acquisto : 0), 0));
-  const valoreGiacenzaVendita = round2(prodottiAttivi.reduce((s, p) => s + (p.prezzo_vendita != null ? (p.giacenza || 0) * p.prezzo_vendita : 0), 0));
-  const totQuantitaVenduta = prodottiAttivi.reduce((s, p) => s + p.quantitaVenduta, 0);
-  const totGiacenza = prodottiAttivi.reduce((s, p) => s + (p.giacenza || 0), 0);
-  const rotazione = totGiacenza > 0 ? round2(totQuantitaVenduta / totGiacenza) : null;
+  const piuVenduto = [...prodottiConStato].filter((p) => p.quantitaVenduta > 0).sort((a, b) => b.quantitaVenduta - a.quantitaVenduta)[0] || null;
+  const maggiorFatturato = [...prodottiConStato].filter((p) => p.fatturato > 0).sort((a, b) => b.fatturato - a.fatturato)[0] || null;
+  const migliorMargine = [...prodottiConStato].filter((p) => p.margine != null).sort((a, b) => b.margine - a.margine)[0] || null;
+
+  const valoreGiacenzaVendita = round2(prodottiConStato.reduce((s, p) => s + (p.prezzo_vendita != null ? (p.giacenza || 0) * p.prezzo_vendita : 0), 0));
+  const valoreGiacenzaCosto = round2(prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? (p.giacenza || 0) * p.costo_acquisto : 0), 0));
+  const totGiacenza = prodottiConStato.reduce((s, p) => s + (p.giacenza || 0), 0);
+  const totQuantitaVendutaAttivi = prodottiConStato.reduce((s, p) => s + p.quantitaVenduta, 0);
+  const rotazione = totGiacenza > 0 ? round2(totQuantitaVendutaAttivi / totGiacenza) : null;
+  const rotazioneBadge = rotazione == null ? null : rotazione < 0.5 ? { testo: "Bassa", colore: "#C0392B", sfondo: "#FBE4E1" } : rotazione < 2 ? { testo: "Media", colore: "#B8860B", sfondo: "#FBF1D9" } : { testo: "Alta", colore: "#2E7D32", sfondo: "#E3F3E5" };
+
+  // i totali di riepilogo vengono dalle vendite REALI del periodo (tutte
+  // le righe), non dalla somma dei soli prodotti ancora nel catalogo:
+  // così una vendita di un prodotto poi rinominato/rimosso non sparisce
+  const totQuantitaSelezionato = Object.values(venditePerNome).reduce((s, v) => s + v.quantita, 0);
+  const totFatturatoSelezionato = round2(Object.values(venditePerNome).reduce((s, v) => s + v.fatturato, 0));
+  const totQuantitaPrecedente = Object.values(venditePerNomePrecedente).reduce((s, v) => s + v.quantita, 0);
+  const totFatturatoPrecedente = round2(Object.values(venditePerNomePrecedente).reduce((s, v) => s + v.fatturato, 0));
+  const varQuantita = totQuantitaPrecedente > 0 ? round1Erp(((totQuantitaSelezionato - totQuantitaPrecedente) / totQuantitaPrecedente) * 100) : null;
+  const varFatturato = totFatturatoPrecedente > 0 ? round1Erp(((totFatturatoSelezionato - totFatturatoPrecedente) / totFatturatoPrecedente) * 100) : null;
+
+  function carrelloMedioPeriodo(inizio, fine) {
+    const ordini = (venditeShop || []).filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= inizio && d <= fine; });
+    if (!ordini.length) return null;
+    return round2(ordini.reduce((s, v) => s + (v.totale || 0), 0) / ordini.length);
+  }
+  const carrelloMedio = carrelloMedioPeriodo(range.inizio, range.fine);
+  const carrelloMedioPrecedente = carrelloMedioPeriodo(rangePrecedente.inizio, rangePrecedente.fine);
+  const varCarrello = carrelloMedio != null && carrelloMedioPrecedente > 0 ? round1Erp(((carrelloMedio - carrelloMedioPrecedente) / carrelloMedioPrecedente) * 100) : null;
+
+  // bucketizzazione (giornaliera/settimanale/mensile secondo la
+  // lunghezza del periodo, stessa funzione già usata da "Costi operativi")
+  const buckets = bucketizzaPeriodoCosti(range.inizio, range.fine);
+  const bucketsPrecedenti = bucketizzaPeriodoCosti(rangePrecedente.inizio, rangePrecedente.fine);
+
+  function sommaBucketVendite(inizio, fine) {
+    let quantita = 0, fatturato = 0;
+    (venditeShop || []).forEach((v) => {
+      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+      if (!d || d < inizio || d > fine) return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => { quantita += Number(p.quantita) || 0; fatturato += Number(p.totale_riga) || 0; });
+    });
+    return { quantita, fatturato: round2(fatturato) };
+  }
+
+  const puntiAndamento = buckets.map((b, i) => {
+    const sel = sommaBucketVendite(b.da, b.a);
+    const bPrec = bucketsPrecedenti[i];
+    const prec = bPrec ? sommaBucketVendite(bPrec.da, bPrec.a) : null;
+    return {
+      etichetta: b.etichetta,
+      selezionato: vistaAnalisi === "quantita" ? sel.quantita : sel.fatturato,
+      precedente: prec ? (vistaAnalisi === "quantita" ? prec.quantita : prec.fatturato) : null,
+    };
+  });
+
+  const puntiCarrelloMedio = buckets.map((b) => ({ etichetta: b.etichetta, valore: carrelloMedioPeriodo(b.da, b.a) }));
+
+  const puntiTrendCategoria = buckets.map((b) => ({ etichetta: b.etichetta, valori: {} }));
+  (venditeShop || []).forEach((v) => {
+    const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    if (!d) return;
+    const idx = buckets.findIndex((b) => d >= b.da && d <= b.a);
+    if (idx === -1) return;
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+      const chiave = (p.nome || "").trim().toLowerCase();
+      (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
+        const nomeCat = categoriaNomeById[catId];
+        if (!nomeCat) return;
+        puntiTrendCategoria[idx].valori[nomeCat] = (puntiTrendCategoria[idx].valori[nomeCat] || 0) + (Number(p.quantita) || 0);
+      });
+    });
+  });
+  const totalePerCategoria = {};
+  puntiTrendCategoria.forEach((pt) => Object.entries(pt.valori).forEach(([cat, v]) => { totalePerCategoria[cat] = (totalePerCategoria[cat] || 0) + v; }));
+  const serieTrendCategoria = categoriaTrendSel
+    ? [categoriaNomeById[categoriaTrendSel]].filter(Boolean)
+    : Object.entries(totalePerCategoria).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([nome]) => nome);
+
+  let prodottiVisti = prodottiConStato;
+  if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
+  if (ricercaProdotto.trim()) { const q = ricercaProdotto.trim().toLowerCase(); prodottiVisti = prodottiVisti.filter((p) => p.nome.toLowerCase().includes(q)); }
+  if (filtroRapido === "sottoscorta") prodottiVisti = prodottiVisti.filter((p) => p.sottoScorta);
+  if (filtroRapido === "esauriti") prodottiVisti = prodottiVisti.filter((p) => p.esaurito);
+  if (filtroRapido === "senzacosto") prodottiVisti = prodottiVisti.filter((p) => p.costo_acquisto == null);
+  if (filtroRapido === "fermi") prodottiVisti = prodottiVisti.filter((p) => p.giorniFermo > 90);
 
   const prodottiOrdinati = [...prodottiVisti].sort((a, b) => {
     const { campo, direzione } = ordinamento;
@@ -9365,115 +9614,194 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     if (va == null || va === "") return 1;
     if (vb == null || vb === "") return -1;
     if (typeof va === "string") return va.localeCompare(vb) * dir;
+    if (typeof va === "boolean") return (va === vb ? 0 : va ? -1 : 1) * dir;
     return (va - vb) * dir;
   });
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Magazzino</div>
-          <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
+          <div style={{ textAlign: "right" }}>
+            <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
+            {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
+          </div>
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: msgSync ? 6 : 20 }}>Catalogo prodotti sincronizzato da WooCommerce. Clicca sul nome di un prodotto per modificarlo.</div>
-        {msgSync && <div style={{ ...fontBody, fontSize: 12.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginBottom: 20 }}>{msgSync}</div>}
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Catalogo prodotti sincronizzato da WooCommerce. Clicca sul nome di un prodotto per modificarlo.</div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-            {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
-              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+            {[{ v: "annuale", l: "Annuale" }, { v: "semestrale", l: "Semestrale" }, { v: "trimestrale", l: "Trimestrale" }, { v: "mensile", l: "Mensile" }, { v: "settimanale", l: "Settimanale" }].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>
                 {p.l}
               </button>
             ))}
           </div>
-          <select style={{ ...inputStyle, width: "auto", minWidth: 200 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+          <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
+            {anniDisponibili.map((a) => <option key={a} value={a}>{a}</option>)}
+          </select>
+          <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
             <option value="">Tutte le categorie</option>
             {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
+          <input style={{ ...inputStyle, width: "auto", minWidth: 180 }} placeholder="Cerca prodotto…" value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} />
         </div>
-        {periodo === "personalizzato" && (
-          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-            <input type="date" style={{ ...inputStyle, width: "auto" }} value={personalizzatoDa} onChange={(e) => setPersonalizzatoDa(e.target.value)} />
-            <input type="date" style={{ ...inputStyle, width: "auto" }} value={personalizzatoA} onChange={(e) => setPersonalizzatoA(e.target.value)} />
-          </div>
-        )}
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 22 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 14 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto (quantità)</div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVendutoQuantita ? piuVendutoQuantita.nome : "—"}</div>
-            {piuVendutoQuantita && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{piuVendutoQuantita.quantitaVenduta} pezzi</div>}
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore potenziale</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaVendita)}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>a prezzo di vendita — {fmtEuroErp(valoreGiacenzaCosto)} a costo</div>
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto (fatturato)</div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVendutoFatturato ? piuVendutoFatturato.nome : "—"}</div>
-            {piuVendutoFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp(piuVendutoFatturato.fatturato)}</div>}
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Rotazione magazzino</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{rotazione != null ? rotazione : "N/D"}</div>
+              {rotazioneBadge && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: rotazioneBadge.colore, background: rotazioneBadge.sfondo, borderRadius: 8, padding: "2px 8px" }}>{rotazioneBadge.testo}</span>}
+            </div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0, cursor: "pointer" }} onClick={() => setFiltroRapido("tutti")}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Segnalazioni</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: totSegnalazioni > 0 ? "#C0392B" : NAVY }}>{totSegnalazioni}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>richiedono attenzione</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0, cursor: "pointer" }} onClick={() => setFiltroRapido("senzacosto")}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Dati da completare</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{senzaCosto.length}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>prodotti senza costo</div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto</div>
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVenduto ? piuVenduto.nome : "—"}</div>
+            {piuVenduto && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{piuVenduto.quantitaVenduta} pezzi</div>}
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Maggior fatturato</div>
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{maggiorFatturato ? maggiorFatturato.nome : "—"}</div>
+            {maggiorFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp(maggiorFatturato.fatturato)}</div>}
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Miglior margine</div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{migliorMargine ? migliorMargine.nome : "N/D"}</div>
-            {migliorMargine && <div style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700 }}>{fmtPctErp(migliorMargine.margine)}</div>}
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{migliorMargine ? migliorMargine.nome : "Non disponibile"}</div>
+            {migliorMargine ? <div style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700 }}>{fmtPctErp(migliorMargine.margine)}</div> : <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Completa i costi per calcolarlo</div>}
           </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.6fr) minmax(0,1fr)", gap: 14, marginBottom: 22, alignItems: "start" }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Rotazione di magazzino</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{rotazione != null ? rotazione : "N/D"}</div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>venduto / giacenza attuale</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Analisi vendite</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
+                  <option value="periodoprecedente">{range.inizio.slice(0, 4)} vs periodo prec.</option>
+                  <option value="annoprecedente">{range.inizio.slice(0, 4)} vs {Number(range.inizio.slice(0, 4)) - 1}</option>
+                </select>
+                <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
+                  {[{ v: "quantita", l: "Quantità" }, { v: "fatturato", l: "Fatturato" }].map((o) => (
+                    <button key={o.v} onClick={() => setVistaAnalisi(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaAnalisi === o.v ? NAVY : "transparent", color: vistaAnalisi === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14, marginBottom: 16 }}>
+              <div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Quantità venduta</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{totQuantitaSelezionato} pz</div>
+                  {varQuantita != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varQuantita >= 0 ? "#2E7D32" : "#C0392B" }}>{varQuantita >= 0 ? "+" : ""}{fmtPctErp(varQuantita)}</span>}
+                </div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>vs periodo precedente</div>
+              </div>
+              <div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fatturato</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totFatturatoSelezionato)}</div>
+                  {varFatturato != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varFatturato >= 0 ? "#2E7D32" : "#C0392B" }}>{varFatturato >= 0 ? "+" : ""}{fmtPctErp(varFatturato)}</span>}
+                </div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>vs periodo precedente</div>
+              </div>
+              <div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Carrello medio</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
+                  {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)}</span>}
+                </div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>vs periodo precedente</div>
+              </div>
+            </div>
+            <GraficoBarreVendite punti={puntiAndamento} />
+            <div style={{ display: "flex", gap: 14, marginTop: 8, ...fontBody, fontSize: 11.5, color: MUTED }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />Periodo selezionato</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: GOLD, display: "inline-block" }} />Periodo precedente</span>
+            </div>
           </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore giacenza (a costo)</div>
-            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaCosto)}</div>
-            {prodottiSenzaCosto > 0 && <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{prodottiSenzaCosto} prodotti senza costo, esclusi</div>}
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore giacenza (a prezzo vendita)</div>
-            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaVendita)}</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ ...cardStyle, marginBottom: 0 }}>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Carrello medio</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
+                {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)} vs periodo prec.</span>}
+              </div>
+              <GraficoLineaSemplice punti={puntiCarrelloMedio} />
+            </div>
+            <div style={{ ...cardStyle, marginBottom: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Trend per categoria</div>
+                <select style={{ ...inputStyle, width: "auto", fontSize: 12 }} value={categoriaTrendSel} onChange={(e) => setCategoriaTrendSel(e.target.value)}>
+                  <option value="">Tutte le categorie</option>
+                  {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </div>
+              <GraficoTrendCategorie punti={puntiTrendCategoria} serie={serieTrendCategoria} />
+            </div>
           </div>
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div onClick={() => setSegnalazioniAperte((v) => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
-              Segnalazioni magazzino
-              {(sottoScorta.length > 0 || invenduti.length > 0) && (
-                <span style={{ marginLeft: 8, ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>
-                  {sottoScorta.length + invenduti.length}
-                </span>
-              )}
+              Da gestire oggi
+              {totSegnalazioni > 0 && <span style={{ marginLeft: 8, ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>{totSegnalazioni}</span>}
             </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: segnalazioniAperte ? "rotate(180deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
           </div>
-          {segnalazioniAperte && (
-            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20 }}>
-              <div>
-                <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Sotto scorta minima ({sottoScorta.length})</div>
-                {sottoScorta.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto sotto la soglia impostata.</div>}
-                {sottoScorta.map((p) => (
-                  <div key={p.id} style={{ ...fontBody, fontSize: 12.5, color: NAVY, padding: "4px 0", display: "flex", justifyContent: "space-between", gap: 8 }}>
-                    <span>{p.nome}</span>
-                    <span style={{ color: "#C0392B", fontWeight: 700, whiteSpace: "nowrap" }}>{p.giacenza ?? 0} / min. {p.scorta_minima}</span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Invenduti nel periodo ({invenduti.length})</div>
-                {invenduti.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Tutti i prodotti attivi hanno venduto almeno un pezzo nel periodo.</div>}
-                {invenduti.slice(0, 15).map((p) => (
-                  <div key={p.id} style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "4px 0" }}>{p.nome}</div>
-                ))}
-                {invenduti.length > 15 && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>e altri {invenduti.length - 15}…</div>}
-              </div>
-            </div>
-          )}
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 10 }}>
+            <button onClick={() => setFiltroRapido("sottoscorta")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === "sottoscorta" ? BG : "#fff", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, textAlign: "left" }}>
+              <span>⚠️ Prodotti sotto scorta</span>
+              <span style={{ fontWeight: 700 }}>{sottoScorta.length} ›</span>
+            </button>
+            <button onClick={() => setFiltroRapido("fermi")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === "fermi" ? BG : "#fff", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, textAlign: "left" }}>
+              <span>⏱ Fermi da oltre 90 giorni</span>
+              <span style={{ fontWeight: 700 }}>{fermi.length} ›</span>
+            </button>
+            <button onClick={() => setFiltroRapido("senzacosto")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === "senzacosto" ? BG : "#fff", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, textAlign: "left" }}>
+              <span>📋 Senza costo di acquisto</span>
+              <span style={{ fontWeight: 700 }}>{senzaCosto.length} ›</span>
+            </button>
+          </div>
         </div>
 
-        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Dettaglio prodotti</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
+              <button key={f.v} onClick={() => setFiltroRapido(f.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: filtroRapido === f.v ? NAVY : "transparent", color: filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                {f.l}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1020 }}>
               <thead>
                 <tr>
                   {COLONNE_MAGAZZINO.map((col) => (
@@ -9489,24 +9817,26 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                 </tr>
               </thead>
               <tbody>
-                {prodottiOrdinati.map((p) => {
-                  const sottoSoglia = p.scorta_minima != null && (p.giacenza || 0) < p.scorta_minima;
-                  return (
-                    <tr key={p.id}>
-                      <td onClick={() => setProdottoModifica(p)} title="Clicca per modificare" style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: sottoSoglia ? "#C0392B" : NAVY, fontWeight: sottoSoglia ? 700 : 400, whiteSpace: "nowrap" }}>{p.giacenza ?? "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.scorta_minima ?? "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.prezzo_vendita != null ? fmtEuroErp(p.prezzo_vendita) : "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.costo_acquisto != null ? fmtEuroErp(p.costo_acquisto) : "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.fatturato)}</td>
-                    </tr>
-                  );
-                })}
+                {prodottiOrdinati.map((p) => (
+                  <tr key={p.id}>
+                    <td onClick={() => setProdottoModifica(p)} title="Clicca per modificare" style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: p.sottoScorta ? "#C0392B" : NAVY, fontWeight: p.sottoScorta ? 700 : 400, whiteSpace: "nowrap" }}>{p.giacenza ?? "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.scorta_minima ?? "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>
+                        {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.prezzo_vendita != null ? fmtEuroErp(p.prezzo_vendita) : "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.costo_acquisto != null ? fmtEuroErp(p.costo_acquisto) : "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.fatturato)}</td>
+                  </tr>
+                ))}
                 {prodottiOrdinati.length === 0 && (
-                  <tr><td colSpan={9} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto in questa categoria.</td></tr>
+                  <tr><td colSpan={10} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
                 )}
               </tbody>
             </table>
