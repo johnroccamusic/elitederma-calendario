@@ -8586,7 +8586,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa, onApriVenditeShop }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa, onApriVenditeShop, onApriMagazzino }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
@@ -8676,7 +8676,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
     { chiave: "team", etichetta: "Team", attiva: true, onClick: onApriImpostazioni },
     { chiave: "contabilita", etichetta: "Contabilità", attiva: true, onClick: onApriCostiOperativi },
     { chiave: "venditeshop", etichetta: "Vendite shop", attiva: true, onClick: onApriVenditeShop },
-    { chiave: "magazzino", etichetta: "Magazzino", attiva: false },
+    { chiave: "magazzino", etichetta: "Magazzino", attiva: true, onClick: onApriMagazzino },
     { chiave: "report", etichetta: "Report", attiva: false },
   ];
 
@@ -8973,7 +8973,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna criticità rilevata nel periodo selezionato.</div>
             )}
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 14, lineHeight: 1.5 }}>
-              Fatture in scadenza e scorte di magazzino non sono ancora tracciate nel gestionale: compariranno qui non appena queste sezioni saranno collegate a dati reali.
+              Le fatture in scadenza non sono ancora tracciate nel gestionale: comparirà qui non appena questa sezione sarà collegata a dati reali. Le scorte di magazzino sono già tracciate — vedi "Magazzino" nel menu qui sopra.
             </div>
           </div>
         </div>
@@ -9176,6 +9176,275 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// ---------- Magazzino (catalogo prodotti WooCommerce) ----------
+// piccolo modale per ricaricare le scorte di un prodotto: scrive prima
+// su WooCommerce (Edge Function woo-aggiorna-scorte) e solo se riesce
+// aggiorna il dato locale — vedi commenti nella function stessa
+function ModaleRicaricaScorte({ prodotto, onClose, onFatto }) {
+  const [quantita, setQuantita] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function conferma() {
+    const q = parseNum(quantita);
+    if (!q || q <= 0) { setMsg("Inserisci una quantità positiva."); return; }
+    setSalvando(true);
+    setMsg("");
+    const { data, error } = await supabase.functions.invoke("woo-aggiorna-scorte", {
+      body: { prodottoId: prodotto.id, quantitaDaAggiungere: q },
+    });
+    setSalvando(false);
+    if (error || data?.errore) {
+      setMsg("Errore: " + (data?.errore || error.message) + " — la giacenza locale NON è stata modificata.");
+      return;
+    }
+    onFatto();
+  }
+
+  return (
+    <Modal title={`Ricarica scorte — ${prodotto.nome}`} onClose={onClose}>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>
+        Giacenza attuale: <b style={{ color: NAVY }}>{prodotto.giacenza ?? "—"}</b>
+      </div>
+      <Field label="Quantità da aggiungere">
+        <input style={inputStyle} inputMode="numeric" value={quantita} onChange={(e) => setQuantita(e.target.value)} autoFocus />
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={conferma} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Aggiorno su WooCommerce…" : "Aggiorna scorte"}</Button>
+    </Modal>
+  );
+}
+
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("anno");
+  const [personalizzatoDa, setPersonalizzatoDa] = useState("");
+  const [personalizzatoA, setPersonalizzatoA] = useState("");
+  const [categoriaSel, setCategoriaSel] = useState("");
+  const [ordinePer, setOrdinePer] = useState("quantitaVenduta");
+  const [segnalazioniAperte, setSegnalazioniAperte] = useState(false);
+  const [prodottoRicarica, setProdottoRicarica] = useState(null);
+
+  const range = rangePeriodoAnalisiCosti(periodo, { da: personalizzatoDa, a: personalizzatoA });
+
+  const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
+  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const categorieIdPerProdottoId = {};
+  (prodottiCategorie || []).forEach((pc) => {
+    (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id);
+  });
+
+  // vendite del periodo selezionato, aggregate per nome prodotto
+  // (il collegamento vendita<->prodotto è per nome: vendite_shop non ha
+  // un riferimento diretto al prodotto, solo la descrizione della riga)
+  const venditePerNome = {};
+  (venditeShop || []).forEach((v) => {
+    const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    if (data && (data < range.inizio || data > range.fine)) return;
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+      const chiave = (p.nome || "").trim().toLowerCase();
+      if (!chiave) return;
+      if (!venditePerNome[chiave]) venditePerNome[chiave] = { quantita: 0, fatturato: 0 };
+      venditePerNome[chiave].quantita += Number(p.quantita) || 0;
+      venditePerNome[chiave].fatturato += Number(p.totale_riga) || 0;
+    });
+  });
+
+  const prodottiArricchiti = (prodottiShop || []).map((p) => {
+    const chiave = (p.nome || "").trim().toLowerCase();
+    const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
+    const margine = p.costo_acquisto != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - p.costo_acquisto) / p.prezzo_vendita) * 100) : null;
+    const categorieIds = categorieIdPerProdottoId[p.id] || [];
+    return {
+      ...p,
+      quantitaVenduta: venduto.quantita,
+      fatturato: round2(venduto.fatturato),
+      margine,
+      categorieIds,
+      nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
+    };
+  });
+
+  const prodottiAttivi = prodottiArricchiti.filter((p) => p.attivo !== false);
+  const prodottiVisti = categoriaSel ? prodottiAttivi.filter((p) => p.categorieIds.includes(categoriaSel)) : prodottiAttivi;
+
+  const piuVendutoQuantita = [...prodottiAttivi].filter((p) => p.quantitaVenduta > 0).sort((a, b) => b.quantitaVenduta - a.quantitaVenduta)[0] || null;
+  const piuVendutoFatturato = [...prodottiAttivi].filter((p) => p.fatturato > 0).sort((a, b) => b.fatturato - a.fatturato)[0] || null;
+  const migliorMargine = [...prodottiAttivi].filter((p) => p.margine != null).sort((a, b) => b.margine - a.margine)[0] || null;
+  const invenduti = prodottiAttivi.filter((p) => p.quantitaVenduta === 0);
+  const sottoScorta = prodottiAttivi.filter((p) => p.scorta_minima != null && (p.giacenza || 0) < p.scorta_minima);
+  const prodottiSenzaCosto = prodottiAttivi.filter((p) => p.costo_acquisto == null).length;
+  const valoreGiacenzaCosto = round2(prodottiAttivi.reduce((s, p) => s + (p.costo_acquisto != null ? (p.giacenza || 0) * p.costo_acquisto : 0), 0));
+  const valoreGiacenzaVendita = round2(prodottiAttivi.reduce((s, p) => s + (p.prezzo_vendita != null ? (p.giacenza || 0) * p.prezzo_vendita : 0), 0));
+  const totQuantitaVenduta = prodottiAttivi.reduce((s, p) => s + p.quantitaVenduta, 0);
+  const totGiacenza = prodottiAttivi.reduce((s, p) => s + (p.giacenza || 0), 0);
+  const rotazione = totGiacenza > 0 ? round2(totQuantitaVenduta / totGiacenza) : null;
+
+  const prodottiOrdinati = [...prodottiVisti].sort((a, b) => {
+    const va = a[ordinePer], vb = b[ordinePer];
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    return vb - va;
+  });
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Magazzino</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Catalogo prodotti sincronizzato da WooCommerce.</div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+            {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                {p.l}
+              </button>
+            ))}
+          </div>
+          <select style={{ ...inputStyle, width: "auto", minWidth: 200 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+            <option value="">Tutte le categorie</option>
+            {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+        </div>
+        {periodo === "personalizzato" && (
+          <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+            <input type="date" style={{ ...inputStyle, width: "auto" }} value={personalizzatoDa} onChange={(e) => setPersonalizzatoDa(e.target.value)} />
+            <input type="date" style={{ ...inputStyle, width: "auto" }} value={personalizzatoA} onChange={(e) => setPersonalizzatoA(e.target.value)} />
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 22 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto (quantità)</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVendutoQuantita ? piuVendutoQuantita.nome : "—"}</div>
+            {piuVendutoQuantita && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{piuVendutoQuantita.quantitaVenduta} pezzi</div>}
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto (fatturato)</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVendutoFatturato ? piuVendutoFatturato.nome : "—"}</div>
+            {piuVendutoFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp(piuVendutoFatturato.fatturato)}</div>}
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Miglior margine</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{migliorMargine ? migliorMargine.nome : "N/D"}</div>
+            {migliorMargine && <div style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700 }}>{fmtPctErp(migliorMargine.margine)}</div>}
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Rotazione di magazzino</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{rotazione != null ? rotazione : "N/D"}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>venduto / giacenza attuale</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore giacenza (a costo)</div>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaCosto)}</div>
+            {prodottiSenzaCosto > 0 && <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{prodottiSenzaCosto} prodotti senza costo, esclusi</div>}
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore giacenza (a prezzo vendita)</div>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaVendita)}</div>
+          </div>
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22 }}>
+          <div onClick={() => setSegnalazioniAperte((v) => !v)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+              Segnalazioni magazzino
+              {(sottoScorta.length > 0 || invenduti.length > 0) && (
+                <span style={{ marginLeft: 8, ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>
+                  {sottoScorta.length + invenduti.length}
+                </span>
+              )}
+            </div>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: segnalazioniAperte ? "rotate(180deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+          </div>
+          {segnalazioniAperte && (
+            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20 }}>
+              <div>
+                <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Sotto scorta minima ({sottoScorta.length})</div>
+                {sottoScorta.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto sotto la soglia impostata.</div>}
+                {sottoScorta.map((p) => (
+                  <div key={p.id} style={{ ...fontBody, fontSize: 12.5, color: NAVY, padding: "4px 0", display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span>{p.nome}</span>
+                    <span style={{ color: "#C0392B", fontWeight: 700, whiteSpace: "nowrap" }}>{p.giacenza ?? 0} / min. {p.scorta_minima}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Invenduti nel periodo ({invenduti.length})</div>
+                {invenduti.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Tutti i prodotti attivi hanno venduto almeno un pezzo nel periodo.</div>}
+                {invenduti.slice(0, 15).map((p) => (
+                  <div key={p.id} style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "4px 0" }}>{p.nome}</div>
+                ))}
+                {invenduti.length > 15 && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>e altri {invenduti.length - 15}…</div>}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
+          <select style={{ ...inputStyle, width: "auto" }} value={ordinePer} onChange={(e) => setOrdinePer(e.target.value)}>
+            <option value="quantitaVenduta">Ordina per: quantità venduta</option>
+            <option value="fatturato">Ordina per: fatturato</option>
+            <option value="giacenza">Ordina per: giacenza</option>
+            <option value="margine">Ordina per: margine %</option>
+          </select>
+        </div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 960 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Categoria", "Giacenza", "Scorta min.", "Prezzo vendita", "Costo acquisto", "Margine %", "Venduto", "Fatturato", ""].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prodottiOrdinati.map((p) => {
+                  const sottoSoglia = p.scorta_minima != null && (p.giacenza || 0) < p.scorta_minima;
+                  return (
+                    <tr key={p.id}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: sottoSoglia ? "#C0392B" : NAVY, fontWeight: sottoSoglia ? 700 : 400, whiteSpace: "nowrap" }}>{p.giacenza ?? "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.scorta_minima ?? "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.prezzo_vendita != null ? fmtEuroErp(p.prezzo_vendita) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.costo_acquisto != null ? fmtEuroErp(p.costo_acquisto) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.fatturato)}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                        <button onClick={() => setProdottoRicarica(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "transparent", border: "none", cursor: "pointer" }}>Ricarica →</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {prodottiOrdinati.length === 0 && (
+                  <tr><td colSpan={10} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto in questa categoria.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {prodottoRicarica && (
+        <ModaleRicaricaScorte
+          prodotto={prodottoRicarica}
+          onClose={() => setProdottoRicarica(null)}
+          onFatto={() => { setProdottoRicarica(null); ricarica(); }}
+        />
+      )}
     </div>
   );
 }
@@ -11014,6 +11283,10 @@ export default function App() {
   // ordini importati automaticamente dallo shop WooCommerce (webhook +
   // import storico una tantum, entrambi via Edge Function)
   const [venditeShop, setVenditeShop] = useState([]);
+  // catalogo prodotti WooCommerce (sincronizzato da woo-sync-catalogo)
+  const [categorieProdotti, setCategorieProdotti] = useState([]);
+  const [prodottiShop, setProdottiShop] = useState([]);
+  const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -11046,7 +11319,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -11070,6 +11343,9 @@ export default function App() {
       supabase.from("costi_soglie_allerta").select("*"),
       supabase.from("entrate_manuali").select("*").order("data", { ascending: false }),
       supabase.from("vendite_shop").select("*").order("data_ordine", { ascending: false }),
+      supabase.from("categorie_prodotti").select("*").order("nome"),
+      supabase.from("prodotti_shop").select("*").order("nome"),
+      supabase.from("prodotti_categorie").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -11094,6 +11370,9 @@ export default function App() {
     setCostiSoglieAllerta(csa.data || []);
     setEntrateManuali(em.data || []);
     setVenditeShop(vs.data || []);
+    setCategorieProdotti(cp.data || []);
+    setProdottiShop(ps.data || []);
+    setProdottiCategorie(pc.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -11251,6 +11530,7 @@ export default function App() {
   function apriErp() { apriViewProtetta("erp"); }
   function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
   function apriVenditeShop() { apriViewProtetta("venditeshop"); }
+  function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -11474,11 +11754,19 @@ export default function App() {
           onApriCostiOperativi={apriCostiOperativi}
           onApriNuovaSpesa={apriNuovaSpesa}
           onApriVenditeShop={apriVenditeShop}
+          onApriMagazzino={apriMagazzino}
         />
       )}
 
       {view === "venditeshop" && (
         <PaginaVenditeShop venditeShop={venditeShop} onBack={() => setView("erp")} />
+      )}
+
+      {view === "magazzino" && (
+        <PaginaMagazzino
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
+          venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("erp")}
+        />
       )}
 
       {view === "costioperativi" && (
