@@ -8357,151 +8357,6 @@ function GaugeMargineErp({ percentuale }) {
   );
 }
 
-// form "+ Nuova operazione" → "Uscita": un'unica tendina con tutte le voci
-// di costo manuali (raggruppate per categoria con <optgroup>), poi
-// data/città/descrizione, imponibile/IVA (selezionabile)/totale, e il
-// metodo di pagamento con lo stesso meccanismo IVA della scheda iscritti
-// (scegliendo "Cash no iva" l'aliquota si azzera e si blocca)
-function ModaleNuovaUscita({ location, costiCategorie, costiSottocategorie, onClose, onSalvato }) {
-  const [sottovoceScelta, setSottovoceScelta] = useState("");
-  const [data, setData] = useState(dataOggiStr());
-  const [citta, setCitta] = useState("");
-  const [descrizione, setDescrizione] = useState("");
-  const [imponibile, setImponibile] = useState("");
-  const [totale, setTotale] = useState("");
-  const [iva, setIva] = useState(22);
-  const [esenteIva, setEsenteIva] = useState(false);
-  const [metodo, setMetodo] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  const ivaBloccata = esenteIva || metodo === "Cash no iva";
-  const ivaEffettiva = ivaBloccata ? 0 : iva;
-
-  function totaleDaImponibile(v, ivaPct) {
-    return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100)));
-  }
-  function imponibileDaTotale(v, ivaPct) {
-    return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100)));
-  }
-
-  function onImponibileChange(v) {
-    setImponibile(v);
-    setTotale(ivaBloccata ? v : totaleDaImponibile(v, ivaEffettiva));
-  }
-  function onTotaleChange(v) {
-    setTotale(v);
-    setImponibile(ivaBloccata ? v : imponibileDaTotale(v, ivaEffettiva));
-  }
-  function onIvaChange(v) {
-    setIva(v);
-    if (!ivaBloccata) setTotale(totaleDaImponibile(imponibile, v));
-  }
-  function ricalcolaBlocco(nuovaBloccata) {
-    setTotale(nuovaBloccata ? imponibile : totaleDaImponibile(imponibile, iva));
-  }
-  function onEsenteChange(checked) {
-    setEsenteIva(checked);
-    ricalcolaBlocco(checked || metodo === "Cash no iva");
-  }
-  function onMetodoChange(opz) {
-    setMetodo(opz);
-    ricalcolaBlocco(esenteIva || opz === "Cash no iva");
-  }
-
-  async function salva() {
-    if (!sottovoceScelta) { setMsg("Scegli una voce di costo."); return; }
-    const imp = parseNum(imponibile);
-    if (!imp) { setMsg("Inserisci un imponibile."); return; }
-    const [categoria, sottovoce] = sottovoceScelta.split("::");
-    setSalvando(true);
-    const { error } = await supabase.from("spese").insert({
-      categoria_id: categoria, sottocategoria_id: sottovoce,
-      descrizione: descrizione.trim() || null,
-      tipo_ambito: citta ? "sede" : "generale",
-      sede_id: citta || null,
-      imponibile: imp,
-      iva_percentuale: ivaEffettiva,
-      totale: totale === "" ? imp : round2(parseNum(totale)),
-      data_documento: data, data_pagamento: data,
-      metodo_pagamento: metodo || null,
-      origine: "manuale", stato: "pagata",
-    });
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    onSalvato();
-  }
-
-  return (
-    <Modal title="Nuova uscita" onClose={onClose}>
-      <Field label="Voce di costo">
-        <select style={inputStyle} value={sottovoceScelta} onChange={(e) => setSottovoceScelta(e.target.value)}>
-          <option value="">— scegli —</option>
-          {[...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((cat) => (
-            <optgroup key={cat.id} label={cat.nome}>
-              {sottocategorieDiCategoria(costiSottocategorie, cat.id).filter((v) => !v.automatico).map((v) => (
-                <option key={v.id} value={`${cat.id}::${v.id}`}>{v.nome}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-      </Field>
-      <div style={{ display: "flex", gap: 14 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Città (opzionale)">
-            <select style={inputStyle} value={citta} onChange={(e) => setCitta(e.target.value)}>
-              <option value="">—</option>
-              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-            </select>
-          </Field>
-        </div>
-      </div>
-      <Field label="Descrizione/fornitore (opzionale)">
-        <input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
-      </Field>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 6 }}>
-        <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} />
-        Importo esente iva
-      </label>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="IVA">
-            <select
-              style={{ ...inputStyle, background: ivaBloccata ? "#EFEFEF" : "#fff", color: ivaBloccata ? MUTED : NAVY }}
-              disabled={ivaBloccata}
-              value={ivaEffettiva}
-              onChange={(e) => onIvaChange(Number(e.target.value))}
-            >
-              {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field>
-        </div>
-      </div>
-      <Field label="Metodo di pagamento">
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-          {["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"].map((opz) => (
-            <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-              <input type="radio" name="metodo-uscita" checked={metodo === opz} onChange={() => onMetodoChange(opz)} />
-              {opz}
-            </label>
-          ))}
-        </div>
-      </Field>
-      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : "Salva uscita"}</Button>
-    </Modal>
-  );
-}
-
 // pannello aperto cliccando la card "Ricavi e costi": confronto anno
 // scolastico su anno scolastico (settembre -> agosto), UNA RIGA PER
 // ANNO, con i 12 mesi in orizzontale dentro la riga (stesso stile a
@@ -8590,12 +8445,11 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
   const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
-  const [modaleUscitaAperta, setModaleUscitaAperta] = useState(false);
   const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -8760,7 +8614,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
             {menuNuovaOperazione && (
               <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)", overflow: "hidden", minWidth: 160 }}>
                 <button
-                  onClick={() => { setMenuNuovaOperazione(false); setModaleUscitaAperta(true); }}
+                  onClick={() => { setMenuNuovaOperazione(false); onApriNuovaSpesa(); }}
                   style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", background: "transparent", color: NAVY, cursor: "pointer" }}
                 >
                   Uscita
@@ -8776,10 +8630,6 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
             )}
           </div>
         </div>
-
-        {modaleUscitaAperta && (
-          <ModaleNuovaUscita location={location} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} onClose={() => setModaleUscitaAperta(false)} onSalvato={() => { setModaleUscitaAperta(false); ricarica(); }} />
-        )}
 
         {confrontoAnnualeAperto && (
           <PannelloConfrontoAnnuale
@@ -11269,6 +11119,7 @@ export default function App() {
           onApriImpostazioni={apriImpostazioni}
           onApriCercaIscritto={() => setView("cercaiscritto")}
           onApriCostiOperativi={apriCostiOperativi}
+          onApriNuovaSpesa={apriNuovaSpesa}
         />
       )}
 
