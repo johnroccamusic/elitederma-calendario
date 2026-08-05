@@ -8586,7 +8586,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa, onApriVenditeShop }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
@@ -8675,6 +8675,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
     { chiave: "sedi", etichetta: "Sedi", attiva: true, onClick: onApriImpostazioni },
     { chiave: "team", etichetta: "Team", attiva: true, onClick: onApriImpostazioni },
     { chiave: "contabilita", etichetta: "Contabilità", attiva: true, onClick: onApriCostiOperativi },
+    { chiave: "venditeshop", etichetta: "Vendite shop", attiva: true, onClick: onApriVenditeShop },
     { chiave: "magazzino", etichetta: "Magazzino", attiva: false },
     { chiave: "report", etichetta: "Report", attiva: false },
   ];
@@ -8974,6 +8975,130 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 14, lineHeight: 1.5 }}>
               Fatture in scadenza e scorte di magazzino non sono ancora tracciate nel gestionale: compariranno qui non appena queste sezioni saranno collegate a dati reali.
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Vendite shop (WooCommerce) ----------
+// stati ordine standard di WooCommerce, con etichetta/colore coerenti
+// col resto del gestionale (verde = incassato, giallo = in corso, rosso
+// = annullato/rimborsato)
+const STATI_VENDITA_SHOP = {
+  completed: { etichetta: "Completato", colore: "#2E7D32", sfondo: "#E3F3E5" },
+  processing: { etichetta: "In lavorazione", colore: "#B8860B", sfondo: "#FBF1D9" },
+  "on-hold": { etichetta: "In sospeso", colore: "#B8860B", sfondo: "#FBF1D9" },
+  pending: { etichetta: "In attesa di pagamento", colore: "#8B8FA3", sfondo: "#EFEFEF" },
+  cancelled: { etichetta: "Annullato", colore: "#C0392B", sfondo: "#FBE4E1" },
+  refunded: { etichetta: "Rimborsato", colore: "#C0392B", sfondo: "#FBE4E1" },
+  failed: { etichetta: "Fallito", colore: "#C0392B", sfondo: "#FBE4E1" },
+};
+function etichettaStatoVenditaShop(stato) {
+  return STATI_VENDITA_SHOP[stato]?.etichetta || stato || "—";
+}
+
+function PaginaVenditeShop({ venditeShop, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("anno");
+  const [statoSel, setStatoSel] = useState("");
+
+  const range = rangePeriodoErp(periodo);
+  const statiPresenti = [...new Set((venditeShop || []).map((v) => v.stato).filter(Boolean))].sort();
+
+  const venditeFiltrate = (venditeShop || []).filter((v) => {
+    const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    if (data && (data < range.inizio || data > range.fine)) return false;
+    if (statoSel && v.stato !== statoSel) return false;
+    return true;
+  });
+
+  const kpi = {
+    nOrdini: venditeFiltrate.length,
+    totale: round2(venditeFiltrate.reduce((s, v) => s + (v.totale || 0), 0)),
+    imponibile: round2(venditeFiltrate.reduce((s, v) => s + (v.totale_imponibile ?? v.totale ?? 0), 0)),
+    iva: round2(venditeFiltrate.reduce((s, v) => s + (v.totale_iva || 0), 0)),
+  };
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Vendite shop</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Ordini importati automaticamente dallo shop WooCommerce.</div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                {p.l}
+              </button>
+            ))}
+          </div>
+          <select style={{ ...inputStyle, width: "auto", minWidth: 160 }} value={statoSel} onChange={(e) => setStatoSel(e.target.value)}>
+            <option value="">Tutti gli stati</option>
+            {statiPresenti.map((s) => <option key={s} value={s}>{etichettaStatoVenditaShop(s)}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ordini</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.nOrdini}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Totale incassato</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.totale)}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Imponibile</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.imponibile)}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>IVA</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.iva)}</div>
+          </div>
+        </div>
+
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+              <thead>
+                <tr>
+                  {["Ordine", "Data", "Cliente", "Stato", "Imponibile", "IVA", "Totale"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {venditeFiltrate
+                  .slice()
+                  .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""))
+                  .map((v) => {
+                    const st = STATI_VENDITA_SHOP[v.stato];
+                    return (
+                      <tr key={v.id}>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>#{v.numero_ordine || v.woo_order_id}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
+                        </td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp(v.totale_imponibile) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp(v.totale_iva) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                      </tr>
+                    );
+                  })}
+                {venditeFiltrate.length === 0 && (
+                  <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
@@ -10812,6 +10937,9 @@ export default function App() {
   // incassi occasionali non legati a un'iscrizione (es. vendita di un
   // prodotto in accademia), inseriti da "+ Nuova operazione" > "Entrata"
   const [entrateManuali, setEntrateManuali] = useState([]);
+  // ordini importati automaticamente dallo shop WooCommerce (webhook +
+  // import storico una tantum, entrambi via Edge Function)
+  const [venditeShop, setVenditeShop] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -10844,7 +10972,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -10867,6 +10995,7 @@ export default function App() {
       supabase.from("costi_budget").select("*"),
       supabase.from("costi_soglie_allerta").select("*"),
       supabase.from("entrate_manuali").select("*").order("data", { ascending: false }),
+      supabase.from("vendite_shop").select("*").order("data_ordine", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -10890,6 +11019,7 @@ export default function App() {
     setCostiBudget(cb.data || []);
     setCostiSoglieAllerta(csa.data || []);
     setEntrateManuali(em.data || []);
+    setVenditeShop(vs.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -11046,6 +11176,7 @@ export default function App() {
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   function apriErp() { apriViewProtetta("erp"); }
   function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
+  function apriVenditeShop() { apriViewProtetta("venditeshop"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -11268,7 +11399,12 @@ export default function App() {
           onApriCercaIscritto={() => setView("cercaiscritto")}
           onApriCostiOperativi={apriCostiOperativi}
           onApriNuovaSpesa={apriNuovaSpesa}
+          onApriVenditeShop={apriVenditeShop}
         />
+      )}
+
+      {view === "venditeshop" && (
+        <PaginaVenditeShop venditeShop={venditeShop} onBack={() => setView("erp")} />
       )}
 
       {view === "costioperativi" && (
