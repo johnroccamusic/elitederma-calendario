@@ -9284,16 +9284,16 @@ function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).p
 // - semestrale/trimestrale: intero ANNO SCOLASTICO Set→Ago (stessa
 //   convenzione già usata per il confronto "Ricavi e costi" nell'ERP),
 //   così si vedono tutti i trimestri/semestri affiancati, non uno solo
-// - mensile/settimanale: "zoom" sul mese/settimana IN CORSO (non
-//   sull'anno scolastico), spezzato in settimane/giorni
-function rangeMagazzino(periodo, anno) {
+// - mensile: mese scelto (anno+mese) dell'anno solare, spezzato in giorni
+// - settimanale: "zoom" sulla settimana IN CORSO, spezzato in giorni
+function rangeMagazzino(periodo, anno, meseSel) {
   const oggi = new Date();
   if (periodo === "annuale") return { inizio: `${anno}-01-01`, fine: `${anno}-12-31` };
   if (periodo === "semestrale" || periodo === "trimestrale") {
     return { inizio: `${anno}-09-01`, fine: fmtDataIso(new Date(anno + 1, 7, 31)) };
   }
   if (periodo === "mensile") {
-    return { inizio: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0)) };
+    return { inizio: fmtDataIso(new Date(anno, meseSel, 1)), fine: fmtDataIso(new Date(anno, meseSel + 1, 0)) };
   }
   // settimanale: lunedì-domenica della settimana corrente
   const giornoSett = oggi.getDay();
@@ -9302,13 +9302,20 @@ function rangeMagazzino(periodo, anno) {
   const domenica = new Date(lunedi.getFullYear(), lunedi.getMonth(), lunedi.getDate() + 6);
   return { inizio: fmtDataIso(lunedi), fine: fmtDataIso(domenica) };
 }
-// range "precedente" per il confronto, con la stessa logica del
-// periodo (mese solare precedente per "mensile", anno scolastico
-// precedente per trimestrale/semestrale, ecc.) — non un generico
-// scorrimento di N giorni, che per i mesi darebbe confini sbagliati
+// range "precedente" per il confronto. Per "mensile" l'utente sceglie
+// (stesso selettore "periodo prec./anno prec." già usato per Annuale):
+// "periodo precedente" → il mese solare subito prima, "anno precedente"
+// → GLI STESSI GIORNI dello stesso mese un anno prima (utile per capire
+// se un'offerta ricorrente ha funzionato come l'anno scorso). Per
+// trimestrale/semestrale/settimanale non c'è scelta perché le due
+// opzioni coinciderebbero (l'intero range dura già ~1 anno/settimana):
+// resta l'anno scolastico precedente / la settimana precedente
 function rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo) {
   if (periodo === "mensile") {
     const [a, m] = range.inizio.split("-").map(Number);
+    if (confrontoTipo === "annoprecedente") {
+      return { inizio: `${a - 1}-${String(m).padStart(2, "0")}-01`, fine: fmtDataIso(new Date(a - 1, m, 0)) };
+    }
     const meseIni = new Date(a, m - 2, 1);
     return { inizio: fmtDataIso(meseIni), fine: fmtDataIso(new Date(meseIni.getFullYear(), meseIni.getMonth() + 1, 0)) };
   }
@@ -9327,22 +9334,6 @@ function bucketsGiorniSettimana(range) {
     const d = new Date(aI, mI - 1, gI + i);
     const iso = fmtDataIso(d);
     buckets.push({ etichetta: GIORNI_SETTIMANA_ABBR[d.getDay()], da: iso, a: iso });
-  }
-  return buckets;
-}
-// bucket settimanali (usato per "Mensile": le settimane DI QUESTO MESE)
-function bucketizzaSettimane(inizio, fine) {
-  const [aI, mI, gI] = inizio.split("-").map(Number);
-  const [aF, mF, gF] = fine.split("-").map(Number);
-  const dIn = new Date(aI, mI - 1, gI), dFin = new Date(aF, mF - 1, gF);
-  const giorni = Math.max(1, Math.round((dFin - dIn) / 86400000) + 1);
-  const buckets = [];
-  let n = 1;
-  for (let i = 0; i < giorni; i += 7) {
-    const dA = new Date(aI, mI - 1, gI + i);
-    const dB = new Date(aI, mI - 1, gI + Math.min(i + 6, giorni - 1));
-    buckets.push({ etichetta: `S${n}`, da: fmtDataIso(dA), a: fmtDataIso(dB) });
-    n++;
   }
   return buckets;
 }
@@ -9462,6 +9453,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
   const [periodo, setPeriodo] = useState("annuale");
   const [anno, setAnno] = useState(oggi.getFullYear());
+  const [meseSel, setMeseSel] = useState(oggi.getMonth());
   const [confrontoTipo, setConfrontoTipo] = useState("periodoprecedente");
   const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
   const [categoriaSel, setCategoriaSel] = useState("");
@@ -9485,6 +9477,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     setPeriodo(nuovoPeriodo);
     if (nuovoPeriodo === "annuale") setAnno(oggi.getFullYear());
     else if (nuovoPeriodo === "trimestrale" || nuovoPeriodo === "semestrale") setAnno(annoScolasticoDi(oggiStr));
+    else if (nuovoPeriodo === "mensile") { setAnno(oggi.getFullYear()); setMeseSel(oggi.getMonth()); }
   }
 
   async function sincronizzaCatalogo() {
@@ -9497,16 +9490,23 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     ricarica();
   }
 
-  const range = rangeMagazzino(periodo, anno);
+  const range = rangeMagazzino(periodo, anno, meseSel);
   const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo);
   const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
-  // stessa etichetta di confronto già mostrata su "Analisi vendite": chiarisce
-  // rispetto a cosa sono calcolate le % di "Trend per categoria/prodotto"
-  const etichettaConfronto = periodo === "annuale"
-    ? (confrontoTipo === "annoprecedente" ? `vs ${Number(range.inizio.slice(0, 4)) - 1}` : "vs periodo precedente")
-    : periodo === "settimanale" ? "vs settimana precedente"
-    : periodo === "mensile" ? "vs mese precedente"
-    : "vs anno scolastico precedente";
+  // etichette CONCRETE (non generiche "periodo precedente") di quale
+  // periodo esatto sta nella barra/riga "selezionato" e quale in quella
+  // "precedente": tolgono l'ambiguità su "rispetto a cosa" è calcolata
+  // ogni % — usate sia nel sottotitolo che nella legenda dei grafici
+  const etichettaPeriodoSelezionato = periodo === "annuale" ? `${anno}`
+    : periodo === "mensile" ? `${MESI[meseSel]} ${anno}`
+    : periodo === "settimanale" ? "questa settimana"
+    : `${anno}/${String((anno + 1) % 100).padStart(2, "0")}`;
+  const [annoMesePrecedente, numMesePrecedente] = rangePrecedente.inizio.split("-").map(Number);
+  const etichettaPeriodoPrecedente = periodo === "annuale" ? `${anno - 1}`
+    : periodo === "mensile" ? `${MESI[numMesePrecedente - 1]} ${annoMesePrecedente}`
+    : periodo === "settimanale" ? "settimana precedente"
+    : `${anno - 1}/${String(anno % 100).padStart(2, "0")}`;
+  const etichettaConfronto = `vs ${etichettaPeriodoPrecedente}`;
 
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
@@ -9606,13 +9606,14 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const varCarrello = carrelloMedio != null && carrelloMedioPrecedente > 0 ? round1Erp(((carrelloMedio - carrelloMedioPrecedente) / carrelloMedioPrecedente) * 100) : null;
 
   // bucketizzazione: dipende dal periodo scelto, non solo dalla durata
-  // (vedi rangeMagazzino) — "Annuale" riusa la bucketizzazione generica
-  // già usata da "Costi operativi" (mensile, dato che un anno solare
-  // supera sempre i 120gg); gli altri periodi hanno bucket dedicati
+  // (vedi rangeMagazzino) — "Annuale"/"Mensile" riusano la
+  // bucketizzazione generica già usata da "Costi operativi" (per
+  // Annuale, un anno solare supera sempre i 120gg → bucket mensili; per
+  // Mensile, un mese sta sempre sotto i 45gg → bucket giornalieri, i
+  // giorni 1..28/30/31 richiesti); gli altri periodi hanno bucket dedicati
   function bucketsPerPeriodo(r) {
     if (periodo === "trimestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 4);
     if (periodo === "semestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 2);
-    if (periodo === "mensile") return bucketizzaSettimane(r.inizio, r.fine);
     if (periodo === "settimanale") return bucketsGiorniSettimana(r);
     return bucketizzaPeriodoCosti(r.inizio, r.fine);
   }
@@ -9646,6 +9647,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   // singolo valore (periodo selezionato) con la variazione % vs il
   // periodo precedente, una barra per categoria o per prodotto (top 10)
   function valoreVendite(v) { return vistaAnalisi === "quantita" ? v.quantita : v.fatturato; }
+  // classifica dal calo maggiore al calo minore (e poi le crescite): chi
+  // non ha un periodo precedente da confrontare (N/D) va in fondo, non è
+  // né un calo né una crescita misurabile
+  function ordinaPerCaloTrend(a, b) {
+    if (a.trend == null && b.trend == null) return 0;
+    if (a.trend == null) return 1;
+    if (b.trend == null) return -1;
+    return a.trend - b.trend;
+  }
   const totaliTrendCategoria = {};
   Object.entries(venditePerNome).forEach(([chiave, v]) => {
     (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
@@ -9664,7 +9674,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       trend: t.precedente > 0 ? round1Erp(((t.corrente - t.precedente) / t.precedente) * 100) : null,
     }))
     .filter((v) => v.nome && v.valore > 0)
-    .sort((a, b) => b.valore - a.valore)
+    .sort(ordinaPerCaloTrend)
     .slice(0, 10);
   const trendProdotti = (prodottiShop || [])
     .filter((p) => p.attivo !== false)
@@ -9676,7 +9686,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       return { nome: p.nome, valore: round2(corrente), trend: precedente > 0 ? round1Erp(((corrente - precedente) / precedente) * 100) : null };
     })
     .filter((v) => v.valore > 0)
-    .sort((a, b) => b.valore - a.valore)
+    .sort(ordinaPerCaloTrend)
     .slice(0, 10);
 
   let prodottiVisti = prodottiConStato;
@@ -9723,9 +9733,14 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               </button>
             ))}
           </div>
-          {(periodo === "annuale" || periodo === "trimestrale" || periodo === "semestrale") && (
+          {periodo === "mensile" && (
+            <select style={{ ...inputStyle, width: "auto" }} value={meseSel} onChange={(e) => setMeseSel(Number(e.target.value))}>
+              {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
+            </select>
+          )}
+          {(periodo === "annuale" || periodo === "trimestrale" || periodo === "semestrale" || periodo === "mensile") && (
             <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
-              {anniDisponibili.map((a) => <option key={a} value={a}>{periodo === "annuale" ? a : `${a}/${String((a + 1) % 100).padStart(2, "0")}`}</option>)}
+              {anniDisponibili.map((a) => <option key={a} value={a}>{periodo === "annuale" || periodo === "mensile" ? a : `${a}/${String((a + 1) % 100).padStart(2, "0")}`}</option>)}
             </select>
           )}
           <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
@@ -9783,10 +9798,10 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Analisi vendite</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {periodo === "annuale" ? (
+                {periodo === "annuale" || periodo === "mensile" ? (
                   <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
-                    <option value="periodoprecedente">{range.inizio.slice(0, 4)} vs periodo prec.</option>
-                    <option value="annoprecedente">{range.inizio.slice(0, 4)} vs {Number(range.inizio.slice(0, 4)) - 1}</option>
+                    <option value="periodoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? "periodo prec." : MESI[(meseSel + 11) % 12]}</option>
+                    <option value="annoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? anno - 1 : `${MESI[meseSel]} ${anno - 1}`}</option>
                   </select>
                 ) : (
                   <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{etichettaConfronto}</div>
@@ -9805,7 +9820,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                   <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{totQuantitaSelezionato} pz</div>
                   {varQuantita != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varQuantita >= 0 ? "#2E7D32" : "#C0392B" }}>{varQuantita >= 0 ? "+" : ""}{fmtPctErp(varQuantita)}</span>}
                 </div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>vs periodo precedente</div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
               </div>
               <div>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fatturato</div>
@@ -9813,7 +9828,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                   <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totFatturatoSelezionato)}</div>
                   {varFatturato != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varFatturato >= 0 ? "#2E7D32" : "#C0392B" }}>{varFatturato >= 0 ? "+" : ""}{fmtPctErp(varFatturato)}</span>}
                 </div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>vs periodo precedente</div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
               </div>
               <div>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Carrello medio</div>
@@ -9821,13 +9836,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                   <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
                   {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)}</span>}
                 </div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>vs periodo precedente</div>
+                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
               </div>
             </div>
             <GraficoBarreVendite punti={puntiAndamento} />
             <div style={{ display: "flex", gap: 14, marginTop: 8, ...fontBody, fontSize: 11.5, color: MUTED }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />Periodo selezionato</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: GOLD, display: "inline-block" }} />Periodo precedente</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />{etichettaPeriodoSelezionato}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: GOLD, display: "inline-block" }} />{etichettaPeriodoPrecedente}</span>
             </div>
           </div>
 
@@ -9836,7 +9851,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Carrello medio</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
                 <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
-                {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)} vs periodo prec.</span>}
+                {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)} {etichettaConfronto}</span>}
               </div>
               <GraficoLineaSemplice punti={puntiCarrelloMedio} />
             </div>
@@ -12113,6 +12128,7 @@ export default function App() {
           <div style={{ display: "flex", background: "#E3DCC9", borderRadius: 30, padding: 4, gap: 4, marginBottom: 20 }}>
             {[
               { etichetta: "Gestione date", onClick: apriGestioneDate },
+              { etichetta: "Magazzino", onClick: apriMagazzino },
               { etichetta: "ERP", onClick: apriErp },
               { etichetta: "Statistiche", onClick: apriStatistiche },
               { etichetta: "Setting", onClick: apriImpostazioni },
