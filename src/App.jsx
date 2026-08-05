@@ -2774,6 +2774,23 @@ function sottocategorieDiCategoria(costiSottocategorie, categoriaId) {
 // Riepilogo amministrativo di una singola data di corso
 const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "oneri_contributivi", "commerciale", "commissioni_pagamento", "pubblicita_acquisizione", "agenzie_consulenti", "affitto_aule_esterne", "struttura_centrale", "fiere_eventi", "prodotti_vendita", "versamenti_adempimenti"];
 
+// i 10 costi fissi del pannello "Riepilogo amministrativo": ognuno è
+// una casella che apre "Nuova spesa" già precompilata su categoria/
+// sotto-categoria/classe. Il valore mostrato in ciascuna casella è la
+// somma delle spese vere già registrate per quella classe+sotto-categoria
+const CAMPI_RIEPILOGO_AMMINISTRATIVO = [
+  { chiave: "costo_accademia", etichetta: "Costo accademia", categoriaId: "affitto_aule_esterne", sottocategoriaId: "affitto_aule_esterne__quota_accademia" },
+  { chiave: "costo_master", etichetta: "Costo master", categoriaId: "docenti_corsi", sottocategoriaId: "docenti_corsi__compensi_master" },
+  { chiave: "costo_assistenti", etichetta: "Costo assistenti", categoriaId: "docenti_corsi", sottocategoriaId: "docenti_corsi__compensi_assistenti" },
+  { chiave: "costo_pranzi", etichetta: "Costo pranzi", categoriaId: "vitto_corsi", sottocategoriaId: "vitto_corsi__costo_pranzi" },
+  { chiave: "rimborso_cene", etichetta: "Rimborso cene", categoriaId: "vitto_corsi", sottocategoriaId: "vitto_corsi__rimborso_cene" },
+  { chiave: "rimborso_colazioni_spesa", etichetta: "Rimborso colazioni e spesa", categoriaId: "vitto_corsi", sottocategoriaId: "vitto_corsi__rimborso_colazioni" },
+  { chiave: "costo_hotel", etichetta: "Costo appartamento/hotel", categoriaId: "alloggi_corsi", sottocategoriaId: "alloggi_corsi__hotel" },
+  { chiave: "costo_coordinatore", etichetta: "Costo coordinatore", categoriaId: "personale_accademia", sottocategoriaId: "personale_accademia__costo_coordinatore" },
+  { chiave: "rimborso_taxi", etichetta: "Rimborso taxi", categoriaId: "viaggi_corsi", sottocategoriaId: "viaggi_corsi__taxi_trasporti_locali" },
+  { chiave: "rimborso_parcheggi", etichetta: "Rimborso parcheggi", categoriaId: "viaggi_corsi", sottocategoriaId: "viaggi_corsi__rimborso_parcheggi" },
+];
+
 const ALIQUOTE_IVA_COSTI = [22, 10, 4, 0];
 const STATI_SPESA = [
   { chiave: "preventivata", etichetta: "Preventivata" },
@@ -5943,7 +5960,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -6012,17 +6029,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // pannello "Riepilogo amministrativo" (costi della classe): parte
   // chiuso perché, se sempre aperto, intralcia la normale gestione
   // contabilità (spuntare incassato, aprire schede...)
-  const [costiAperto, setCostiAperto] = useState(false);
-  const [costoAccademia, setCostoAccademia] = useState(corsoData.costo_accademia != null ? String(corsoData.costo_accademia) : "");
-  const [costoMaster, setCostoMaster] = useState(corsoData.costo_master != null ? String(corsoData.costo_master) : "");
-  const [costoAssistenti, setCostoAssistenti] = useState(corsoData.costo_assistenti != null ? String(corsoData.costo_assistenti) : "");
-  const [costoPranzi, setCostoPranzi] = useState(corsoData.costo_pranzi != null ? String(corsoData.costo_pranzi) : "");
-  const [rimborsoCene, setRimborsoCene] = useState(corsoData.rimborso_cene != null ? String(corsoData.rimborso_cene) : "");
-  const [rimborsoColazioniSpesa, setRimborsoColazioniSpesa] = useState(corsoData.rimborso_colazioni_spesa != null ? String(corsoData.rimborso_colazioni_spesa) : "");
-  const [costoHotel, setCostoHotel] = useState(corsoData.costo_hotel != null ? String(corsoData.costo_hotel) : "");
-  const [costoCoordinatore, setCostoCoordinatore] = useState(corsoData.costo_coordinatore != null ? String(corsoData.costo_coordinatore) : "");
-  const [rimborsoTaxi, setRimborsoTaxi] = useState(corsoData.rimborso_taxi != null ? String(corsoData.rimborso_taxi) : "");
-  const [rimborsoParcheggi, setRimborsoParcheggi] = useState(corsoData.rimborso_parcheggi != null ? String(corsoData.rimborso_parcheggi) : "");
+  const [costiAperto, setCostiAperto] = useState(sottoVistaIniziale?.costiAperto ?? false);
+  // ognuno dei 10 costi fissi è ormai una spesa vera in "spese" (non più
+  // un numero nudo su corsi_date): il valore mostrato in ogni casella è
+  // la somma di quelle spese per questa classe+sotto-categoria
+  const totaliRiepilogo = Object.fromEntries(
+    CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => [
+      c.chiave,
+      round2((spese || []).filter((s) => s.classe_id === corsoData.id && s.sottocategoria_id === c.sottocategoriaId).reduce((s, v) => s + (v.imponibile || 0), 0)),
+    ])
+  );
   // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
   const [costiExtra, setCostiExtra] = useState(
     Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "", sottovoce: c.sottovoce || "" })) : []
@@ -6035,9 +6051,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // pulsanti Indietro/Avanti possono registrare anche questi passaggi
   // interni, non solo i cambi di schermata principale
   useEffect(() => {
-    onCambiaSottoVista?.({ vista, modificandoId, mostraGestione });
+    onCambiaSottoVista?.({ vista, modificandoId, mostraGestione, costiAperto });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vista, modificandoId, mostraGestione]);
+  }, [vista, modificandoId, mostraGestione, costiAperto]);
 
   // quando si arriva qui già con un iscritto da modificare (es. cliccando
   // una riga in "Ultime iscrizioni", o tornando con Indietro/Avanti a
@@ -6087,9 +6103,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
   const totaleCostiClasse = round2(
-    quoteVenditoreClasse + parseNum(costoAccademia) + parseNum(costoMaster) + parseNum(costoAssistenti) +
-    parseNum(costoPranzi) + parseNum(costoHotel) + parseNum(costoCoordinatore) +
-    parseNum(rimborsoCene) + parseNum(rimborsoColazioniSpesa) + parseNum(rimborsoTaxi) + parseNum(rimborsoParcheggi) +
+    quoteVenditoreClasse + Object.values(totaliRiepilogo).reduce((s, v) => s + v, 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
@@ -6117,16 +6131,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   async function salvaCostiClasse() {
     setSalvandoCosti(true);
     const { error } = await supabase.from("corsi_date").update({
-      costo_accademia: costoAccademia === "" ? null : parseNum(costoAccademia),
-      costo_master: costoMaster === "" ? null : parseNum(costoMaster),
-      costo_assistenti: costoAssistenti === "" ? null : parseNum(costoAssistenti),
-      costo_pranzi: costoPranzi === "" ? null : parseNum(costoPranzi),
-      costo_hotel: costoHotel === "" ? null : parseNum(costoHotel),
-      costo_coordinatore: costoCoordinatore === "" ? null : parseNum(costoCoordinatore),
-      rimborso_cene: rimborsoCene === "" ? null : parseNum(rimborsoCene),
-      rimborso_colazioni_spesa: rimborsoColazioniSpesa === "" ? null : parseNum(rimborsoColazioniSpesa),
-      rimborso_taxi: rimborsoTaxi === "" ? null : parseNum(rimborsoTaxi),
-      rimborso_parcheggi: rimborsoParcheggi === "" ? null : parseNum(rimborsoParcheggi),
       costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null, sottovoce: c.sottovoce || null })),
     }).eq("id", corsoData.id);
     setSalvandoCosti(false);
@@ -6973,16 +6977,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Costi della classe</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
-                <Field label="Costo accademia"><input style={inputStyle} inputMode="decimal" value={costoAccademia} onChange={(e) => setCostoAccademia(e.target.value)} /></Field>
-                <Field label="Costo master"><input style={inputStyle} inputMode="decimal" value={costoMaster} onChange={(e) => setCostoMaster(e.target.value)} /></Field>
-                <Field label="Costo assistenti"><input style={inputStyle} inputMode="decimal" value={costoAssistenti} onChange={(e) => setCostoAssistenti(e.target.value)} /></Field>
-                <Field label="Costo pranzi"><input style={inputStyle} inputMode="decimal" value={costoPranzi} onChange={(e) => setCostoPranzi(e.target.value)} /></Field>
-                <Field label="Rimborso cene"><input style={inputStyle} inputMode="decimal" value={rimborsoCene} onChange={(e) => setRimborsoCene(e.target.value)} /></Field>
-                <Field label="Rimborso colazioni e spesa"><input style={inputStyle} inputMode="decimal" value={rimborsoColazioniSpesa} onChange={(e) => setRimborsoColazioniSpesa(e.target.value)} /></Field>
-                <Field label="Costo appartamento/hotel"><input style={inputStyle} inputMode="decimal" value={costoHotel} onChange={(e) => setCostoHotel(e.target.value)} /></Field>
-                <Field label="Costo coordinatore"><input style={inputStyle} inputMode="decimal" value={costoCoordinatore} onChange={(e) => setCostoCoordinatore(e.target.value)} /></Field>
-                <Field label="Rimborso taxi"><input style={inputStyle} inputMode="decimal" value={rimborsoTaxi} onChange={(e) => setRimborsoTaxi(e.target.value)} /></Field>
-                <Field label="Rimborso parcheggi"><input style={inputStyle} inputMode="decimal" value={rimborsoParcheggi} onChange={(e) => setRimborsoParcheggi(e.target.value)} /></Field>
+                {CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => (
+                  <Field key={c.chiave} label={c.etichetta}>
+                    <button
+                      type="button"
+                      onClick={() => onApriNuovaSpesaPerClasse(corsoData.id, c.categoriaId, c.sottocategoriaId)}
+                      title="Aggiungi spesa"
+                      style={{ ...inputStyle, textAlign: "left", cursor: "pointer", background: "#fff", color: totaliRiepilogo[c.chiave] ? NAVY : MUTED }}
+                    >
+                      {totaliRiepilogo[c.chiave] ? `€ ${totaliRiepilogo[c.chiave]}` : "+ Aggiungi"}
+                    </button>
+                  </Field>
+                ))}
               </div>
 
               {costiExtra.map((voce, idx) => (
@@ -8165,12 +8171,13 @@ function VistaBiglietti({ param, tipo }) {
 }
 
 // ---------- ERP: dashboard direzionale ----------
-// somma i costi di un'edizione (corso_data): le 8 voci fisse più le voci
-// libere aggiunte in "Riepilogo amministrativo" (Contabilità classe)
+// somma solo le voci libere aggiunte in "Riepilogo amministrativo"
+// (Contabilità classe): i 10 costi fissi (Costo Master, Rimborso
+// cene...) ora sono spese vere nella tabella "spese" (tipo_ambito
+// "classe"), già sommate da calcolaKpiErp tramite "costiManuali" —
+// includerle anche qui le conterebbe due volte
 function costoClasseErp(cd) {
-  const extra = Array.isArray(cd.costi_extra) ? cd.costi_extra.reduce((s, c) => s + (Number(c.valore) || 0), 0) : 0;
-  return (cd.costo_accademia || 0) + (cd.costo_master || 0) + (cd.costo_assistenti || 0) + (cd.costo_pranzi || 0) + (cd.costo_hotel || 0) + (cd.costo_coordinatore || 0)
-    + (cd.rimborso_cene || 0) + (cd.rimborso_colazioni_spesa || 0) + (cd.rimborso_taxi || 0) + (cd.rimborso_parcheggi || 0) + extra;
+  return Array.isArray(cd.costi_extra) ? cd.costi_extra.reduce((s, c) => s + (Number(c.valore) || 0), 0) : 0;
 }
 function fmtEuroErp(n) {
   return `${Math.round(n || 0).toLocaleString("it-IT")} €`;
@@ -9173,31 +9180,6 @@ function corrispondeAmbitoDiretto(s, filtri, corsiDateById) {
   if (filtri.eventoId) return s.evento_id === filtri.eventoId;
   return true;
 }
-// le sotto-categorie marcate "automatico" (Compensi Master/assistenti,
-// Costo pranzi, Rimborso cene, Hotel, Quota accademia, Costo
-// coordinatore, Rimborso taxi/parcheggi...) non sono righe della
-// tabella "spese": sono già tracciate sui campi di corsi_date compilati
-// dal pannello "Riepilogo amministrativo". Le trasforma in voci
-// "virtuali" con la stessa forma di una spesa reale, così il resto
-// dell'aggregazione (filtri, ambito, drill-down) le tratta allo stesso
-// modo senza bisogno di casi speciali sparsi ovunque
-function generaVociAutomaticheDaCorsiDate(corsiDate, costiSottocategorie) {
-  const automatiche = (costiSottocategorie || []).filter((v) => v.automatico && v.campo_automatico);
-  const voci = [];
-  (corsiDate || []).forEach((cd) => {
-    automatiche.forEach((v) => {
-      const valore = cd[v.campo_automatico];
-      if (valore) {
-        voci.push({
-          id: `auto__${cd.id}__${v.id}`, categoria_id: v.categoria_id, sottocategoria_id: v.id,
-          imponibile: valore, data_documento: cd.data_inizio, data_pagamento: cd.data_inizio, competenza_da: cd.data_inizio, competenza_a: cd.data_inizio,
-          tipo_ambito: "classe", classe_id: cd.id, origine: "automatico", stato: "pagata", includi_analisi_costi: true,
-        });
-      }
-    });
-  });
-  return voci;
-}
 // commissioni venditori: automatiche dalla quota_venditore di ogni
 // iscritto, raggruppate per classe (stessa data della classe)
 function generaVociCommissioniVenditori(corsiDate, iscritti) {
@@ -9252,7 +9234,6 @@ function generaVociDaCostiExtra(corsiDate, costiSottocategorie) {
 function speseComplete(spese, corsiDate, iscritti, costiSottocategorie) {
   return [
     ...(spese || []),
-    ...generaVociAutomaticheDaCorsiDate(corsiDate, costiSottocategorie),
     ...generaVociCommissioniVenditori(corsiDate, iscritti),
     ...generaVociDaCostiExtra(corsiDate, costiSottocategorie),
   ];
@@ -10225,13 +10206,17 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
 // brief (identificativi, stato, ambito con ripartizione multi-ambito,
 // classificazione gestionale, ricorrenza, budget/soglia per-spesa,
 // allegato). Pagina intera (non modale) vista la quantità di campi
-function PaginaSpesaForm({ spesaId, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, spese, speseAttribuzioni, ricarica, onBack }) {
+function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, spese, speseAttribuzioni, ricarica, onBack }) {
   const spesaEsistente = spesaId ? spese.find((s) => s.id === spesaId) : null;
   const attribuzioniEsistenti = spesaId ? speseAttribuzioni.filter((a) => a.spesa_id === spesaId) : [];
+  // aperta da una casella del Riepilogo amministrativo di una classe:
+  // categoria/sotto-categoria/ambito sono fissi e non modificabili, per
+  // essere certi che la spesa finisca esattamente in quella casella
+  const ambitoBloccato = !!prefill;
 
   const [descrizione, setDescrizione] = useState(spesaEsistente?.descrizione || "");
-  const [categoriaId, setCategoriaId] = useState(spesaEsistente?.categoria_id || "");
-  const [sottocategoriaId, setSottocategoriaId] = useState(spesaEsistente?.sottocategoria_id || "");
+  const [categoriaId, setCategoriaId] = useState(prefill?.categoriaId || spesaEsistente?.categoria_id || "");
+  const [sottocategoriaId, setSottocategoriaId] = useState(prefill?.sottocategoriaId || spesaEsistente?.sottocategoria_id || "");
   const [fornitoreId, setFornitoreId] = useState(spesaEsistente?.fornitore_id || "");
   const [nuovoFornitore, setNuovoFornitore] = useState("");
   const [numeroDocumento, setNumeroDocumento] = useState(spesaEsistente?.numero_documento || "");
@@ -10247,10 +10232,10 @@ function PaginaSpesaForm({ spesaId, corsi, location, corsiDate, eventi, fornitor
   const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || "");
   const [note, setNote] = useState(spesaEsistente?.note || "");
 
-  const [tipoAmbito, setTipoAmbito] = useState(spesaEsistente?.tipo_ambito || "generale");
+  const [tipoAmbito, setTipoAmbito] = useState(prefill ? "classe" : spesaEsistente?.tipo_ambito || "generale");
   const [sedeId, setSedeId] = useState(spesaEsistente?.sede_id || "");
   const [corsoId, setCorsoId] = useState(spesaEsistente?.corso_id || "");
-  const [classeId, setClasseId] = useState(spesaEsistente?.classe_id || "");
+  const [classeId, setClasseId] = useState(prefill?.classeId || spesaEsistente?.classe_id || "");
   const [eventoId, setEventoId] = useState(spesaEsistente?.evento_id || "");
   const [ripartisci, setRipartisci] = useState(attribuzioniEsistenti.length > 0);
   const [righeRipartizione, setRigheRipartizione] = useState(
@@ -10402,27 +10387,35 @@ function PaginaSpesaForm({ spesaId, corsi, location, corsiDate, eventi, fornitor
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
 
+        {ambitoBloccato && (
+          <div style={{ ...cardStyle, background: BG_CHIARO, border: `1px solid ${GOLD}`, ...fontBody, fontSize: 13, color: NAVY }}>
+            Spesa per <b>{opzioniClasse.find((o) => o.id === classeId)?.nome || "questa classe"}</b> — categoria <b>{costiCategorie.find((c) => c.id === categoriaId)?.nome}</b> · <b>{sottocategorieDisponibili.find((v) => v.id === sottocategoriaId)?.nome}</b>
+          </div>
+        )}
+
         <div style={{ ...cardStyle }}>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Identificativi</div>
           <Field label="Descrizione"><input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} /></Field>
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Categoria">
-                <select style={inputStyle} value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setSottocategoriaId(""); }}>
-                  <option value="">— scegli —</option>
-                  {[...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
-              </Field>
+          {!ambitoBloccato && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Categoria">
+                  <select style={inputStyle} value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setSottocategoriaId(""); }}>
+                    <option value="">— scegli —</option>
+                    {[...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Sotto-categoria">
+                  <select style={inputStyle} value={sottocategoriaId} onChange={(e) => setSottocategoriaId(e.target.value)} disabled={!categoriaId}>
+                    <option value="">— scegli —</option>
+                    {sottocategorieDisponibili.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                  </select>
+                </Field>
+              </div>
             </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Sotto-categoria">
-                <select style={inputStyle} value={sottocategoriaId} onChange={(e) => setSottocategoriaId(e.target.value)} disabled={!categoriaId}>
-                  <option value="">— scegli —</option>
-                  {sottocategorieDisponibili.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
-                </select>
-              </Field>
-            </div>
-          </div>
+          )}
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <Field label="Fornitore">
@@ -10492,6 +10485,7 @@ function PaginaSpesaForm({ spesaId, corsi, location, corsiDate, eventi, fornitor
           </div>
         )}
 
+        {!ambitoBloccato && (
         <div style={{ ...cardStyle }}>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Ambito di attribuzione</div>
           {!ripartisci && (
@@ -10550,6 +10544,7 @@ function PaginaSpesaForm({ spesaId, corsi, location, corsiDate, eventi, fornitor
             </div>
           )}
         </div>
+        )}
 
         <div style={{ ...cardStyle }}>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Classificazione gestionale</div>
@@ -10818,6 +10813,11 @@ export default function App() {
   // prodotto in accademia), inseriti da "+ Nuova operazione" > "Entrata"
   const [entrateManuali, setEntrateManuali] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
+  // quando "Nuova spesa" si apre da una casella del Riepilogo
+  // amministrativo di una classe (non da "Analisi costi di gestione"):
+  // precompila e blocca categoria/sotto-categoria/classe, e al termine
+  // riporta alla scheda della classe invece che al catalogo costi
+  const [spesaPrefill, setSpesaPrefill] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -11048,8 +11048,13 @@ export default function App() {
   function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
-  function apriNuovaSpesa() { setSpesaInModifica(null); apriViewProtetta("spesaform"); }
-  function apriModificaSpesa(id) { setSpesaInModifica(id); apriViewProtetta("spesaform"); }
+  function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
+  function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
+  function apriNuovaSpesaPerClasse(classeId, categoriaId, sottocategoriaId) {
+    setSpesaInModifica(null);
+    setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
+    apriViewProtetta("spesaform");
+  }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -11294,10 +11299,12 @@ export default function App() {
       {view === "spesaform" && (
         <PaginaSpesaForm
           spesaId={spesaInModifica}
+          prefill={spesaPrefill}
           corsi={corsi} location={location} corsiDate={corsiDate} eventi={eventi} fornitori={fornitori}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           spese={spese} speseAttribuzioni={speseAttribuzioni}
-          ricarica={fetchDati} onBack={() => setView("costioperativi")}
+          ricarica={fetchDati}
+          onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView("costioperativi"); } }}
         />
       )}
 
@@ -11359,10 +11366,12 @@ export default function App() {
           segnaposti={segnaposti}
           costiCategorie={costiCategorie}
           costiSottocategorie={costiSottocategorie}
+          spese={spese}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
           onCambiaSottoVista={setSottoVistaScheda}
+          onApriNuovaSpesaPerClasse={apriNuovaSpesaPerClasse}
         />
       )}
     </div>
