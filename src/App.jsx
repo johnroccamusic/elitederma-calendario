@@ -10175,7 +10175,9 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
                 <button onClick={() => eliminaCategoria(cat)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
                 </button>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.id ? "rotate(180deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+                <button onClick={() => setCategoriaAperta((c) => (c === cat.id ? "" : cat.id))} title={categoriaAperta === cat.id ? "Chiudi sotto-voci" : "Apri sotto-voci"} style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: categoriaAperta === cat.id ? "rotate(180deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+                </button>
               </div>
             </div>
             {categoriaAperta === cat.id && (
