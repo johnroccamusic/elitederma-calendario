@@ -1,18 +1,17 @@
 // Edge Function "woo-sync-catalogo"
 // Importa categorie prodotto e prodotti da WooCommerce (lettura), da
-// eseguire periodicamente o su richiesta manuale — separata da
-// woo-webhook (ordini) e da woo-aggiorna-scorte (scrittura), così le
-// chiavi API di sola lettura restano isolate da quelle di scrittura.
+// eseguire su richiesta dal pulsante "Sincronizza catalogo" in
+// "Magazzino" (o manualmente da terminale) — separata da woo-webhook
+// (ordini) e da woo-aggiorna-prodotto (scrittura), così le chiavi API
+// di sola lettura restano isolate da quelle di scrittura.
 //
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   WC_SITE_URL / WC_CONSUMER_KEY / WC_CONSUMER_SECRET — le stesse già
 //   usate da woo-import-storico (permessi "Lettura" bastano)
-//   CATALOGO_SYNC_SECRET — stringa a scelta, va passata nell'header
-//   "X-Sync-Secret" per invocare questa funzione
 //
-// Invocazione (da rilanciare ogni volta che si vuole aggiornare il catalogo):
-//   curl -X POST "https://<project-ref>.supabase.co/functions/v1/woo-sync-catalogo" \
-//     -H "X-Sync-Secret: <CATALOGO_SYNC_SECRET>"
+// Protetta dalla verifica JWT di Supabase (comportamento di default,
+// nessun secret custom): l'app la chiama già autenticata con l'anon
+// key tramite supabase.functions.invoke('woo-sync-catalogo').
 //
 // Non sovrascrive MAI costo_acquisto/scorta_minima di prodotti_shop:
 // sono dati inseriti a mano nell'app, WooCommerce non li conosce.
@@ -45,9 +44,8 @@ async function fetchTutteLePagine(url: string, auth: string) {
 }
 
 Deno.serve(async (req) => {
-  const syncSecret = Deno.env.get("CATALOGO_SYNC_SECRET");
-  if (!syncSecret || req.headers.get("x-sync-secret") !== syncSecret) {
-    return new Response("Non autorizzato", { status: 401 });
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ errore: "Metodo non consentito" }), { status: 405, headers: { "Content-Type": "application/json" } });
   }
 
   const siteUrl = Deno.env.get("WC_SITE_URL");
