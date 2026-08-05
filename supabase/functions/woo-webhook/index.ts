@@ -44,15 +44,27 @@ Deno.serve(async (req) => {
     return new Response("Metodo non consentito", { status: 405 });
   }
 
+  const rawBody = await req.text();
+  const contentType = req.headers.get("content-type") || "";
+
+  // il ping di verifica che WooCommerce manda quando si salva/attiva il
+  // webhook è diverso da una consegna vera: non ha nessuna firma ed è
+  // "application/x-www-form-urlencoded" con corpo "webhook_id=123" (non
+  // JSON). Non contiene nessun dato dell'ordine, quindi non c'è nulla da
+  // proteggere: risponde 200 senza pretendere la firma, così WooCommerce
+  // non mostra un falso errore alla configurazione del webhook
+  if (contentType.includes("x-www-form-urlencoded") && /^webhook_id=\d+$/.test(rawBody)) {
+    return new Response("ok (ping di verifica)", { status: 200 });
+  }
+
   const secret = Deno.env.get("WC_WEBHOOK_SECRET");
   if (!secret) {
     console.error("WC_WEBHOOK_SECRET non impostato");
     return new Response("Configurazione mancante", { status: 500 });
   }
 
-  // la firma va calcolata sui byte ESATTI ricevuti: va letto il body
-  // come testo grezzo PRIMA di fare qualunque JSON.parse
-  const rawBody = await req.text();
+  // la firma va calcolata sui byte ESATTI ricevuti: rawBody è già il
+  // testo grezzo, letto PRIMA di qualunque JSON.parse
   const firmaRicevuta = req.headers.get("x-wc-webhook-signature") || "";
   const firmaCalcolata = await firmaAttesa(rawBody, secret);
 
@@ -69,9 +81,8 @@ Deno.serve(async (req) => {
 
   const riga = mappaOrdine(ordine);
   if (!riga) {
-    // "ping" di verifica del webhook (o corpo vuoto): firma corretta,
-    // nessun ordine da salvare — rispondere comunque 200 così
-    // WooCommerce marca il webhook come attivo
+    // corpo firmato correttamente ma senza un vero ordine dentro: non
+    // c'è niente da salvare, ma la richiesta era legittima
     return new Response("ok (nessun ordine nel payload)", { status: 200 });
   }
 
