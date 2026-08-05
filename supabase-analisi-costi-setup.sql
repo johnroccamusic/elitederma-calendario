@@ -435,7 +435,13 @@ update public.costi_sottocategorie set includi_analisi_costi = false where categ
 -- vecchia tabella (non distruttivo) e sposta ogni riga in "spese" con
 -- la nuova categoria/sotto-categoria corrispondente
 -- ---------------------------------------------------------
-alter table if exists public.costi_operativi_voci rename to costi_operativi_voci_deprecata;
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'costi_operativi_voci')
+     and not exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'costi_operativi_voci_deprecata') then
+    alter table public.costi_operativi_voci rename to costi_operativi_voci_deprecata;
+  end if;
+end $$;
 
 insert into public.spese (
   descrizione, categoria_id, sottocategoria_id, imponibile, iva_percentuale, totale,
