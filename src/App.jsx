@@ -9427,50 +9427,32 @@ function GraficoLineaSemplice({ punti }) {
     </svg>
   );
 }
-const COLORI_TREND_CATEGORIE = [NAVY, GOLD, "#4A7C59", "#C0392B", "#7C8DA6", "#8E5A9E"];
-// multi-linea (una serie per categoria) — usata per "Trend per categoria"
-function GraficoTrendCategorie({ punti, serie }) {
-  if (!punti.length || !serie.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dato nel periodo.</div>;
-  const larghezza = 560, altezza = 200, padSx = 40, padDx = 12, padAlto = 14, padBasso = 26;
-  const massimo = Math.max(1, ...punti.flatMap((p) => serie.map((s) => p.valori[s] || 0)));
-  const scalaX = (i) => padSx + (i / Math.max(1, punti.length - 1)) * (larghezza - padSx - padDx);
-  const scalaY = (v) => padAlto + (1 - v / massimo) * (altezza - padAlto - padBasso);
-  const saltoEtichette = punti.length <= 12 ? 1 : Math.ceil(punti.length / 8);
+// una barra per categoria/prodotto, con la % di trend scritta sopra e il
+// nome sotto — usata da "Trend per categoria/prodotto"
+function GraficoTrendBarre({ voci }) {
+  if (!voci.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dato nel periodo.</div>;
+  const larghezza = 560, altezza = 200, padSx = 8, padDx = 8, padAlto = 30, padBasso = 30;
+  const massimo = Math.max(1, ...voci.map((v) => v.valore));
+  const n = voci.length;
+  const stepX = (larghezza - padSx - padDx) / n;
+  const xCentro = (i) => padSx + stepX * i + stepX / 2;
+  const yBar = (v) => altezza - padBasso - (v / massimo) * (altezza - padAlto - padBasso);
   return (
-    <div>
-      <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
-        {Array.from({ length: 4 }).map((_, i) => {
-          const y = padAlto + (i / 3) * (altezza - padAlto - padBasso);
-          const valore = Math.round(massimo * (1 - i / 3));
-          return (
-            <g key={i}>
-              <line x1={padSx} y1={y} x2={larghezza - padDx} y2={y} stroke={CREAM_BORDER} strokeWidth="1" />
-              <text x={0} y={y + 4} fontSize="9.5" fill={MUTED} fontFamily="'Roboto',sans-serif">{valore}</text>
-            </g>
-          );
-        })}
-        {serie.map((nomeCat, si) => {
-          const pts = punti.map((p, i) => [scalaX(i), scalaY(p.valori[nomeCat] || 0)]);
-          const path = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-          const colore = COLORI_TREND_CATEGORIE[si % COLORI_TREND_CATEGORIE.length];
-          return (
-            <g key={nomeCat}>
-              <path d={path} fill="none" stroke={colore} strokeWidth="2" />
-              {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="2" fill={colore} />)}
-            </g>
-          );
-        })}
-        {punti.map((p, i) => (i % saltoEtichette === 0 ? <text key={i} x={scalaX(i)} y={altezza - 6} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text> : null))}
-      </svg>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8 }}>
-        {serie.map((nomeCat, si) => (
-          <div key={nomeCat} style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 11.5, color: NAVY }}>
-            <span style={{ width: 9, height: 9, borderRadius: "50%", background: COLORI_TREND_CATEGORIE[si % COLORI_TREND_CATEGORIE.length], flexShrink: 0 }} />
-            {nomeCat}
-          </div>
-        ))}
-      </div>
-    </div>
+    <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
+      {voci.map((v, i) => (
+        <rect key={v.nome} x={xCentro(i) - stepX * 0.3} y={yBar(v.valore)} width={stepX * 0.6} height={Math.max(1, altezza - padBasso - yBar(v.valore))} fill={NAVY} rx="3" />
+      ))}
+      {voci.map((v, i) => (
+        <text key={`t${v.nome}`} x={xCentro(i)} y={yBar(v.valore) - 8} fontSize="11" fontWeight="700" fill={v.trend == null ? MUTED : v.trend >= 0 ? "#2E7D32" : "#C0392B"} textAnchor="middle" fontFamily="'Roboto',sans-serif">
+          {v.trend == null ? "N/D" : `${v.trend >= 0 ? "+" : ""}${v.trend}%`}
+        </text>
+      ))}
+      {voci.map((v, i) => (
+        <text key={`n${v.nome}`} x={xCentro(i)} y={altezza - padBasso + 16} fontSize="9.5" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">
+          {v.nome.length > 12 ? `${v.nome.slice(0, 11)}…` : v.nome}
+        </text>
+      ))}
+    </svg>
   );
 }
 
@@ -9483,7 +9465,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [confrontoTipo, setConfrontoTipo] = useState("periodoprecedente");
   const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
   const [categoriaSel, setCategoriaSel] = useState("");
-  const [categoriaTrendSel, setCategoriaTrendSel] = useState("");
+  const [vistaTrend, setVistaTrend] = useState("categoria");
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
@@ -9653,26 +9635,42 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
 
   const puntiCarrelloMedio = buckets.map((b) => ({ etichetta: b.etichetta, valore: carrelloMedioPeriodo(b.da, b.a) }));
 
-  const puntiTrendCategoria = buckets.map((b) => ({ etichetta: b.etichetta, valori: {} }));
-  (venditeShop || []).forEach((v) => {
-    const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
-    if (!d) return;
-    const idx = buckets.findIndex((b) => d >= b.da && d <= b.a);
-    if (idx === -1) return;
-    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
-      const chiave = (p.nome || "").trim().toLowerCase();
-      (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
-        const nomeCat = categoriaNomeById[catId];
-        if (!nomeCat) return;
-        puntiTrendCategoria[idx].valori[nomeCat] = (puntiTrendCategoria[idx].valori[nomeCat] || 0) + (Number(p.quantita) || 0);
-      });
+  // "Trend per categoria/prodotto": non è più una serie nel tempo, ma un
+  // singolo valore (periodo selezionato) con la variazione % vs il
+  // periodo precedente, una barra per categoria o per prodotto (top 10)
+  function valoreVendite(v) { return vistaAnalisi === "quantita" ? v.quantita : v.fatturato; }
+  const totaliTrendCategoria = {};
+  Object.entries(venditePerNome).forEach(([chiave, v]) => {
+    (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
+      (totaliTrendCategoria[catId] ||= { corrente: 0, precedente: 0 }).corrente += valoreVendite(v);
     });
   });
-  const totalePerCategoria = {};
-  puntiTrendCategoria.forEach((pt) => Object.entries(pt.valori).forEach(([cat, v]) => { totalePerCategoria[cat] = (totalePerCategoria[cat] || 0) + v; }));
-  const serieTrendCategoria = categoriaTrendSel
-    ? [categoriaNomeById[categoriaTrendSel]].filter(Boolean)
-    : Object.entries(totalePerCategoria).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([nome]) => nome);
+  Object.entries(venditePerNomePrecedente).forEach(([chiave, v]) => {
+    (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
+      (totaliTrendCategoria[catId] ||= { corrente: 0, precedente: 0 }).precedente += valoreVendite(v);
+    });
+  });
+  const trendCategorie = Object.entries(totaliTrendCategoria)
+    .map(([catId, t]) => ({
+      nome: categoriaNomeById[catId],
+      valore: round2(t.corrente),
+      trend: t.precedente > 0 ? round1Erp(((t.corrente - t.precedente) / t.precedente) * 100) : null,
+    }))
+    .filter((v) => v.nome && v.valore > 0)
+    .sort((a, b) => b.valore - a.valore)
+    .slice(0, 10);
+  const trendProdotti = (prodottiShop || [])
+    .filter((p) => p.attivo !== false)
+    .filter((p) => !categoriaSel || (categorieIdPerProdottoId[p.id] || []).includes(categoriaSel))
+    .map((p) => {
+      const chiave = (p.nome || "").trim().toLowerCase();
+      const corrente = valoreVendite(venditePerNome[chiave] || { quantita: 0, fatturato: 0 });
+      const precedente = valoreVendite(venditePerNomePrecedente[chiave] || { quantita: 0, fatturato: 0 });
+      return { nome: p.nome, valore: round2(corrente), trend: precedente > 0 ? round1Erp(((corrente - precedente) / precedente) * 100) : null };
+    })
+    .filter((v) => v.valore > 0)
+    .sort((a, b) => b.valore - a.valore)
+    .slice(0, 10);
 
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
@@ -9838,14 +9836,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               <GraficoLineaSemplice punti={puntiCarrelloMedio} />
             </div>
             <div style={{ ...cardStyle, marginBottom: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
-                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Trend per categoria</div>
-                <select style={{ ...inputStyle, width: "auto", fontSize: 12 }} value={categoriaTrendSel} onChange={(e) => setCategoriaTrendSel(e.target.value)}>
-                  <option value="">Tutte le categorie</option>
-                  {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                </select>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Trend {vistaTrend === "categoria" ? "per categoria" : "per prodotto"}</div>
+                <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
+                  {[{ v: "categoria", l: "Per categoria" }, { v: "prodotto", l: "Per prodotto" }].map((o) => (
+                    <button key={o.v} onClick={() => setVistaTrend(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaTrend === o.v ? NAVY : "transparent", color: vistaTrend === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
+                  ))}
+                </div>
               </div>
-              <GraficoTrendCategorie punti={puntiTrendCategoria} serie={serieTrendCategoria} />
+              <GraficoTrendBarre voci={vistaTrend === "categoria" ? trendCategorie : trendProdotti} />
             </div>
           </div>
         </div>
