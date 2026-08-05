@@ -9500,6 +9500,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const range = rangeMagazzino(periodo, anno);
   const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo);
   const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
+  // stessa etichetta di confronto già mostrata su "Analisi vendite": chiarisce
+  // rispetto a cosa sono calcolate le % di "Trend per categoria/prodotto"
+  const etichettaConfronto = periodo === "annuale"
+    ? (confrontoTipo === "annoprecedente" ? `vs ${Number(range.inizio.slice(0, 4)) - 1}` : "vs periodo precedente")
+    : periodo === "settimanale" ? "vs settimana precedente"
+    : periodo === "mensile" ? "vs mese precedente"
+    : "vs anno scolastico precedente";
 
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
@@ -9782,9 +9789,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                     <option value="annoprecedente">{range.inizio.slice(0, 4)} vs {Number(range.inizio.slice(0, 4)) - 1}</option>
                   </select>
                 ) : (
-                  <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
-                    {periodo === "settimanale" ? "vs settimana precedente" : periodo === "mensile" ? "vs mese precedente" : "vs anno scolastico precedente"}
-                  </div>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{etichettaConfronto}</div>
                 )}
                 <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
                   {[{ v: "quantita", l: "Quantità" }, { v: "fatturato", l: "Fatturato" }].map((o) => (
@@ -9836,13 +9841,16 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               <GraficoLineaSemplice punti={puntiCarrelloMedio} />
             </div>
             <div style={{ ...cardStyle, marginBottom: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 2, flexWrap: "wrap" }}>
                 <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Trend {vistaTrend === "categoria" ? "per categoria" : "per prodotto"}</div>
                 <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
                   {[{ v: "categoria", l: "Per categoria" }, { v: "prodotto", l: "Per prodotto" }].map((o) => (
                     <button key={o.v} onClick={() => setVistaTrend(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaTrend === o.v ? NAVY : "transparent", color: vistaTrend === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
                   ))}
                 </div>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+                {vistaAnalisi === "quantita" ? "Quantità venduta" : "Fatturato"} nel periodo, {etichettaConfronto}
               </div>
               <GraficoTrendBarre voci={vistaTrend === "categoria" ? trendCategorie : trendProdotti} />
             </div>
