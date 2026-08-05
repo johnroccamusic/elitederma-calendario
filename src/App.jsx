@@ -8248,11 +8248,19 @@ function variazionePctErp(attuale, precedente) {
 // ricavi/costi/allievi/riempimento/cash flow/crediti di un insieme di
 // edizioni filtrate per periodo + sede — riusata sia per i KPI del
 // periodo corrente/precedente sia per ogni riga di "Andamento per sede"
-function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio, fine, sedeId, corsoById, locById }) {
+function calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio, fine, sedeId, corsoById, locById }) {
   const cdFiltrate = corsiDate.filter((cd) => cd.data_inizio >= inizio && cd.data_inizio <= fine && (!sedeId || cd.location_id === sedeId));
   const idsCd = new Set(cdFiltrate.map((cd) => cd.id));
   const iscrittiFiltrati = iscritti.filter((i) => idsCd.has(i.corso_data_id));
-  const ricavi = round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+  // incassi non legati a un'iscrizione (es. vendita di un prodotto in
+  // accademia): stesso trattamento "al netto di IVA" dei ricavi corsi,
+  // così restano confrontabili nello stesso KPI
+  const entrateManualiValide = (entrateManuali || []).filter((e) => {
+    if (!e.data || e.data < inizio || e.data > fine) return false;
+    return !sedeId || e.sede_id === sedeId;
+  });
+  const totaleEntrateManuali = round2(entrateManualiValide.reduce((s, e) => s + (e.imponibile || 0), 0));
+  const ricavi = round2(iscrittiFiltrati.reduce((s, i) => s + (i.totale_pattuito || 0), 0) + totaleEntrateManuali);
   const costiClasse = round2(cdFiltrate.reduce((s, cd) => s + costoClasseErp(cd), 0));
   const quoteVenditore = round2(iscrittiFiltrati.reduce((s, i) => s + (i.quota_venditore || 0), 0));
   // spese di "Analisi costi di gestione": sull'imponibile, coerente coi
@@ -8357,6 +8365,132 @@ function GaugeMargineErp({ percentuale }) {
   );
 }
 
+// form "+ Nuova operazione" → "Entrata": incasso non legato a
+// un'iscrizione (es. vendita in accademia di un prodotto a un cliente
+// occasionale). Stessa struttura/UX di "Uscita", ma senza voce di costo:
+// qui la descrizione libera indica cosa è stato venduto/incassato
+function ModaleNuovaEntrata({ location, onClose, onSalvato }) {
+  const [data, setData] = useState(dataOggiStr());
+  const [citta, setCitta] = useState("");
+  const [descrizione, setDescrizione] = useState("");
+  const [imponibile, setImponibile] = useState("");
+  const [totale, setTotale] = useState("");
+  const [iva, setIva] = useState(22);
+  const [esenteIva, setEsenteIva] = useState(false);
+  const [metodo, setMetodo] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const ivaBloccata = esenteIva || metodo === "Cash no iva";
+  const ivaEffettiva = ivaBloccata ? 0 : iva;
+
+  function totaleDaImponibile(v, ivaPct) {
+    return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100)));
+  }
+  function imponibileDaTotale(v, ivaPct) {
+    return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100)));
+  }
+
+  function onImponibileChange(v) {
+    setImponibile(v);
+    setTotale(ivaBloccata ? v : totaleDaImponibile(v, ivaEffettiva));
+  }
+  function onTotaleChange(v) {
+    setTotale(v);
+    setImponibile(ivaBloccata ? v : imponibileDaTotale(v, ivaEffettiva));
+  }
+  function onIvaChange(v) {
+    setIva(v);
+    if (!ivaBloccata) setTotale(totaleDaImponibile(imponibile, v));
+  }
+  function ricalcolaBlocco(nuovaBloccata) {
+    setTotale(nuovaBloccata ? imponibile : totaleDaImponibile(imponibile, iva));
+  }
+  function onEsenteChange(checked) {
+    setEsenteIva(checked);
+    ricalcolaBlocco(checked || metodo === "Cash no iva");
+  }
+  function onMetodoChange(opz) {
+    setMetodo(opz);
+    ricalcolaBlocco(esenteIva || opz === "Cash no iva");
+  }
+
+  async function salva() {
+    const imp = parseNum(imponibile);
+    if (!imp) { setMsg("Inserisci un imponibile."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("entrate_manuali").insert({
+      descrizione: descrizione.trim() || null,
+      sede_id: citta || null,
+      imponibile: imp,
+      iva_percentuale: ivaEffettiva,
+      totale: totale === "" ? imp : round2(parseNum(totale)),
+      data,
+      metodo_pagamento: metodo || null,
+    });
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    onSalvato();
+  }
+
+  return (
+    <Modal title="Nuova entrata" onClose={onClose}>
+      <div style={{ display: "flex", gap: 14 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Città (opzionale)">
+            <select style={inputStyle} value={citta} onChange={(e) => setCitta(e.target.value)}>
+              <option value="">—</option>
+              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <Field label="Descrizione (es. vendita prodotto, cliente occasionale)">
+        <input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
+      </Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 6 }}>
+        <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} />
+        Importo esente iva
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="IVA">
+            <select
+              style={{ ...inputStyle, background: ivaBloccata ? "#EFEFEF" : "#fff", color: ivaBloccata ? MUTED : NAVY }}
+              disabled={ivaBloccata}
+              value={ivaEffettiva}
+              onChange={(e) => onIvaChange(Number(e.target.value))}
+            >
+              {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field>
+        </div>
+      </div>
+      <Field label="Metodo di pagamento">
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+          {["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"].map((opz) => (
+            <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+              <input type="radio" name="metodo-entrata" checked={metodo === opz} onChange={() => onMetodoChange(opz)} />
+              {opz}
+            </label>
+          ))}
+        </div>
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : "Salva entrata"}</Button>
+    </Modal>
+  );
+}
+
 // pannello aperto cliccando la card "Ricavi e costi": confronto anno
 // scolastico su anno scolastico (settembre -> agosto), UNA RIGA PER
 // ANNO, con i 12 mesi in orizzontale dentro la riga (stesso stile a
@@ -8369,7 +8503,7 @@ function annoScolasticoDi(dataStr) {
   const [anno, mese] = dataStr.split("-").map(Number);
   return mese >= 9 ? anno : anno - 1;
 }
-function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieById, sedeSel, corsoById, locById, onClose }) {
+function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, sedeSel, corsoById, locById, onClose }) {
   const isMobile = useIsMobile();
   const annoScolasticoCorrente = annoScolasticoDi(dataOggiStr());
   const anniScolasticiDisponibili = useMemo(() => {
@@ -8385,13 +8519,13 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
       const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
       const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
       const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
-      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
       return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
     });
     const totaleRicavi = round2(mesi.reduce((s, m) => s + m.ricavi, 0));
     const totaleCosti = round2(mesi.reduce((s, m) => s + m.costi, 0));
     return { annoIniziale, etichetta: `${annoIniziale}/${annoIniziale + 1}`, mesi, totaleRicavi, totaleCosti, totaleUtile: round2(totaleRicavi - totaleCosti) };
-  }), [anniScolasticiDisponibili, corsiDate, iscritti, spese, costiCategorieById, sedeSel, corsoById, locById]);
+  }), [anniScolasticiDisponibili, corsiDate, iscritti, spese, costiCategorieById, entrateManuali, sedeSel, corsoById, locById]);
 
   const massimoGlobale = Math.max(1, ...confronto.flatMap((a) => a.mesi.flatMap((m) => [m.ricavi, m.costi])));
 
@@ -8445,11 +8579,12 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
   const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
+  const [modaleEntrataAperta, setModaleEntrataAperta] = useState(false);
   const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -8460,12 +8595,12 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
   const rangePrec = rangePrecedenteErp(range);
 
   const kpi = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
-    [corsiDate, iscritti, spese, costiCategorieById, range.inizio, range.fine, sedeSel, corsoById, locById]
+    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: sedeSel, corsoById, locById }),
+    [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, range.inizio, range.fine, sedeSel, corsoById, locById]
   );
   const kpiPrec = useMemo(
-    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
-    [corsiDate, iscritti, spese, costiCategorieById, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
+    () => calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: sedeSel, corsoById, locById }),
+    [corsiDate, iscritti, spese, costiCategorieById, entrateManuali, rangePrec.inizio, rangePrec.fine, sedeSel, corsoById, locById]
   );
 
   const varRicavi = variazionePctErp(kpi.ricavi, kpiPrec.ricavi);
@@ -8493,7 +8628,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
     const inizioMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-01`;
     const ultimoGiorno = new Date(anno, mese0 + 1, 0).getDate();
     const fineMese = `${anno}-${String(mese0 + 1).padStart(2, "0")}-${String(ultimoGiorno).padStart(2, "0")}`;
-    const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
+    const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: inizioMese, fine: fineMese, sedeId: sedeSel, corsoById, locById });
     return { etichetta: MESI_ABBR[mese0], ricavi: k.ricavi, costi: k.costi };
   });
   const maxBarra = Math.max(1, ...andamentoMensile.flatMap((m) => [m.ricavi, m.costi]));
@@ -8501,8 +8636,8 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
   const sediConDati = location.filter((l) => corsiDate.some((cd) => cd.location_id === l.id && cd.data_inizio >= range.inizio && cd.data_inizio <= range.fine));
   const righeSedi = (sediConDati.length ? sediConDati : location)
     .map((l) => {
-      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
-      const kPrec = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
+      const k = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: range.inizio, fine: range.fine, sedeId: l.id, corsoById, locById });
+      const kPrec = calcolaKpiErp({ corsiDate, iscritti, spese, costiCategorieById, entrateManuali, inizio: rangePrec.inizio, fine: rangePrec.fine, sedeId: l.id, corsoById, locById });
       return { location: l, ...k, trend: variazionePctErp(k.ricavi, kPrec.ricavi) };
     })
     .sort((a, b) => b.ricavi - a.ricavi);
@@ -8620,9 +8755,8 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
                   Uscita
                 </button>
                 <button
-                  disabled
-                  title="Non ancora disponibile"
-                  style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, background: "transparent", color: "#C7C9D4", cursor: "not-allowed" }}
+                  onClick={() => { setMenuNuovaOperazione(false); setModaleEntrataAperta(true); }}
+                  style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, background: "transparent", color: NAVY, cursor: "pointer" }}
                 >
                   Entrata
                 </button>
@@ -8631,9 +8765,13 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
           </div>
         </div>
 
+        {modaleEntrataAperta && (
+          <ModaleNuovaEntrata location={location} onClose={() => setModaleEntrataAperta(false)} onSalvato={() => { setModaleEntrataAperta(false); ricarica(); }} />
+        )}
+
         {confrontoAnnualeAperto && (
           <PannelloConfrontoAnnuale
-            corsiDate={corsiDate} iscritti={iscritti} spese={spese} costiCategorieById={costiCategorieById}
+            corsiDate={corsiDate} iscritti={iscritti} spese={spese} costiCategorieById={costiCategorieById} entrateManuali={entrateManuali}
             sedeSel={sedeSel} corsoById={corsoById} locById={locById}
             onClose={() => setConfrontoAnnualeAperto(false)}
           />
@@ -10676,6 +10814,9 @@ export default function App() {
   const [speseAttribuzioni, setSpeseAttribuzioni] = useState([]);
   const [costiBudget, setCostiBudget] = useState([]);
   const [costiSoglieAllerta, setCostiSoglieAllerta] = useState([]);
+  // incassi occasionali non legati a un'iscrizione (es. vendita di un
+  // prodotto in accademia), inseriti da "+ Nuova operazione" > "Entrata"
+  const [entrateManuali, setEntrateManuali] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
@@ -10703,7 +10844,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -10725,6 +10866,7 @@ export default function App() {
       supabase.from("spese_attribuzioni").select("*"),
       supabase.from("costi_budget").select("*"),
       supabase.from("costi_soglie_allerta").select("*"),
+      supabase.from("entrate_manuali").select("*").order("data", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -10747,6 +10889,7 @@ export default function App() {
     setSpeseAttribuzioni(sa.data || []);
     setCostiBudget(cb.data || []);
     setCostiSoglieAllerta(csa.data || []);
+    setEntrateManuali(em.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -11112,7 +11255,7 @@ export default function App() {
       {view === "erp" && (
         <PaginaErp
           corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
-          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           onApriGestioneDate={apriGestioneDate}
