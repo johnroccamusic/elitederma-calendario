@@ -9001,10 +9001,13 @@ function etichettaStatoVenditaShop(stato) {
 
 function PaginaVenditeShop({ venditeShop, onBack }) {
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("anno");
+  const [periodo, setPeriodo] = useState("tutto");
   const [statoSel, setStatoSel] = useState("");
 
-  const range = rangePeriodoErp(periodo);
+  // "tutto" non esiste in rangePeriodoErp (pensato per l'ERP, senza
+  // storico pluriennale): qui serve perché l'import storico può
+  // risalire ad anni fa, e di default si vuole vedere l'intera storia
+  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
   const statiPresenti = [...new Set((venditeShop || []).map((v) => v.stato).filter(Boolean))].sort();
 
   const venditeFiltrate = (venditeShop || []).filter((v) => {
@@ -9021,6 +9024,28 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
     iva: round2(venditeFiltrate.reduce((s, v) => s + (v.totale_iva || 0), 0)),
   };
 
+  // "prodotti più venduti": aggrega le righe-prodotto di tutti gli
+  // ordini filtrati (stesso periodo/stato della tabella sopra). Se lo
+  // stato è "Tutti" include anche ordini annullati/rimborsati/falliti —
+  // per un'analisi realistica delle vendite conviene filtrare per
+  // "Completato" nella tendina qui sopra
+  const [ordinePer, setOrdinePer] = useState("quantita");
+  const prodottiAggregati = (() => {
+    const mappa = {};
+    venditeFiltrate.forEach((v) => {
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+        const nome = (p.nome || "").trim() || "—";
+        if (!mappa[nome]) mappa[nome] = { nome, quantita: 0, ricavo: 0, ordini: new Set() };
+        mappa[nome].quantita += Number(p.quantita) || 0;
+        mappa[nome].ricavo += Number(p.totale_riga) || 0;
+        mappa[nome].ordini.add(v.id);
+      });
+    });
+    return Object.values(mappa)
+      .map((p) => ({ nome: p.nome, quantita: p.quantita, ricavo: round2(p.ricavo), nOrdini: p.ordini.size, prezzoMedio: p.quantita > 0 ? round2(p.ricavo / p.quantita) : 0 }))
+      .sort((a, b) => (ordinePer === "quantita" ? b.quantita - a.quantita : b.ricavo - a.ricavo));
+  })();
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -9033,7 +9058,7 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
+            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
               <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
                 {p.l}
               </button>
@@ -9100,6 +9125,55 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 28, marginBottom: 4 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Prodotti più venduti</div>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+            {[{ v: "quantita", l: "Per quantità" }, { v: "ricavo", l: "Per ricavo" }].map((o) => (
+              <button key={o.v} onClick={() => setOrdinePer(o.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 12px", borderRadius: 16, border: "none", background: ordinePer === o.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                {o.l}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+          Stesso periodo/stato filtrati sopra — con "Tutti gli stati" include anche annullati/rimborsati/falliti; per la vendita reale filtra su "Completato".
+        </div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Quantità", "N. ordini", "Ricavo", "Prezzo medio"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prodottiAggregati.slice(0, 20).map((p, i) => (
+                  <tr key={p.nome}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+                      {i === 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
+                      {p.nome}
+                    </td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.nOrdini}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.ricavo)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{fmtEuroErp(p.prezzoMedio)}</td>
+                  </tr>
+                ))}
+                {prodottiAggregati.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {prodottiAggregati.length > 20 && (
+            <div style={{ padding: "10px 14px", ...fontBody, fontSize: 12, color: MUTED, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              Mostrati i primi 20 di {prodottiAggregati.length} prodotti diversi.
+            </div>
+          )}
         </div>
       </div>
     </div>
