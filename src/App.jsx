@@ -9277,32 +9277,89 @@ const COLONNE_MAGAZZINO = [
   { label: "Fatturato", campo: "fatturato", direzioneIniziale: "desc" },
 ];
 
-// range di date per ciascun periodo, ancorato all'anno scelto: se
-// l'anno selezionato è quello corrente, "oggi" fa da riferimento (es.
-// "Mensile" = il mese in corso); se è un anno passato, il riferimento
-// diventa il 31 dicembre di quell'anno (es. "Mensile" = dicembre)
+function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+
+// range di date per ciascun periodo:
+// - annuale: anno solare Gen→Dic dell'anno scelto
+// - semestrale/trimestrale: intero ANNO SCOLASTICO Set→Ago (stessa
+//   convenzione già usata per il confronto "Ricavi e costi" nell'ERP),
+//   così si vedono tutti i trimestri/semestri affiancati, non uno solo
+// - mensile/settimanale: "zoom" sul mese/settimana IN CORSO (non
+//   sull'anno scolastico), spezzato in settimane/giorni
 function rangeMagazzino(periodo, anno) {
   const oggi = new Date();
-  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  const riferimento = anno === oggi.getFullYear() ? oggi : new Date(anno, 11, 31);
   if (periodo === "annuale") return { inizio: `${anno}-01-01`, fine: `${anno}-12-31` };
-  if (periodo === "semestrale") {
-    const meseInizio = riferimento.getMonth() < 6 ? 0 : 6;
-    return { inizio: fmt(new Date(anno, meseInizio, 1)), fine: fmt(new Date(anno, meseInizio + 6, 0)) };
-  }
-  if (periodo === "trimestrale") {
-    const meseInizio = Math.floor(riferimento.getMonth() / 3) * 3;
-    return { inizio: fmt(new Date(anno, meseInizio, 1)), fine: fmt(new Date(anno, meseInizio + 3, 0)) };
+  if (periodo === "semestrale" || periodo === "trimestrale") {
+    return { inizio: `${anno}-09-01`, fine: fmtDataIso(new Date(anno + 1, 7, 31)) };
   }
   if (periodo === "mensile") {
-    return { inizio: fmt(new Date(anno, riferimento.getMonth(), 1)), fine: fmt(new Date(anno, riferimento.getMonth() + 1, 0)) };
+    return { inizio: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0)) };
   }
-  // settimanale: lunedì-domenica della settimana del riferimento
-  const giornoSett = riferimento.getDay();
+  // settimanale: lunedì-domenica della settimana corrente
+  const giornoSett = oggi.getDay();
   const offsetLunedi = giornoSett === 0 ? -6 : 1 - giornoSett;
-  const lunedi = new Date(anno, riferimento.getMonth(), riferimento.getDate() + offsetLunedi);
+  const lunedi = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() + offsetLunedi);
   const domenica = new Date(lunedi.getFullYear(), lunedi.getMonth(), lunedi.getDate() + 6);
-  return { inizio: fmt(lunedi), fine: fmt(domenica) };
+  return { inizio: fmtDataIso(lunedi), fine: fmtDataIso(domenica) };
+}
+// range "precedente" per il confronto, con la stessa logica del
+// periodo (mese solare precedente per "mensile", anno scolastico
+// precedente per trimestrale/semestrale, ecc.) — non un generico
+// scorrimento di N giorni, che per i mesi darebbe confini sbagliati
+function rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo) {
+  if (periodo === "mensile") {
+    const [a, m] = range.inizio.split("-").map(Number);
+    const meseIni = new Date(a, m - 2, 1);
+    return { inizio: fmtDataIso(meseIni), fine: fmtDataIso(new Date(meseIni.getFullYear(), meseIni.getMonth() + 1, 0)) };
+  }
+  if (periodo === "settimanale") return rangeConfrontoAnalisiCosti(range, "periodoprecedente");
+  if (periodo === "semestrale" || periodo === "trimestrale") {
+    return { inizio: `${anno - 1}-09-01`, fine: fmtDataIso(new Date(anno, 7, 31)) };
+  }
+  return rangeConfrontoAnalisiCosti(range, confrontoTipo);
+}
+const GIORNI_SETTIMANA_ABBR = ["Dom", "Lun", "Mar", "Mer", "Gio", "Ven", "Sab"]; // getDay(): 0=Domenica
+// 7 bucket giornalieri Lun→Dom con i nomi dei giorni (non i numeri del mese)
+function bucketsGiorniSettimana(range) {
+  const [aI, mI, gI] = range.inizio.split("-").map(Number);
+  const buckets = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(aI, mI - 1, gI + i);
+    const iso = fmtDataIso(d);
+    buckets.push({ etichetta: GIORNI_SETTIMANA_ABBR[d.getDay()], da: iso, a: iso });
+  }
+  return buckets;
+}
+// bucket settimanali (usato per "Mensile": le settimane DI QUESTO MESE)
+function bucketizzaSettimane(inizio, fine) {
+  const [aI, mI, gI] = inizio.split("-").map(Number);
+  const [aF, mF, gF] = fine.split("-").map(Number);
+  const dIn = new Date(aI, mI - 1, gI), dFin = new Date(aF, mF - 1, gF);
+  const giorni = Math.max(1, Math.round((dFin - dIn) / 86400000) + 1);
+  const buckets = [];
+  let n = 1;
+  for (let i = 0; i < giorni; i += 7) {
+    const dA = new Date(aI, mI - 1, gI + i);
+    const dB = new Date(aI, mI - 1, gI + Math.min(i + 6, giorni - 1));
+    buckets.push({ etichetta: `S${n}`, da: fmtDataIso(dA), a: fmtDataIso(dB) });
+    n++;
+  }
+  return buckets;
+}
+// 4 trimestri o 2 semestri dell'anno SCOLASTICO che parte a settembre
+// dell'anno indicato (es. anno=2025 → Set 2025 → Ago 2026)
+function bucketsAnnoScolasticoGruppi(anno, nGruppi) {
+  const mesiPerGruppo = 12 / nGruppi;
+  const buckets = [];
+  for (let g = 0; g < nGruppi; g++) {
+    const meseIniAssoluto = 8 + g * mesiPerGruppo; // 8 = settembre (indice 0-based)
+    const dIni = new Date(anno + Math.floor(meseIniAssoluto / 12), meseIniAssoluto % 12, 1);
+    const meseFineAssoluto = meseIniAssoluto + mesiPerGruppo - 1;
+    const dFine = new Date(anno + Math.floor(meseFineAssoluto / 12), (meseFineAssoluto % 12) + 1, 0);
+    const etichetta = mesiPerGruppo === 1 ? MESI_ABBR[dIni.getMonth()] : `${MESI_ABBR[dIni.getMonth()]}-${MESI_ABBR[dFine.getMonth()]}`;
+    buckets.push({ etichetta, da: fmtDataIso(dIni), a: fmtDataIso(dFine) });
+  }
+  return buckets;
 }
 
 // grafico a barre affiancate (periodo selezionato vs periodo di
@@ -9438,6 +9495,16 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
 
+  // cambiando periodo, l'anno selezionato deve restare sensato: "Annuale"
+  // vuole l'anno solare corrente, "Trimestrale/Semestrale" l'anno
+  // scolastico in corso (che può essere l'anno solare precedente, es. ad
+  // agosto siamo ancora nell'anno scolastico iniziato a settembre scorso)
+  function selezionaPeriodo(nuovoPeriodo) {
+    setPeriodo(nuovoPeriodo);
+    if (nuovoPeriodo === "annuale") setAnno(oggi.getFullYear());
+    else if (nuovoPeriodo === "trimestrale" || nuovoPeriodo === "semestrale") setAnno(annoScolasticoDi(oggiStr));
+  }
+
   async function sincronizzaCatalogo() {
     setSincronizzando(true);
     setMsgSync("");
@@ -9449,7 +9516,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   }
 
   const range = rangeMagazzino(periodo, anno);
-  const rangePrecedente = rangeConfrontoAnalisiCosti(range, confrontoTipo);
+  const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo);
   const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
 
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
@@ -9549,10 +9616,19 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const carrelloMedioPrecedente = carrelloMedioPeriodo(rangePrecedente.inizio, rangePrecedente.fine);
   const varCarrello = carrelloMedio != null && carrelloMedioPrecedente > 0 ? round1Erp(((carrelloMedio - carrelloMedioPrecedente) / carrelloMedioPrecedente) * 100) : null;
 
-  // bucketizzazione (giornaliera/settimanale/mensile secondo la
-  // lunghezza del periodo, stessa funzione già usata da "Costi operativi")
-  const buckets = bucketizzaPeriodoCosti(range.inizio, range.fine);
-  const bucketsPrecedenti = bucketizzaPeriodoCosti(rangePrecedente.inizio, rangePrecedente.fine);
+  // bucketizzazione: dipende dal periodo scelto, non solo dalla durata
+  // (vedi rangeMagazzino) — "Annuale" riusa la bucketizzazione generica
+  // già usata da "Costi operativi" (mensile, dato che un anno solare
+  // supera sempre i 120gg); gli altri periodi hanno bucket dedicati
+  function bucketsPerPeriodo(r) {
+    if (periodo === "trimestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 4);
+    if (periodo === "semestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 2);
+    if (periodo === "mensile") return bucketizzaSettimane(r.inizio, r.fine);
+    if (periodo === "settimanale") return bucketsGiorniSettimana(r);
+    return bucketizzaPeriodoCosti(r.inizio, r.fine);
+  }
+  const buckets = bucketsPerPeriodo(range);
+  const bucketsPrecedenti = bucketsPerPeriodo(rangePrecedente);
 
   function sommaBucketVendite(inizio, fine) {
     let quantita = 0, fatturato = 0;
@@ -9637,14 +9713,16 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
             {[{ v: "annuale", l: "Annuale" }, { v: "semestrale", l: "Semestrale" }, { v: "trimestrale", l: "Trimestrale" }, { v: "mensile", l: "Mensile" }, { v: "settimanale", l: "Settimanale" }].map((p) => (
-              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>
+              <button key={p.v} onClick={() => selezionaPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>
                 {p.l}
               </button>
             ))}
           </div>
-          <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
-            {anniDisponibili.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
+          {(periodo === "annuale" || periodo === "trimestrale" || periodo === "semestrale") && (
+            <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
+              {anniDisponibili.map((a) => <option key={a} value={a}>{periodo === "annuale" ? a : `${a}/${String((a + 1) % 100).padStart(2, "0")}`}</option>)}
+            </select>
+          )}
           <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
             <option value="">Tutte le categorie</option>
             {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
@@ -9700,10 +9778,16 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Analisi vendite</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
-                  <option value="periodoprecedente">{range.inizio.slice(0, 4)} vs periodo prec.</option>
-                  <option value="annoprecedente">{range.inizio.slice(0, 4)} vs {Number(range.inizio.slice(0, 4)) - 1}</option>
-                </select>
+                {periodo === "annuale" ? (
+                  <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
+                    <option value="periodoprecedente">{range.inizio.slice(0, 4)} vs periodo prec.</option>
+                    <option value="annoprecedente">{range.inizio.slice(0, 4)} vs {Number(range.inizio.slice(0, 4)) - 1}</option>
+                  </select>
+                ) : (
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                    {periodo === "settimanale" ? "vs settimana precedente" : periodo === "mensile" ? "vs mese precedente" : "vs anno scolastico precedente"}
+                  </div>
+                )}
                 <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
                   {[{ v: "quantita", l: "Quantità" }, { v: "fatturato", l: "Fatturato" }].map((o) => (
                     <button key={o.v} onClick={() => setVistaAnalisi(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaAnalisi === o.v ? NAVY : "transparent", color: vistaAnalisi === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
