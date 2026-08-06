@@ -10056,6 +10056,57 @@ function ModaleNuovaCategoriaShop({ padreNome, onClose, onCrea, salvando }) {
   );
 }
 
+// editor di testo con formattazione (grassetto/corsivo/elenco) invece di un
+// campo dove si vedrebbe il codice HTML grezzo: WooCommerce salva le
+// descrizioni come HTML, ma chi lavora in magazzino non deve scriverlo a
+// mano. "key" sull'istanza (fatto dal chiamante, tipicamente sull'id del
+// prodotto/categoria) serve a far ripartire il contenuto quando si passa a
+// un prodotto diverso, dato che il contenuto iniziale viene scritto nel div
+// una sola volta (altrimenti riscriverlo ad ogni render sposterebbe il
+// cursore mentre si digita)
+function EditorRicco({ value, onChange, minHeight = 90 }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = value || "";
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function comando(nome) {
+    document.execCommand("styleWithCSS", false, false);
+    document.execCommand(nome);
+    onChange(ref.current.innerHTML);
+  }
+
+  const bottone = (etichetta, comandoNome, stile) => (
+    <button
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => comando(comandoNome)}
+      style={{ ...fontBody, fontSize: 13, minWidth: 28, padding: "4px 8px", borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...stile }}
+    >
+      {etichetta}
+    </button>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+        {bottone("B", "bold", { fontWeight: 700 })}
+        {bottone("I", "italic", { fontStyle: "italic" })}
+        {bottone("• Elenco", "insertUnorderedList", {})}
+      </div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={(e) => onChange(e.currentTarget.innerHTML)}
+        style={{ ...inputStyle, minHeight, overflow: "auto" }}
+      />
+    </div>
+  );
+}
+
 function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
@@ -10398,8 +10449,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Trascina per riordinare le immagini. La prima è la copertina mostrata sullo shop.</div>
       </Field>
       <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
-      <Field label="Descrizione breve"><textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={prodottoForm.descrizioneBreve} onChange={(e) => setProdottoForm((f) => ({ ...f, descrizioneBreve: e.target.value }))} /></Field>
-      <Field label="Descrizione completa"><textarea style={{ ...inputStyle, minHeight: 110, resize: "vertical" }} value={prodottoForm.descrizione} onChange={(e) => setProdottoForm((f) => ({ ...f, descrizione: e.target.value }))} /></Field>
+      <Field label="Descrizione breve">
+        <EditorRicco key={`breve-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizioneBreve} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizioneBreve: html }))} minHeight={60} />
+      </Field>
+      <Field label="Descrizione completa">
+        <EditorRicco key={`completa-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizione} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizione: html }))} minHeight={110} />
+      </Field>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 140px" }}><Field label="Prezzo (€)"><input style={inputStyle} inputMode="decimal" value={prodottoForm.prezzo} onChange={(e) => setProdottoForm((f) => ({ ...f, prezzo: e.target.value }))} /></Field></div>
         <div style={{ flex: "1 1 140px" }}>
@@ -10447,7 +10502,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
       </Field>
       <Field label="Nome categoria"><input style={inputStyle} value={categoriaForm.nome} onChange={(e) => setCategoriaForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
-      <Field label="Descrizione"><textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical" }} value={categoriaForm.descrizione} onChange={(e) => setCategoriaForm((f) => ({ ...f, descrizione: e.target.value }))} /></Field>
+      <Field label="Descrizione">
+        <EditorRicco key={`cat-${categoriaForm.id}`} value={categoriaForm.descrizione} onChange={(html) => setCategoriaForm((f) => ({ ...f, descrizione: html }))} minHeight={100} />
+      </Field>
     </div>
   );
 
