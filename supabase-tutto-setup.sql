@@ -1286,4 +1286,39 @@ create policy "accesso interno prodotti_categorie" on public.prodotti_categorie 
 create index if not exists prodotti_shop_attivo_idx on public.prodotti_shop (attivo);
 create index if not exists prodotti_categorie_categoria_idx on public.prodotti_categorie (categoria_id);
 
+-- ---------------------------------------------------------
+-- 30) Gestione Shop: descrizione/immagine/ordine di categorie e
+-- prodotti, galleria immagini prodotto (prodotti_immagini). Scritte
+-- dalle Edge Function woo-gestisci-categoria/woo-gestisci-prodotto e
+-- tenute aggiornate anche da woo-sync-catalogo.
+-- ---------------------------------------------------------
+alter table public.categorie_prodotti add column if not exists descrizione text;
+alter table public.categorie_prodotti add column if not exists immagine_url text;
+alter table public.categorie_prodotti add column if not exists ordine integer not null default 0;
+
+alter table public.prodotti_shop add column if not exists descrizione text;
+alter table public.prodotti_shop add column if not exists descrizione_breve text;
+alter table public.prodotti_shop add column if not exists stato text not null default 'publish';
+
+create table if not exists public.prodotti_immagini (
+  id uuid primary key default gen_random_uuid(),
+  prodotto_id uuid not null references public.prodotti_shop(id) on delete cascade,
+  woo_image_id integer,
+  url text not null,
+  ordine integer not null default 0,
+  ts_sync timestamptz not null default now()
+);
+alter table public.prodotti_immagini enable row level security;
+drop policy if exists "accesso interno prodotti_immagini" on public.prodotti_immagini;
+create policy "accesso interno prodotti_immagini" on public.prodotti_immagini for all to anon using (true) with check (true);
+
+create index if not exists prodotti_immagini_prodotto_ordine_idx on public.prodotti_immagini (prodotto_id, ordine);
+
+-- storage per le immagini caricate da "Gestione Shop" (poi passate a
+-- WooCommerce come URL: WooCommerce le scarica nella sua media library)
+insert into storage.buckets (id, name, public) values ('shop-immagini', 'shop-immagini', true) on conflict (id) do nothing;
+drop policy if exists "accesso interno shop-immagini" on storage.objects;
+create policy "accesso interno shop-immagini" on storage.objects for all to anon
+  using (bucket_id = 'shop-immagini') with check (bucket_id = 'shop-immagini');
+
 notify pgrst, 'reload schema';

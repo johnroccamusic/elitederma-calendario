@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 // build "legacy" invece di quella principale: consigliata dalla stessa
 // pdf.js per i browser che supportano peggio i worker "module" (in
@@ -9447,7 +9447,7 @@ function GraficoTrendBarre({ voci }) {
   );
 }
 
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack, onApriGestioneShop }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -9719,7 +9719,10 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Magazzino</div>
           <div style={{ textAlign: "right" }}>
-            <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Button variant="ghost" onClick={onApriGestioneShop}>Gestione Shop</Button>
+              <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
+            </div>
             {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
           </div>
         </div>
@@ -9955,6 +9958,548 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           prodotto={prodottoModifica}
           onClose={() => setProdottoModifica(null)}
           onFatto={() => { setProdottoModifica(null); ricarica(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------- Gestione Shop (categorie/prodotti/immagini WooCommerce) ----------
+// Pannello dentro Magazzino per gestire lo shop online senza aprire
+// wp-admin: albero categorie a sinistra, elenco prodotti della categoria
+// al centro, dettaglio (categoria o prodotto) a destra. Ogni scrittura
+// passa da una Edge Function che aggiorna prima WooCommerce e solo se
+// riesce riflette la modifica sui dati locali (vedi woo-gestisci-categoria
+// e woo-gestisci-prodotto): niente salvataggi "finti" in caso di errore.
+
+function IconaCartellaShop({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    </svg>
+  );
+}
+function IconaImmagineShop({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
+function IconaShopShop({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l1-5h16l1 5" /><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9" /><path d="M9 20v-6h6v6" />
+    </svg>
+  );
+}
+
+// { "_root": [categorie di primo livello], "<idCategoria>": [figli] },
+// ognuna ordinata per "ordine" (rispecchia l'ordine reale dello shop)
+function costruisciAlberoCategorie(categorie) {
+  const figliDi = {};
+  (categorie || []).forEach((c) => {
+    const chiave = c.categoria_padre_id || "_root";
+    (figliDi[chiave] ||= []).push(c);
+  });
+  Object.values(figliDi).forEach((lista) => lista.sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome)));
+  return figliDi;
+}
+
+function NodoAlberoShop({ categoria, profondita, figliDi, contaProdotti, categoriaSelId, collassate, onSeleziona, onToggle, onAggiungiSotto }) {
+  const figli = figliDi[categoria.id] || [];
+  const haFigli = figli.length > 0;
+  const collassato = collassate.has(categoria.id);
+  const selezionata = categoriaSelId === categoria.id;
+  return (
+    <div>
+      <div
+        onClick={() => onSeleziona(categoria.id)}
+        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 6px", paddingLeft: 6 + profondita * 16, borderRadius: 8, cursor: "pointer", background: selezionata ? "#FBF3E4" : "transparent", border: selezionata ? `1px solid ${GOLD}` : "1px solid transparent" }}
+      >
+        <button
+          onClick={(e) => { e.stopPropagation(); if (haFigli) onToggle(categoria.id); }}
+          style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: haFigli ? "pointer" : "default", color: haFigli ? NAVY : "transparent", flexShrink: 0 }}
+        >
+          {haFigli
+            ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: collassato ? "rotate(-90deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
+            : <span style={{ width: 11, display: "inline-block" }} />}
+        </button>
+        <span style={{ color: GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
+        <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoria.nome}</span>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdotti(categoria.id)}</span>
+        <button onClick={(e) => { e.stopPropagation(); onAggiungiSotto(categoria.id); }} title="Aggiungi sotto-categoria" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: "pointer", color: MUTED, flexShrink: 0 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+      </div>
+      {haFigli && !collassato && figli.map((f) => (
+        <NodoAlberoShop key={f.id} categoria={f} profondita={profondita + 1} figliDi={figliDi} contaProdotti={contaProdotti} categoriaSelId={categoriaSelId} collassate={collassate} onSeleziona={onSeleziona} onToggle={onToggle} onAggiungiSotto={onAggiungiSotto} />
+      ))}
+    </div>
+  );
+}
+
+function ModaleNuovaCategoriaShop({ padreNome, onClose, onCrea, salvando }) {
+  const [nome, setNome] = useState("");
+  return (
+    <Modal title={padreNome ? `Nuova sotto-categoria di "${padreNome}"` : "Nuova categoria"} onClose={onClose}>
+      <Field label="Nome categoria">
+        <input style={inputStyle} autoFocus value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && nome.trim() && onCrea(nome)} />
+      </Field>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+        <Button variant="ghost" onClick={onClose}>Annulla</Button>
+        <Button onClick={() => onCrea(nome)} disabled={salvando || !nome.trim()}>{salvando ? "Creo…" : "Crea categoria"}</Button>
+      </div>
+    </Modal>
+  );
+}
+
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
+  const [collassate, setCollassate] = useState(() => new Set());
+  const [ricerca, setRicerca] = useState("");
+  const [filtroStato, setFiltroStato] = useState("tutti");
+  const [prodottoForm, setProdottoForm] = useState(null);
+  const [categoriaForm, setCategoriaForm] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [caricandoImmagine, setCaricandoImmagine] = useState(false);
+  const [msgErrore, setMsgErrore] = useState("");
+  const [msgSuccesso, setMsgSuccesso] = useState("");
+  const [modaleCategoria, setModaleCategoria] = useState(null);
+  const [vistaMobile, setVistaMobile] = useState("albero");
+  const trascinamento = useRef(null);
+
+  const categorieAttive = categorieProdotti || [];
+  const figliDi = useMemo(() => costruisciAlberoCategorie(categorieAttive), [categorieAttive]);
+  const radiciCategorie = figliDi["_root"] || [];
+
+  const contaProdottiDiretti = (categoriaId) => (prodottiCategorie || []).filter((pc) => pc.categoria_id === categoriaId).length;
+
+  const categorieIdPerProdotto = useMemo(() => {
+    const mappa = {};
+    (prodottiCategorie || []).forEach((pc) => { (mappa[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+    return mappa;
+  }, [prodottiCategorie]);
+
+  const immaginiPerProdotto = useMemo(() => {
+    const mappa = {};
+    (prodottiImmagini || []).forEach((im) => { (mappa[im.prodotto_id] ||= []).push(im); });
+    Object.values(mappa).forEach((lista) => lista.sort((a, b) => (a.ordine || 0) - (b.ordine || 0)));
+    return mappa;
+  }, [prodottiImmagini]);
+
+  const categoriaSelezionata = categorieAttive.find((c) => c.id === categoriaSelId) || null;
+  const totaleProdottiAttivi = (prodottiShop || []).filter((p) => p.attivo !== false).length;
+
+  // la ricerca testuale è globale (ignora la categoria selezionata), utile
+  // quando una categoria ha troppi articoli o non si ricorda dov'è il prodotto
+  const prodottiBase = ricerca.trim() || !categoriaSelId
+    ? (prodottiShop || []).filter((p) => p.attivo !== false)
+    : (prodottiShop || []).filter((p) => p.attivo !== false && (categorieIdPerProdotto[p.id] || []).includes(categoriaSelId));
+
+  const prodottiFiltrati = prodottiBase
+    .filter((p) => !ricerca.trim() || p.nome.toLowerCase().includes(ricerca.trim().toLowerCase()))
+    .filter((p) => filtroStato === "tutti" || (filtroStato === "online" ? p.stato !== "draft" : p.stato === "draft"))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const conteggiStato = {
+    tutti: prodottiBase.length,
+    online: prodottiBase.filter((p) => p.stato !== "draft").length,
+    bozze: prodottiBase.filter((p) => p.stato === "draft").length,
+  };
+
+  function categorieAppiattite() {
+    const righe = [];
+    (function esplora(lista, profondita) {
+      lista.forEach((c) => { righe.push({ ...c, profondita }); esplora(figliDi[c.id] || [], profondita + 1); });
+    })(radiciCategorie, 0);
+    return righe;
+  }
+
+  function selezionaCategoria(id) {
+    setCategoriaSelId(id);
+    setProdottoForm(null);
+    setMsgErrore(""); setMsgSuccesso("");
+    const cat = categorieAttive.find((c) => c.id === id);
+    setCategoriaForm(cat ? { id: cat.id, nome: cat.nome, descrizione: cat.descrizione || "", immagineUrl: cat.immagine_url || "" } : null);
+    if (isMobile) setVistaMobile("lista");
+  }
+
+  function toggleCollassa(id) {
+    setCollassate((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+
+  function apriProdotto(p) {
+    setProdottoForm({
+      id: p.id,
+      nome: p.nome,
+      descrizioneBreve: p.descrizione_breve || "",
+      descrizione: p.descrizione || "",
+      prezzo: p.prezzo_vendita != null ? String(p.prezzo_vendita) : "",
+      stato: p.stato || "publish",
+      categorieIds: categorieIdPerProdotto[p.id] || [],
+      immagini: (immaginiPerProdotto[p.id] || []).map((im) => ({ chiave: im.id, url: im.url, wooImageId: im.woo_image_id })),
+    });
+    setMsgErrore(""); setMsgSuccesso("");
+    if (isMobile) setVistaMobile("dettaglio");
+  }
+
+  function nuovoProdotto() {
+    setProdottoForm({
+      id: null, nome: "", descrizioneBreve: "", descrizione: "", prezzo: "", stato: "publish",
+      categorieIds: categoriaSelId ? [categoriaSelId] : [],
+      immagini: [],
+    });
+    setMsgErrore(""); setMsgSuccesso("");
+    if (isMobile) setVistaMobile("dettaglio");
+  }
+
+  async function caricaFileSuStorage(file) {
+    const estensione = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const percorso = `${Date.now()}-${Math.random().toString(36).slice(2)}.${estensione}`;
+    const { error } = await supabase.storage.from("shop-immagini").upload(percorso, file);
+    if (error) throw new Error(error.message);
+    return supabase.storage.from("shop-immagini").getPublicUrl(percorso).data.publicUrl;
+  }
+
+  async function onCambiaImmagineCategoria(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !categoriaForm) return;
+    setCaricandoImmagine(true);
+    try {
+      const url = await caricaFileSuStorage(file);
+      setCategoriaForm((f) => ({ ...f, immagineUrl: url }));
+    } catch (err) {
+      window.alert("Caricamento immagine non riuscito: " + err.message);
+    }
+    setCaricandoImmagine(false);
+  }
+
+  async function onAggiungiImmaginiProdotto(e) {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length || !prodottoForm) return;
+    setCaricandoImmagine(true);
+    try {
+      const nuove = [];
+      for (const file of files) {
+        const url = await caricaFileSuStorage(file);
+        nuove.push({ chiave: `nuova-${Date.now()}-${Math.random().toString(36).slice(2)}`, url, wooImageId: null });
+      }
+      setProdottoForm((f) => ({ ...f, immagini: [...f.immagini, ...nuove] }));
+    } catch (err) {
+      window.alert("Caricamento immagine non riuscito: " + err.message);
+    }
+    setCaricandoImmagine(false);
+  }
+
+  function rimuoviImmagineProdotto(chiave) {
+    setProdottoForm((f) => ({ ...f, immagini: f.immagini.filter((im) => im.chiave !== chiave) }));
+  }
+  function rendiCopertina(chiave) {
+    setProdottoForm((f) => {
+      const idx = f.immagini.findIndex((im) => im.chiave === chiave);
+      if (idx <= 0) return f;
+      const nuove = [...f.immagini];
+      const [scelta] = nuove.splice(idx, 1);
+      nuove.unshift(scelta);
+      return { ...f, immagini: nuove };
+    });
+  }
+  function onDropImmagine(chiaveDestinazione) {
+    const origine = trascinamento.current;
+    trascinamento.current = null;
+    if (!origine || origine === chiaveDestinazione) return;
+    setProdottoForm((f) => {
+      const nuove = [...f.immagini];
+      const idxOrigine = nuove.findIndex((im) => im.chiave === origine);
+      const idxDestinazione = nuove.findIndex((im) => im.chiave === chiaveDestinazione);
+      if (idxOrigine < 0 || idxDestinazione < 0) return f;
+      const [spostata] = nuove.splice(idxOrigine, 1);
+      nuove.splice(idxDestinazione, 0, spostata);
+      return { ...f, immagini: nuove };
+    });
+  }
+
+  function toggleCategoriaProdotto(categoriaId) {
+    setProdottoForm((f) => {
+      const presente = f.categorieIds.includes(categoriaId);
+      return { ...f, categorieIds: presente ? f.categorieIds.filter((id) => id !== categoriaId) : [...f.categorieIds, categoriaId] };
+    });
+  }
+
+  async function salvaCategoria() {
+    if (!categoriaForm) return;
+    setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
+    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", {
+      body: { azione: "modifica", categoriaId: categoriaForm.id, nome: categoriaForm.nome, descrizione: categoriaForm.descrizione, immagineUrl: categoriaForm.immagineUrl },
+    });
+    setSalvando(false);
+    if (error || data?.errore) { setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
+    setMsgSuccesso("Categoria salvata.");
+    ricarica();
+  }
+
+  async function eliminaCategoriaCorrente() {
+    if (!categoriaForm) return;
+    const n = contaProdottiDiretti(categoriaForm.id);
+    const messaggio = n > 0
+      ? `Questa categoria contiene ${n} prodott${n === 1 ? "o" : "i"}: verranno scollegati da questa categoria (non eliminati). Continuare?`
+      : `Eliminare la categoria "${categoriaForm.nome}"?`;
+    if (!window.confirm(messaggio)) return;
+    setSalvando(true); setMsgErrore("");
+    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", { body: { azione: "elimina", categoriaId: categoriaForm.id } });
+    setSalvando(false);
+    if (error || data?.errore) { window.alert("Eliminazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+    setCategoriaSelId(null); setCategoriaForm(null);
+    ricarica();
+  }
+
+  async function creaCategoria(nome, padreId) {
+    if (!nome.trim()) return;
+    setSalvando(true);
+    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", { body: { azione: "crea", nome: nome.trim(), categoriaPadreId: padreId || undefined } });
+    setSalvando(false);
+    if (error || data?.errore) { window.alert("Creazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+    setModaleCategoria(null);
+    await ricarica();
+    if (data?.categoria?.id) selezionaCategoria(data.categoria.id);
+  }
+
+  async function salvaProdotto() {
+    if (!prodottoForm) return;
+    if (!prodottoForm.nome.trim()) { setMsgErrore("Il nome del prodotto è obbligatorio."); return; }
+    const prezzoNum = parseNum(prodottoForm.prezzo);
+    if (!(prezzoNum > 0)) { setMsgErrore("Inserisci un prezzo valido, maggiore di zero."); return; }
+    setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
+    const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
+      body: {
+        azione: prodottoForm.id ? "modifica" : "crea",
+        prodottoId: prodottoForm.id || undefined,
+        nome: prodottoForm.nome.trim(),
+        descrizioneBreve: prodottoForm.descrizioneBreve,
+        descrizione: prodottoForm.descrizione,
+        prezzo: prezzoNum,
+        stato: prodottoForm.stato,
+        categorieIds: prodottoForm.categorieIds,
+        immagini: prodottoForm.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
+      },
+    });
+    setSalvando(false);
+    if (error || data?.errore) { setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
+    setMsgSuccesso(prodottoForm.id ? "Prodotto salvato." : "Prodotto creato.");
+    if (!prodottoForm.id && data?.prodottoId) setProdottoForm((f) => ({ ...f, id: data.prodottoId }));
+    ricarica();
+  }
+
+  const paneAlbero = (
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Struttura shop</div>
+      <div
+        onClick={() => selezionaCategoria(null)}
+        style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: categoriaSelId === null ? "#FBF3E4" : "transparent", border: categoriaSelId === null ? `1px solid ${GOLD}` : "1px solid transparent" }}
+      >
+        <span style={{ color: NAVY, display: "flex" }}><IconaShopShop size={14} /></span>
+        <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, flex: 1 }}>Tutti i prodotti</span>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px" }}>{totaleProdottiAttivi}</span>
+      </div>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {radiciCategorie.map((c) => (
+          <NodoAlberoShop key={c.id} categoria={c} profondita={0} figliDi={figliDi} contaProdotti={contaProdottiDiretti} categoriaSelId={categoriaSelId} collassate={collassate} onSeleziona={selezionaCategoria} onToggle={toggleCollassa} onAggiungiSotto={(padreId) => setModaleCategoria({ padreId })} />
+        ))}
+        {radiciCategorie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna categoria. Sincronizza il catalogo da Magazzino o creane una.</div>}
+      </div>
+      <button onClick={() => setModaleCategoria({ padreId: null })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi categoria</button>
+    </div>
+  );
+
+  const paneLista = (
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+        {ricerca.trim() ? "Risultati ricerca" : categoriaSelezionata ? categoriaSelezionata.nome : "Tutti i prodotti"}
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+        {[{ v: "tutti", l: "Tutti" }, { v: "online", l: "Online" }, { v: "bozze", l: "Bozze" }].map((t) => (
+          <button key={t.v} onClick={() => setFiltroStato(t.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 14, border: "none", background: filtroStato === t.v ? NAVY : BG, color: filtroStato === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
+            {t.l} {conteggiStato[t.v]}
+          </button>
+        ))}
+      </div>
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        {prodottiFiltrati.map((p) => {
+          const immagini = immaginiPerProdotto[p.id] || [];
+          const selezionato = prodottoForm?.id === p.id;
+          return (
+            <div key={p.id} onClick={() => apriProdotto(p)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#FAF8F2", border: selezionato ? `1px solid ${GOLD}` : `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ width: 40, height: 40, borderRadius: 8, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+                {immagini[0] ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: MUTED }}><IconaImmagineShop size={16} /></span>}
+                {immagini.length > 1 && <span style={{ position: "absolute", bottom: -1, right: -1, ...fontBody, fontSize: 9, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "1px 4px" }}>{immagini.length}</span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp(p.prezzo_vendita) : "—"}</div>
+              </div>
+              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: p.stato === "draft" ? "#F4EEDB" : "#E6F2E8", color: p.stato === "draft" ? "#8A6D1D" : "#2E7D32", flexShrink: 0 }}>{p.stato === "draft" ? "Bozza" : "Online"}</span>
+            </div>
+          );
+        })}
+        {prodottiFiltrati.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto.</div>}
+      </div>
+      <button onClick={nuovoProdotto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "10px 10px", cursor: "pointer", marginTop: 10 }}>+ Nuovo prodotto</button>
+    </div>
+  );
+
+  const messaggi = (
+    <>
+      {msgErrore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 12, padding: "8px 10px", background: "#FBEAEA", borderRadius: 8 }}>{msgErrore}</div>}
+      {msgSuccesso && !msgErrore && <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginBottom: 12, padding: "8px 10px", background: "#EAF5EC", borderRadius: 8 }}>{msgSuccesso}</div>}
+    </>
+  );
+
+  const paneDettaglioProdotto = prodottoForm && (
+    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 230px)", overflow: "auto" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{prodottoForm.id ? "Modifica prodotto" : "Nuovo prodotto"}</div>
+        <Button onClick={salvaProdotto} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+      </div>
+      {messaggi}
+      <Field label="Immagini prodotto">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {prodottoForm.immagini.map((im, i) => (
+            <div
+              key={im.chiave}
+              draggable
+              onDragStart={() => { trascinamento.current = im.chiave; }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => onDropImmagine(im.chiave)}
+              style={{ width: 84, height: 84, borderRadius: 10, overflow: "hidden", position: "relative", border: i === 0 ? `2px solid ${GOLD}` : `1px solid ${CREAM_BORDER}`, cursor: "grab" }}
+            >
+              <img src={im.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              {i === 0 && <span style={{ position: "absolute", top: 3, left: 3, ...fontBody, fontSize: 8.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 6, padding: "1px 5px" }}>Copertina</span>}
+              <div style={{ position: "absolute", top: 3, right: 3, display: "flex", gap: 3 }}>
+                {i !== 0 && (
+                  <button onClick={() => rendiCopertina(im.chiave)} title="Rendi copertina" style={{ background: "rgba(14,27,51,0.75)", border: "none", borderRadius: 6, color: "#fff", width: 18, height: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, padding: 0 }}>★</button>
+                )}
+                <button onClick={() => rimuoviImmagineProdotto(im.chiave)} title="Elimina immagine" style={{ background: "rgba(192,57,43,0.85)", border: "none", borderRadius: 6, color: "#fff", width: 18, height: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+          <label style={{ width: 84, height: 84, borderRadius: 10, border: `1.5px dashed ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", cursor: caricandoImmagine ? "default" : "pointer", color: MUTED, ...fontBody, fontSize: 24 }}>
+            {caricandoImmagine ? "…" : "+"}
+            <input type="file" accept="image/*" multiple onChange={onAggiungiImmaginiProdotto} style={{ display: "none" }} disabled={caricandoImmagine} />
+          </label>
+        </div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Trascina per riordinare le immagini. La prima è la copertina mostrata sullo shop.</div>
+      </Field>
+      <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
+      <Field label="Descrizione breve"><textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={prodottoForm.descrizioneBreve} onChange={(e) => setProdottoForm((f) => ({ ...f, descrizioneBreve: e.target.value }))} /></Field>
+      <Field label="Descrizione completa"><textarea style={{ ...inputStyle, minHeight: 110, resize: "vertical" }} value={prodottoForm.descrizione} onChange={(e) => setProdottoForm((f) => ({ ...f, descrizione: e.target.value }))} /></Field>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 140px" }}><Field label="Prezzo (€)"><input style={inputStyle} inputMode="decimal" value={prodottoForm.prezzo} onChange={(e) => setProdottoForm((f) => ({ ...f, prezzo: e.target.value }))} /></Field></div>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Disponibilità">
+            <select style={inputStyle} value={prodottoForm.stato} onChange={(e) => setProdottoForm((f) => ({ ...f, stato: e.target.value }))}>
+              <option value="publish">Pubblicato</option>
+              <option value="draft">Bozza</option>
+            </select>
+          </Field>
+        </div>
+      </div>
+      <Field label="Categorie">
+        <div style={{ maxHeight: 160, overflow: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 8 }}>
+          {categorieAppiattite().map((c) => (
+            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 4px", paddingLeft: 4 + c.profondita * 16, cursor: "pointer" }}>
+              <input type="checkbox" checked={prodottoForm.categorieIds.includes(c.id)} onChange={() => toggleCategoriaProdotto(c.id)} />
+              <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{c.nome}</span>
+            </label>
+          ))}
+          {categorieAppiattite().length === 0 && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessuna categoria disponibile.</div>}
+        </div>
+      </Field>
+    </div>
+  );
+
+  const paneDettaglioCategoria = !prodottoForm && categoriaForm && (
+    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 230px)", overflow: "auto" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Categoria</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Button variant="danger" onClick={eliminaCategoriaCorrente} disabled={salvando}>Elimina</Button>
+          <Button onClick={salvaCategoria} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+        </div>
+      </div>
+      {messaggi}
+      <Field label="Immagine categoria">
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 72, height: 72, borderRadius: 10, background: BG, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            {categoriaForm.immagineUrl ? <img src={categoriaForm.immagineUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: MUTED }}><IconaImmagineShop size={22} /></span>}
+          </div>
+          <label style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: caricandoImmagine ? "default" : "pointer" }}>
+            {caricandoImmagine ? "Carico…" : "Cambia immagine"}
+            <input type="file" accept="image/*" onChange={onCambiaImmagineCategoria} style={{ display: "none" }} disabled={caricandoImmagine} />
+          </label>
+        </div>
+      </Field>
+      <Field label="Nome categoria"><input style={inputStyle} value={categoriaForm.nome} onChange={(e) => setCategoriaForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
+      <Field label="Descrizione"><textarea style={{ ...inputStyle, minHeight: 100, resize: "vertical" }} value={categoriaForm.descrizione} onChange={(e) => setCategoriaForm((f) => ({ ...f, descrizione: e.target.value }))} /></Field>
+    </div>
+  );
+
+  const panePlaceholder = (
+    <div style={{ ...cardStyle, marginBottom: 0, height: isMobile ? 200 : "calc(100vh - 230px)", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 30 }}>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Seleziona una categoria o un prodotto per vederne i dettagli, oppure crea qualcosa di nuovo.</div>
+    </div>
+  );
+
+  const paneDettaglio = paneDettaglioProdotto || paneDettaglioCategoria || panePlaceholder;
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1500, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione Shop</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Categorie, prodotti e immagini dello shop online, sincronizzati con WooCommerce.</div>
+          </div>
+          <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} placeholder="Cerca prodotto…" value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} />
+        </div>
+
+        {isMobile ? (
+          <>
+            {vistaMobile !== "albero" && (
+              <button onClick={() => setVistaMobile(vistaMobile === "dettaglio" ? "lista" : "albero")} style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                <IconaFrecciaSinistra size={14} /> {vistaMobile === "dettaglio" ? "Elenco prodotti" : "Struttura shop"}
+              </button>
+            )}
+            {vistaMobile === "albero" && paneAlbero}
+            {vistaMobile === "lista" && paneLista}
+            {vistaMobile === "dettaglio" && paneDettaglio}
+          </>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "280px 340px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
+            {paneAlbero}
+            {paneLista}
+            {paneDettaglio}
+          </div>
+        )}
+      </div>
+
+      {modaleCategoria && (
+        <ModaleNuovaCategoriaShop
+          padreNome={modaleCategoria.padreId ? categorieAttive.find((c) => c.id === modaleCategoria.padreId)?.nome : null}
+          onClose={() => setModaleCategoria(null)}
+          onCrea={(nome) => creaCategoria(nome, modaleCategoria.padreId)}
+          salvando={salvando}
         />
       )}
     </div>
@@ -11799,6 +12344,7 @@ export default function App() {
   const [categorieProdotti, setCategorieProdotti] = useState([]);
   const [prodottiShop, setProdottiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
+  const [prodottiImmagini, setProdottiImmagini] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -11831,7 +12377,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -11858,6 +12404,7 @@ export default function App() {
       supabase.from("categorie_prodotti").select("*").order("nome"),
       supabase.from("prodotti_shop").select("*").order("nome"),
       supabase.from("prodotti_categorie").select("*"),
+      supabase.from("prodotti_immagini").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -11885,6 +12432,7 @@ export default function App() {
     setCategorieProdotti(cp.data || []);
     setProdottiShop(ps.data || []);
     setProdottiCategorie(pc.data || []);
+    setProdottiImmagini(pi.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -12043,6 +12591,7 @@ export default function App() {
   function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
   function apriVenditeShop() { apriViewProtetta("venditeshop"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
+  function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -12279,6 +12828,14 @@ export default function App() {
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("erp")}
+          onApriGestioneShop={apriGestioneShop}
+        />
+      )}
+
+      {view === "gestioneshop" && (
+        <PaginaGestioneShop
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
+          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("magazzino")}
         />
       )}
 

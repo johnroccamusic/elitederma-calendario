@@ -26,6 +26,14 @@ const supabase = createClient(
 const PER_PAGE = 100;
 const MASSIMO_PAGINE = 200;
 
+// senza queste intestazioni il browser blocca la risposta (CORS) e il
+// client Supabase fallisce con "Failed to send a request to the Edge
+// Function" ancora prima che la funzione faccia qualunque cosa
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 async function fetchTutteLePagine(url: string, auth: string) {
   const risultati: any[] = [];
   let pagina = 1;
@@ -44,15 +52,18 @@ async function fetchTutteLePagine(url: string, auth: string) {
 }
 
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ errore: "Metodo non consentito" }), { status: 405, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Metodo non consentito" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const siteUrl = Deno.env.get("WC_SITE_URL");
   const consumerKey = Deno.env.get("WC_CONSUMER_KEY");
   const consumerSecret = Deno.env.get("WC_CONSUMER_SECRET");
   if (!siteUrl || !consumerKey || !consumerSecret) {
-    return new Response("Configurazione WooCommerce mancante (WC_SITE_URL/WC_CONSUMER_KEY/WC_CONSUMER_SECRET)", { status: 500 });
+    return new Response("Configurazione WooCommerce mancante (WC_SITE_URL/WC_CONSUMER_KEY/WC_CONSUMER_SECRET)", { status: 500, headers: corsHeaders });
   }
   const auth = "Basic " + btoa(`${consumerKey}:${consumerSecret}`);
 
@@ -60,10 +71,22 @@ Deno.serve(async (req) => {
     // --- 1) categorie: due passate, una per creare le righe, una per
     // risolvere la gerarchia (il padre potrebbe comparire dopo il
     // figlio nella paginazione, quindi va risolto solo a righe create) ---
-    const categorieWoo = await fetchTutteLePagine(`${siteUrl}/wp-json/wc/v3/products/categories?orderby=id&order=asc`, auth);
+    // "menu_order" non è un orderby valido per le categorie di WooCommerce
+    // (a differenza dei prodotti, le categorie non hanno un ordine manuale
+    // nativo senza un plugin apposito) — si ordina per nome, che è anche
+    // l'ordine con cui WooCommerce le mostra di default sullo shop, e si usa
+    // la posizione nell'elenco già ordinato come "ordine" locale
+    const categorieWoo = await fetchTutteLePagine(`${siteUrl}/wp-json/wc/v3/products/categories?orderby=name&order=asc`, auth);
 
     if (categorieWoo.length > 0) {
-      const righeCategorie = categorieWoo.map((c) => ({ woo_category_id: c.id, nome: c.name, ts_sync: new Date().toISOString() }));
+      const righeCategorie = categorieWoo.map((c, indice) => ({
+        woo_category_id: c.id,
+        nome: c.name,
+        descrizione: c.description || null,
+        immagine_url: c.image?.src || null,
+        ordine: indice,
+        ts_sync: new Date().toISOString(),
+      }));
       const { error: erroreCat } = await supabase.from("categorie_prodotti").upsert(righeCategorie, { onConflict: "woo_category_id" });
       if (erroreCat) throw new Error("Upsert categorie: " + erroreCat.message);
 
@@ -98,6 +121,9 @@ Deno.serve(async (req) => {
         sku: p.sku || null,
         prezzo_vendita: p.price !== "" && p.price != null ? parseFloat(p.price) : (p.regular_price ? parseFloat(p.regular_price) : null),
         giacenza: p.stock_quantity != null ? parseInt(p.stock_quantity, 10) : null,
+        descrizione: p.description || null,
+        descrizione_breve: p.short_description || null,
+        stato: p.status || "publish",
         attivo: true,
         ts_sync: new Date().toISOString(),
       }));
@@ -128,6 +154,24 @@ Deno.serve(async (req) => {
           const { error: erroreLink } = await supabase.from("prodotti_categorie").insert(righeCollegamento);
           if (erroreLink) throw new Error("Collegamento categorie: " + erroreLink.message);
         }
+
+        // galleria immagini: sostituita per intero ad ogni sync, l'ordine
+        // nell'array "images" di WooCommerce è già quello mostrato sullo
+        // shop (posizione 0 = copertina)
+        await supabase.from("prodotti_immagini").delete().in("prodotto_id", idProdottiPagina as string[]);
+        const righeImmagini: { prodotto_id: string; woo_image_id: number | null; url: string; ordine: number }[] = [];
+        prodottiWoo.forEach((p: any) => {
+          const prodottoId = prodottoIdPerWooId[p.id];
+          if (!prodottoId) return;
+          (Array.isArray(p.images) ? p.images : []).forEach((img: any, indice: number) => {
+            if (!img?.src) return;
+            righeImmagini.push({ prodotto_id: prodottoId, woo_image_id: img.id ?? null, url: img.src, ordine: indice });
+          });
+        });
+        if (righeImmagini.length > 0) {
+          const { error: erroreImmagini } = await supabase.from("prodotti_immagini").insert(righeImmagini);
+          if (erroreImmagini) throw new Error("Salvataggio immagini: " + erroreImmagini.message);
+        }
       }
 
       wooIdVisti.push(...prodottiWoo.map((p: any) => p.id));
@@ -152,9 +196,9 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ categorieImportate: categorieWoo.length, prodottiImportati, prodottiDisattivati: disattivati }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (e) {
-    return new Response(JSON.stringify({ errore: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: e instanceof Error ? e.message : String(e) }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

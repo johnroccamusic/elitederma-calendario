@@ -28,39 +28,50 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
 
+// senza queste intestazioni il browser blocca la risposta (CORS) e il
+// client Supabase fallisce con "Failed to send a request to the Edge
+// Function" ancora prima che la funzione faccia qualunque cosa
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ errore: "Metodo non consentito" }), { status: 405, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Metodo non consentito" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   let corpo: any;
   try {
     corpo = await req.json();
   } catch {
-    return new Response(JSON.stringify({ errore: "JSON non valido" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "JSON non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const { prodottoId, prezzoVendita, giacenza } = corpo || {};
   if (!prodottoId) {
-    return new Response(JSON.stringify({ errore: "Parametro mancante: prodottoId" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Parametro mancante: prodottoId" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   const cambiaPrezzo = prezzoVendita != null && Number.isFinite(prezzoVendita);
   const cambiaGiacenza = giacenza != null && Number.isFinite(giacenza);
   if (!cambiaPrezzo && !cambiaGiacenza) {
-    return new Response(JSON.stringify({ errore: "Nulla da aggiornare: servono prezzoVendita e/o giacenza" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Nulla da aggiornare: servono prezzoVendita e/o giacenza" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   if (cambiaPrezzo && prezzoVendita <= 0) {
-    return new Response(JSON.stringify({ errore: "Il prezzo di vendita deve essere maggiore di zero" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Il prezzo di vendita deve essere maggiore di zero" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   if (cambiaGiacenza && giacenza < 0) {
-    return new Response(JSON.stringify({ errore: "La giacenza non può essere negativa" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "La giacenza non può essere negativa" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const siteUrl = Deno.env.get("WC_SITE_URL");
   const consumerKeyWrite = Deno.env.get("WC_CONSUMER_KEY_WRITE");
   const consumerSecretWrite = Deno.env.get("WC_CONSUMER_SECRET_WRITE");
   if (!siteUrl || !consumerKeyWrite || !consumerSecretWrite) {
-    return new Response(JSON.stringify({ errore: "Configurazione WooCommerce (scrittura) mancante" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Configurazione WooCommerce (scrittura) mancante" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const { data: prodotto, error: erroreLettura } = await supabase
@@ -69,7 +80,7 @@ Deno.serve(async (req) => {
     .eq("id", prodottoId)
     .single();
   if (erroreLettura || !prodotto) {
-    return new Response(JSON.stringify({ errore: "Prodotto non trovato" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Prodotto non trovato" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const payloadWoo: Record<string, unknown> = {};
@@ -88,7 +99,7 @@ Deno.serve(async (req) => {
     // il dato locale NON viene toccato: WooCommerce resta la fonte di verità
     return new Response(
       JSON.stringify({ errore: `WooCommerce ha rifiutato l'aggiornamento (${rispostaWoo.status})`, dettaglio: testo }),
-      { status: 502, headers: { "Content-Type": "application/json" } }
+      { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
@@ -102,9 +113,9 @@ Deno.serve(async (req) => {
     // cambiato, sul database locale no — richiede un nuovo sync catalogo
     return new Response(
       JSON.stringify({ errore: "Aggiornato su WooCommerce ma non nel database locale: " + erroreAggiorna.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, giacenza: cambiaGiacenza ? giacenza : undefined }), { status: 200, headers: { "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, giacenza: cambiaGiacenza ? giacenza : undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
