@@ -2053,13 +2053,40 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 // servono quel giorno (Modella del Master per la demo e/o modelle degli
 // Allievi) e con quale trattamento — vale per tutte le edizioni del corso
 function nuovoGiornoCorsoVuoto(numero) {
-  return { numero_giorno: numero, richiede_modella_master: false, mattina_master: false, pomeriggio_master: false, richiede_modelle_allievi: false, tipo_modella: "" };
+  return {
+    numero_giorno: numero,
+    richiede_modella_master: false, mattina_master: false, pomeriggio_master: false, tipo_modella_master: "",
+    richiede_modelle_allievi: false, mattina_allievi: false, pomeriggio_allievi: false, tipo_modella_allievi: "",
+  };
+}
+// una riga "turno (MAT/POM) + tipo di trattamento", usata identica sia
+// per il blocco Modella del Master sia per il blocco Modella Allievi:
+// stessa forma, dati indipendenti, così non si confondono mai i due turni
+// né i due trattamenti quando entrambi ricorrono nello stesso giorno
+function RigaTurnoETipoGiorno({ etichetta, coloreEtichetta, mattina, pomeriggio, tipo, opzioniTipo, onCambiaMattina, onCambiaPomeriggio, onCambiaTipo }) {
+  return (
+    <div style={{ background: BG, borderRadius: 8, padding: 10 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: coloreEtichetta, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>{etichetta}</div>
+      <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 12.5, color: NAVY }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          <input type="checkbox" checked={mattina} onChange={(e) => onCambiaMattina(e.target.checked)} /> MAT
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          <input type="checkbox" checked={pomeriggio} onChange={(e) => onCambiaPomeriggio(e.target.checked)} /> POM
+        </label>
+      </div>
+      <select style={{ ...inputStyle, fontSize: 13, background: "#fff" }} value={tipo || ""} onChange={(e) => onCambiaTipo(e.target.value)}>
+        <option value="">— Tipo trattamento —</option>
+        {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+      </select>
+    </div>
+  );
 }
 function BloccoGiornoCorso({ giorno, onCambia, opzioniTipo }) {
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Giorno {giorno.numero_giorno}</div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: giorno.richiede_modella_master || giorno.richiede_modelle_allievi ? 8 : 0 }}>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Giorno {giorno.numero_giorno}</div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: giorno.richiede_modella_master || giorno.richiede_modelle_allievi ? 10 : 0 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
           <input type="checkbox" checked={giorno.richiede_modella_master} onChange={(e) => onCambia({ ...giorno, richiede_modella_master: e.target.checked })} />
           Modella del Master
@@ -2069,28 +2096,36 @@ function BloccoGiornoCorso({ giorno, onCambia, opzioniTipo }) {
           Allievi
         </label>
       </div>
+
       {giorno.richiede_modella_master && (
-        <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-            <input type="checkbox" checked={giorno.mattina_master} onChange={(e) => onCambia({ ...giorno, mattina_master: e.target.checked })} /> MAT
-          </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-            <input type="checkbox" checked={giorno.pomeriggio_master} onChange={(e) => onCambia({ ...giorno, pomeriggio_master: e.target.checked })} /> POM
-          </label>
+        <div style={{ marginBottom: giorno.richiede_modelle_allievi ? 8 : 0 }}>
+          <RigaTurnoETipoGiorno
+            etichetta="Modella del Master" coloreEtichetta={GOLD}
+            mattina={giorno.mattina_master} pomeriggio={giorno.pomeriggio_master} tipo={giorno.tipo_modella_master}
+            opzioniTipo={opzioniTipo}
+            onCambiaMattina={(v) => onCambia({ ...giorno, mattina_master: v })}
+            onCambiaPomeriggio={(v) => onCambia({ ...giorno, pomeriggio_master: v })}
+            onCambiaTipo={(v) => onCambia({ ...giorno, tipo_modella_master: v })}
+          />
         </div>
       )}
-      {(giorno.richiede_modella_master || giorno.richiede_modelle_allievi) && (
-        <select style={{ ...inputStyle, fontSize: 13 }} value={giorno.tipo_modella || ""} onChange={(e) => onCambia({ ...giorno, tipo_modella: e.target.value })}>
-          <option value="">— Tipo modella —</option>
-          {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
-        </select>
+      {giorno.richiede_modelle_allievi && (
+        <RigaTurnoETipoGiorno
+          etichetta="Modella Allievi" coloreEtichetta={MUTED}
+          mattina={giorno.mattina_allievi} pomeriggio={giorno.pomeriggio_allievi} tipo={giorno.tipo_modella_allievi}
+          opzioniTipo={opzioniTipo}
+          onCambiaMattina={(v) => onCambia({ ...giorno, mattina_allievi: v })}
+          onCambiaPomeriggio={(v) => onCambia({ ...giorno, pomeriggio_allievi: v })}
+          onCambiaTipo={(v) => onCambia({ ...giorno, tipo_modella_allievi: v })}
+        />
       )}
     </div>
   );
 }
-// true se un giorno richiede modelle ma non ha scelto il tipo: blocca il salvataggio
+// true se un giorno richiede una modella ma non ha scelto il suo tipo di
+// trattamento: blocca il salvataggio (Master e Allievi controllati separatamente)
 function giorniCorsoNonValidi(giorni) {
-  return giorni.some((g) => (g.richiede_modella_master || g.richiede_modelle_allievi) && !g.tipo_modella);
+  return giorni.some((g) => (g.richiede_modella_master && !g.tipo_modella_master) || (g.richiede_modelle_allievi && !g.tipo_modella_allievi));
 }
 
 // card di un corso-tipo nella griglia "Aggiungi corso"
@@ -2248,8 +2283,11 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       richiede_modella_master: g.richiede_modella_master,
       mattina_master: g.mattina_master,
       pomeriggio_master: g.pomeriggio_master,
+      tipo_modella_master: g.tipo_modella_master || "",
       richiede_modelle_allievi: g.richiede_modelle_allievi,
-      tipo_modella: g.tipo_modella || "",
+      mattina_allievi: g.mattina_allievi,
+      pomeriggio_allievi: g.pomeriggio_allievi,
+      tipo_modella_allievi: g.tipo_modella_allievi || "",
     })));
     setTipiModellaSelCorsoModifica((corsiTipiModella || []).filter((x) => x.corso_id === c.id).map((x) => x.tipo_modella_id));
     setVistaCorsiModal("modifica");
@@ -2273,8 +2311,11 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
         richiede_modella_master: g.richiede_modella_master,
         mattina_master: g.mattina_master,
         pomeriggio_master: g.pomeriggio_master,
+        tipo_modella_master: g.tipo_modella_master || null,
         richiede_modelle_allievi: g.richiede_modelle_allievi,
-        tipo_modella: g.tipo_modella || null,
+        mattina_allievi: g.mattina_allievi,
+        pomeriggio_allievi: g.pomeriggio_allievi,
+        tipo_modella_allievi: g.tipo_modella_allievi || null,
       }));
       const { error } = await supabase.from("corsi_giorni").insert(righe);
       if (error) return error;
@@ -6353,10 +6394,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     // assegna subito senza chiedere nulla — il selettore "Giorno" compare
     // solo quando c'è davvero una scelta da fare (più giorni possibili)
     const giorniAllievi = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id && g.richiede_modelle_allievi);
-    const giornoDefault = giorniAllievi.length === 1 ? giorniAllievi[0].numero_giorno : null;
+    const giornoUnico = giorniAllievi.length === 1 ? giorniAllievi[0] : null;
+    const giornoDefault = giornoUnico ? giornoUnico.numero_giorno : null;
+    const tipoDefault = giornoUnico ? (giornoUnico.tipo_modella_allievi || "") : "";
     setTipiModelle((prev) => {
       if (n < prev.length) return prev.slice(0, n);
-      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: giornoDefault }))];
+      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: tipoDefault, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: giornoDefault }))];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [richiedeModelle, numeroModelle]);
@@ -7683,11 +7726,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           <select
                             style={{ ...inputStyle, flex: 1 }}
                             value={m.giorno || ""}
-                            onChange={(e) => setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, giorno: e.target.value ? Number(e.target.value) : null } : x)))}
+                            onChange={(e) => {
+                              const giornoScelto = e.target.value ? Number(e.target.value) : null;
+                              const giornoObj = giorniAllieviCorso.find((g) => g.numero_giorno === giornoScelto);
+                              // scegliendo il giorno si suggerisce anche il suo trattamento
+                              // previsto, restando comunque modificabile a mano se serve
+                              setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, giorno: giornoScelto, tipo: giornoObj?.tipo_modella_allievi || x.tipo } : x)));
+                            }}
                           >
                             <option value="">— giorno —</option>
                             {giorniAllieviCorso.map((g) => (
-                              <option key={g.numero_giorno} value={g.numero_giorno}>Giorno {g.numero_giorno}{g.tipo_modella ? ` — ${g.tipo_modella}` : ""}</option>
+                              <option key={g.numero_giorno} value={g.numero_giorno}>Giorno {g.numero_giorno}{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}</option>
                             ))}
                           </select>
                         )}
@@ -7824,14 +7873,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               return (
                 <div key={g.id} style={{ ...cardStyle, padding: 18 }}>
                   <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
-                    Giorno {g.numero_giorno}{g.tipo_modella ? ` — ${g.tipo_modella}` : ""}
+                    Giorno {g.numero_giorno}
                   </div>
 
                   {g.richiede_modella_master && (
                     <div style={{ marginBottom: g.richiede_modelle_allievi ? 16 : 0 }}>
-                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>Modella del Master</div>
+                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
+                        Modella del Master{g.tipo_modella_master ? ` — ${g.tipo_modella_master}` : ""}
+                      </div>
                       <RigaModella
-                        modella={{ ...modellaMaster, tipo: g.tipo_modella }}
+                        modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
                         primaRiga
                         onSalva={(campo, valore) => aggiornaModellaMaster(g.numero_giorno, campo, valore)}
                       />
@@ -7840,7 +7891,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
                   {g.richiede_modelle_allievi && (
                     <div>
-                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Allievi</div>
+                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
+                        Allievi{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}
+                      </div>
                       {listaIscritti.length === 0 && (
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto in questa classe.</div>
                       )}

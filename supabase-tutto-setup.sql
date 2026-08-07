@@ -1379,4 +1379,24 @@ alter table public.corsi_tipi_modella enable row level security;
 drop policy if exists "accesso interno corsi_tipi_modella" on public.corsi_tipi_modella;
 create policy "accesso interno corsi_tipi_modella" on public.corsi_tipi_modella for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 34) Separa turno/trattamento di Modella del Master e Modella Allievi
+-- in corsi_giorni: "tipo_modella" (condiviso) diventa tipo_modella_master
+-- + nuovo tipo_modella_allievi indipendente, con turno proprio.
+-- ---------------------------------------------------------
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'corsi_giorni' and column_name = 'tipo_modella'
+  ) then
+    alter table public.corsi_giorni rename column tipo_modella to tipo_modella_master;
+  end if;
+end $$;
+
+alter table public.corsi_giorni add column if not exists tipo_modella_master text;
+alter table public.corsi_giorni add column if not exists mattina_allievi boolean not null default false;
+alter table public.corsi_giorni add column if not exists pomeriggio_allievi boolean not null default false;
+alter table public.corsi_giorni add column if not exists tipo_modella_allievi text;
+
 notify pgrst, 'reload schema';
