@@ -2091,6 +2091,50 @@ function giorniCorsoNonValidi(giorni) {
   return giorni.some((g) => (g.richiede_modella_master || g.richiede_modelle_allievi) && !g.tipo_modella);
 }
 
+// card di un corso-tipo nella griglia "Aggiungi corso"
+function CardCorso({ corso, onModifica, onElimina }) {
+  const [menuAperto, setMenuAperto] = useState(false);
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ height: 5, background: corso.colore }} />
+      <div style={{ padding: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 0 }}>{corso.nome}</div>
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button onClick={() => setMenuAperto((v) => !v)} title="Altre azioni" style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, padding: 4, fontSize: 18, lineHeight: 1 }}>⋯</button>
+            {menuAperto && (
+              <>
+                <div onClick={() => setMenuAperto(false)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
+                <div style={{ position: "absolute", right: 0, top: "100%", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 14px rgba(0,0,0,0.14)", zIndex: 10, minWidth: 110, overflow: "hidden" }}>
+                  <button onClick={() => { setMenuAperto(false); onElimina(); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 12px", background: "none", border: "none", cursor: "pointer", color: "#C0392B", ...fontBody, fontSize: 13 }}>Elimina</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        {corso.categoria && (
+          <span style={{ display: "inline-block", ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: BG, borderRadius: 6, padding: "3px 9px", marginBottom: 10 }}>{corso.categoria}</span>
+        )}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 13, color: NAVY }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21a8 8 0 0 0-16 0" /><circle cx="12" cy="8" r="4" /></svg>
+            {corso.posti_max} posti
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 13, color: corso.diploma_template_path ? "#2E7D32" : MUTED }}>
+            {corso.diploma_template_path ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 21h14" /></svg>
+            )}
+            {corso.diploma_template_path ? "Diploma caricato" : "Diploma da caricare"}
+          </div>
+        </div>
+        <button onClick={onModifica} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0 }}>Modifica</button>
+      </div>
+    </div>
+  );
+}
+
 function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
@@ -2100,6 +2144,10 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [giorniCorso, setGiorniCorso] = useState([]);
   const [durataCorsoModifica, setDurataCorsoModifica] = useState("");
   const [giorniCorsoModifica, setGiorniCorsoModifica] = useState([]);
+  const [categoriaCorso, setCategoriaCorso] = useState("");
+  const [modCategoriaCorso, setModCategoriaCorso] = useState("");
+  const [vistaCorsiModal, setVistaCorsiModal] = useState("griglia"); // griglia | nuovo | modifica
+  const [ricercaCorsi, setRicercaCorsi] = useState("");
   const [nomeLoc, setNomeLoc] = useState("");
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [msg, setMsg] = useState("");
@@ -2163,6 +2211,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     setModNomeCorso(c.nome.toUpperCase());
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
+    setModCategoriaCorso(c.categoria || "");
     setDiplomaCorsoModifica(null);
     const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
     setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
@@ -2174,6 +2223,13 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       richiede_modelle_allievi: g.richiede_modelle_allievi,
       tipo_modella: g.tipo_modella || "",
     })));
+    setVistaCorsiModal("modifica");
+  }
+  function apriNuovoCorso() {
+    setNomeCorso(""); setColore("#4A90D9"); setPostiMax(10); setCategoriaCorso("");
+    setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]);
+    setMsg("");
+    setVistaCorsiModal("nuovo");
   }
   // sostituisce per intero il template giorni di un corso: nessun dato
   // già inserito nelle edizioni (corsi_date/iscritti) dipende da queste
@@ -2212,6 +2268,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       nome: modNomeCorso.trim().toUpperCase(),
       colore: modColoreCorso,
       posti_max: Number(modPostiCorso) || 10,
+      categoria: modCategoriaCorso.trim() || null,
     };
     if (diplomaCorsoModifica) {
       try {
@@ -2226,6 +2283,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     setSalvandoCorso(false);
     setCorsoInModifica(null);
     setDiplomaCorsoModifica(null);
+    setVistaCorsiModal("griglia");
     setMsg("Corso aggiornato.");
   }
 
@@ -2253,7 +2311,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       return;
     }
     if (giorniCorsoNonValidi(giorniCorso)) { setMsg("Scegli il tipo di modella per ogni giorno che la richiede."); return; }
-    const ins = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 }).select("id").single();
+    const ins = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10, categoria: categoriaCorso.trim() || null }).select("id").single();
     if (ins.error) { setMsg("Errore: " + ins.error.message); return; }
     const erroreGiorni = await salvaGiorniCorso(ins.data.id, giorniCorso);
     if (erroreGiorni) { setMsg("Corso aggiunto, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); }
@@ -2263,13 +2321,13 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
         await supabase.from("corsi").update({ diploma_template_path: percorso }).eq("id", ins.data.id);
       } catch (e) {
         setMsg("Corso aggiunto, ma errore nel caricamento del diploma: " + e.message);
-        setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]);
+        setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso("");
         ricarica();
         return;
       }
     }
-    setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]);
-    if (!erroreGiorni) setMsg("Corso aggiunto.");
+    setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso("");
+    if (!erroreGiorni) { setMsg("Corso aggiunto."); setVistaCorsiModal("griglia"); }
     ricarica();
   }
 
@@ -2296,7 +2354,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     {
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
-        { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => setShowCorsoModal(true) },
+        { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
         { etichetta: "Definisci Hotel", Icona: IconaHotelRiga, onClick: () => setShowHotelModal(true) },
         { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
         { etichetta: "Assegna Master", Icona: IconaMasterRiga, onClick: onApriAssegnazioneMaster },
@@ -2352,120 +2410,139 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
 
-      {showCorsoModal && (
-        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)}>
-          <div style={hStyle}>Aggiungi corso</div>
-          <div style={subStyle}>Nome, colore univoco per il calendario, posti massimi di default.</div>
-          <Field label="Nome corso">
-            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeCorso} onChange={(e) => setNomeCorso(e.target.value.toUpperCase())} placeholder="es. MICROBLADING" />
-          </Field>
-          <div style={{ display: "flex", gap: 14 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Colore">
-                <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
-              </Field>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Posti massimi">
-                <input type="number" min="1" style={inputStyle} value={postiMax} onChange={(e) => setPostiMax(e.target.value)} />
-              </Field>
-            </div>
-          </div>
-          <Field label="Diploma (PDF, opzionale)">
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoNuovo(e.target.files?.[0] || null)} />
-              {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
-            </div>
-          </Field>
-          <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
-            <input type="number" min="0" style={inputStyle} value={durataCorso} onChange={(e) => setDurataCorso(e.target.value)} />
-          </Field>
-          {giorniCorso.length > 0 && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
-              {giorniCorso.map((g, idx) => (
-                <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorso((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
-              ))}
-            </div>
+      {showCorsoModal && (() => {
+        const corsiFiltrati = corsi.filter((c) => {
+          const q = ricercaCorsi.trim().toLowerCase();
+          if (!q) return true;
+          return c.nome.toLowerCase().includes(q) || (c.categoria || "").toLowerCase().includes(q);
+        });
+        return (
+        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)} maxWidth={vistaCorsiModal === "griglia" ? 1080 : 560}>
+          {vistaCorsiModal === "griglia" && (
+            <>
+              <div style={hStyle}>Aggiungi corso</div>
+              <div style={{ ...subStyle, marginBottom: 16 }}>Nome, colore univoco per il calendario, posti massimi di default.</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+                <input style={{ ...inputStyle, maxWidth: 260 }} placeholder="Cerca" value={ricercaCorsi} onChange={(e) => setRicercaCorsi(e.target.value)} />
+                <Button onClick={apriNuovoCorso}>+ Nuovo tipo di corso</Button>
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>{corsiFiltrati.length} tipologie</div>
+              {corsiFiltrati.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso trovato.</div>}
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 14 }}>
+                {corsiFiltrati.map((c) => (
+                  <CardCorso key={c.id} corso={c} onModifica={() => apriModificaCorso(c)} onElimina={() => eliminaCorso(c.id)} />
+                ))}
+              </div>
+              {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+            </>
           )}
-          <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
 
-          <div style={{ ...hStyle, marginTop: 24 }}>Corsi esistenti</div>
-          <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le sue date e i relativi iscritti).</div>
-          {corsi.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso ancora.</div>}
-          {corsi.map((c) => (
-            <div key={c.id}>
-              <RigaEliminabile
-                label={
-                  <span style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <span>
-                      <span style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: c.colore, marginRight: 8 }} />
-                      {c.nome.toUpperCase()}
-                    </span>
-                    {c.diploma_template_path ? (
-                      <BadgeFileCaricato />
-                    ) : (
-                      <button
-                        onClick={() => apriModificaCorso(c)}
-                        style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
-                      >
-                        Nessun diploma caricato — caricalo qui
-                      </button>
-                    )}
-                  </span>
-                }
-                dettaglio={`posti default: ${c.posti_max}`}
-                onModifica={() => apriModificaCorso(c)}
-                onDelete={() => eliminaCorso(c.id)}
-              />
-              {corsoInModifica === c.id && (
-                <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <Field label="Nome corso">
-                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCorso} onChange={(e) => setModNomeCorso(e.target.value.toUpperCase())} />
+          {vistaCorsiModal === "nuovo" && (
+            <>
+              <button onClick={() => setVistaCorsiModal("griglia")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 0, marginBottom: 14, ...fontBody, fontSize: 13, fontWeight: 600 }}>
+                <IconaFrecciaSinistra size={15} /> Tutti i corsi
+              </button>
+              <div style={hStyle}>Nuovo tipo di corso</div>
+              <div style={subStyle}>Nome, colore univoco per il calendario, posti massimi di default.</div>
+              <Field label="Nome corso">
+                <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeCorso} onChange={(e) => setNomeCorso(e.target.value.toUpperCase())} placeholder="es. MICROBLADING" />
+              </Field>
+              <Field label="Categoria (opzionale)">
+                <input style={{ ...inputStyle, textTransform: "uppercase" }} value={categoriaCorso} onChange={(e) => setCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
+              </Field>
+              <div style={{ display: "flex", gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Colore">
+                    <input type="color" value={colore} onChange={(e) => setColore(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
                   </Field>
-                  <div style={{ display: "flex", gap: 14 }}>
-                    <div style={{ flex: 1 }}>
-                      <Field label="Colore">
-                        <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
-                      </Field>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <Field label="Posti massimi">
-                        <input type="number" min="1" style={inputStyle} value={modPostiCorso} onChange={(e) => setModPostiCorso(e.target.value)} />
-                      </Field>
-                    </div>
-                  </div>
-                  <Field label="Diploma (PDF, opzionale)">
-                    {c.diploma_template_path && !diplomaCorsoModifica && (
-                      <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink bucket="diploma-templates" percorso={c.diploma_template_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-                    )}
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                      <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoModifica(e.target.files?.[0] || null)} />
-                      {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
-                    </div>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Posti massimi">
+                    <input type="number" min="1" style={inputStyle} value={postiMax} onChange={(e) => setPostiMax(e.target.value)} />
                   </Field>
-                  <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
-                    <input type="number" min="0" style={inputStyle} value={durataCorsoModifica} onChange={(e) => setDurataCorsoModifica(e.target.value)} />
-                  </Field>
-                  {giorniCorsoModifica.length > 0 && (
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
-                      {giorniCorsoModifica.map((g, idx) => (
-                        <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorsoModifica((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
-                      ))}
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button onClick={() => salvaModificaCorso(c.id)} disabled={salvandoCorso}>{salvandoCorso ? "Salvataggio…" : "Salva"}</Button>
-                    <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); }}>Annulla</Button>
-                  </div>
+                </div>
+              </div>
+              <Field label="Diploma (PDF, opzionale)">
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoNuovo(e.target.files?.[0] || null)} />
+                  {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
+                </div>
+              </Field>
+              <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
+                <input type="number" min="0" style={inputStyle} value={durataCorso} onChange={(e) => setDurataCorso(e.target.value)} />
+              </Field>
+              {giorniCorso.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
+                  {giorniCorso.map((g, idx) => (
+                    <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorso((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
+                  ))}
                 </div>
               )}
-            </div>
-          ))}
-          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+              <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
+              {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+            </>
+          )}
+
+          {vistaCorsiModal === "modifica" && corsoInModifica && (() => {
+            const c = corsi.find((x) => x.id === corsoInModifica);
+            if (!c) return null;
+            return (
+              <>
+                <button onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); setVistaCorsiModal("griglia"); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 0, marginBottom: 14, ...fontBody, fontSize: 13, fontWeight: 600 }}>
+                  <IconaFrecciaSinistra size={15} /> Tutti i corsi
+                </button>
+                <div style={hStyle}>Modifica corso</div>
+                <div style={{ ...subStyle, marginBottom: 16 }}>Clicca "Elimina" nella griglia per rimuoverlo (rimuove anche le sue date e i relativi iscritti).</div>
+                <Field label="Nome corso">
+                  <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCorso} onChange={(e) => setModNomeCorso(e.target.value.toUpperCase())} />
+                </Field>
+                <Field label="Categoria (opzionale)">
+                  <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modCategoriaCorso} onChange={(e) => setModCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
+                </Field>
+                <div style={{ display: "flex", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Colore">
+                      <input type="color" value={modColoreCorso} onChange={(e) => setModColoreCorso(e.target.value)} style={{ width: "100%", height: 40, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }} />
+                    </Field>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Posti massimi">
+                      <input type="number" min="1" style={inputStyle} value={modPostiCorso} onChange={(e) => setModPostiCorso(e.target.value)} />
+                    </Field>
+                  </div>
+                </div>
+                <Field label="Diploma (PDF, opzionale)">
+                  {c.diploma_template_path && !diplomaCorsoModifica && (
+                    <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink bucket="diploma-templates" percorso={c.diploma_template_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+                  )}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoModifica(e.target.files?.[0] || null)} />
+                    {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
+                  </div>
+                </Field>
+                <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
+                  <input type="number" min="0" style={inputStyle} value={durataCorsoModifica} onChange={(e) => setDurataCorsoModifica(e.target.value)} />
+                </Field>
+                {giorniCorsoModifica.length > 0 && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
+                    {giorniCorsoModifica.map((g, idx) => (
+                      <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorsoModifica((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={() => salvaModificaCorso(c.id)} disabled={salvandoCorso}>{salvandoCorso ? "Salvataggio…" : "Salva"}</Button>
+                  <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); setVistaCorsiModal("griglia"); }}>Annulla</Button>
+                </div>
+                {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+              </>
+            );
+          })()}
         </Modal>
-      )}
+        );
+      })()}
 
       {showLocModal && (
         <Modal title="Location" onClose={() => setShowLocModal(false)}>
@@ -4506,7 +4583,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
   );
 }
 
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, maxWidth = 560 }) {
   const overlayRef = React.useRef(null);
 
   useEffect(() => {
@@ -4550,7 +4627,7 @@ function Modal({ title, onClose, children }) {
       onClick={onClose}
     >
       <div
-        style={{ ...cardStyle, maxWidth: 560, width: "100%", height: "fit-content", marginBottom: 0 }}
+        style={{ ...cardStyle, maxWidth, width: "100%", height: "fit-content", marginBottom: 0 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

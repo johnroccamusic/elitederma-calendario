@@ -1344,4 +1344,10 @@ create policy "accesso interno corsi_giorni" on public.corsi_giorni for all to a
 
 alter table public.corsi_date add column if not exists modelle_master jsonb not null default '[]';
 
+-- ---------------------------------------------------------
+-- 32) "Categoria" sui corsi-tipo: etichetta libera (PMU, Microblading,
+-- Extension...) mostrata sulla card del corso in "Definisci corsi".
+-- ---------------------------------------------------------
+alter table public.corsi add column if not exists categoria text;
+
 notify pgrst, 'reload schema';
