@@ -4677,7 +4677,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
 // blur, non ad ogni tasto: altrimenti ogni carattere digitato scatenerebbe
 // un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
 // focus mentre si scrive
-function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
+function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo }) {
   const [nome, setNome] = useState(modella.nome_modella || "");
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
   useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
@@ -4685,7 +4685,18 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva }) {
 
   return (
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, marginBottom: 8 }}>{modella.tipo || "(trattamento non scelto)"}</div>
+      {opzioniTipo ? (
+        <select
+          style={{ ...inputStyle, fontSize: 13, fontWeight: 600, marginBottom: 8, maxWidth: 280 }}
+          value={modella.tipo || ""}
+          onChange={(e) => onSalva("tipo", e.target.value)}
+        >
+          <option value="">— scegli trattamento —</option>
+          {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+        </select>
+      ) : (
+        <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, marginBottom: 8 }}>{modella.tipo || "(trattamento non scelto)"}</div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         {mostraOrario && (
           <>
@@ -8003,6 +8014,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         key={idx}
                         modella={m}
                         primaRiga={idx === 0}
+                        opzioniTipo={opzioniTipoModellaCorso}
                         onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
                       />
                     ))}
@@ -8077,6 +8089,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                             <RigaModella
                               modella={modellaVista}
                               primaRiga
+                              opzioniTipo={opzioniTipoModellaCorso}
                               onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, g.tipo_modella_allievi)}
                             />
                           </div>
