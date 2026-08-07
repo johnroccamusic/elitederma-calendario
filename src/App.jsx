@@ -2234,20 +2234,75 @@ function SezioneDateCorsi({
   );
 }
 
+// login del venditore per la propria Dashboard: sceglie il proprio nome
+// da una tendina (stesso elenco di "Definisci venditori") e scrive la
+// password. Se il codice inserito è l'ADMIN_CODE (lo stesso già usato
+// per le altre aree protette), entra invece in modalità amministratore:
+// la Dashboard resta "sbloccata", con la tendina per scegliere
+// qualunque venditore — così l'amministratore non perde la possibilità
+// di controllare le performance di tutti.
+function ModaleLoginVenditore({ venditori, onClose, onEntra }) {
+  const [venditoreId, setVenditoreId] = useState("");
+  const [password, setPassword] = useState("");
+  const [errore, setErrore] = useState("");
+  const [verificando, setVerificando] = useState(false);
+
+  async function entra() {
+    if (!venditoreId) { setErrore("Scegli il tuo nome."); return; }
+    if (!password) { setErrore("Scrivi la password."); return; }
+    setErrore(""); setVerificando(true);
+    if (ADMIN_CODE && password === ADMIN_CODE) {
+      setVerificando(false);
+      onEntra({ modalitaAdmin: true });
+      return;
+    }
+    const { data, error } = await supabase.functions.invoke("venditori-login", { body: { venditoreId, password } });
+    setVerificando(false);
+    if (error || data?.errore) { setErrore(data?.errore || "Password errata."); return; }
+    onEntra({ modalitaAdmin: false, venditoreId, nome: data.nome });
+  }
+
+  return (
+    <Modal title="Accedi come venditore" onClose={onClose}>
+      <div style={{ ...subStyle, marginTop: -4 }}>Scegli il tuo nome e scrivi la tua password per vedere le tue chiusure e commissioni.</div>
+      <Field label="Il tuo nome">
+        <select style={inputStyle} value={venditoreId} onChange={(e) => setVenditoreId(e.target.value)}>
+          <option value="">— scegli —</option>
+          {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+        </select>
+      </Field>
+      <Field label="Password">
+        <input
+          type="password" style={inputStyle} value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && entra()}
+        />
+      </Field>
+      {errore && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{errore}</div>}
+      <Button onClick={entra} disabled={verificando} style={{ width: "100%" }}>{verificando ? "Verifico…" : "Entra"}</Button>
+    </Modal>
+  );
+}
+
 function PaginaDashboardVenditori({
-  corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData,
+  corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData, venditoreBloccato,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
 }) {
   const isMobile = useIsMobile();
-  const [venditoreSelId, setVenditoreSelId] = useState("");
+  // se un venditore ha fatto login (venditoreBloccato valorizzato), la
+  // selezione parte già su di lui e resta fissa — niente tendina, niente
+  // modo di guardare i dati di qualcun altro
+  const [venditoreSelId, setVenditoreSelId] = useState(venditoreBloccato?.id || "");
   const [periodo, setPeriodo] = useState("mese"); // mese | trimestre | personalizzato
   const [customDa, setCustomDa] = useState("");
   const [customA, setCustomA] = useState("");
 
-  const venditoreSel = venditori.find((v) => v.id === venditoreSelId) || null;
+  const venditoreSel = venditoreBloccato
+    ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
+    : (venditori.find((v) => v.id === venditoreSelId) || null);
   const oggiStr = dataOggiStr();
 
   const range = useMemo(() => {
@@ -2324,10 +2379,14 @@ function PaginaDashboardVenditori({
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Dashboard venditori</div>
-          <select style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={venditoreSelId} onChange={(e) => setVenditoreSelId(e.target.value)}>
-            <option value="">— scegli venditore —</option>
-            {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
-          </select>
+          {venditoreBloccato ? (
+            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>Ciao, {(venditoreSel?.nome || venditoreBloccato.nome || "").toUpperCase()}</div>
+          ) : (
+            <select style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={venditoreSelId} onChange={(e) => setVenditoreSelId(e.target.value)}>
+              <option value="">— scegli venditore —</option>
+              {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+            </select>
+          )}
         </div>
 
         {!venditoreSel ? (
@@ -13728,6 +13787,18 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
+  // login venditore dalla home: mostra la tendina nome+password; se il
+  // venditore entra, venditoreLoggato blocca la Dashboard venditori sui
+  // suoi soli dati; se entra con il codice amministratore, venditoreLoggato
+  // resta null e la Dashboard si apre sbloccata (tendina "scegli venditore")
+  const [mostraLoginVenditore, setMostraLoginVenditore] = useState(false);
+  const [venditoreLoggato, setVenditoreLoggato] = useState(null);
+  function apriLoginVenditore() { setMostraLoginVenditore(true); }
+  function onEntraVenditore({ modalitaAdmin, venditoreId, nome }) {
+    setMostraLoginVenditore(false);
+    setVenditoreLoggato(modalitaAdmin ? null : { id: venditoreId, nome });
+    setView("dashboardvenditori");
+  }
   // toglie l'accesso (sia quello generale che quello amministratore) e
   // mostra di nuovo il Gate: unico modo per "sloggarsi" in un'app senza
   // account individuali, un solo codice condiviso per l'intera sessione
@@ -13760,7 +13831,6 @@ export default function App() {
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
-  function apriDashboardVenditori() { apriViewProtetta("dashboardvenditori"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
@@ -13853,7 +13923,7 @@ export default function App() {
 
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 14 }}>
             <TileHome title="Gestione corsi" onClick={apriGestioneDate} />
-            <TileHome title="Dashboard venditori" onClick={apriDashboardVenditori} />
+            <TileHome title="Dashboard venditori" onClick={apriLoginVenditore} />
             <TileHome title="ERP / Magazzino" onClick={apriErp} />
             <TileHome title="Logistica prodotti" attivo={false} />
             <TileHome title="Assegna logo" onClick={apriGenerazioneLoghi} />
@@ -13862,6 +13932,10 @@ export default function App() {
             <TileHome title="Setting" onClick={apriImpostazioni} />
           </div>
         </div>
+      )}
+
+      {mostraLoginVenditore && (
+        <ModaleLoginVenditore venditori={venditori} onClose={() => setMostraLoginVenditore(false)} onEntra={onEntraVenditore} />
       )}
 
       {view === "archivio" && (
@@ -13984,7 +14058,8 @@ export default function App() {
       {view === "dashboardvenditori" && (
         <PaginaDashboardVenditori
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} venditori={venditori}
-          ricarica={fetchDati} onBack={() => setView("home")} apriData={apriData}
+          ricarica={fetchDati} onBack={() => { setVenditoreLoggato(null); setView("home"); }} apriData={apriData}
+          venditoreBloccato={venditoreLoggato}
           filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
           filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
           filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
