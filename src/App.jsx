@@ -9383,7 +9383,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         // quale modella è utile in entrambi i casi
                         const modellaVista = slotEsistente || { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" };
                         return (
-                          <div key={i.id} style={{ padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <div key={i.id} style={{ padding: nostra ? "8px 0" : "8px 18px", margin: nostra ? 0 : "0 -18px", background: nostra ? "transparent" : "#F1EEE7", borderTop: `1px solid ${CREAM_BORDER}` }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
