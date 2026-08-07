@@ -308,6 +308,14 @@ function IconaHotelRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+function IconaTipoModellaRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41 12 22l-9-9V4a1 1 0 0 1 1-1h9Z" transform="translate(0.5 0.5)" />
+      <circle cx="7.5" cy="7.5" r="1.4" />
+    </svg>
+  );
+}
 function IconaGruppoDocumenti({ size = 22, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -874,12 +882,6 @@ const inputStyle = {
 
 // ---------- helper per i calcoli di imponibile/IVA/totale ----------
 const PREZZO_MODELLA = 60;
-
-// trattamenti tra cui scegliere per ogni modella richiesta da un iscritto
-const OPZIONI_TIPO_MODELLA = [
-  "Microblading", "Sopracciglia ombretto", "Labbra", "Eyeliner",
-  "Pelo con dermografo", "Trico", "Areola", "Laminazione", "Extension", "Needling",
-];
 
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
@@ -2053,7 +2055,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 function nuovoGiornoCorsoVuoto(numero) {
   return { numero_giorno: numero, richiede_modella_master: false, mattina_master: false, pomeriggio_master: false, richiede_modelle_allievi: false, tipo_modella: "" };
 }
-function BloccoGiornoCorso({ giorno, onCambia }) {
+function BloccoGiornoCorso({ giorno, onCambia, opzioniTipo }) {
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
       <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Giorno {giorno.numero_giorno}</div>
@@ -2080,7 +2082,7 @@ function BloccoGiornoCorso({ giorno, onCambia }) {
       {(giorno.richiede_modella_master || giorno.richiede_modelle_allievi) && (
         <select style={{ ...inputStyle, fontSize: 13 }} value={giorno.tipo_modella || ""} onChange={(e) => onCambia({ ...giorno, tipo_modella: e.target.value })}>
           <option value="">— Tipo modella —</option>
-          {OPZIONI_TIPO_MODELLA.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+          {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
         </select>
       )}
     </div>
@@ -2135,7 +2137,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -2148,10 +2150,13 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [modCategoriaCorso, setModCategoriaCorso] = useState("");
   const [vistaCorsiModal, setVistaCorsiModal] = useState("griglia"); // griglia | nuovo | modifica
   const [ricercaCorsi, setRicercaCorsi] = useState("");
+  const [tipiModellaSelCorso, setTipiModellaSelCorso] = useState([]);
+  const [tipiModellaSelCorsoModifica, setTipiModellaSelCorsoModifica] = useState([]);
   const [nomeLoc, setNomeLoc] = useState("");
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [msg, setMsg] = useState("");
   const [showCorsoModal, setShowCorsoModal] = useState(false);
+  const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [showMasterModal, setShowMasterModal] = useState(false);
   const [showHotelModal, setShowHotelModal] = useState(false);
@@ -2171,6 +2176,29 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
+
+  // "Nessuna riga selezionata" per un corso = nessuna restrizione: nei
+  // selettori "tipo modella" compaiono comunque tutti i tipi del catalogo
+  const nomiTipiModella = (tipiModella || []).map((t) => t.nome);
+  function opzioniTipoPerSelezione(idSelezionati) {
+    if (!idSelezionati || idSelezionati.length === 0) return nomiTipiModella;
+    const idsSet = new Set(idSelezionati);
+    return (tipiModella || []).filter((t) => idsSet.has(t.id)).map((t) => t.nome);
+  }
+  const opzioniTipoNuovo = opzioniTipoPerSelezione(tipiModellaSelCorso);
+  const opzioniTipoModifica = opzioniTipoPerSelezione(tipiModellaSelCorsoModifica);
+
+  // sostituisce per intero le righe corsi_tipi_modella di un corso, stesso
+  // principio non distruttivo di salvaGiorniCorso: nessun vincolo esterno
+  // dipende da queste righe, quindi non c'è mai perdita di dati altrove
+  async function salvaTipiModellaCorso(corsoId, idSelezionati) {
+    await supabase.from("corsi_tipi_modella").delete().eq("corso_id", corsoId);
+    if (idSelezionati.length > 0) {
+      const { error } = await supabase.from("corsi_tipi_modella").insert(idSelezionati.map((tipoId) => ({ corso_id: corsoId, tipo_modella_id: tipoId })));
+      if (error) return error;
+    }
+    return null;
+  }
 
   // "Durata (giorni)" pilota l'elenco dei blocchi giorno, stesso
   // meccanismo già in uso per "Quante modelle" → elenco trattamenti
@@ -2223,11 +2251,12 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       richiede_modelle_allievi: g.richiede_modelle_allievi,
       tipo_modella: g.tipo_modella || "",
     })));
+    setTipiModellaSelCorsoModifica((corsiTipiModella || []).filter((x) => x.corso_id === c.id).map((x) => x.tipo_modella_id));
     setVistaCorsiModal("modifica");
   }
   function apriNuovoCorso() {
     setNomeCorso(""); setColore("#4A90D9"); setPostiMax(10); setCategoriaCorso("");
-    setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]);
+    setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setTipiModellaSelCorso([]);
     setMsg("");
     setVistaCorsiModal("nuovo");
   }
@@ -2279,6 +2308,8 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     if (error) { setMsg("Errore: " + error.message); setSalvandoCorso(false); return; }
     const erroreGiorni = await salvaGiorniCorso(id, giorniCorsoModifica);
     if (erroreGiorni) { setMsg("Corso aggiornato, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); setSalvandoCorso(false); return; }
+    const erroreTipi = await salvaTipiModellaCorso(id, tipiModellaSelCorsoModifica);
+    if (erroreTipi) { setMsg("Corso aggiornato, ma errore nel salvataggio dei tipi di modella: " + erroreTipi.message); setSalvandoCorso(false); return; }
     await ricarica();
     setSalvandoCorso(false);
     setCorsoInModifica(null);
@@ -2315,19 +2346,21 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     if (ins.error) { setMsg("Errore: " + ins.error.message); return; }
     const erroreGiorni = await salvaGiorniCorso(ins.data.id, giorniCorso);
     if (erroreGiorni) { setMsg("Corso aggiunto, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); }
+    const erroreTipi = await salvaTipiModellaCorso(ins.data.id, tipiModellaSelCorso);
+    if (erroreTipi) { setMsg("Corso aggiunto, ma errore nel salvataggio dei tipi di modella: " + erroreTipi.message); }
     if (diplomaCorsoNuovo) {
       try {
         const percorso = await caricaTemplateDiploma(diplomaCorsoNuovo, ins.data.id);
         await supabase.from("corsi").update({ diploma_template_path: percorso }).eq("id", ins.data.id);
       } catch (e) {
         setMsg("Corso aggiunto, ma errore nel caricamento del diploma: " + e.message);
-        setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso("");
+        setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso(""); setTipiModellaSelCorso([]);
         ricarica();
         return;
       }
     }
-    setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso("");
-    if (!erroreGiorni) { setMsg("Corso aggiunto."); setVistaCorsiModal("griglia"); }
+    setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso(""); setTipiModellaSelCorso([]);
+    if (!erroreGiorni && !erroreTipi) { setMsg("Corso aggiunto."); setVistaCorsiModal("griglia"); }
     ricarica();
   }
 
@@ -2355,6 +2388,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
         { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
+        { etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { etichetta: "Definisci Hotel", Icona: IconaHotelRiga, onClick: () => setShowHotelModal(true) },
         { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
         { etichetta: "Assegna Master", Icona: IconaMasterRiga, onClick: onApriAssegnazioneMaster },
@@ -2468,6 +2502,17 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
                   {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                 </div>
               </Field>
+              <Field label="Tipi di modella selezionabili in questo corso (vuoto = tutti)">
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 10, maxHeight: 160, overflow: "auto" }}>
+                  {tipiModella.length === 0 && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun tipo di modella definito ancora — vedi "Definisci tipi di modelle".</span>}
+                  {tipiModella.map((t) => (
+                    <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                      <input type="checkbox" checked={tipiModellaSelCorso.includes(t.id)} onChange={(e) => setTipiModellaSelCorso((prev) => (e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)))} />
+                      {t.nome}
+                    </label>
+                  ))}
+                </div>
+              </Field>
               <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
                 <input type="number" min="0" style={inputStyle} value={durataCorso} onChange={(e) => setDurataCorso(e.target.value)} />
               </Field>
@@ -2475,7 +2520,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
                   {giorniCorso.map((g, idx) => (
-                    <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorso((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
+                    <BloccoGiornoCorso key={g.numero_giorno} giorno={g} opzioniTipo={opzioniTipoNuovo} onCambia={(nuovo) => setGiorniCorso((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
                   ))}
                 </div>
               )}
@@ -2521,6 +2566,17 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
                     {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                   </div>
                 </Field>
+                <Field label="Tipi di modella selezionabili in questo corso (vuoto = tutti)">
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 10, maxHeight: 160, overflow: "auto" }}>
+                    {tipiModella.length === 0 && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun tipo di modella definito ancora — vedi "Definisci tipi di modelle".</span>}
+                    {tipiModella.map((t) => (
+                      <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                        <input type="checkbox" checked={tipiModellaSelCorsoModifica.includes(t.id)} onChange={(e) => setTipiModellaSelCorsoModifica((prev) => (e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)))} />
+                        {t.nome}
+                      </label>
+                    ))}
+                  </div>
+                </Field>
                 <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
                   <input type="number" min="0" style={inputStyle} value={durataCorsoModifica} onChange={(e) => setDurataCorsoModifica(e.target.value)} />
                 </Field>
@@ -2528,7 +2584,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
                     {giorniCorsoModifica.map((g, idx) => (
-                      <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorsoModifica((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
+                      <BloccoGiornoCorso key={g.numero_giorno} giorno={g} opzioniTipo={opzioniTipoModifica} onCambia={(nuovo) => setGiorniCorsoModifica((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
                     ))}
                   </div>
                 )}
@@ -2595,6 +2651,17 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
             elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
             mostraFirmaCheckbox
+          />
+        </Modal>
+      )}
+
+      {showTipiModellaModal && (
+        <Modal title="Tipi di modella" onClose={() => setShowTipiModellaModal(false)}>
+          <div style={{ ...subStyle, marginTop: -4 }}>Trattamenti tra cui scegliere quando un allievo richiede una modella. In "Definisci corsi" puoi limitare quali di questi sono selezionabili per ciascun corso.</div>
+          <GestioneListaSemplice
+            nomeSingolare="Tipo di modella" nomeArticolo="un" tabella="tipi_modella"
+            elementi={tipiModella} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            placeholder="es. MICROBLADING"
           />
         </Modal>
       )}
@@ -6165,7 +6232,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -6301,6 +6368,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const giorniCorsoDiQuesto = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id).sort((a, b) => a.numero_giorno - b.numero_giorno);
   const giorniAllieviCorso = giorniCorsoDiQuesto.filter((g) => g.richiede_modelle_allievi);
   const giorniRilevantiModelle = giorniCorsoDiQuesto.filter((g) => g.richiede_modella_master || g.richiede_modelle_allievi);
+  // tipi di modella selezionabili per QUESTO corso (da "Definisci corsi");
+  // nessuna riga configurata = nessuna restrizione, si mostra tutto il catalogo
+  const idTipiModellaCorso = (corsiTipiModella || []).filter((x) => x.corso_id === corsoData.corso_id).map((x) => x.tipo_modella_id);
+  const opzioniTipoModellaCorso = idTipiModellaCorso.length > 0
+    ? (tipiModella || []).filter((t) => idTipiModellaCorso.includes(t.id)).map((t) => t.nome)
+    : (tipiModella || []).map((t) => t.nome);
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
   const max = postiMaxEffettivi(corsoData, corso, loc);
   const liberi = Math.max(0, max - listaIscritti.length);
@@ -7604,7 +7677,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           onChange={(e) => setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, tipo: e.target.value } : x)))}
                         >
                           <option value="">— scegli —</option>
-                          {OPZIONI_TIPO_MODELLA.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+                          {opzioniTipoModellaCorso.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
                         </select>
                         {giorniAllieviCorso.length > 1 && (
                           <select
@@ -12729,6 +12802,9 @@ export default function App() {
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
   // template dei giorni di ogni corso-tipo (Modella del Master/Allievi per giorno)
   const [corsiGiorni, setCorsiGiorni] = useState([]);
+  // catalogo generale dei tipi di modella + quali sono selezionabili per ciascun corso
+  const [tipiModella, setTipiModella] = useState([]);
+  const [corsiTipiModella, setCorsiTipiModella] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -12761,7 +12837,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -12790,6 +12866,8 @@ export default function App() {
       supabase.from("prodotti_categorie").select("*"),
       supabase.from("prodotti_immagini").select("*"),
       supabase.from("corsi_giorni").select("*").order("numero_giorno"),
+      supabase.from("tipi_modella").select("*").order("nome"),
+      supabase.from("corsi_tipi_modella").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -12819,6 +12897,8 @@ export default function App() {
     setProdottiCategorie(pc.data || []);
     setProdottiImmagini(pi.data || []);
     setCorsiGiorni(cg.data || []);
+    setTipiModella(tm.data || []);
+    setCorsiTipiModella(ctm.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -13176,7 +13256,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
       )}
 
       {view === "gestionedate" && (
@@ -13322,6 +13402,8 @@ export default function App() {
           costiSottocategorie={costiSottocategorie}
           spese={spese}
           corsiGiorni={corsiGiorni}
+          tipiModella={tipiModella}
+          corsiTipiModella={corsiTipiModella}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
