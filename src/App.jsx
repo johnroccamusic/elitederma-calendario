@@ -9343,15 +9343,25 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>
                           Modella del Master{g.tipo_modella_master ? ` — ${g.tipo_modella_master}` : ""}
                         </div>
-                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 600, color: modellaMaster.la_porta_master ? "#111" : "#C7C7C7" }}>
-                          <input
-                            type="checkbox"
-                            checked={!!modellaMaster.la_porta_master}
-                            onChange={(e) => aggiornaModellaMaster(g.numero_giorno, "la_porta_master", e.target.checked)}
-                            style={{ width: 16, height: 16, accentColor: "#2E7D32", cursor: "pointer" }}
-                          />
+                        <div
+                          role="checkbox"
+                          aria-checked={!!modellaMaster.la_porta_master}
+                          onClick={() => aggiornaModellaMaster(g.numero_giorno, "la_porta_master", !modellaMaster.la_porta_master)}
+                          style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", ...fontBody, fontSize: 14, fontWeight: 600, color: modellaMaster.la_porta_master ? "#111" : "#C7C7C7" }}
+                        >
+                          <span
+                            style={{
+                              width: 22, height: 22, borderRadius: 5, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                              border: modellaMaster.la_porta_master ? "none" : "1.5px solid #C7C7C7",
+                              background: modellaMaster.la_porta_master ? "#2E7D32" : "#fff",
+                            }}
+                          >
+                            {modellaMaster.la_porta_master && (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            )}
+                          </span>
                           La porta la master
-                        </label>
+                        </div>
                       </div>
                       <RigaModella
                         modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
