@@ -844,6 +844,29 @@ function CardHome({ title, sub, onClick, icona }) {
   );
 }
 
+// card grande e quadrata della home (griglia 4x2): solo titolo, nessuna
+// icona/sottotitolo. "attivo=false" la mostra spenta con badge "Non
+// attivo", per aree non ancora costruite
+function TileHome({ title, attivo = true, onClick }) {
+  return (
+    <button
+      onClick={attivo ? onClick : undefined}
+      disabled={!attivo}
+      style={{
+        ...fontBody, textAlign: "left", width: "100%", aspectRatio: "1", position: "relative",
+        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
+        padding: 22, cursor: attivo ? "pointer" : "default",
+      }}
+    >
+      {!attivo && (
+        <span style={{ position: "absolute", top: 16, right: 18, ...fontBody, fontSize: 11, color: MUTED }}>Non attivo</span>
+      )}
+      <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, lineHeight: 1.25, color: attivo ? NAVY : MUTED }}>{title}</span>
+    </button>
+  );
+}
+
 function Button({ children, onClick, variant = "primary", style = {}, disabled }) {
   const base = {
     ...fontBody,
@@ -2112,6 +2135,105 @@ function TabPillola({ attivo, onClick, children }) {
   );
 }
 
+// blocco "Date corsi" (tab In programmazione/Archivio, ricerca, filtri,
+// Elenco/Calendario): riusato sia da "Dashboard venditori" sia da
+// "Gestione modelle" — cambia solo dove porta il click su una data
+// (onApriData), passato dal chiamante
+function SezioneDateCorsi({
+  corsi, location, corsiDate, iscritti, master, ricarica, onApriData,
+  filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
+  cronologicoHome, setCronologicoHome,
+  apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
+  selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
+}) {
+  const [vistaDateTab, setVistaDateTab] = useState("programmazione"); // programmazione | archivio
+  const [vistaDateModo, setVistaDateModo] = useState("elenco"); // elenco | calendario
+  const [ricercaDate, setRicercaDate] = useState("");
+  const oggiStr = dataOggiStr();
+
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
+
+  const numeroInProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
+  const corsiDateFiltrate = corsiDate.filter((cd) => {
+    if (vistaDateTab === "programmazione" ? cd.data_fine < oggiStr : cd.data_fine >= oggiStr) return false;
+    if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
+    if (filtroCittaHome && cd.location_id !== filtroCittaHome) return false;
+    if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
+    const q = ricercaDate.trim().toLowerCase();
+    if (!q) return true;
+    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome].filter(Boolean).join(" ").toLowerCase();
+    return testo.includes(q);
+  });
+
+  return (
+    <div>
+      <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Date corsi</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
+          <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
+          <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+        </div>
+      </div>
+      <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="Cerca corso, sede o master…" value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} />
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        <FiltroPill
+          etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
+          valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
+          aperto={apriFiltroCorsoHome} selectRef={selectFiltroCorsoHomeRef}
+          onToggle={() => { setApriFiltroCorsoHome((v) => !v); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
+          onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
+          onBlur={() => setApriFiltroCorsoHome(false)}
+        />
+        <FiltroPill
+          etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
+          valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
+          aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
+          onToggle={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroMasterHome(false); }}
+          onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
+          onBlur={() => setApriFiltroCittaHome(false)}
+        />
+        <FiltroPill
+          etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
+          valore={filtroMasterHome} etichettaAttiva={master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase()}
+          aperto={apriFiltroMasterHome} selectRef={selectFiltroMasterHomeRef}
+          onToggle={() => { setApriFiltroMasterHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
+          onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
+          onBlur={() => setApriFiltroMasterHome(false)}
+        />
+        <button
+          onClick={() => setCronologicoHome((v) => !v)}
+          style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer" }}
+        >
+          Cronologico
+        </button>
+        <button
+          onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
+          style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}
+        >
+          Reset filtri
+        </button>
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>{corsiDateFiltrate.length} cors{corsiDateFiltrate.length === 1 ? "o trovato" : "i trovati"}</div>
+
+      {vistaDateModo === "elenco" ? (
+        <DateRaggruppatePerCitta
+          corsi={corsi} location={location} cronologico={cronologicoHome}
+          corsiDate={corsiDateFiltrate}
+          iscritti={iscritti} master={master} onApriData={onApriData}
+        />
+      ) : (
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} />
+      )}
+    </div>
+  );
+}
+
 function PaginaDashboardVenditori({
   corsi, location, corsiDate, iscritti, master, venditori, ricarica, onBack, apriData,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
@@ -2124,9 +2246,6 @@ function PaginaDashboardVenditori({
   const [periodo, setPeriodo] = useState("mese"); // mese | trimestre | personalizzato
   const [customDa, setCustomDa] = useState("");
   const [customA, setCustomA] = useState("");
-  const [vistaDateTab, setVistaDateTab] = useState("programmazione"); // programmazione | archivio
-  const [vistaDateModo, setVistaDateModo] = useState("elenco"); // elenco | calendario
-  const [ricercaDate, setRicercaDate] = useState("");
 
   const venditoreSel = venditori.find((v) => v.id === venditoreSelId) || null;
   const oggiStr = dataOggiStr();
@@ -2152,7 +2271,6 @@ function PaginaDashboardVenditori({
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
   const corsoDataById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
 
   // "chiusura" = un'iscrizione venduta da questo venditore, nel periodo
@@ -2196,21 +2314,6 @@ function PaginaDashboardVenditori({
     perEdizione[corsoData.id].totale += iscritto.quota_venditore || 0;
   });
   const commissioniInArrivo = Object.values(perEdizione).sort((a, b) => a.corsoData.data_fine.localeCompare(b.corsoData.data_fine));
-
-  // sezione "Date corsi": stesso principio già in uso in Home/Gestione date
-  // (data_fine per capire se una data è ancora in programmazione o già
-  // archiviata), con in più una ricerca testuale libera
-  const numeroInProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
-  const corsiDateFiltrate = corsiDate.filter((cd) => {
-    if (vistaDateTab === "programmazione" ? cd.data_fine < oggiStr : cd.data_fine >= oggiStr) return false;
-    if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
-    if (filtroCittaHome && cd.location_id !== filtroCittaHome) return false;
-    if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
-    const q = ricercaDate.trim().toLowerCase();
-    if (!q) return true;
-    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome].filter(Boolean).join(" ").toLowerCase();
-    return testo.includes(q);
-  });
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -2313,67 +2416,57 @@ function PaginaDashboardVenditori({
           </>
         )}
 
-        <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Date corsi</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
-            <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
-          </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
-            <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
-          </div>
-        </div>
-        <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="Cerca corso, sede o master…" value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} />
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-          <FiltroPill
-            etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
-            valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
-            aperto={apriFiltroCorsoHome} selectRef={selectFiltroCorsoHomeRef}
-            onToggle={() => { setApriFiltroCorsoHome((v) => !v); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-            onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
-            onBlur={() => setApriFiltroCorsoHome(false)}
-          />
-          <FiltroPill
-            etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
-            valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
-            aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
-            onToggle={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroMasterHome(false); }}
-            onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
-            onBlur={() => setApriFiltroCittaHome(false)}
-          />
-          <FiltroPill
-            etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
-            valore={filtroMasterHome} etichettaAttiva={master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase()}
-            aperto={apriFiltroMasterHome} selectRef={selectFiltroMasterHomeRef}
-            onToggle={() => { setApriFiltroMasterHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); }}
-            onChange={(e) => { setFiltroMasterHome(e.target.value); setApriFiltroMasterHome(false); }}
-            onBlur={() => setApriFiltroMasterHome(false)}
-          />
-          <button
-            onClick={() => setCronologicoHome((v) => !v)}
-            style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer" }}
-          >
-            Cronologico
-          </button>
-          <button
-            onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-            style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}
-          >
-            Reset filtri
-          </button>
-        </div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>{corsiDateFiltrate.length} cors{corsiDateFiltrate.length === 1 ? "o trovato" : "i trovati"}</div>
+        <SezioneDateCorsi
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          ricarica={ricarica} onApriData={apriData}
+          filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
+          filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
+          filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
+          cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
+          apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
+          apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
+          apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
+          selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+        />
+      </div>
+    </div>
+  );
+}
 
-        {vistaDateModo === "elenco" ? (
-          <DateRaggruppatePerCitta
-            corsi={corsi} location={location} cronologico={cronologicoHome}
-            corsiDate={corsiDateFiltrate}
-            iscritti={iscritti} master={master} onApriData={apriData}
-          />
-        ) : (
-          <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} onApriData={apriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} />
-        )}
+// pagina "Gestione modelle": stessa lista/calendario di date già usata in
+// Dashboard venditori, ma cliccando una data si entra direttamente nella
+// scheda "Assegna modelle" di quell'edizione (onApriData qui è
+// apriDataModelle, non apriData) invece che nella lista iscritti
+function PaginaGestioneModelle({
+  corsi, location, corsiDate, iscritti, master, ricarica, onBack, apriDataModelle,
+  filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
+  cronologicoHome, setCronologicoHome,
+  apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
+  selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
+}) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione modelle</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Scegli una data corso per aprire direttamente "Assegna modelle".</div>
+
+        <SezioneDateCorsi
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          ricarica={ricarica} onApriData={apriDataModelle}
+          filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
+          filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
+          filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
+          cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
+          apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
+          apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
+          apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
+          selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+        />
       </div>
     </div>
   );
@@ -13349,6 +13442,7 @@ export default function App() {
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
+  const isMobile = useIsMobile();
   const [view, setView] = useState("home");
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
   const [corsi, setCorsi] = useState([]);
@@ -13626,6 +13720,22 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
+  // come apriData, ma entra direttamente nella tab "Assegna modelle"
+  // invece che nella lista iscritti — usata da "Gestione modelle"
+  function apriDataModelle(cd) {
+    setCorsoDataAperta(cd.id);
+    setSottoVistaScheda({ vista: "modelle", modificandoId: null, mostraGestione: false });
+    setSchedaKey((k) => k + 1);
+    setView("scheda");
+  }
+  // toglie l'accesso (sia quello generale che quello amministratore) e
+  // mostra di nuovo il Gate: unico modo per "sloggarsi" in un'app senza
+  // account individuali, un solo codice condiviso per l'intera sessione
+  function esci() {
+    sessionStorage.removeItem("edc_ok");
+    sessionStorage.removeItem("edc_admin_ok");
+    setOk(false);
+  }
   // Setting e Statistiche usano lo stesso codice amministratore e lo
   // stesso sblocco (valido per l'intera sessione) già usato per la
   // contabilità classe: una volta inserito corretto una volta, non viene
@@ -13651,6 +13761,7 @@ export default function App() {
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriDashboardVenditori() { apriViewProtetta("dashboardvenditori"); }
+  function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -13728,44 +13839,27 @@ export default function App() {
           ogni schermata invece di limitarsi ad affiancarlo */}
       <div style={{ height: 76 }} />
       {view === "home" && (
-        <div style={{ maxWidth: 480, margin: "0 auto", padding: "42px 20px 60px" }}>
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto" }} />
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px 60px" : "28px 28px 60px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 28 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 1.2 }}>ELITEDERMA</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>Amministratore</span>
+              <button onClick={esci} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0 }}>Esci</button>
+            </div>
           </div>
-          <div style={{ ...fontDisplay, fontSize: 28, color: NAVY, textAlign: "center", letterSpacing: 0.5, marginTop: 44, marginBottom: 30 }}>GESTIONALE ACADEMY</div>
-          <div style={{ display: "flex", flexWrap: "wrap", background: "#E3DCC9", borderRadius: 22, padding: 4, gap: 4, marginBottom: 20 }}>
-            {[
-              { etichetta: "Gestione date", onClick: apriGestioneDate },
-              { etichetta: "Magazzino", onClick: apriMagazzino },
-              { etichetta: "ERP", onClick: apriErp },
-              { etichetta: "Statistiche", onClick: apriStatistiche },
-              { etichetta: "Setting", onClick: apriImpostazioni },
-              { etichetta: "Generazione loghi", onClick: apriGenerazioneLoghi },
-              { etichetta: "Dashboard venditori", onClick: apriDashboardVenditori },
-            ].map(({ etichetta, onClick }) => (
-              <button
-                key={etichetta}
-                onClick={onClick}
-                style={{
-                  ...fontDisplay, flex: "1 1 30%", background: "transparent", border: "none", borderRadius: 18,
-                  padding: "10px 6px", fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer",
-                  textAlign: "center", overflow: "hidden",
-                }}
-              >
-                <EtichettaAdattiva testo={etichetta} />
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
-              <CardHome title="Calendario" sub="Vista mensile con tutte le edizioni" onClick={() => setView("calendario")} icona={<IconaCalendarioCard />} />
-            </div>
-            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
-              <CardHome title="Cerca iscritto" sub="Trova in quale corso è iscritto" onClick={() => setView("cercaiscritto")} icona={<IconaRicercaCard />} />
-            </div>
-            <div style={{ flex: "1 1 calc(50% - 4px)", minWidth: 0 }}>
-              <CardHome title="Archivio corsi" sub="Corsi con date già concluse" onClick={() => setView("archivio")} icona={<IconaOrologioCard />} />
-            </div>
+
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 26 : 34, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Gestionale Academy</div>
+          <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 26 }}>Scegli l'area da gestire.</div>
+
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 14 }}>
+            <TileHome title="Gestione corsi" onClick={apriGestioneDate} />
+            <TileHome title="Dashboard venditori" onClick={apriDashboardVenditori} />
+            <TileHome title="ERP / Magazzino" onClick={apriErp} />
+            <TileHome title="Logistica prodotti" attivo={false} />
+            <TileHome title="Assegna logo" onClick={apriGenerazioneLoghi} />
+            <TileHome title="Gestione modelle" onClick={apriGestioneModelle} />
+            <TileHome title="Statistiche" onClick={apriStatistiche} />
+            <TileHome title="Setting" onClick={apriImpostazioni} />
           </div>
         </div>
       )}
@@ -13891,6 +13985,21 @@ export default function App() {
         <PaginaDashboardVenditori
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} venditori={venditori}
           ricarica={fetchDati} onBack={() => setView("home")} apriData={apriData}
+          filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
+          filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
+          filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
+          cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
+          apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
+          apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
+          apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
+          selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+        />
+      )}
+
+      {view === "gestionemodelle" && (
+        <PaginaGestioneModelle
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          ricarica={fetchDati} onBack={() => setView("home")} apriDataModelle={apriDataModelle}
           filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
           filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
           filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
