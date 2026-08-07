@@ -2135,6 +2135,32 @@ function TabPillola({ attivo, onClick, children }) {
   );
 }
 
+// colori pastello per le tipologie di modella nella Dashboard modelle: le
+// tipologie sono libere (catalogo "Definisci tipi di modelle", non un enum
+// fisso), quindi il colore si sceglie con un hash del testo invece di un
+// elenco codificato — stabile per ogni nome, senza doverli conoscere prima
+const PALETTE_TIPOLOGIA = [
+  { bg: "#FBE5D6", fg: "#8A4B1F" },
+  { bg: "#FCE4EC", fg: "#9B3A5B" },
+  { bg: "#E3F2FD", fg: "#1F5C8A" },
+  { bg: "#EDE7F6", fg: "#5B3B8A" },
+  { bg: "#E8F5E9", fg: "#2E7D32" },
+  { bg: "#FFF8E1", fg: "#8A6D1F" },
+];
+function coloreTipologia(testo) {
+  let hash = 0;
+  for (let i = 0; i < (testo || "").length; i++) hash = (hash * 31 + testo.charCodeAt(i)) | 0;
+  return PALETTE_TIPOLOGIA[Math.abs(hash) % PALETTE_TIPOLOGIA.length];
+}
+function BadgeTipologia({ testo, conteggio }) {
+  const c = coloreTipologia(testo);
+  return (
+    <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 20, background: c.bg, color: c.fg, display: "inline-flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}>
+      {testo}{conteggio != null && <span style={{ fontWeight: 700 }}>{conteggio}</span>}
+    </span>
+  );
+}
+
 // blocco "Date corsi" (tab In programmazione/Archivio, ricerca, filtri,
 // Elenco/Calendario): riusato sia da "Dashboard venditori" sia da
 // "Gestione modelle" — cambia solo dove porta il click su una data
@@ -2149,9 +2175,18 @@ function SezioneDateCorsi({
   // sulle righe. Dashboard venditori e Gestione modelle restano di sola
   // consultazione non passandoli (undefined).
   onEdit, onDelete, idInModifica, renderModifica,
+  // opzionali: quando il chiamante ha già le proprie tab esterne
+  // equivalenti (es. Dashboard modelle: Elenco richieste/Calendario/
+  // Archivio), può forzare qui tab/modo e nascondere le pillole interne
+  // per non duplicarle
+  tabForzata, modoForzato, nascondiControlli,
 }) {
-  const [vistaDateTab, setVistaDateTab] = useState("programmazione"); // programmazione | archivio
-  const [vistaDateModo, setVistaDateModo] = useState("elenco"); // elenco | calendario
+  const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
+  const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
+  const vistaDateTab = tabForzata || vistaDateTabInterna;
+  const vistaDateModo = modoForzato || vistaDateModoInterno;
+  const setVistaDateTab = setVistaDateTabInterna;
+  const setVistaDateModo = setVistaDateModoInterno;
   const [ricercaDate, setRicercaDate] = useState("");
   const oggiStr = dataOggiStr();
 
@@ -2180,17 +2215,21 @@ function SezioneDateCorsi({
 
   return (
     <div>
-      <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Date corsi</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
-          <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
-        </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
-          <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
-        </div>
-      </div>
+      {!nascondiControlli && (
+        <>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Date corsi</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 6 }}>
+              <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
+              <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
+            </div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
+              <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+            </div>
+          </div>
+        </>
+      )}
       <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="Cerca allievo, corso, sede o master…" value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} />
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <FiltroPill
@@ -2504,18 +2543,607 @@ function PaginaDashboardVenditori({
   );
 }
 
-// pagina "Gestione modelle": stessa lista/calendario di date già usata in
-// Dashboard venditori, ma cliccando una data si entra direttamente nella
-// scheda "Assegna modelle" di quell'edizione (onApriData qui è
-// apriDataModelle, non apriData) invece che nella lista iscritti
+// ---------- Dashboard modelle ----------
+// calcola, per ogni edizione (corsi_date), l'elenco degli "slot modella"
+// richiesti: uno per giorno con "Modella del Master" nel template
+// corsi_giorni, più uno per ogni trattamento richiesto da ciascun allievo
+// NOSTRA (richiede_modelle=true) nei giorni Allievi del template. Stessa
+// logica esatta usata in "Assegna modelle" (SchedaData, vista "modelle"),
+// solo estesa a tutte le edizioni invece che a una sola — uno slot è
+// "assegnata" quando il suo nome_modella non è vuoto
+function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, corsiGiorni }) {
+  const corsoById = Object.fromEntries(corsi.map((c) => [c.id, c]));
+  const locById = Object.fromEntries(location.map((l) => [l.id, l]));
+  const masterById = Object.fromEntries((master || []).map((m) => [m.id, m]));
+  const giorniByCorso = {};
+  (corsiGiorni || []).forEach((g) => {
+    (giorniByCorso[g.corso_id] = giorniByCorso[g.corso_id] || []).push(g);
+  });
+
+  const slot = [];
+  corsiDate.forEach((cd) => {
+    const corso = corsoById[cd.corso_id];
+    const loc = locById[cd.location_id];
+    const masterRec = masterById[cd.master_id];
+    const base = {
+      corsoDataId: cd.id, corsoId: cd.corso_id, corsoNome: corso?.nome || "?", cittaNome: loc?.nome || "?",
+      dataInizio: cd.data_inizio, dataFine: cd.data_fine, masterTrainerNome: masterRec?.nome || "",
+    };
+    const giorniCorso = (giorniByCorso[cd.corso_id] || []).slice().sort((a, b) => a.numero_giorno - b.numero_giorno);
+    const giorniRilevanti = giorniCorso.filter((g) => g.richiede_modella_master || g.richiede_modelle_allievi);
+    const giornoRipiego = giorniCorso.filter((g) => g.richiede_modelle_allievi)[0]?.numero_giorno ?? null;
+    const iscrittiCd = iscritti.filter((i) => i.corso_data_id === cd.id);
+
+    if (giorniRilevanti.length > 0) {
+      giorniRilevanti.forEach((g) => {
+        if (g.richiede_modella_master) {
+          const modelleMaster = Array.isArray(cd.modelle_master) ? cd.modelle_master : [];
+          const entry = modelleMaster.find((m) => m.numero_giorno === g.numero_giorno);
+          slot.push({
+            ...base, id: `${cd.id}-master-${g.numero_giorno}`, ruolo: "master", numeroGiorno: g.numero_giorno,
+            tipo: g.tipo_modella_master || "Modella del Master", allievoNome: null,
+            nomeModella: entry?.nome_modella || "", telefonoModella: entry?.telefono_modella || "",
+            assegnata: !!(entry?.nome_modella && entry.nome_modella.trim()),
+          });
+        }
+        if (g.richiede_modelle_allievi) {
+          iscrittiCd.forEach((i) => {
+            if (!i.richiede_modelle) return; // SUA: se la porta l'allieva, non è un "fabbisogno" nostro
+            (Array.isArray(i.tipi_modelle) ? i.tipi_modelle : []).forEach((m, idx) => {
+              if ((m.giorno ?? giornoRipiego) !== g.numero_giorno) return;
+              slot.push({
+                ...base, id: `${cd.id}-allievo-${i.id}-${idx}`, ruolo: "allievo", numeroGiorno: g.numero_giorno,
+                tipo: m.tipo || g.tipo_modella_allievi || "?", allievoNome: `${i.nome} ${i.cognome}`,
+                iscrittoId: i.id, indexTipi: idx,
+                nomeModella: m.nome_modella || "", telefonoModella: m.telefono_modella || "",
+                assegnata: !!(m.nome_modella && m.nome_modella.trim()),
+              });
+            });
+          });
+        }
+      });
+    } else {
+      // corso senza template corsi_giorni: elenco piatto, come il ramo
+      // legacy di "Assegna modelle" quando giorniRilevantiModelle è vuoto
+      iscrittiCd.forEach((i) => {
+        if (!i.richiede_modelle) return;
+        (Array.isArray(i.tipi_modelle) ? i.tipi_modelle : []).forEach((m, idx) => {
+          slot.push({
+            ...base, id: `${cd.id}-allievo-${i.id}-${idx}`, ruolo: "allievo", numeroGiorno: null,
+            tipo: m.tipo || "?", allievoNome: `${i.nome} ${i.cognome}`, iscrittoId: i.id, indexTipi: idx,
+            nomeModella: m.nome_modella || "", telefonoModella: m.telefono_modella || "",
+            assegnata: !!(m.nome_modella && m.nome_modella.trim()),
+          });
+        });
+      });
+    }
+  });
+  return slot;
+}
+
+// scrive nome/telefono su un singolo slot (master o allievo), sulla
+// tabella giusta (corsi_date.modelle_master o iscritti.tipi_modelle) —
+// nome/telefono vuoti "liberano" lo slot (usato anche per "Elimina")
+async function scriviSlotModella(slotDaScrivere, { corsiDate, iscritti }, nomeModella, telefonoModella) {
+  if (slotDaScrivere.ruolo === "master") {
+    const cd = corsiDate.find((c) => c.id === slotDaScrivere.corsoDataId);
+    const attuale = Array.isArray(cd?.modelle_master) ? cd.modelle_master : [];
+    const idx = attuale.findIndex((m) => m.numero_giorno === slotDaScrivere.numeroGiorno);
+    const nuovo = idx >= 0
+      ? attuale.map((m, i) => (i === idx ? { ...m, nome_modella: nomeModella, telefono_modella: telefonoModella } : m))
+      : [...attuale, { numero_giorno: slotDaScrivere.numeroGiorno, mattina: false, pomeriggio: false, nome_modella: nomeModella, telefono_modella: telefonoModella }];
+    const { error } = await supabase.from("corsi_date").update({ modelle_master: nuovo }).eq("id", slotDaScrivere.corsoDataId);
+    return error;
+  }
+  const iscritto = iscritti.find((i) => i.id === slotDaScrivere.iscrittoId);
+  const attuale = Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [];
+  const nuovo = attuale.map((m, i) => (i === slotDaScrivere.indexTipi ? { ...m, nome_modella: nomeModella, telefono_modella: telefonoModella } : m));
+  const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovo }).eq("id", slotDaScrivere.iscrittoId);
+  return error;
+}
+
+// sposta una modella già assegnata da uno slot a un altro (libera lo slot
+// di partenza, la scrive su quello di arrivo con lo stesso nome/telefono)
+async function spostaModellaTraSlot(slotOrigine, slotDestinazione, ctx) {
+  const err1 = await scriviSlotModella(slotOrigine, ctx, "", "");
+  if (err1) return err1;
+  const err2 = await scriviSlotModella(slotDestinazione, ctx, slotOrigine.nomeModella, slotOrigine.telefonoModella);
+  return err2;
+}
+
+function etichettaSlot(s) {
+  return `${fmtDataCompatta(s.dataInizio, s.dataFine)} · ${s.cittaNome} · ${toTitleCase(s.corsoNome)} · ${s.tipo}${s.allievoNome ? " · " + toTitleCase(s.allievoNome) : ""}`;
+}
+
+// card statistica in cima alla Dashboard modelle: cliccabile quando passa
+// onClick (le due centrali aprono le liste di slot corrispondenti)
+function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo, icona, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={!onClick}
+      style={{
+        ...fontBody, textAlign: "left", flex: "1 1 200px", display: "flex", alignItems: "center", gap: 14,
+        background: sfondo || "#fff", border: `1px solid ${sfondo ? "transparent" : CREAM_BORDER}`, borderRadius: 14,
+        padding: 18, cursor: onClick ? "pointer" : "default",
+      }}
+    >
+      {icona && (
+        <span style={{ width: 42, height: 42, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          {icona}
+        </span>
+      )}
+      <span>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 2 }}>{etichetta}</div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
+        {sottotitolo && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>{sottotitolo}</div>}
+      </span>
+    </button>
+  );
+}
+
+// banner di avviso scadenze modelle: rimane visibile finché non si preme
+// "Visualizzato" — torna a comparire da capo se, alla riapertura della
+// pagina, il numero di slot urgenti è cambiato rispetto a quando è stato
+// chiuso l'ultima volta (altrimenti resterebbe muto per sempre su nuove
+// urgenze comparse dopo la chiusura)
+function AlertScadenzeModelle({ numeroSlot, numeroCorsi, giorni }) {
+  const chiaveVisto = `edc_alert_modelle_${numeroSlot}_${numeroCorsi}_${giorni}`;
+  const [chiuso, setChiuso] = useState(() => sessionStorage.getItem(chiaveVisto) === "1");
+  if (chiuso || numeroSlot === 0) return null;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#FDECEC", border: "1px solid #F5C6C0", borderRadius: 14, padding: "14px 18px", marginBottom: 18 }}>
+      <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 9v4" /><path d="M12 17h.01" />
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+        </svg>
+      </span>
+      <div style={{ flex: 1, ...fontBody, fontSize: 14, color: "#7A2C1E" }}>
+        <strong>{numeroSlot} modell{numeroSlot === 1 ? "a" : "e"} ancora da trovare</strong> per {numeroCorsi} corso{numeroCorsi === 1 ? "" : "i"} in partenza entro {giorni} giorni.
+      </div>
+      <Button variant="ghost" style={{ borderColor: "#C0392B", color: "#C0392B", flexShrink: 0 }} onClick={() => { sessionStorage.setItem(chiaveVisto, "1"); setChiuso(true); }}>
+        Visualizzato
+      </Button>
+    </div>
+  );
+}
+
+// riga cliccabile della lista "Priorità": mostra il badge "TRA N GIORNI"
+// (colore in base all'urgenza), città+data, corso, master, tipologie
+// richieste e i tre numeri richieste/assegnate/da trovare
+function RigaPrioritaModelle({ edizione, onApri }) {
+  const g = edizione.giorniAOggi;
+  const urgenza = g <= 3 ? { bg: "#FDECEC", fg: "#C0392B" } : g <= 7 ? { bg: "#FFF3E0", fg: "#B9770E" } : { bg: "#F1ECDF", fg: NAVY };
+  const testoGiorni = g < 0 ? "IN CORSO" : g === 0 ? "OGGI" : g === 1 ? "DOMANI" : `TRA ${g} GIORNI`;
+  return (
+    <div onClick={onApri} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+      <div style={{ width: 100, flexShrink: 0 }}>
+        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", marginBottom: 6 }}>{testoGiorni}</span>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
+        {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {Object.entries(edizione.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 18, flexShrink: 0, textAlign: "center" }}>
+        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{edizione.richieste}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>richieste</div></div>
+        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#2E7D32" }}>{edizione.assegnate}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>assegnate</div></div>
+        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#C0392B" }}>{edizione.daTrovare}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>da trovare</div></div>
+      </div>
+      <IconaFrecciaSinistra size={16} color={MUTED} />
+    </div>
+  );
+}
+
+// blocco per città nel pannello "Richieste totali per città": barra di
+// avanzamento assegnate/richieste + tipologie principali
+function RigaCittaModelle({ dati }) {
+  const pct = dati.richieste > 0 ? Math.round((dati.assegnate / dati.richieste) * 100) : 0;
+  const tipologieOrdinate = Object.entries(dati.tipologie).sort((a, b) => b[1] - a[1]);
+  const principali = tipologieOrdinate.slice(0, 3);
+  const restoConteggio = tipologieOrdinate.slice(3).reduce((s, [, n]) => s + n, 0);
+  return (
+    <div style={{ padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>
+          <IconaMarker size={14} /> {dati.citta.toUpperCase()}
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{dati.richieste} modell{dati.richieste === 1 ? "a" : "e"}</div>
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>
+        {principali.map(([t, n], idx) => <span key={t}>{idx > 0 ? " · " : ""}{t} {n}</span>)}
+        {restoConteggio > 0 && <span> · Altro {restoConteggio}</span>}
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: "#F1ECDF", overflow: "hidden", marginBottom: 6 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: "#2E7D32", borderRadius: 3 }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12 }}>
+        <span style={{ color: "#2E7D32", fontWeight: 600 }}>{dati.assegnate} assegnate</span>
+        <span style={{ color: "#C0392B", fontWeight: 600 }}>{dati.richieste - dati.assegnate} da trovare</span>
+      </div>
+    </div>
+  );
+}
+function IconaMarker({ size = 14, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 10c0 6-9 12-9 12s-9-6-9-12a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+    </svg>
+  );
+}
+
+// modale "Ancora da trovare": elenco degli slot scoperti, ognuno apribile
+// per inserire nome e telefono della modella trovata e salvare
+function ModaleSlotDaTrovare({ slotList, ctx, ricarica, onClose }) {
+  const [apertoId, setApertoId] = useState(null);
+  const [nome, setNome] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  function apri(s) { setApertoId(s.id); setNome(""); setTelefono(""); setErrore(""); }
+  async function salva(s) {
+    if (!nome.trim()) { setErrore("Scrivi almeno il nome della modella."); return; }
+    setSalvando(true); setErrore("");
+    const err = await scriviSlotModella(s, ctx, nome.trim(), telefono.trim());
+    setSalvando(false);
+    if (err) { setErrore("Errore: " + err.message); return; }
+    setApertoId(null);
+    await ricarica();
+  }
+
+  return (
+    <Modal title={`Modelle da trovare (${slotList.length})`} onClose={onClose} maxWidth={640}>
+      {slotList.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna modella ancora da trovare: tutti gli slot attivi sono assegnati.</div>
+      ) : (
+        slotList.map((s) => (
+          <div key={s.id} style={{ borderBottom: `1px solid ${CREAM_BORDER}`, padding: "12px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{fmtDataCompatta(s.dataInizio, s.dataFine)} · {s.cittaNome} · {toTitleCase(s.corsoNome)}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>
+                  {s.ruolo === "master" ? "Modella del Master" : `Allieva: ${toTitleCase(s.allievoNome)}`} · {s.tipo}
+                </div>
+              </div>
+              {apertoId !== s.id && <Button variant="ghost" style={{ flexShrink: 0 }} onClick={() => apri(s)}>Assegna</Button>}
+            </div>
+            {apertoId === s.id && (
+              <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 160px" }}>
+                  <Field label="Nome e cognome"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus /></Field>
+                </div>
+                <div style={{ flex: "1 1 140px" }}>
+                  <Field label="Telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <Button onClick={() => salva(s)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+                  <Button variant="ghost" onClick={() => setApertoId(null)}>Annulla</Button>
+                </div>
+              </div>
+            )}
+            {apertoId === s.id && errore && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B" }}>{errore}</div>}
+          </div>
+        ))
+      )}
+    </Modal>
+  );
+}
+
+// modale "Già assegnate": elenco delle modelle assegnate, con azioni
+// Modifica (rinomina nome/telefono), Sposta (su un altro slot scoperto),
+// Elimina (libera lo slot)
+function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClose }) {
+  const [inModifica, setInModifica] = useState(null); // { id, modo: "modifica" | "sposta" }
+  const [nome, setNome] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [destinazioneId, setDestinazioneId] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  function apriModifica(s) { setInModifica({ id: s.id, modo: "modifica" }); setNome(s.nomeModella); setTelefono(s.telefonoModella); setErrore(""); }
+  function apriSposta(s) { setInModifica({ id: s.id, modo: "sposta" }); setDestinazioneId(""); setErrore(""); }
+  async function salvaModifica(s) {
+    if (!nome.trim()) { setErrore("Il nome non può essere vuoto (usa Elimina per liberare lo slot)."); return; }
+    setSalvando(true); setErrore("");
+    const err = await scriviSlotModella(s, ctx, nome.trim(), telefono.trim());
+    setSalvando(false);
+    if (err) { setErrore("Errore: " + err.message); return; }
+    setInModifica(null);
+    await ricarica();
+  }
+  async function confermaSposta(s) {
+    const dest = slotDaTrovare.find((d) => d.id === destinazioneId);
+    if (!dest) { setErrore("Scegli lo slot di destinazione."); return; }
+    setSalvando(true); setErrore("");
+    const err = await spostaModellaTraSlot(s, dest, ctx);
+    setSalvando(false);
+    if (err) { setErrore("Errore: " + err.message); return; }
+    setInModifica(null);
+    await ricarica();
+  }
+  async function elimina(s) {
+    if (!window.confirm(`Rimuovere ${toTitleCase(s.nomeModella)} da questo slot? Tornerà "da trovare".`)) return;
+    setSalvando(true);
+    const err = await scriviSlotModella(s, ctx, "", "");
+    setSalvando(false);
+    if (err) { window.alert("Errore: " + err.message); return; }
+    await ricarica();
+  }
+
+  return (
+    <Modal title={`Modelle assegnate (${slotList.length})`} onClose={onClose} maxWidth={680}>
+      {slotList.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna modella assegnata ancora.</div>
+      ) : (
+        slotList.map((s) => (
+          <div key={s.id} style={{ borderBottom: `1px solid ${CREAM_BORDER}`, padding: "12px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(s.nomeModella)}{s.telefonoModella && <span style={{ fontWeight: 400, color: MUTED }}> · {s.telefonoModella}</span>}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{etichettaSlot(s)}</div>
+              </div>
+              <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                <button onClick={() => apriModifica(s)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                </button>
+                <button onClick={() => apriSposta(s)} title="Sposta su un altro corso" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3l4 4-4 4" /><path d="M3 11V9a4 4 0 0 1 4-4h14" /><path d="M7 21l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
+                </button>
+                <button onClick={() => elimina(s)} disabled={salvando} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex" }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                </button>
+              </div>
+            </div>
+            {inModifica?.id === s.id && inModifica.modo === "modifica" && (
+              <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 160px" }}><Field label="Nome e cognome"><input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus /></Field></div>
+                <div style={{ flex: "1 1 140px" }}><Field label="Telefono"><input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} /></Field></div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <Button onClick={() => salvaModifica(s)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+                  <Button variant="ghost" onClick={() => setInModifica(null)}>Annulla</Button>
+                </div>
+              </div>
+            )}
+            {inModifica?.id === s.id && inModifica.modo === "sposta" && (
+              <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 320px" }}>
+                  <Field label="Sposta su">
+                    <select style={inputStyle} value={destinazioneId} onChange={(e) => setDestinazioneId(e.target.value)}>
+                      <option value="">— scegli lo slot scoperto —</option>
+                      {slotDaTrovare.map((d) => <option key={d.id} value={d.id}>{etichettaSlot(d)}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  <Button onClick={() => confermaSposta(s)} disabled={salvando || !destinazioneId}>{salvando ? "Sposto…" : "Conferma spostamento"}</Button>
+                  <Button variant="ghost" onClick={() => setInModifica(null)}>Annulla</Button>
+                </div>
+              </div>
+            )}
+            {inModifica?.id === s.id && errore && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B" }}>{errore}</div>}
+          </div>
+        ))
+      )}
+    </Modal>
+  );
+}
+
+// dashboard "Fabbisogno, scadenze e assegnazioni": card riepilogo, filtri,
+// priorità prossimi 15 giorni, riepilogo per città, tabella completa
+function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, apriDataModelle }) {
+  const oggiStr = dataOggiStr();
+  const [ricerca, setRicerca] = useState("");
+  const [filtroCitta, setFiltroCitta] = useState("");
+  const [filtroTipologia, setFiltroTipologia] = useState("");
+  const [scadenzaGiorni, setScadenzaGiorni] = useState(15);
+  const [ordine, setOrdine] = useState("urgenza"); // urgenza | richieste
+  const [modaleDaTrovare, setModaleDaTrovare] = useState(false);
+  const [modaleAssegnate, setModaleAssegnate] = useState(false);
+
+  const ctx = { corsiDate, iscritti };
+
+  const slotAttivi = useMemo(
+    () => calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, corsiGiorni }).filter((s) => s.dataFine >= oggiStr),
+    [corsiDate, corsi, location, master, iscritti, corsiGiorni, oggiStr]
+  );
+
+  const edizioni = useMemo(() => {
+    const m = new Map();
+    slotAttivi.forEach((s) => {
+      if (!m.has(s.corsoDataId)) m.set(s.corsoDataId, { corsoDataId: s.corsoDataId, corsoId: s.corsoId, corsoNome: s.corsoNome, cittaNome: s.cittaNome, dataInizio: s.dataInizio, dataFine: s.dataFine, masterTrainerNome: s.masterTrainerNome, slot: [] });
+      m.get(s.corsoDataId).slot.push(s);
+    });
+    return Array.from(m.values()).map((e) => {
+      const richieste = e.slot.length;
+      const assegnate = e.slot.filter((s) => s.assegnata).length;
+      const tipologie = {};
+      e.slot.forEach((s) => { tipologie[s.tipo] = (tipologie[s.tipo] || 0) + 1; });
+      const giorniAOggi = Math.round((new Date(e.dataInizio + "T00:00:00") - new Date(oggiStr + "T00:00:00")) / 86400000);
+      return { ...e, richieste, assegnate, daTrovare: richieste - assegnate, tipologie, giorniAOggi };
+    }).sort((a, b) => a.dataInizio.localeCompare(b.dataInizio));
+  }, [slotAttivi, oggiStr]);
+
+  const tipologiePresenti = useMemo(() => Array.from(new Set(slotAttivi.map((s) => s.tipo))).sort(), [slotAttivi]);
+  const cittaPresenti = useMemo(() => Array.from(new Set(edizioni.map((e) => e.cittaNome))).sort(), [edizioni]);
+
+  const edizioniFiltrate = useMemo(() => {
+    let arr = edizioni.filter((e) => e.richieste > 0);
+    if (filtroCitta) arr = arr.filter((e) => e.cittaNome === filtroCitta);
+    if (filtroTipologia) arr = arr.filter((e) => Object.keys(e.tipologie).includes(filtroTipologia));
+    const termini = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (termini.length > 0) {
+      arr = arr.filter((e) => {
+        const testo = [e.corsoNome, e.cittaNome, e.masterTrainerNome, ...Object.keys(e.tipologie)].filter(Boolean).join(" ").toLowerCase();
+        return termini.every((t) => testo.includes(t));
+      });
+    }
+    return arr.slice().sort((a, b) => (ordine === "richieste" ? b.daTrovare - a.daTrovare : a.dataInizio.localeCompare(b.dataInizio)));
+  }, [edizioni, filtroCitta, filtroTipologia, ricerca, ordine]);
+
+  const edizioniPrioritarie = useMemo(
+    () => edizioniFiltrate.filter((e) => e.daTrovare > 0 && e.giorniAOggi <= scadenzaGiorni),
+    [edizioniFiltrate, scadenzaGiorni]
+  );
+
+  const perCitta = useMemo(() => {
+    const m = new Map();
+    edizioniFiltrate.forEach((e) => {
+      if (!m.has(e.cittaNome)) m.set(e.cittaNome, { citta: e.cittaNome, richieste: 0, assegnate: 0, tipologie: {} });
+      const c = m.get(e.cittaNome);
+      c.richieste += e.richieste; c.assegnate += e.assegnate;
+      Object.entries(e.tipologie).forEach(([t, n]) => { c.tipologie[t] = (c.tipologie[t] || 0) + n; });
+    });
+    return Array.from(m.values()).sort((a, b) => b.richieste - a.richieste);
+  }, [edizioniFiltrate]);
+
+  const totaleRichieste = edizioni.reduce((s, e) => s + e.richieste, 0);
+  const totaleAssegnate = edizioni.reduce((s, e) => s + e.assegnate, 0);
+  const totaleDaTrovare = totaleRichieste - totaleAssegnate;
+  const corsiDistinti = new Set(edizioni.filter((e) => e.richieste > 0).map((e) => e.corsoId)).size;
+
+  const slotDaTrovare = useMemo(() => slotAttivi.filter((s) => !s.assegnata).sort((a, b) => a.dataInizio.localeCompare(b.dataInizio)), [slotAttivi]);
+  const slotAssegnati = useMemo(() => slotAttivi.filter((s) => s.assegnata).sort((a, b) => a.dataInizio.localeCompare(b.dataInizio)), [slotAttivi]);
+
+  function apriEdizione(e) {
+    const cd = corsiDate.find((c) => c.id === e.corsoDataId);
+    if (cd) apriDataModelle(cd);
+  }
+
+  async function ricaricaLocale() { await ricarica(); }
+
+  return (
+    <div>
+      <AlertScadenzeModelle numeroSlot={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)} numeroCorsi={edizioniPrioritarie.length} giorni={scadenzaGiorni} />
+
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+        <CardStatisticaModelle
+          etichetta="Modelle richieste" valore={totaleRichieste} sottotitolo={`su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`}
+          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>}
+        />
+        <CardStatisticaModelle
+          etichetta={`In scadenza entro ${scadenzaGiorni} gg`} valore={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)}
+          sottotitolo={`${edizioniPrioritarie.length} cors${edizioniPrioritarie.length === 1 ? "o prioritario" : "i prioritari"}`}
+          colore="#C0392B" sfondo="#FDF3D9"
+          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
+        />
+        <CardStatisticaModelle
+          etichetta="Già assegnate" valore={totaleAssegnate} colore="#2E7D32" onClick={() => setModaleAssegnate(true)}
+          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+        />
+        <CardStatisticaModelle
+          etichetta="Ancora da trovare" valore={totaleDaTrovare} colore="#C0392B" onClick={() => setModaleDaTrovare(true)}
+          icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>}
+        />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+        <input style={{ ...inputStyle, flex: "2 1 260px" }} placeholder="Cerca città, corso, master o tipologia…" value={ricerca} onChange={(e) => setRicerca(e.target.value)} />
+        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={filtroCitta} onChange={(e) => setFiltroCitta(e.target.value)}>
+          <option value="">Tutte le città</option>
+          {cittaPresenti.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+        </select>
+        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={filtroTipologia} onChange={(e) => setFiltroTipologia(e.target.value)}>
+          <option value="">Tutte le tipologie</option>
+          {tipologiePresenti.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={scadenzaGiorni} onChange={(e) => setScadenzaGiorni(Number(e.target.value))}>
+          <option value={7}>Entro 7 giorni</option>
+          <option value={15}>Entro 15 giorni</option>
+          <option value={30}>Entro 30 giorni</option>
+          <option value={90}>Entro 90 giorni</option>
+        </select>
+        <select style={{ ...inputStyle, flex: "1 1 150px" }} value={ordine} onChange={(e) => setOrdine(e.target.value)}>
+          <option value="urgenza">Ordina: urgenza</option>
+          <option value="richieste">Ordina: più da trovare</option>
+        </select>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18, alignItems: "start" }}>
+        <div style={cardStyle}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <div>
+              <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
+              <div style={subStyle}>In ordine di urgenza</div>
+            </div>
+            {edizioniPrioritarie.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie[0])}>Gestisci assegnazioni</Button>}
+          </div>
+          {edizioniPrioritarie.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi {scadenzaGiorni} giorni.</div>
+          ) : (
+            edizioniPrioritarie.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
+          )}
+        </div>
+
+        <div style={cardStyle}>
+          <div style={{ ...hStyle, marginBottom: 12 }}>Richieste totali per città</div>
+          {perCitta.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Nessuna richiesta attiva.</div>
+          ) : (
+            perCitta.map((c) => <RigaCittaModelle key={c.citta} dati={c} />)
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, marginTop: 18 }}>
+        <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
+        <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+            <thead>
+              <tr style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>
+                <th style={{ padding: "0 8px 8px 0" }}>Città</th>
+                <th style={{ padding: "0 8px 8px 0" }}>Data</th>
+                <th style={{ padding: "0 8px 8px 0" }}>Corso</th>
+                <th style={{ padding: "0 8px 8px 0" }}>Tipologie richieste</th>
+                <th style={{ padding: "0 8px 8px 0", textAlign: "right" }}>Richieste</th>
+                <th style={{ padding: "0 0 8px 0", textAlign: "right" }}>Da trovare</th>
+              </tr>
+            </thead>
+            <tbody>
+              {edizioniFiltrate.map((e) => (
+                <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
+                  <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
+                  <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY }}>{toTitleCase(e.corsoNome)}</td>
+                  <td style={{ padding: "10px 8px" }}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div></td>
+                  <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "right" }}>{e.richieste}</td>
+                  <td style={{ padding: "10px 0", ...fontBody, fontSize: 13, fontWeight: 700, textAlign: "right", color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32" }}>{e.daTrovare}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
+        </div>
+      </div>
+
+      {modaleDaTrovare && <ModaleSlotDaTrovare slotList={slotDaTrovare} ctx={ctx} ricarica={ricaricaLocale} onClose={() => setModaleDaTrovare(false)} />}
+      {modaleAssegnate && <ModaleModelleAssegnate slotList={slotAssegnati} slotDaTrovare={slotDaTrovare} ctx={ctx} ricarica={ricaricaLocale} onClose={() => setModaleAssegnate(false)} />}
+    </div>
+  );
+}
+
+// pagina "Gestione modelle": Dashboard (fabbisogno/scadenze/assegnazioni)
+// più le stesse 3 modalità di "Date corsi" già usate in Dashboard
+// venditori/Gestione corsi — qui pilotate da tab in alto invece che dalle
+// pillole interne di SezioneDateCorsi, per restare fedeli al mockup
+// (Dashboard | Elenco richieste | Calendario | Archivio). Cliccando una
+// data si entra direttamente nella scheda "Assegna modelle" di
+// quell'edizione (onApriData qui è apriDataModelle, non apriData)
 function PaginaGestioneModelle({
-  corsi, location, corsiDate, iscritti, master, ricarica, onBack, apriDataModelle,
+  corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, onBack, apriDataModelle,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
 }) {
   const isMobile = useIsMobile();
+  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | calendario | archivio
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -2523,21 +3151,42 @@ function PaginaGestioneModelle({
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione modelle</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Scegli una data corso per aprire direttamente "Assegna modelle".</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione modelle</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Fabbisogno, scadenze e assegnazioni</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <TabPillola attivo={tabGM === "dashboard"} onClick={() => setTabGM("dashboard")}>Dashboard</TabPillola>
+            <TabPillola attivo={tabGM === "richieste"} onClick={() => setTabGM("richieste")}>Elenco richieste</TabPillola>
+            <TabPillola attivo={tabGM === "calendario"} onClick={() => setTabGM("calendario")}>Calendario</TabPillola>
+            <TabPillola attivo={tabGM === "archivio"} onClick={() => setTabGM("archivio")}>Archivio</TabPillola>
+          </div>
+        </div>
+        <div style={{ marginBottom: 20 }} />
 
-        <SezioneDateCorsi
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
-          ricarica={ricarica} onApriData={apriDataModelle}
-          filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
-          filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
-          filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
-          cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
-          apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
-          apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
-          apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
-          selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
-        />
+        {tabGM === "dashboard" ? (
+          <PaginaDashboardModelle
+            corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
+            ricarica={ricarica} apriDataModelle={apriDataModelle}
+          />
+        ) : (
+          <SezioneDateCorsi
+            corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+            ricarica={ricarica} onApriData={apriDataModelle}
+            filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
+            filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
+            filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
+            cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
+            apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
+            apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
+            apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
+            selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+            nascondiControlli
+            tabForzata={tabGM === "archivio" ? "archivio" : "programmazione"}
+            modoForzato={tabGM === "calendario" ? "calendario" : "elenco"}
+          />
+        )}
       </div>
     </div>
   );
@@ -14161,7 +14810,7 @@ export default function App() {
 
       {view === "gestionemodelle" && (
         <PaginaGestioneModelle
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
           ricarica={fetchDati} onBack={() => setView("home")} apriDataModelle={apriDataModelle}
           filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
           filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
