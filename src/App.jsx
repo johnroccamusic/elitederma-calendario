@@ -9372,8 +9372,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       {/* prima chi dobbiamo trovare noi (NOSTRA), poi chi
                           porta già la propria modella: così si vede a
                           colpo d'occhio chi manca ancora */}
-                      {listaIscritti.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i) => {
+                      {listaIscritti.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i, idx, elencoOrdinato) => {
                         const nostra = !!i.richiede_modelle;
+                        const ultimo = idx === elencoOrdinato.length - 1;
                         const elenco = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
                         const slotEsistente = elenco.find((m) => (m.giorno ?? giornoDiRipiegoAllievi) === g.numero_giorno);
                         // una riga scrivibile sempre presente, anche se non
@@ -9383,7 +9384,17 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                         // quale modella è utile in entrambi i casi
                         const modellaVista = slotEsistente || { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" };
                         return (
-                          <div key={i.id} style={{ padding: nostra ? "8px 0" : "8px 18px", margin: nostra ? 0 : "0 -18px", background: nostra ? "transparent" : "#F1EEE7", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <div
+                            key={i.id}
+                            style={{
+                              padding: nostra ? "8px 0" : ultimo ? "8px 18px 26px" : "8px 18px",
+                              margin: nostra ? 0 : ultimo ? "0 -18px -18px" : "0 -18px",
+                              background: nostra ? "transparent" : "#F7F6F3",
+                              borderTop: `1px solid ${CREAM_BORDER}`,
+                              borderBottomLeftRadius: ultimo && !nostra ? 14 : 0,
+                              borderBottomRightRadius: ultimo && !nostra ? 14 : 0,
+                            }}
+                          >
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
