@@ -3025,6 +3025,12 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
     () => edizioniFiltrate.filter((e) => e.daTrovare > 0 && e.giorniAOggi <= scadenzaGiorni),
     [edizioniFiltrate, scadenzaGiorni]
   );
+  // vista fissa a 60 giorni, indipendente dal filtro "Entro N giorni" qui
+  // sopra: dà sempre un colpo d'occhio più ampio accanto a quella corta
+  const edizioniPrioritarie60 = useMemo(
+    () => edizioniFiltrate.filter((e) => e.daTrovare > 0 && e.giorniAOggi <= 60),
+    [edizioniFiltrate]
+  );
 
   const perCitta = useMemo(() => {
     const m = new Map();
@@ -3100,19 +3106,36 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </select>
       </div>
 
-      <div style={cardStyle}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-          <div>
-            <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
-            <div style={subStyle}>In ordine di urgenza</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+        <div style={cardStyle}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <div>
+              <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
+              <div style={subStyle}>In ordine di urgenza</div>
+            </div>
+            {edizioniPrioritarie.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie[0])}>Gestisci assegnazioni</Button>}
           </div>
-          {edizioniPrioritarie.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie[0])}>Gestisci assegnazioni</Button>}
+          {edizioniPrioritarie.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi {scadenzaGiorni} giorni.</div>
+          ) : (
+            edizioniPrioritarie.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
+          )}
         </div>
-        {edizioniPrioritarie.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi {scadenzaGiorni} giorni.</div>
-        ) : (
-          edizioniPrioritarie.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
-        )}
+
+        <div style={cardStyle}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <div>
+              <div style={{ ...hStyle, marginBottom: 0 }}>Priorità prossimi 60 giorni</div>
+              <div style={subStyle}>In ordine di urgenza</div>
+            </div>
+            {edizioniPrioritarie60.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie60[0])}>Gestisci assegnazioni</Button>}
+          </div>
+          {edizioniPrioritarie60.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi 60 giorni.</div>
+          ) : (
+            edizioniPrioritarie60.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
+          )}
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
