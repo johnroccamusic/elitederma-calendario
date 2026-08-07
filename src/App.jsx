@@ -2579,7 +2579,7 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
         if (g.richiede_modella_master) {
           const modelleMaster = Array.isArray(cd.modelle_master) ? cd.modelle_master : [];
           const entry = modelleMaster.find((m) => m.numero_giorno === g.numero_giorno);
-          slot.push({
+          if (!entry?.la_porta_master) slot.push({
             ...base, id: `${cd.id}-master-${g.numero_giorno}`, ruolo: "master", numeroGiorno: g.numero_giorno,
             tipo: g.tipo_modella_master || "Modella del Master", allievoNome: null,
             nomeModella: entry?.nome_modella || "", telefonoModella: entry?.telefono_modella || "",
@@ -9339,8 +9339,19 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
                   {g.richiede_modella_master && (
                     <div style={{ marginBottom: g.richiede_modelle_allievi ? 16 : 0 }}>
-                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>
-                        Modella del Master{g.tipo_modella_master ? ` — ${g.tipo_modella_master}` : ""}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 6 }}>
+                        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                          Modella del Master{g.tipo_modella_master ? ` — ${g.tipo_modella_master}` : ""}
+                        </div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 600, color: modellaMaster.la_porta_master ? "#111" : "#C7C7C7" }}>
+                          <input
+                            type="checkbox"
+                            checked={!!modellaMaster.la_porta_master}
+                            onChange={(e) => aggiornaModellaMaster(g.numero_giorno, "la_porta_master", e.target.checked)}
+                            style={{ width: 16, height: 16, accentColor: "#2E7D32", cursor: "pointer" }}
+                          />
+                          La porta la master
+                        </label>
                       </div>
                       <RigaModella
                         modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
