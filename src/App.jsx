@@ -902,6 +902,19 @@ function conTotaleAggiornato(prev, valore, applicaIva) {
   const imponibile = valore === "" ? "" : String(applicaIva ? round2(num / 1.22) : num);
   return { ...prev, totale: valore, imponibile };
 }
+// cambio del metodo di pagamento di una quota (o di una sua riga extra):
+// stessa logica già usata per "Quota acconto" (gestisce anche "Cash no
+// iva", che azzera l'imponibile mostrato/bloccato), estratta qui perché
+// serve identica anche per ogni riga aggiunta con "+"
+function conMetodoAggiornato(prev, v) {
+  if (v === "Cash no iva") {
+    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: "" };
+  }
+  if (prev.metodo === "Cash no iva" && prev.totale !== "") {
+    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
+  }
+  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+}
 function ivaDiQuota(q) {
   // imponibile vuoto (es. "Cash no iva": la casella resta bloccata
   // e non si riempie mai da sola) significa "nessuna IVA da mostrare",
@@ -1087,11 +1100,37 @@ function postiMaxEffettivi(cd, corso, loc) {
 }
 
 // blocco Imponibile/IVA/Totale + metodo di pagamento per una singola quota
-function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo }) {
+// pillola rosso/verde "Da pagare"/"Pagato": stesso linguaggio visivo del
+// semaforo() già in uso altrove nell'app (Sì/NO verde/rosso), qui applicato
+// a una singola riga di pagamento (acconto/pre corso, comprese le righe
+// aggiunte con "+")
+function SemaforoPagamento({ pagato, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...fontBody, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
+        border: "none", borderRadius: 8, padding: "6px 14px", flexShrink: 0,
+        background: pagato ? "#E8F5E9" : "#FDECEC", color: pagato ? "#2E7D32" : "#C0392B",
+      }}
+    >
+      {pagato ? "Pagato" : "Da pagare"}
+    </button>
+  );
+}
+function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
-      <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
+        {onRimuovi && (
+          <button onClick={onRimuovi} title="Rimuovi questo pagamento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 2, display: "flex" }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+          </button>
+        )}
+      </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 90px" }}>
           <Field label="Imponibile">
@@ -1122,13 +1161,16 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
         </div>
       </div>
       {onMetodo && (
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-          {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
-            <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-              <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
-              {opz}
-            </label>
-          ))}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
+            {(opzioniMetodo || ["Sito", "Bonifico", "Pos", "Contanti"]).map((opz) => (
+              <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                <input type="radio" name={titolo + "-metodo"} checked={valori.metodo === opz} onChange={() => onMetodo(opz)} />
+                {opz}
+              </label>
+            ))}
+          </div>
+          {onPagato && <SemaforoPagamento pagato={pagato} onClick={() => onPagato(!pagato)} />}
         </div>
       )}
       {onMetodo && valori.metodo === "Rate" && (
@@ -6309,8 +6351,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   // momento in cui viene salvata nel database, non la data del corso)
   const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
   const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "" };
+  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
+  const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
+  // pagamenti aggiuntivi di acconto oltre al primo (pulsante "+"): stesso
+  // conto (acconto), semplicemente arrivati in un secondo momento — non
+  // toccano "Da avere al corso", che resta sempre a scrittura manuale
+  const [accontoExtra, setAccontoExtra] = useState([]);
   const [pagPrecorso, setPagPrecorso] = useState(QUOTA_VUOTA);
+  const [pagPrecorsoPagato, setPagPrecorsoPagato] = useState(false);
+  const [precorsoExtra, setPrecorsoExtra] = useState([]);
   const [pagSaldo, setPagSaldo] = useState(QUOTA_VUOTA);
   const [accordiCommerciali, setAccordiCommerciali] = useState("");
   const [richiedeModelle, setRichiedeModelle] = useState("");
@@ -6762,7 +6812,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
   function resetCampi() {
     setNome(""); setCognome(""); setNote(""); setTutor(""); setTelefono(""); setVecchiaIscrizione(false);
-    setPagAcconto(QUOTA_VUOTA); setPagPrecorso(QUOTA_VUOTA); setPagSaldo(QUOTA_VUOTA);
+    setPagAcconto(QUOTA_VUOTA); setPagAccontoPagato(false); setAccontoExtra([]);
+    setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPrecorsoExtra([]);
+    setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTagliaDivisa("");
     setRichiedeFattura(false); svuotaCampiFattura();
@@ -6786,12 +6838,28 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       metodo: i.acconto_metodo || "",
       interessi: i.acconto_interessi != null ? String(i.acconto_interessi) : "",
     });
+    setPagAccontoPagato(i.acconto_pagato === true);
+    setAccontoExtra(Array.isArray(i.acconto_extra) ? i.acconto_extra.map((r) => ({
+      imponibile: r.imponibile != null ? String(r.imponibile) : "",
+      totale: r.totale != null ? String(r.totale) : "",
+      metodo: r.metodo || "",
+      interessi: r.interessi != null ? String(r.interessi) : "",
+      pagato: !!r.pagato,
+    })) : []);
     setPagPrecorso({
       imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
       totale: i.precorso_totale != null ? String(i.precorso_totale) : "",
       metodo: i.precorso_metodo || "",
       interessi: i.precorso_interessi != null ? String(i.precorso_interessi) : "",
     });
+    setPagPrecorsoPagato(i.precorso_pagato === true);
+    setPrecorsoExtra(Array.isArray(i.precorso_extra) ? i.precorso_extra.map((r) => ({
+      imponibile: r.imponibile != null ? String(r.imponibile) : "",
+      totale: r.totale != null ? String(r.totale) : "",
+      metodo: r.metodo || "",
+      interessi: r.interessi != null ? String(r.interessi) : "",
+      pagato: !!r.pagato,
+    })) : []);
     setPagSaldo({
       imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
       totale: i.saldo_totale != null ? String(i.saldo_totale) : "",
@@ -6842,7 +6910,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
     const metodiMancanti = [];
     if (pagAcconto.totale !== "" && parseNum(pagAcconto.totale) !== 0 && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
+    accontoExtra.forEach((r, idx) => { if (r.totale !== "" && parseNum(r.totale) !== 0 && !r.metodo) metodiMancanti.push(`acconto aggiuntivo ${idx + 1}`); });
     if (pagPrecorso.totale !== "" && parseNum(pagPrecorso.totale) !== 0 && !pagPrecorso.metodo) metodiMancanti.push("quota pre corso");
+    precorsoExtra.forEach((r, idx) => { if (r.totale !== "" && parseNum(r.totale) !== 0 && !r.metodo) metodiMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
     if (pagSaldo.totale !== "" && parseNum(pagSaldo.totale) !== 0 && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
 
     const altriMancanti = [];
@@ -6882,10 +6952,26 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         acconto_totale: pagAcconto.totale === "" ? null : parseNum(pagAcconto.totale),
         acconto_metodo: pagAcconto.metodo || null,
         acconto_interessi: pagAcconto.metodo === "Rate" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
+        acconto_pagato: pagAccontoPagato,
+        acconto_extra: accontoExtra.map((r) => ({
+          imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
+          totale: r.totale === "" ? null : parseNum(r.totale),
+          metodo: r.metodo || null,
+          interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
+          pagato: !!r.pagato,
+        })),
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
         precorso_metodo: pagPrecorso.metodo || null,
         precorso_interessi: pagPrecorso.metodo === "Rate" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
+        precorso_pagato: pagPrecorsoPagato,
+        precorso_extra: precorsoExtra.map((r) => ({
+          imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
+          totale: r.totale === "" ? null : parseNum(r.totale),
+          metodo: r.metodo || null,
+          interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
+          pagato: !!r.pagato,
+        })),
         saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
         saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
         saldo_metodo: pagSaldo.metodo || null,
@@ -7608,7 +7694,33 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                 return conTotaleAggiornato(prev, String(nettoNuovo), true);
               })
             }
+            pagato={pagAccontoPagato}
+            onPagato={setPagAccontoPagato}
           />
+          {accontoExtra.map((riga, idx) => (
+            <BloccoQuota
+              key={idx}
+              titolo={`Acconto aggiuntivo ${idx + 1}`}
+              valori={riga}
+              opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"]}
+              imponibileBloccato={riga.metodo === "Cash no iva"}
+              onImponibile={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, true) : r)))}
+              onTotale={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? (r.metodo === "Cash no iva" ? { ...r, totale: v } : conTotaleAggiornato(r, v, true)) : r)))}
+              onMetodo={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? conMetodoAggiornato(r, v) : r)))}
+              onInteressi={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, interessi: v } : r)))}
+              pagato={riga.pagato}
+              onPagato={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
+              onRimuovi={() => setAccontoExtra((prev) => prev.filter((_, i) => i !== idx))}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%", marginBottom: 14 }}
+          >
+            + Aggiungi un altro acconto
+          </button>
+
           <BloccoQuota
             titolo="Quota pre corso"
             valori={pagPrecorso}
@@ -7617,7 +7729,32 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, true))}
             onMetodo={(v) => setPagPrecorso((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
             onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
+            pagato={pagPrecorsoPagato}
+            onPagato={setPagPrecorsoPagato}
           />
+          {precorsoExtra.map((riga, idx) => (
+            <BloccoQuota
+              key={idx}
+              titolo={`Pre corso aggiuntivo ${idx + 1}`}
+              valori={riga}
+              opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
+              onImponibile={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, true) : r)))}
+              onTotale={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conTotaleAggiornato(r, v, true) : r)))}
+              onMetodo={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conMetodoAggiornato(r, v) : r)))}
+              onInteressi={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, interessi: v } : r)))}
+              pagato={riga.pagato}
+              onPagato={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
+              onRimuovi={() => setPrecorsoExtra((prev) => prev.filter((_, i) => i !== idx))}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%", marginBottom: 14 }}
+          >
+            + Aggiungi un altro pre corso
+          </button>
+
           <BloccoQuota
             titolo="Da avere al corso"
             valori={pagSaldo}
@@ -7640,9 +7777,12 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             // imponibile non è mai stata riempita
             const impEffettivo = (q) => (q.imponibile === "" ? parseNum(q.totale) : parseNum(q.imponibile));
             const ivaEffettiva = (q) => (q.imponibile === "" ? 0 : round2(parseNum(q.totale) - parseNum(q.imponibile)));
-            const nessunaIva = ivaEffettiva(pagAcconto) === 0 && ivaEffettiva(pagPrecorso) === 0 && ivaEffettiva(pagSaldo) === 0;
-            const totaleSenzaIva = impEffettivo(pagAcconto) + impEffettivo(pagPrecorso) + impEffettivo(pagSaldo);
-            const totaleConIva = parseNum(pagAcconto.totale) + parseNum(pagPrecorso.totale) + parseNum(pagSaldo.totale);
+            // include anche i pagamenti extra aggiunti con "+": sono a tutti
+            // gli effetti altre quote di acconto/pre corso, solo arrivate dopo
+            const tutteLeQuote = [pagAcconto, pagPrecorso, pagSaldo, ...accontoExtra, ...precorsoExtra];
+            const nessunaIva = tutteLeQuote.every((q) => ivaEffettiva(q) === 0);
+            const totaleSenzaIva = tutteLeQuote.reduce((somma, q) => somma + impEffettivo(q), 0);
+            const totaleConIva = tutteLeQuote.reduce((somma, q) => somma + parseNum(q.totale), 0);
             return (
               <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG_CHIARO }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
@@ -7667,10 +7807,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       <input
                         style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
                         value={(() => {
-                          const intAcconto = pagAcconto.metodo === "Rate" ? parseNum(pagAcconto.interessi) : 0;
-                          const intPrecorso = pagPrecorso.metodo === "Rate" ? parseNum(pagPrecorso.interessi) : 0;
-                          if (intAcconto <= 0 && intPrecorso <= 0) return "";
-                          return (totaleConIva + intAcconto + intPrecorso).toFixed(2);
+                          const interessiTotali = tutteLeQuote
+                            .filter((q) => q !== pagSaldo && q.metodo === "Rate")
+                            .reduce((somma, q) => somma + parseNum(q.interessi), 0);
+                          if (interessiTotali <= 0) return "";
+                          return (totaleConIva + interessiTotali).toFixed(2);
                         })()}
                         disabled
                       />

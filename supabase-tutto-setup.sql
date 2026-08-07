@@ -1399,4 +1399,13 @@ alter table public.corsi_giorni add column if not exists mattina_allievi boolean
 alter table public.corsi_giorni add column if not exists pomeriggio_allievi boolean not null default false;
 alter table public.corsi_giorni add column if not exists tipo_modella_allievi text;
 
+-- ---------------------------------------------------------
+-- 35) Pagamenti extra (pulsante "+") e semaforo pagato/da pagare per
+-- Quota acconto e Quota pre corso.
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists acconto_pagato boolean not null default false;
+alter table public.iscritti add column if not exists precorso_pagato boolean not null default false;
+alter table public.iscritti add column if not exists acconto_extra jsonb not null default '[]';
+alter table public.iscritti add column if not exists precorso_extra jsonb not null default '[]';
+
 notify pgrst, 'reload schema';
