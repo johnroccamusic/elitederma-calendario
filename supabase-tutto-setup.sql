@@ -1429,4 +1429,19 @@ create policy "accesso interno venditori" on public.venditori for all to anon us
 alter table public.venditori add column if not exists password_hash text;
 alter table public.venditori add column if not exists password_salt text;
 
+-- ---------------------------------------------------------
+-- 38) Password per voce di menù (rotellina in home): una riga per ogni
+-- voce protetta (gestionedate, erp, generazioneloghi, gestionemodelle,
+-- statistiche, impostazioni). Password in chiaro, stesso livello di
+-- sicurezza già in uso per ADMIN_CODE; se vuota resta valido il codice
+-- amministratore generale.
+-- ---------------------------------------------------------
+create table if not exists public.password_menu (
+  vista text primary key,
+  password text not null default ''
+);
+alter table public.password_menu enable row level security;
+drop policy if exists "password_menu_all" on public.password_menu;
+create policy "password_menu_all" on public.password_menu for all to anon using (true) with check (true);
+
 notify pgrst, 'reload schema';

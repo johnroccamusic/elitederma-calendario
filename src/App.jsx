@@ -2531,6 +2531,73 @@ function PaginaGestioneModelle({
   );
 }
 
+function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
+  const [password, setPassword] = useState(valoreDiDefault);
+  const [salvando, setSalvando] = useState(false);
+  const [fatto, setFatto] = useState(false);
+  async function salva() {
+    setSalvando(true); setFatto(false);
+    await onSalva(password);
+    setSalvando(false); setFatto(true);
+    setTimeout(() => setFatto(false), 2000);
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <input
+        style={{ ...inputStyle, maxWidth: 220 }}
+        placeholder="Nessuna (solo codice amministratore)"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button
+        onClick={salva}
+        disabled={salvando}
+        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: salvando ? "default" : "pointer" }}
+      >
+        {salvando ? "Salvo…" : fatto ? "Salvata ✓" : "Salva"}
+      </button>
+    </div>
+  );
+}
+
+// pannello dietro la rotellina in home (codice CODICE_ROTELLINA): imposta,
+// voce per voce, la password che sblocca ciascuna area protetta della
+// home — un modo per delegare l'accesso a una singola area senza dare il
+// codice amministratore generale, che invece continua a funzionare ovunque
+function PaginaPasswordMenu({ passwordMenu, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [msg, setMsg] = useState("");
+  async function salvaPassword(vista, password) {
+    const { error } = await supabase.from("password_menu").upsert({ vista, password: password.trim() }, { onConflict: "vista" });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Password aggiornata.");
+    ricarica();
+  }
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Password menù</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
+          Imposta una password per ogni voce protetta della home: chi la conosce entra solo in quella voce. Il codice amministratore generale continua a funzionare ovunque, in aggiunta. Campo vuoto = resta valido solo il codice amministratore.
+        </div>
+        {VISTE_PROTETTE_MENU.map((v) => {
+          const riga = passwordMenu.find((p) => p.vista === v.vista);
+          return (
+            <div key={v.vista} style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{v.etichetta}</div>
+              <RigaPasswordMenu valoreDiDefault={riga?.password || ""} onSalva={(pwd) => salvaPassword(v.vista, pwd)} />
+            </div>
+          );
+        })}
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Impostazioni ----------
 // un blocco "Giorno N" nel template di un corso-tipo: quali modelle
 // servono quel giorno (Modella del Master per la demo e/o modelle degli
@@ -6604,6 +6671,21 @@ function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBac
 
 // ---------- Scheda data (iscritti) ----------
 const ADMIN_CODE = import.meta.env.VITE_ADMIN_CODE || "";
+// codice fisso per aprire la rotellina "password menù" in home, dove si
+// impostano le password delle singole voci protette — volutamente diverso
+// dall'ADMIN_CODE generale, così anche chi non ha l'ADMIN_CODE ma conosce
+// solo questo può gestire le password delle voci senza avere accesso
+// amministratore ovunque
+const CODICE_ROTELLINA = "RCCGLC68H03L719U";
+// le voci della home protette da apriViewProtetta, gestibili dalla rotellina
+const VISTE_PROTETTE_MENU = [
+  { vista: "gestionedate", etichetta: "Gestione corsi" },
+  { vista: "erp", etichetta: "ERP / Magazzino" },
+  { vista: "generazioneloghi", etichetta: "Assegna logo" },
+  { vista: "gestionemodelle", etichetta: "Gestione modelle" },
+  { vista: "statistiche", etichetta: "Statistiche" },
+  { vista: "impostazioni", etichetta: "Setting" },
+];
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
 function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
@@ -13544,6 +13626,7 @@ export default function App() {
   const [corsiTipiModella, setCorsiTipiModella] = useState([]);
   // venditori/tutor selezionabili in fase di iscrizione
   const [venditori, setVenditori] = useState([]);
+  const [passwordMenu, setPasswordMenu] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -13576,7 +13659,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -13611,6 +13694,7 @@ export default function App() {
       // scrive solo l'Edge Function venditori-imposta-password, l'app non
       // le legge mai — così non finiscono nel browser di chi la usa
       supabase.from("venditori").select("id, nome, ts").order("nome"),
+      supabase.from("password_menu").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -13643,6 +13727,7 @@ export default function App() {
     setTipiModella(tm.data || []);
     setCorsiTipiModella(ctm.data || []);
     setVenditori(ve.data || []);
+    setPasswordMenu(pm.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -13805,19 +13890,40 @@ export default function App() {
   function esci() {
     sessionStorage.removeItem("edc_ok");
     sessionStorage.removeItem("edc_admin_ok");
+    Object.keys(sessionStorage).filter((k) => k.startsWith("edc_ok_")).forEach((k) => sessionStorage.removeItem(k));
     setOk(false);
   }
-  // Setting e Statistiche usano lo stesso codice amministratore e lo
-  // stesso sblocco (valido per l'intera sessione) già usato per la
-  // contabilità classe: una volta inserito corretto una volta, non viene
-  // richiesto di nuovo altrove nella stessa sessione
+  // Ogni voce protetta ha il proprio sblocco di sessione (edc_ok_<vista>):
+  // entrare in una non sblocca automaticamente le altre. La password
+  // richiesta è quella impostata per quella vista nella rotellina
+  // (Impostazioni > password menù); se non è stata impostata, o se si
+  // digita comunque il codice amministratore generale, funziona sempre
+  // anche quello, come prima.
   function apriViewProtetta(nomeView) {
-    if (sessionStorage.getItem("edc_admin_ok") === "1") { setView(nomeView); return; }
-    const codice = window.prompt("Codice amministratore:");
+    const chiaveSessione = "edc_ok_" + nomeView;
+    if (sessionStorage.getItem(chiaveSessione) === "1") { setView(nomeView); return; }
+    const rigaPassword = passwordMenu.find((p) => p.vista === nomeView);
+    const codiceRichiesto = (rigaPassword?.password || "").trim();
+    const codice = window.prompt("Codice per accedere:");
     if (codice === null) return;
-    if (ADMIN_CODE && codice === ADMIN_CODE) {
+    if (codiceRichiesto && codice === codiceRichiesto) {
+      sessionStorage.setItem(chiaveSessione, "1");
+      setView(nomeView);
+    } else if (ADMIN_CODE && codice === ADMIN_CODE) {
+      sessionStorage.setItem(chiaveSessione, "1");
       sessionStorage.setItem("edc_admin_ok", "1");
       setView(nomeView);
+    } else {
+      window.alert("Codice non corretto.");
+    }
+  }
+  // rotellina in home: codice fisso e distinto dall'ADMIN_CODE, apre il
+  // pannello dove impostare le password delle singole voci del menù
+  function apriRotellinaPassword() {
+    const codice = window.prompt("Codice per impostare le password del menù:");
+    if (codice === null) return;
+    if (codice === CODICE_ROTELLINA) {
+      setView("passwordmenu");
     } else {
       window.alert("Codice non corretto.");
     }
@@ -13900,6 +14006,20 @@ export default function App() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+          </button>
+          <button
+            onClick={apriRotellinaPassword}
+            aria-label="Password menù"
+            title="Password menù"
+            style={{
+              background: "#F1ECDF", color: NAVY, border: "none", borderRadius: "50%",
+              width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
         </div>
@@ -14084,6 +14204,10 @@ export default function App() {
           apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
         />
+      )}
+
+      {view === "passwordmenu" && (
+        <PaginaPasswordMenu passwordMenu={passwordMenu} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (
