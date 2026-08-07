@@ -1408,4 +1408,17 @@ alter table public.iscritti add column if not exists precorso_pagato boolean not
 alter table public.iscritti add column if not exists acconto_extra jsonb not null default '[]';
 alter table public.iscritti add column if not exists precorso_extra jsonb not null default '[]';
 
+-- ---------------------------------------------------------
+-- 36) Venditori (tutor): elenco gestibile da "Definisci venditori"
+-- (Impostazioni > Team), selezionabile in fase di iscrizione.
+-- ---------------------------------------------------------
+create table if not exists public.venditori (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  ts timestamptz not null default now()
+);
+alter table public.venditori enable row level security;
+drop policy if exists "accesso interno venditori" on public.venditori;
+create policy "accesso interno venditori" on public.venditori for all to anon using (true) with check (true);
+
 notify pgrst, 'reload schema';

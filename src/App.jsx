@@ -280,6 +280,15 @@ function IconaMasterRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+function IconaVenditoreRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="7" width="18" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M3 12h18" />
+    </svg>
+  );
+}
 function IconaGruppoSediCorsi({ size = 22, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -2214,7 +2223,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -2239,6 +2248,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [showHotelModal, setShowHotelModal] = useState(false);
   const [showAssistenteModal, setShowAssistenteModal] = useState(false);
   const [showLevaModal, setShowLevaModal] = useState(false);
+  const [showVenditoriModal, setShowVenditoriModal] = useState(false);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
   const [modNomeCorso, setModNomeCorso] = useState("");
@@ -2465,6 +2475,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
         { etichetta: "Definisci Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
         { etichetta: "Definisci Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
         { etichetta: "Definisci Master", Icona: IconaMasterRiga, onClick: () => setShowMasterModal(true) },
+        { etichetta: "Definisci venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
       ],
     },
     {
@@ -2775,6 +2786,17 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
             nomeSingolare="Leva" nomeArticolo="una" tabella="leva"
             elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. LEVA 1"
+          />
+        </Modal>
+      )}
+
+      {showVenditoriModal && (
+        <Modal title="Venditori" onClose={() => setShowVenditoriModal(false)}>
+          <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano.</div>
+          <GestioneListaSemplice
+            nomeSingolare="Venditore" nomeArticolo="un" tabella="venditori"
+            elementi={venditori} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            placeholder="es. MARIA ROSSI"
           />
         </Modal>
       )}
@@ -6326,7 +6348,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -7561,7 +7583,16 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           </div>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ flex: "2 1 140px" }}>
-              <Field label="Tutor"><input value={tutor} onChange={(e) => setTutor(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+              <Field label="Tutor">
+                <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...inputStyle, textTransform: "uppercase" }}>
+                  <option value="">— scegli venditore —</option>
+                  {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
+                  {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
+                  {tutor && !(venditori || []).some((v) => v.nome.toUpperCase() === tutor.toUpperCase()) && (
+                    <option value={tutor}>{tutor} (non in elenco)</option>
+                  )}
+                </select>
+              </Field>
             </div>
             <div style={{ flex: "2 1 140px" }}>
               <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
@@ -13032,6 +13063,8 @@ export default function App() {
   // catalogo generale dei tipi di modella + quali sono selezionabili per ciascun corso
   const [tipiModella, setTipiModella] = useState([]);
   const [corsiTipiModella, setCorsiTipiModella] = useState([]);
+  // venditori/tutor selezionabili in fase di iscrizione
+  const [venditori, setVenditori] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -13064,7 +13097,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -13095,6 +13128,7 @@ export default function App() {
       supabase.from("corsi_giorni").select("*").order("numero_giorno"),
       supabase.from("tipi_modella").select("*").order("nome"),
       supabase.from("corsi_tipi_modella").select("*"),
+      supabase.from("venditori").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -13126,6 +13160,7 @@ export default function App() {
     setCorsiGiorni(cg.data || []);
     setTipiModella(tm.data || []);
     setCorsiTipiModella(ctm.data || []);
+    setVenditori(ve.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -13483,7 +13518,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
       )}
 
       {view === "gestionedate" && (
@@ -13631,6 +13666,7 @@ export default function App() {
           corsiGiorni={corsiGiorni}
           tipiModella={tipiModella}
           corsiTipiModella={corsiTipiModella}
+          venditori={venditori}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
