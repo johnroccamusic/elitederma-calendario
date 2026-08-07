@@ -2167,7 +2167,8 @@ function SezioneDateCorsi({
     if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
     const q = ricercaDate.trim().toLowerCase();
     if (!q) return true;
-    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome].filter(Boolean).join(" ").toLowerCase();
+    const nomiAllievi = iscritti.filter((i) => i.corso_data_id === cd.id).map((i) => `${i.nome} ${i.cognome}`);
+    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome, ...nomiAllievi].filter(Boolean).join(" ").toLowerCase();
     return testo.includes(q);
   });
 
@@ -2184,7 +2185,7 @@ function SezioneDateCorsi({
           <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
         </div>
       </div>
-      <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="Cerca corso, sede o master…" value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} />
+      <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="Cerca allievo, corso, sede o master…" value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} />
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <FiltroPill
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
