@@ -3021,6 +3021,22 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
     return arr.slice().sort((a, b) => (ordine === "richieste" ? b.daTrovare - a.daTrovare : a.dataInizio.localeCompare(b.dataInizio)));
   }, [edizioni, filtroCitta, filtroTipologia, ricerca, ordine]);
 
+  // tabella raggruppata per mese (come nei calendari): l'ordine scelto
+  // nel filtro "Ordina" vale dentro ogni mese, i mesi restano sempre in
+  // sequenza cronologica
+  const edizioniPerMese = useMemo(() => {
+    const gruppi = new Map();
+    edizioniFiltrate.forEach((e) => {
+      const chiave = e.dataInizio.slice(0, 7); // "YYYY-MM"
+      if (!gruppi.has(chiave)) {
+        const mese = parseInt(e.dataInizio.slice(5, 7), 10);
+        gruppi.set(chiave, { chiave, etichetta: `${MESI[mese - 1]} ${e.dataInizio.slice(0, 4)}`, edizioni: [] });
+      }
+      gruppi.get(chiave).edizioni.push(e);
+    });
+    return Array.from(gruppi.values()).sort((a, b) => a.chiave.localeCompare(b.chiave));
+  }, [edizioniFiltrate]);
+
   const edizioniPrioritarie = useMemo(
     () => edizioniFiltrate.filter((e) => e.daTrovare > 0 && e.giorniAOggi <= scadenzaGiorni),
     [edizioniFiltrate, scadenzaGiorni]
@@ -3155,15 +3171,24 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
                 </tr>
               </thead>
               <tbody>
-                {edizioniFiltrate.map((e) => (
-                  <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                    <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
-                    <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
-                    <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY }}>{toTitleCase(e.corsoNome)}</td>
-                    <td style={{ padding: "10px 8px" }}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div></td>
-                    <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "right" }}>{e.richieste}</td>
-                    <td style={{ padding: "10px 0", ...fontBody, fontSize: 13, fontWeight: 700, textAlign: "right", color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32" }}>{e.daTrovare}</td>
-                  </tr>
+                {edizioniPerMese.map((gruppo) => (
+                  <React.Fragment key={gruppo.chiave}>
+                    <tr>
+                      <td colSpan={6} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, background: BG, padding: "7px 10px", borderRadius: 6 }}>
+                        {gruppo.etichetta}
+                      </td>
+                    </tr>
+                    {gruppo.edizioni.map((e) => (
+                      <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY }}>{toTitleCase(e.corsoNome)}</td>
+                        <td style={{ padding: "10px 8px" }}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div></td>
+                        <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "right" }}>{e.richieste}</td>
+                        <td style={{ padding: "10px 0", ...fontBody, fontSize: 13, fontWeight: 700, textAlign: "right", color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32" }}>{e.daTrovare}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
                 ))}
               </tbody>
             </table>
