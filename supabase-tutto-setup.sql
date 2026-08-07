@@ -1421,4 +1421,12 @@ alter table public.venditori enable row level security;
 drop policy if exists "accesso interno venditori" on public.venditori;
 create policy "accesso interno venditori" on public.venditori for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 37) Password venditori (per un futuro login): mai in chiaro, solo
+-- hash+salt scritti dalla Edge Function "venditori-imposta-password".
+-- L'app non seleziona mai queste colonne nel caricamento dati generale.
+-- ---------------------------------------------------------
+alter table public.venditori add column if not exists password_hash text;
+alter table public.venditori add column if not exists password_salt text;
+
 notify pgrst, 'reload schema';
