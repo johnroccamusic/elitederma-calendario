@@ -2145,6 +2145,10 @@ function SezioneDateCorsi({
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
+  // opzionali: solo "Gestione corsi" li passa, per matita/cestino inline
+  // sulle righe. Dashboard venditori e Gestione modelle restano di sola
+  // consultazione non passandoli (undefined).
+  onEdit, onDelete, idInModifica, renderModifica,
 }) {
   const [vistaDateTab, setVistaDateTab] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModo, setVistaDateModo] = useState("elenco"); // elenco | calendario
@@ -2226,6 +2230,7 @@ function SezioneDateCorsi({
           corsi={corsi} location={location} cronologico={cronologicoHome}
           corsiDate={corsiDateFiltrate}
           iscritti={iscritti} master={master} onApriData={onApriData}
+          onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
         />
       ) : (
         <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} />
@@ -3396,7 +3401,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <TopBar title="Gestione date" onBack={onBack} />
 
       <div style={cardStyle}>
@@ -3415,129 +3420,81 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         <PopupEliminaData evento={popupEliminaData} corsoById={corsoByIdImp} locById={locByIdImp} onElimina={eliminaDataCliccata} onChiudi={() => setPopupEliminaData(null)} />
       )}
 
-      <div>
-        <div style={subStyle}>Solo le edizioni future. Clicca la matita per modificarne una (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
+      <div style={{ ...subStyle, marginTop: 24, marginBottom: -4 }}>Clicca la matita per modificare una data (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
 
-        <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>Date in programmazione</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-            <FiltroPill
-              etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
-              valore={filtroCorsoDate} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoDate)?.nome.toUpperCase()}
-              aperto={apriFiltroCorsoDate} selectRef={selectFiltroCorsoDateRef}
-              onToggle={() => { setApriFiltroCorsoDate((v) => !v); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-              onChange={(e) => { setFiltroCorsoDate(e.target.value); setApriFiltroCorsoDate(false); }}
-              onBlur={() => setApriFiltroCorsoDate(false)}
-            />
-            <FiltroPill
-              etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
-              valore={filtroCittaDate} etichettaAttiva={location.find((l) => l.id === filtroCittaDate)?.nome.toUpperCase()}
-              aperto={apriFiltroCittaDate} selectRef={selectFiltroCittaDateRef}
-              onToggle={() => { setApriFiltroCittaDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroMasterDate(false); }}
-              onChange={(e) => { setFiltroCittaDate(e.target.value); setApriFiltroCittaDate(false); }}
-              onBlur={() => setApriFiltroCittaDate(false)}
-            />
-            <FiltroPill
-              etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
-              valore={filtroMasterDate} etichettaAttiva={master.find((m) => m.id === filtroMasterDate)?.nome.toUpperCase()}
-              aperto={apriFiltroMasterDate} selectRef={selectFiltroMasterDateRef}
-              onToggle={() => { setApriFiltroMasterDate((v) => !v); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); }}
-              onChange={(e) => { setFiltroMasterDate(e.target.value); setApriFiltroMasterDate(false); }}
-              onBlur={() => setApriFiltroMasterDate(false)}
-            />
-            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex" }}>
-              <button
-                onClick={() => setCronologicoDate((v) => !v)}
-                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: cronologicoDate ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoDate ? NAVY : "#fff", color: cronologicoDate ? "#fff" : NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <EtichettaAdattiva testo="Cronologico" />
-              </button>
+      <SezioneDateCorsi
+        corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+        ricarica={ricarica} onApriData={onApriData}
+        filtroCorsoHome={filtroCorsoDate} setFiltroCorsoHome={setFiltroCorsoDate}
+        filtroCittaHome={filtroCittaDate} setFiltroCittaHome={setFiltroCittaDate}
+        filtroMasterHome={filtroMasterDate} setFiltroMasterHome={setFiltroMasterDate}
+        cronologicoHome={cronologicoDate} setCronologicoHome={setCronologicoDate}
+        apriFiltroCorsoHome={apriFiltroCorsoDate} setApriFiltroCorsoHome={setApriFiltroCorsoDate}
+        apriFiltroCittaHome={apriFiltroCittaDate} setApriFiltroCittaHome={setApriFiltroCittaDate}
+        apriFiltroMasterHome={apriFiltroMasterDate} setApriFiltroMasterHome={setApriFiltroMasterDate}
+        selectFiltroCorsoHomeRef={selectFiltroCorsoDateRef} selectFiltroCittaHomeRef={selectFiltroCittaDateRef} selectFiltroMasterHomeRef={selectFiltroMasterDateRef}
+        onEdit={apriModificaData}
+        onDelete={eliminaData}
+        idInModifica={dataInModifica}
+        renderModifica={() => (
+          <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
+            <div style={{ marginBottom: 14 }}>
+              <CalendarioModifica
+                corsi={corsi}
+                location={location}
+                corsiDate={corsiDate}
+                iscritti={iscritti}
+                cdId={dataInModifica}
+                valore={{ inizio: modDataInizio, fine: modDataFine }}
+                onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
+                ricarica={ricarica}
+                onDataEliminata={(id) => { if (id === dataInModifica) setDataInModifica(null); }}
+              />
             </div>
-            <div style={{ flex: "1 1 0", minWidth: 0, display: "flex" }}>
-              <button
-                onClick={() => { setFiltroCorsoDate(""); setFiltroCittaDate(""); setFiltroMasterDate(""); setApriFiltroCorsoDate(false); setApriFiltroCittaDate(false); setApriFiltroMasterDate(false); }}
-                style={{ ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
-              >
-                <EtichettaAdattiva testo="Reset filtri" />
-              </button>
-            </div>
-        </div>
-
-        <DateRaggruppatePerCitta
-          corsi={corsi}
-          location={location}
-          cronologico={cronologicoDate}
-          corsiDate={corsiDate.filter((cd) =>
-            cd.data_fine >= dataOggiStr() &&
-            (!filtroCorsoDate || cd.corso_id === filtroCorsoDate) &&
-            (!filtroCittaDate || cd.location_id === filtroCittaDate) &&
-            (!filtroMasterDate || cd.master_id === filtroMasterDate)
-          )}
-          iscritti={iscritti}
-          master={master}
-          onApriData={onApriData}
-          onDelete={eliminaData}
-          onEdit={apriModificaData}
-          idInModifica={dataInModifica}
-          renderModifica={() => (
-            <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 500, color: NAVY, marginBottom: 10 }}>Modifica data</div>
-              <div style={{ marginBottom: 14 }}>
-                <CalendarioModifica
-                  corsi={corsi}
-                  location={location}
-                  corsiDate={corsiDate}
-                  iscritti={iscritti}
-                  cdId={dataInModifica}
-                  valore={{ inizio: modDataInizio, fine: modDataFine }}
-                  onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
-                  ricarica={ricarica}
-                  onDataEliminata={(id) => { if (id === dataInModifica) setDataInModifica(null); }}
-                />
+            <div style={{ display: "flex", gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Data inizio">
+                  <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
+                </Field>
               </div>
-              <div style={{ display: "flex", gap: 14 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Data inizio">
-                    <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
-                  </Field>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Data fine">
-                    <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
-                  </Field>
-                </div>
-              </div>
-              <Field label="Posti in classe">
-                <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-                  <button
-                    type="button"
-                    onClick={() => cambiaModPostiData(-1)}
-                    disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
-                    style={{
-                      width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
-                      cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
-                      opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
-                    }}
-                  >
-                    −
-                  </button>
-                  <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
-                  <button
-                    type="button"
-                    onClick={() => cambiaModPostiData(1)}
-                    style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
-                  >
-                    +
-                  </button>
-                </div>
-              </Field>
-              <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
-                <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
+              <div style={{ flex: 1 }}>
+                <Field label="Data fine">
+                  <input type="date" style={inputStyle} value={modDataFine} min={modDataInizio || undefined} onChange={(e) => setModDataFine(e.target.value)} />
+                </Field>
               </div>
             </div>
-          )}
-        />
-      </div>
+            <Field label="Posti in classe">
+              <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+                <button
+                  type="button"
+                  onClick={() => cambiaModPostiData(-1)}
+                  disabled={Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length}
+                  style={{
+                    width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, fontSize: 20,
+                    cursor: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? "default" : "pointer",
+                    opacity: Number(modPostiData) <= iscritti.filter((i) => i.corso_data_id === dataInModifica).length ? 0.35 : 1,
+                  }}
+                >
+                  −
+                </button>
+                <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, minWidth: 40, textAlign: "center" }}>{modPostiData}</div>
+                <button
+                  type="button"
+                  onClick={() => cambiaModPostiData(1)}
+                  style={{ width: 40, height: 40, borderRadius: "50%", border: `1px solid ${NAVY}`, background: NAVY, color: "#fff", fontSize: 20, cursor: "pointer" }}
+                >
+                  +
+                </button>
+              </div>
+            </Field>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button onClick={() => salvaModificaData(dataInModifica)}>Salva</Button>
+              <Button variant="ghost" onClick={() => setDataInModifica(null)}>Annulla</Button>
+            </div>
+          </div>
+        )}
+      />
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
     </div>
