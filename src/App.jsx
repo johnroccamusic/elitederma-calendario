@@ -7752,7 +7752,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
             onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
             style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%", marginBottom: 14 }}
           >
-            + Aggiungi un altro pre corso
+            + Aggiungi un'altra quota pre corso
           </button>
 
           <BloccoQuota
