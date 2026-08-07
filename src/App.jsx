@@ -2383,10 +2383,10 @@ function PaginaDashboardVenditori({
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Dashboard venditori</div>
-          {venditoreBloccato ? (
-            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>Ciao, {(venditoreSel?.nome || venditoreBloccato.nome || "").toUpperCase()}</div>
-          ) : (
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>
+            {venditoreBloccato ? `Dashboard vendite ${toTitleCase(venditoreSel?.nome || venditoreBloccato.nome || "")}` : "Dashboard venditori"}
+          </div>
+          {venditoreBloccato ? null : (
             <select style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={venditoreSelId} onChange={(e) => setVenditoreSelId(e.target.value)}>
               <option value="">— scegli venditore —</option>
               {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
