@@ -9369,7 +9369,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       {listaIscritti.length === 0 && (
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto in questa classe.</div>
                       )}
-                      {listaIscritti.map((i) => {
+                      {/* prima chi dobbiamo trovare noi (NOSTRA), poi chi
+                          porta già la propria modella: così si vede a
+                          colpo d'occhio chi manca ancora */}
+                      {listaIscritti.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i) => {
                         const nostra = !!i.richiede_modelle;
                         const elenco = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
                         const slotEsistente = elenco.find((m) => (m.giorno ?? giornoDiRipiegoAllievi) === g.numero_giorno);
