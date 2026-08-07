@@ -1321,4 +1321,27 @@ drop policy if exists "accesso interno shop-immagini" on storage.objects;
 create policy "accesso interno shop-immagini" on storage.objects for all to anon
   using (bucket_id = 'shop-immagini') with check (bucket_id = 'shop-immagini');
 
+-- ---------------------------------------------------------
+-- 31) Gestione modelle per giorno: corsi_giorni (template dei giorni di
+-- un corso-tipo: quali richiedono la Modella del Master e/o modelle
+-- Allievi, con quale trattamento), corsi_date.modelle_master (dati reali
+-- della Modella del Master per una specifica edizione).
+-- ---------------------------------------------------------
+create table if not exists public.corsi_giorni (
+  id uuid primary key default gen_random_uuid(),
+  corso_id uuid not null references public.corsi(id) on delete cascade,
+  numero_giorno integer not null,
+  richiede_modella_master boolean not null default false,
+  mattina_master boolean not null default false,
+  pomeriggio_master boolean not null default false,
+  richiede_modelle_allievi boolean not null default false,
+  tipo_modella text,
+  unique (corso_id, numero_giorno)
+);
+alter table public.corsi_giorni enable row level security;
+drop policy if exists "accesso interno corsi_giorni" on public.corsi_giorni;
+create policy "accesso interno corsi_giorni" on public.corsi_giorni for all to anon using (true) with check (true);
+
+alter table public.corsi_date add column if not exists modelle_master jsonb not null default '[]';
+
 notify pgrst, 'reload schema';

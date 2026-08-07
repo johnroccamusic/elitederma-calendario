@@ -2047,11 +2047,59 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
 }
 
 // ---------- Impostazioni ----------
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
+// un blocco "Giorno N" nel template di un corso-tipo: quali modelle
+// servono quel giorno (Modella del Master per la demo e/o modelle degli
+// Allievi) e con quale trattamento — vale per tutte le edizioni del corso
+function nuovoGiornoCorsoVuoto(numero) {
+  return { numero_giorno: numero, richiede_modella_master: false, mattina_master: false, pomeriggio_master: false, richiede_modelle_allievi: false, tipo_modella: "" };
+}
+function BloccoGiornoCorso({ giorno, onCambia }) {
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Giorno {giorno.numero_giorno}</div>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: giorno.richiede_modella_master || giorno.richiede_modelle_allievi ? 8 : 0 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+          <input type="checkbox" checked={giorno.richiede_modella_master} onChange={(e) => onCambia({ ...giorno, richiede_modella_master: e.target.checked })} />
+          Modella del Master
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+          <input type="checkbox" checked={giorno.richiede_modelle_allievi} onChange={(e) => onCambia({ ...giorno, richiede_modelle_allievi: e.target.checked })} />
+          Allievi
+        </label>
+      </div>
+      {giorno.richiede_modella_master && (
+        <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 12.5, color: NAVY }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input type="checkbox" checked={giorno.mattina_master} onChange={(e) => onCambia({ ...giorno, mattina_master: e.target.checked })} /> MAT
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+            <input type="checkbox" checked={giorno.pomeriggio_master} onChange={(e) => onCambia({ ...giorno, pomeriggio_master: e.target.checked })} /> POM
+          </label>
+        </div>
+      )}
+      {(giorno.richiede_modella_master || giorno.richiede_modelle_allievi) && (
+        <select style={{ ...inputStyle, fontSize: 13 }} value={giorno.tipo_modella || ""} onChange={(e) => onCambia({ ...giorno, tipo_modella: e.target.value })}>
+          <option value="">— Tipo modella —</option>
+          {OPZIONI_TIPO_MODELLA.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+// true se un giorno richiede modelle ma non ha scelto il tipo: blocca il salvataggio
+function giorniCorsoNonValidi(giorni) {
+  return giorni.some((g) => (g.richiede_modella_master || g.richiede_modelle_allievi) && !g.tipo_modella);
+}
+
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
   const [postiMax, setPostiMax] = useState(10);
+  const [durataCorso, setDurataCorso] = useState("");
+  const [giorniCorso, setGiorniCorso] = useState([]);
+  const [durataCorsoModifica, setDurataCorsoModifica] = useState("");
+  const [giorniCorsoModifica, setGiorniCorsoModifica] = useState([]);
   const [nomeLoc, setNomeLoc] = useState("");
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [msg, setMsg] = useState("");
@@ -2076,6 +2124,26 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
+  // "Durata (giorni)" pilota l'elenco dei blocchi giorno, stesso
+  // meccanismo già in uso per "Quante modelle" → elenco trattamenti
+  // nell'iscrizione allievo: allunga con giorni vuoti o taglia in eccesso
+  useEffect(() => {
+    const n = Math.max(0, parseInt(durataCorso, 10) || 0);
+    setGiorniCorso((prev) => {
+      if (n === prev.length) return prev;
+      if (n < prev.length) return prev.slice(0, n);
+      return [...prev, ...Array.from({ length: n - prev.length }, (_, idx) => nuovoGiornoCorsoVuoto(prev.length + idx + 1))];
+    });
+  }, [durataCorso]);
+  useEffect(() => {
+    const n = Math.max(0, parseInt(durataCorsoModifica, 10) || 0);
+    setGiorniCorsoModifica((prev) => {
+      if (n === prev.length) return prev;
+      if (n < prev.length) return prev.slice(0, n);
+      return [...prev, ...Array.from({ length: n - prev.length }, (_, idx) => nuovoGiornoCorsoVuoto(prev.length + idx + 1))];
+    });
+  }, [durataCorsoModifica]);
+
   async function eliminaCorso(id) {
     if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
     const { error } = await supabase.from("corsi").delete().eq("id", id);
@@ -2096,6 +2164,37 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
     setDiplomaCorsoModifica(null);
+    const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
+    setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
+    setGiorniCorsoModifica(giorniEsistenti.map((g) => ({
+      numero_giorno: g.numero_giorno,
+      richiede_modella_master: g.richiede_modella_master,
+      mattina_master: g.mattina_master,
+      pomeriggio_master: g.pomeriggio_master,
+      richiede_modelle_allievi: g.richiede_modelle_allievi,
+      tipo_modella: g.tipo_modella || "",
+    })));
+  }
+  // sostituisce per intero il template giorni di un corso: nessun dato
+  // già inserito nelle edizioni (corsi_date/iscritti) dipende da queste
+  // righe con un vincolo di chiave esterna, quindi accorciare la durata
+  // non cancella mai nulla di già compilato altrove
+  async function salvaGiorniCorso(corsoId, giorni) {
+    await supabase.from("corsi_giorni").delete().eq("corso_id", corsoId);
+    if (giorni.length > 0) {
+      const righe = giorni.map((g) => ({
+        corso_id: corsoId,
+        numero_giorno: g.numero_giorno,
+        richiede_modella_master: g.richiede_modella_master,
+        mattina_master: g.mattina_master,
+        pomeriggio_master: g.pomeriggio_master,
+        richiede_modelle_allievi: g.richiede_modelle_allievi,
+        tipo_modella: g.tipo_modella || null,
+      }));
+      const { error } = await supabase.from("corsi_giorni").insert(righe);
+      if (error) return error;
+    }
+    return null;
   }
   // carica il template PDF del diploma di un corso nello storage
   // "diploma-templates" e restituisce il percorso salvato
@@ -2107,6 +2206,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
   }
   async function salvaModificaCorso(id) {
     if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
+    if (giorniCorsoNonValidi(giorniCorsoModifica)) { setMsg("Scegli il tipo di modella per ogni giorno che la richiede."); return; }
     setSalvandoCorso(true);
     const payload = {
       nome: modNomeCorso.trim().toUpperCase(),
@@ -2120,6 +2220,8 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
     }
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); setSalvandoCorso(false); return; }
+    const erroreGiorni = await salvaGiorniCorso(id, giorniCorsoModifica);
+    if (erroreGiorni) { setMsg("Corso aggiornato, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); setSalvandoCorso(false); return; }
     await ricarica();
     setSalvandoCorso(false);
     setCorsoInModifica(null);
@@ -2150,20 +2252,24 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
       setMsg("Questo colore è già usato da un altro corso: scegline un altro.");
       return;
     }
+    if (giorniCorsoNonValidi(giorniCorso)) { setMsg("Scegli il tipo di modella per ogni giorno che la richiede."); return; }
     const ins = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10 }).select("id").single();
     if (ins.error) { setMsg("Errore: " + ins.error.message); return; }
+    const erroreGiorni = await salvaGiorniCorso(ins.data.id, giorniCorso);
+    if (erroreGiorni) { setMsg("Corso aggiunto, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); }
     if (diplomaCorsoNuovo) {
       try {
         const percorso = await caricaTemplateDiploma(diplomaCorsoNuovo, ins.data.id);
         await supabase.from("corsi").update({ diploma_template_path: percorso }).eq("id", ins.data.id);
       } catch (e) {
         setMsg("Corso aggiunto, ma errore nel caricamento del diploma: " + e.message);
-        setNomeCorso(""); setDiplomaCorsoNuovo(null);
+        setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]);
         ricarica();
         return;
       }
     }
-    setNomeCorso(""); setDiplomaCorsoNuovo(null); setMsg("Corso aggiunto.");
+    setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]);
+    if (!erroreGiorni) setMsg("Corso aggiunto.");
     ricarica();
   }
 
@@ -2271,6 +2377,17 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
               {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
             </div>
           </Field>
+          <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
+            <input type="number" min="0" style={inputStyle} value={durataCorso} onChange={(e) => setDurataCorso(e.target.value)} />
+          </Field>
+          {giorniCorso.length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
+              {giorniCorso.map((g, idx) => (
+                <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorso((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
+              ))}
+            </div>
+          )}
           <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
 
           <div style={{ ...hStyle, marginTop: 24 }}>Corsi esistenti</div>
@@ -2327,6 +2444,17 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, ricari
                       {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                     </div>
                   </Field>
+                  <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
+                    <input type="number" min="0" style={inputStyle} value={durataCorsoModifica} onChange={(e) => setDurataCorsoModifica(e.target.value)} />
+                  </Field>
+                  {giorniCorsoModifica.length > 0 && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
+                      {giorniCorsoModifica.map((g, idx) => (
+                        <BloccoGiornoCorso key={g.numero_giorno} giorno={g} onCambia={(nuovo) => setGiorniCorsoModifica((prev) => prev.map((x, i) => (i === idx ? nuovo : x)))} />
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button onClick={() => salvaModificaCorso(c.id)} disabled={salvandoCorso}>{salvandoCorso ? "Salvataggio…" : "Salva"}</Button>
                     <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); }}>Annulla</Button>
@@ -5960,7 +6088,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -6077,15 +6205,25 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     if (richiedeModelle !== "si") { if (tipiModelle.length > 0) setTipiModelle([]); return; }
     const n = Math.max(0, parseInt(numeroModelle, 10) || 0);
     if (n === tipiModelle.length) return;
+    // se il corso ha un solo giorno che richiede modelle allievi, lo si
+    // assegna subito senza chiedere nulla — il selettore "Giorno" compare
+    // solo quando c'è davvero una scelta da fare (più giorni possibili)
+    const giorniAllievi = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id && g.richiede_modelle_allievi);
+    const giornoDefault = giorniAllievi.length === 1 ? giorniAllievi[0].numero_giorno : null;
     setTipiModelle((prev) => {
       if (n < prev.length) return prev.slice(0, n);
-      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }))];
+      return [...prev, ...Array.from({ length: n - prev.length }, () => ({ tipo: "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: giornoDefault }))];
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [richiedeModelle, numeroModelle]);
 
   const corso = corsi.find((c) => c.id === corsoData.corso_id);
   const loc = location.find((l) => l.id === corsoData.location_id);
+  // template dei giorni di questo corso-tipo (Modella del Master/Allievi),
+  // usato sia dal selettore "Giorno" nell'iscrizione sia da "Assegna modelle"
+  const giorniCorsoDiQuesto = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id).sort((a, b) => a.numero_giorno - b.numero_giorno);
+  const giorniAllieviCorso = giorniCorsoDiQuesto.filter((g) => g.richiede_modelle_allievi);
+  const giorniRilevantiModelle = giorniCorsoDiQuesto.filter((g) => g.richiede_modella_master || g.richiede_modelle_allievi);
   const listaIscritti = iscritti.filter((i) => i.corso_data_id === corsoData.id);
   const max = postiMaxEffettivi(corsoData, corso, loc);
   const liberi = Math.max(0, max - listaIscritti.length);
@@ -6734,6 +6872,20 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     ricarica();
   }
 
+  // stesso principio di aggiornaModellaSlot ma per la Modella del Master:
+  // un array in corsi_date.modelle_master con una voce per giorno che la
+  // richiede, creata al volo la prima volta che si scrive qualcosa
+  async function aggiornaModellaMaster(numeroGiorno, campo, valore) {
+    const elencoAttuale = Array.isArray(corsoData.modelle_master) ? corsoData.modelle_master : [];
+    const esiste = elencoAttuale.some((m) => m.numero_giorno === numeroGiorno);
+    const nuovoElenco = esiste
+      ? elencoAttuale.map((m) => (m.numero_giorno === numeroGiorno ? { ...m, [campo]: valore } : m))
+      : [...elencoAttuale, { numero_giorno: numeroGiorno, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", [campo]: valore }];
+    const { error } = await supabase.from("corsi_date").update({ modelle_master: nuovoElenco }).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
   async function toggleIncassato(i) {
     const { error } = await supabase.from("iscritti").update({ incassato: !i.incassato }).eq("id", i.id);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -7377,6 +7529,18 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           <option value="">— scegli —</option>
                           {OPZIONI_TIPO_MODELLA.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
                         </select>
+                        {giorniAllieviCorso.length > 1 && (
+                          <select
+                            style={{ ...inputStyle, flex: 1 }}
+                            value={m.giorno || ""}
+                            onChange={(e) => setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, giorno: e.target.value ? Number(e.target.value) : null } : x)))}
+                          >
+                            <option value="">— giorno —</option>
+                            {giorniAllieviCorso.map((g) => (
+                              <option key={g.numero_giorno} value={g.numero_giorno}>Giorno {g.numero_giorno}{g.tipo_modella ? ` — ${g.tipo_modella}` : ""}</option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -7437,6 +7601,65 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
 
       {vista === "modelle" && (() => {
         const iscrittiConModelle = listaIscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+        const linkCard = (
+          <div style={cardStyle}>
+            <div style={hStyle}>Link per ricerca modelle</div>
+            <div style={subStyle}>Genera un link senza dati personali o di pagamento, con solo i trattamenti richiesti, dove chi cerca le modelle può scrivere nome e telefono appena ne trova una.</div>
+            <Button variant="ghost" onClick={generaLinkModelle} style={{ width: "100%" }}>Genera link per ricerca modelle</Button>
+            {linkModelle && (
+              <div style={{ marginTop: 12 }}>
+                <input readOnly value={linkModelle} onFocus={(e) => e.target.select()} style={{ ...inputStyle, marginBottom: 8 }} />
+                <Button onClick={copiaLinkModelle} style={{ width: "100%" }}>Copia link</Button>
+              </div>
+            )}
+          </div>
+        );
+
+        // corso senza template giorni impostato: comportamento identico a
+        // prima di questa funzionalità, nessuna rottura per i corsi già
+        // esistenti che non l'hanno ancora configurata
+        if (giorniRilevantiModelle.length === 0) {
+          return (
+            <div>
+              <div style={{ ...hStyle, marginBottom: 4 }}>Assegna modelle</div>
+              <div style={subStyle}>
+                Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
+              </div>
+
+              {iscrittiConModelle.length === 0 && (
+                <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto di questa classe ha richiesto modelle.</div>
+              )}
+
+              {iscrittiConModelle.map((i) => (
+                <div key={i.id} style={{ ...cardStyle, padding: 18 }}>
+                  <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
+                    {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+                  </div>
+                  <div>
+                    {i.tipi_modelle.map((m, idx) => (
+                      <RigaModella
+                        key={idx}
+                        modella={m}
+                        primaRiga={idx === 0}
+                        onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {linkCard}
+              {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
+            </div>
+          );
+        }
+
+        // giorno di ripiego per le voci di tipi_modelle inserite prima di
+        // questa funzionalità (senza "giorno" valorizzato): il primo/unico
+        // giorno Allievi del corso, così non spariscono dalla vista
+        const giornoDiRipiego = giorniAllieviCorso[0]?.numero_giorno ?? null;
+        const modelleMaster = Array.isArray(corsoData.modelle_master) ? corsoData.modelle_master : [];
+
         return (
           <div>
             <div style={{ ...hStyle, marginBottom: 4 }}>Assegna modelle</div>
@@ -7444,39 +7667,64 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
               Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
             </div>
 
-            {iscrittiConModelle.length === 0 && (
-              <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto di questa classe ha richiesto modelle.</div>
-            )}
+            {giorniRilevantiModelle.map((g) => {
+              const modellaMaster = modelleMaster.find((m) => m.numero_giorno === g.numero_giorno)
+                || { mattina: g.mattina_master, pomeriggio: g.pomeriggio_master, nome_modella: "", telefono_modella: "" };
 
-            {iscrittiConModelle.map((i) => (
-              <div key={i.id} style={{ ...cardStyle, padding: 18 }}>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
-                  {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
-                </div>
-                <div>
-                  {i.tipi_modelle.map((m, idx) => (
-                    <RigaModella
-                      key={idx}
-                      modella={m}
-                      primaRiga={idx === 0}
-                      onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+              return (
+                <div key={g.id} style={{ ...cardStyle, padding: 18 }}>
+                  <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>
+                    Giorno {g.numero_giorno}{g.tipo_modella ? ` — ${g.tipo_modella}` : ""}
+                  </div>
 
-            <div style={cardStyle}>
-              <div style={hStyle}>Link per ricerca modelle</div>
-              <div style={subStyle}>Genera un link senza dati personali o di pagamento, con solo i trattamenti richiesti, dove chi cerca le modelle può scrivere nome e telefono appena ne trova una.</div>
-              <Button variant="ghost" onClick={generaLinkModelle} style={{ width: "100%" }}>Genera link per ricerca modelle</Button>
-              {linkModelle && (
-                <div style={{ marginTop: 12 }}>
-                  <input readOnly value={linkModelle} onFocus={(e) => e.target.select()} style={{ ...inputStyle, marginBottom: 8 }} />
-                  <Button onClick={copiaLinkModelle} style={{ width: "100%" }}>Copia link</Button>
+                  {g.richiede_modella_master && (
+                    <div style={{ marginBottom: g.richiede_modelle_allievi ? 16 : 0 }}>
+                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 2 }}>Modella del Master</div>
+                      <RigaModella
+                        modella={{ ...modellaMaster, tipo: g.tipo_modella }}
+                        primaRiga
+                        onSalva={(campo, valore) => aggiornaModellaMaster(g.numero_giorno, campo, valore)}
+                      />
+                    </div>
+                  )}
+
+                  {g.richiede_modelle_allievi && (
+                    <div>
+                      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Allievi</div>
+                      {listaIscritti.length === 0 && (
+                        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto in questa classe.</div>
+                      )}
+                      {listaIscritti.map((i) => {
+                        const nostra = !!i.richiede_modelle;
+                        const slotDiQuestoGiorno = nostra
+                          ? (i.tipi_modelle || []).map((m, idx) => ({ m, idx })).filter(({ m }) => (m.giorno ?? giornoDiRipiego) === g.numero_giorno)
+                          : [];
+                        return (
+                          <div key={i.id} style={{ padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#EFEFEF", color: nostra ? "#8A6D1D" : MUTED }}>
+                                {nostra ? "NOSTRA" : "SUA"}
+                              </span>
+                            </div>
+                            {slotDiQuestoGiorno.map(({ m, idx }, i2) => (
+                              <RigaModella
+                                key={idx}
+                                modella={m}
+                                primaRiga={i2 === 0}
+                                onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
+                              />
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              );
+            })}
+
+            {linkCard}
             {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
           </div>
         );
@@ -12402,6 +12650,8 @@ export default function App() {
   const [prodottiShop, setProdottiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
+  // template dei giorni di ogni corso-tipo (Modella del Master/Allievi per giorno)
+  const [corsiGiorni, setCorsiGiorni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -12434,7 +12684,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -12462,6 +12712,7 @@ export default function App() {
       supabase.from("prodotti_shop").select("*").order("nome"),
       supabase.from("prodotti_categorie").select("*"),
       supabase.from("prodotti_immagini").select("*"),
+      supabase.from("corsi_giorni").select("*").order("numero_giorno"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -12490,6 +12741,7 @@ export default function App() {
     setProdottiShop(ps.data || []);
     setProdottiCategorie(pc.data || []);
     setProdottiImmagini(pi.data || []);
+    setCorsiGiorni(cg.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -12847,7 +13099,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
       )}
 
       {view === "gestionedate" && (
@@ -12992,6 +13244,7 @@ export default function App() {
           costiCategorie={costiCategorie}
           costiSottocategorie={costiSottocategorie}
           spese={spese}
+          corsiGiorni={corsiGiorni}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
