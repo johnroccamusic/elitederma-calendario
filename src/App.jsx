@@ -13542,6 +13542,12 @@ export default function App() {
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
   const isMobile = useIsMobile();
   const [view, setView] = useState("home");
+  // login venditore dalla home: vanno dichiarati qui (prima dei return
+  // anticipati di Gate/Caricamento più sotto), altrimenti in alcuni render
+  // questi due hook non verrebbero chiamati per niente, violando le regole
+  // degli Hook e mandando in crash l'intera app con schermo bianco
+  const [mostraLoginVenditore, setMostraLoginVenditore] = useState(false);
+  const [venditoreLoggato, setVenditoreLoggato] = useState(null);
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
   const [corsi, setCorsi] = useState([]);
   const [location, setLocation] = useState([]);
@@ -13833,8 +13839,6 @@ export default function App() {
   // venditore entra, venditoreLoggato blocca la Dashboard venditori sui
   // suoi soli dati; se entra con il codice amministratore, venditoreLoggato
   // resta null e la Dashboard si apre sbloccata (tendina "scegli venditore")
-  const [mostraLoginVenditore, setMostraLoginVenditore] = useState(false);
-  const [venditoreLoggato, setVenditoreLoggato] = useState(null);
   function apriLoginVenditore() { setMostraLoginVenditore(true); }
   function onEntraVenditore({ modalitaAdmin, venditoreId, nome }) {
     setMostraLoginVenditore(false);
