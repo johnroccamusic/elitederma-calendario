@@ -8560,9 +8560,9 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 22 }}>
           <div style={{ ...fontHero, fontSize: 40, color: "#F7F2E7", lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
           {loc?.nome && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "6px 14px", flexShrink: 0 }}>
-              <IconaPin size={14} color={GOLD} />
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
+              <IconaPin size={16} color={GOLD} />
+              <span style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
             </div>
           )}
         </div>
