@@ -853,8 +853,8 @@ function TileHome({ title, attivo = true, onClick }) {
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
       style={{
-        ...fontBody, textAlign: "left", width: "100%", aspectRatio: "1", position: "relative",
-        display: "flex", flexDirection: "column", justifyContent: "flex-end",
+        ...fontBody, textAlign: "left", width: "100%", boxSizing: "border-box", aspectRatio: "1", position: "relative",
+        display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0,
         background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
         padding: 22, cursor: attivo ? "pointer" : "default",
       }}
@@ -2742,30 +2742,65 @@ function RigaPrioritaModelle({ edizione, onApri }) {
 
 // blocco per città nel pannello "Richieste totali per città": barra di
 // avanzamento assegnate/richieste + tipologie principali
-function RigaCittaModelle({ dati }) {
+// riga cliccabile: si espande mostrando, corso per corso, ogni singolo
+// slot che compone il totale (Modella del Master vs allievo, con nome
+// dell'allievo e se è già assegnata) — serve a verificare da dove viene
+// un numero, non solo a vederlo
+function RigaCittaModelle({ dati, onApriEdizione }) {
+  const [espanso, setEspanso] = useState(false);
   const pct = dati.richieste > 0 ? Math.round((dati.assegnate / dati.richieste) * 100) : 0;
   const tipologieOrdinate = Object.entries(dati.tipologie).sort((a, b) => b[1] - a[1]);
   const principali = tipologieOrdinate.slice(0, 3);
   const restoConteggio = tipologieOrdinate.slice(3).reduce((s, [, n]) => s + n, 0);
   return (
     <div style={{ padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>
-          <IconaMarker size={14} /> {dati.citta.toUpperCase()}
+      <div onClick={() => setEspanso((v) => !v)} style={{ cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>
+            <IconaMarker size={14} /> {dati.citta.toUpperCase()}
+            <span style={{ transform: espanso ? "rotate(90deg)" : "none", display: "flex", color: MUTED }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+            </span>
+          </div>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{dati.richieste} modell{dati.richieste === 1 ? "a" : "e"}</div>
         </div>
-        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{dati.richieste} modell{dati.richieste === 1 ? "a" : "e"}</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>
+          {principali.map(([t, n], idx) => <span key={t}>{idx > 0 ? " · " : ""}{t} {n}</span>)}
+          {restoConteggio > 0 && <span> · Altro {restoConteggio}</span>}
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: "#F1ECDF", overflow: "hidden", marginBottom: 6 }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: "#2E7D32", borderRadius: 3 }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12 }}>
+          <span style={{ color: "#2E7D32", fontWeight: 600 }}>{dati.assegnate} assegnate</span>
+          <span style={{ color: "#C0392B", fontWeight: 600 }}>{dati.richieste - dati.assegnate} da trovare</span>
+        </div>
       </div>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>
-        {principali.map(([t, n], idx) => <span key={t}>{idx > 0 ? " · " : ""}{t} {n}</span>)}
-        {restoConteggio > 0 && <span> · Altro {restoConteggio}</span>}
-      </div>
-      <div style={{ height: 6, borderRadius: 3, background: "#F1ECDF", overflow: "hidden", marginBottom: 6 }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: "#2E7D32", borderRadius: 3 }} />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12 }}>
-        <span style={{ color: "#2E7D32", fontWeight: 600 }}>{dati.assegnate} assegnate</span>
-        <span style={{ color: "#C0392B", fontWeight: 600 }}>{dati.richieste - dati.assegnate} da trovare</span>
-      </div>
+      {espanso && (
+        <div style={{ marginTop: 10, background: "#F7F5EF", borderRadius: 10, padding: 10 }}>
+          {dati.edizioni.map((e) => (
+            <div key={e.corsoDataId} style={{ marginBottom: 10 }}>
+              <div
+                onClick={() => onApriEdizione?.(e)}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", cursor: onApriEdizione ? "pointer" : "default", marginBottom: 4 }}
+              >
+                <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY }}>{fmtDataCompatta(e.dataInizio, e.dataFine)} · {toTitleCase(e.corsoNome)}</span>
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{e.richieste} slot</span>
+              </div>
+              {e.slot.map((s) => (
+                <div key={s.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, ...fontBody, fontSize: 12, padding: "3px 0", color: NAVY }}>
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s.ruolo === "master" ? "Modella del Master" : toTitleCase(s.allievoNome)} · {s.tipo}
+                  </span>
+                  <span style={{ flexShrink: 0, fontWeight: 600, color: s.assegnata ? "#2E7D32" : "#C0392B" }}>
+                    {s.assegnata ? toTitleCase(s.nomeModella) : "da trovare"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2994,10 +3029,11 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
   const perCitta = useMemo(() => {
     const m = new Map();
     edizioniFiltrate.forEach((e) => {
-      if (!m.has(e.cittaNome)) m.set(e.cittaNome, { citta: e.cittaNome, richieste: 0, assegnate: 0, tipologie: {} });
+      if (!m.has(e.cittaNome)) m.set(e.cittaNome, { citta: e.cittaNome, richieste: 0, assegnate: 0, tipologie: {}, edizioni: [] });
       const c = m.get(e.cittaNome);
       c.richieste += e.richieste; c.assegnate += e.assegnate;
       Object.entries(e.tipologie).forEach(([t, n]) => { c.tipologie[t] = (c.tipologie[t] || 0) + n; });
+      c.edizioni.push(e);
     });
     return Array.from(m.values()).sort((a, b) => b.richieste - a.richieste);
   }, [edizioniFiltrate]);
@@ -3085,7 +3121,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
           {perCitta.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Nessuna richiesta attiva.</div>
           ) : (
-            perCitta.map((c) => <RigaCittaModelle key={c.citta} dati={c} />)
+            perCitta.map((c) => <RigaCittaModelle key={c.citta} dati={c} onApriEdizione={apriEdizione} />)
           )}
         </div>
       </div>
