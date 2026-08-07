@@ -2165,11 +2165,17 @@ function SezioneDateCorsi({
     if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
     if (filtroCittaHome && cd.location_id !== filtroCittaHome) return false;
     if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
-    const q = ricercaDate.trim().toLowerCase();
-    if (!q) return true;
+    const termini = ricercaDate.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (termini.length === 0) return true;
     const nomiAllievi = iscritti.filter((i) => i.corso_data_id === cd.id).map((i) => `${i.nome} ${i.cognome}`);
-    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome, ...nomiAllievi].filter(Boolean).join(" ").toLowerCase();
-    return testo.includes(q);
+    const mesiCd = [cd.data_inizio, cd.data_fine].filter(Boolean).map((d) => MESI[parseInt(d.slice(5, 7), 10) - 1]);
+    const anniCd = [cd.data_inizio, cd.data_fine].filter(Boolean).map((d) => d.slice(0, 4));
+    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome, ...nomiAllievi, ...mesiCd, ...anniCd]
+      .filter(Boolean).join(" ").toLowerCase();
+    // ogni termine digitato deve trovarsi da qualche parte nel testo
+    // (in qualunque ordine): "mei milano" trova Mei anche se sta in un
+    // campo diverso da "milano" (es. nome allievo + città)
+    return termini.every((t) => testo.includes(t));
   });
 
   return (
