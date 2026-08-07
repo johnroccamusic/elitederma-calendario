@@ -6411,6 +6411,10 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const giorniCorsoDiQuesto = (corsiGiorni || []).filter((g) => g.corso_id === corsoData.corso_id).sort((a, b) => a.numero_giorno - b.numero_giorno);
   const giorniAllieviCorso = giorniCorsoDiQuesto.filter((g) => g.richiede_modelle_allievi);
   const giorniRilevantiModelle = giorniCorsoDiQuesto.filter((g) => g.richiede_modella_master || g.richiede_modelle_allievi);
+  // giorno di ripiego per le voci di tipi_modelle inserite prima di questa
+  // funzionalità (senza "giorno" valorizzato): il primo/unico giorno
+  // Allievi del corso, così non spariscono dalla vista
+  const giornoDiRipiegoAllievi = giorniAllieviCorso[0]?.numero_giorno ?? null;
   // tipi di modella selezionabili per QUESTO corso (da "Definisci corsi");
   // nessuna riga configurata = nessuna restrizione, si mostra tutto il catalogo
   const idTipiModellaCorso = (corsiTipiModella || []).filter((x) => x.corso_id === corsoData.corso_id).map((x) => x.tipo_modella_id);
@@ -7075,6 +7079,24 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
       ? elencoAttuale.map((m) => (m.numero_giorno === numeroGiorno ? { ...m, [campo]: valore } : m))
       : [...elencoAttuale, { numero_giorno: numeroGiorno, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", [campo]: valore }];
     const { error } = await supabase.from("corsi_date").update({ modelle_master: nuovoElenco }).eq("id", corsoData.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  // stesso principio, ma per la modella di un allievo in un giorno preciso
+  // di "Assegna modelle": scrive/crea la voce in iscritti.tipi_modelle
+  // indipendentemente da SUA/NOSTRA — il nome/telefono va sempre potuto
+  // annotare, anche se l'allievo porta una modella propria (SUA), quella
+  // dell'allievo serve solo a sapere chi porta cosa, non blocca la scrittura
+  async function aggiornaModellaAllievoGiorno(iscrittoId, numeroGiorno, campo, valore, tipoDefault) {
+    const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
+    if (!iscritto) return;
+    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
+    const idx = elenco.findIndex((m) => (m.giorno ?? giornoDiRipiegoAllievi) === numeroGiorno);
+    const nuovoElenco = idx >= 0
+      ? elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m))
+      : [...elenco, { tipo: tipoDefault || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: numeroGiorno, [campo]: valore }];
+    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
@@ -7853,10 +7875,6 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
           );
         }
 
-        // giorno di ripiego per le voci di tipi_modelle inserite prima di
-        // questa funzionalità (senza "giorno" valorizzato): il primo/unico
-        // giorno Allievi del corso, così non spariscono dalla vista
-        const giornoDiRipiego = giorniAllieviCorso[0]?.numero_giorno ?? null;
         const modelleMaster = Array.isArray(corsoData.modelle_master) ? corsoData.modelle_master : [];
 
         return (
@@ -7899,9 +7917,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                       )}
                       {listaIscritti.map((i) => {
                         const nostra = !!i.richiede_modelle;
-                        const slotDiQuestoGiorno = nostra
-                          ? (i.tipi_modelle || []).map((m, idx) => ({ m, idx })).filter(({ m }) => (m.giorno ?? giornoDiRipiego) === g.numero_giorno)
-                          : [];
+                        const elenco = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
+                        const slotEsistente = elenco.find((m) => (m.giorno ?? giornoDiRipiegoAllievi) === g.numero_giorno);
+                        // una riga scrivibile sempre presente, anche se non
+                        // esiste ancora nulla salvato per questo allievo in
+                        // questo giorno (creata al primo carattere digitato)
+                        // — vale sia per NOSTRA che per SUA: sapere chi porta
+                        // quale modella è utile in entrambi i casi
+                        const modellaVista = slotEsistente || { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" };
                         return (
                           <div key={i.id} style={{ padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -7910,14 +7933,11 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                                 {nostra ? "NOSTRA" : "SUA"}
                               </span>
                             </div>
-                            {slotDiQuestoGiorno.map(({ m, idx }, i2) => (
-                              <RigaModella
-                                key={idx}
-                                modella={m}
-                                primaRiga={i2 === 0}
-                                onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
-                              />
-                            ))}
+                            <RigaModella
+                              modella={modellaVista}
+                              primaRiga
+                              onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, g.tipo_modella_allievi)}
+                            />
                           </div>
                         );
                       })}
