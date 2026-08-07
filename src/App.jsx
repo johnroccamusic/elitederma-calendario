@@ -7605,7 +7605,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse }) {
+function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -8609,6 +8609,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                   { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse },
                   { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
                 ])
+          : vista === "modelle" && origineGestioneModelle
+          ? [{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }]
           : [{ chiave: "torna", etichetta: "Torna alla lista", Icona: IconaFrecciaSinistra, onClick: annullaForm }];
 
         return (
@@ -9370,8 +9372,8 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
                           <div key={i.id} style={{ padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                               <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
-                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#EFEFEF", color: nostra ? "#8A6D1D" : MUTED }}>
-                                {nostra ? "NOSTRA" : "SUA"}
+                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
+                                {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
                               </span>
                             </div>
                             <RigaModella
@@ -14287,6 +14289,11 @@ export default function App() {
   // questi due hook non verrebbero chiamati per niente, violando le regole
   // degli Hook e mandando in crash l'intera app con schermo bianco
   const [mostraLoginVenditore, setMostraLoginVenditore] = useState(false);
+  // true quando si è entrati nella scheda direttamente da "Gestione
+  // modelle" (apriDataModelle, che salta la lista allievi e apre subito
+  // "Assegna modelle"): il tasto "torna" della scheda deve allora uscire
+  // verso Gestione modelle invece che verso una lista mai mostrata
+  const [vieneDaGestioneModelle, setVieneDaGestioneModelle] = useState(false);
   const [venditoreLoggato, setVenditoreLoggato] = useState(null);
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
   const [corsi, setCorsi] = useState([]);
@@ -14562,14 +14569,19 @@ export default function App() {
   }
 
   function apriData(cd) {
+    setVieneDaGestioneModelle(false);
     setCorsoDataAperta(cd.id);
     setSottoVistaScheda({ vista: "lista", modificandoId: null, mostraGestione: false });
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
   // come apriData, ma entra direttamente nella tab "Assegna modelle"
-  // invece che nella lista iscritti — usata da "Gestione modelle"
+  // invece che nella lista iscritti — usata da "Gestione modelle". Segna
+  // anche la provenienza: da qui il tasto "torna" nella scheda deve
+  // uscire verso Gestione modelle, non verso la lista allievi (che in
+  // questo percorso non è mai stata mostrata)
   function apriDataModelle(cd) {
+    setVieneDaGestioneModelle(true);
     setCorsoDataAperta(cd.id);
     setSottoVistaScheda({ vista: "modelle", modificandoId: null, mostraGestione: false });
     setSchedaKey((k) => k + 1);
@@ -14653,6 +14665,7 @@ export default function App() {
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
   function apriIscritto(i) {
     window.scrollTo(0, 0);
+    setVieneDaGestioneModelle(false);
     setCorsoDataAperta(i.corso_data_id);
     setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
     setSchedaKey((k) => k + 1);
@@ -14967,6 +14980,8 @@ export default function App() {
           sottoVistaIniziale={sottoVistaScheda}
           onCambiaSottoVista={setSottoVistaScheda}
           onApriNuovaSpesaPerClasse={apriNuovaSpesaPerClasse}
+          origineGestioneModelle={vieneDaGestioneModelle}
+          onTornaGestioneModelle={() => setView("gestionemodelle")}
         />
       )}
     </div>
