@@ -3100,20 +3100,52 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </select>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18, alignItems: "start" }}>
-        <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <div>
-              <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
-              <div style={subStyle}>In ordine di urgenza</div>
-            </div>
-            {edizioniPrioritarie.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie[0])}>Gestisci assegnazioni</Button>}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div>
+            <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
+            <div style={subStyle}>In ordine di urgenza</div>
           </div>
-          {edizioniPrioritarie.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi {scadenzaGiorni} giorni.</div>
-          ) : (
-            edizioniPrioritarie.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
-          )}
+          {edizioniPrioritarie.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie[0])}>Gestisci assegnazioni</Button>}
+        </div>
+        {edizioniPrioritarie.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi {scadenzaGiorni} giorni.</div>
+        ) : (
+          edizioniPrioritarie.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
+        <div style={cardStyle}>
+          <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
+          <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+              <thead>
+                <tr style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>
+                  <th style={{ padding: "0 8px 8px 0" }}>Città</th>
+                  <th style={{ padding: "0 8px 8px 0" }}>Data</th>
+                  <th style={{ padding: "0 8px 8px 0" }}>Corso</th>
+                  <th style={{ padding: "0 8px 8px 0" }}>Tipologie richieste</th>
+                  <th style={{ padding: "0 8px 8px 0", textAlign: "right" }}>Richieste</th>
+                  <th style={{ padding: "0 0 8px 0", textAlign: "right" }}>Da trovare</th>
+                </tr>
+              </thead>
+              <tbody>
+                {edizioniFiltrate.map((e) => (
+                  <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
+                    <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
+                    <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY }}>{toTitleCase(e.corsoNome)}</td>
+                    <td style={{ padding: "10px 8px" }}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div></td>
+                    <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "right" }}>{e.richieste}</td>
+                    <td style={{ padding: "10px 0", ...fontBody, fontSize: 13, fontWeight: 700, textAlign: "right", color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32" }}>{e.daTrovare}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
+          </div>
         </div>
 
         <div style={cardStyle}>
@@ -3123,38 +3155,6 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
           ) : (
             perCitta.map((c) => <RigaCittaModelle key={c.citta} dati={c} onApriEdizione={apriEdizione} />)
           )}
-        </div>
-      </div>
-
-      <div style={{ ...cardStyle, marginTop: 18 }}>
-        <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
-        <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
-            <thead>
-              <tr style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>
-                <th style={{ padding: "0 8px 8px 0" }}>Città</th>
-                <th style={{ padding: "0 8px 8px 0" }}>Data</th>
-                <th style={{ padding: "0 8px 8px 0" }}>Corso</th>
-                <th style={{ padding: "0 8px 8px 0" }}>Tipologie richieste</th>
-                <th style={{ padding: "0 8px 8px 0", textAlign: "right" }}>Richieste</th>
-                <th style={{ padding: "0 0 8px 0", textAlign: "right" }}>Da trovare</th>
-              </tr>
-            </thead>
-            <tbody>
-              {edizioniFiltrate.map((e) => (
-                <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
-                  <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
-                  <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY }}>{toTitleCase(e.corsoNome)}</td>
-                  <td style={{ padding: "10px 8px" }}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div></td>
-                  <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textAlign: "right" }}>{e.richieste}</td>
-                  <td style={{ padding: "10px 0", ...fontBody, fontSize: 13, fontWeight: 700, textAlign: "right", color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32" }}>{e.daTrovare}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
         </div>
       </div>
 
