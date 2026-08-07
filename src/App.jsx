@@ -6304,6 +6304,45 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
   );
 }
 
+// indicatore "iscritti/posti" nelle liste date: due numeri affiancati,
+// barra di riempimento, e sotto quanti liberi restano — o "Completo" con
+// sfondo dorato quando non ce ne sono più
+function IndicatorePosti({ occupati, max, liberi }) {
+  const completo = liberi === 0;
+  const pct = max > 0 ? Math.min(100, Math.round((occupati / max) * 100)) : 0;
+  return (
+    <div style={{ width: 132, flexShrink: 0, borderRadius: 10, padding: "8px 12px 9px", background: completo ? "#FBF3E0" : "#fff", border: `1px solid ${completo ? "#EEDCB4" : CREAM_BORDER}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
+          <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>iscritti</div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
+          <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>posti</div>
+        </div>
+      </div>
+      <div style={{ height: 4, borderRadius: 2, background: "#EFE9DC", overflow: "hidden", marginBottom: 5 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 2 }} />
+      </div>
+      <div style={{ textAlign: "center", ...fontBody, fontSize: 11, fontWeight: completo ? 700 : 400, color: completo ? GOLD : MUTED }}>
+        {completo ? "Completo" : `${liberi} liber${liberi === 1 ? "o" : "i"}`}
+      </div>
+    </div>
+  );
+}
+// etichetta "ISCRITTI / POSTI" sopra la lista, allineata a destra dove
+// sta la colonna dell'indicatore
+function EtichettaColonnaPosti() {
+  return (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      <div style={{ width: 132, textAlign: "center", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>
+        Iscritti / Posti
+      </div>
+    </div>
+  );
+}
+
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
 function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica, cronologico }) {
@@ -6335,7 +6374,6 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
   function rigaCorso(cd, i, mostraCitta) {
     const corso = corsoById[cd.corso_id];
     const sfondoRiga = "transparent";
-    const coloreBadge = i % 2 === 0 ? { bg: "#F5EBDA", testo: "#A08A63" } : { bg: "#E3EDF8", testo: "#7C93AD" };
     const rigaCittaMaster = (mostraCitta || cd.master_id) && (
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {mostraCitta && toTitleCase(locById[cd.location_id]?.nome || "?")}
@@ -6364,12 +6402,8 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
               const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
               const liberi = Math.max(0, max - occupati);
               return (
-                <span
-                  onClick={onApriData ? () => onApriData(cd) : undefined}
-                  title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
-                  style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", cursor: onApriData ? "pointer" : undefined }}
-                >
-                  {liberi} post{liberi === 1 ? "o" : "i"}
+                <span onClick={onApriData ? () => onApriData(cd) : undefined} title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined} style={{ cursor: onApriData ? "pointer" : undefined }}>
+                  <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />
                 </span>
               );
             })()}
@@ -6419,11 +6453,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
             const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
             const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
             const liberi = Math.max(0, max - occupati);
-            return (
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: coloreBadge.testo, background: coloreBadge.bg, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap" }}>
-                {liberi} post{liberi === 1 ? "o" : "i"}
-              </span>
-            );
+            return <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />;
           })()}
           {onDelete && (
             <button
@@ -6458,6 +6488,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
     const chiaviMesi = Object.keys(mesi).sort();
     return (
       <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
+        {corsiDate.length > 0 && <EtichettaColonnaPosti />}
         {chiaviMesi.map((chiaveMese, mIdx) => {
           const gruppoMese = mesi[chiaveMese];
           return (
@@ -6491,6 +6522,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                 {totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"}
               </span>
             </div>
+          <EtichettaColonnaPosti />
           {Object.keys(c.mesi)
             .sort()
             .map((chiaveMese, mIdx) => {
