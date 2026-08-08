@@ -8321,7 +8321,7 @@ function CercaIscritto({ corsi, location, corsiDate, iscritti, onApriData, onBac
 }
 
 // ---------- Scheda data (iscritti) ----------
-const ADMIN_CODE = import.meta.env.VITE_ADMIN_CODE || "";
+const ADMIN_CODE = import.meta.env.VITE_ADMIN_CODE || "ED26";
 // codice fisso per aprire la rotellina "password menù" in home, dove si
 // impostano le password delle singole voci protette — volutamente diverso
 // dall'ADMIN_CODE generale, così anche chi non ha l'ADMIN_CODE ma conosce
@@ -8343,7 +8343,7 @@ const VISTE_PROTETTE_MENU = [
 // valore di sempre finché non viene impostato qualcosa di personalizzato
 const PASSWORD_SISTEMA_MENU = [
   { vista: "__user", etichetta: "Password utente (accesso generale)", fallback: ACCESS_CODE, descrizione: "La password che usano tutti per entrare nell'app. Chi entra con questa vede \"User\" in alto." },
-  { vista: "__admin", etichetta: "Password amministratore", fallback: ADMIN_CODE, descrizione: "Sblocca le voci protette (Gestione corsi, ERP, Assegna logo, Gestione modelle, Statistiche, Setting) una per volta." },
+  { vista: "__admin", etichetta: "Password amministratore", fallback: ADMIN_CODE, descrizione: "Chi entra con questa (\"ED26\" di default) vede subito tutte le voci protette tranne Statistiche e questa rotellina, senza dover reinserire nessuna password." },
   { vista: "__programmatore", etichetta: "Password programmatore", fallback: "1234", descrizione: "Entra ovunque nell'app senza dover reinserire nessun'altra password, nemmeno per le voci protette." },
   { vista: "__rotellina", etichetta: "Password di questa rotellina", fallback: CODICE_ROTELLINA, descrizione: "Il codice per aprire questo stesso pannello e cambiare tutte le password." },
 ];
@@ -15637,8 +15637,17 @@ export default function App() {
   // (Impostazioni > password menù); se non è stata impostata, o se si
   // digita comunque il codice amministratore generale, funziona sempre
   // anche quello, come prima. Il Programmatore salta subito la richiesta.
+  // L'Amministratore (password "ED26" di default) salta anche lui la
+  // richiesta per tutto TRANNE Statistiche, che resta fuori portata anche
+  // per lui — solo lo User (che non ha loggato con "ED26") vede ancora il
+  // prompt password per le singole voci, incluse Statistiche se protetta
   function apriViewProtetta(nomeView) {
     if (ruoloUtente === "programmatore") { setView(nomeView); return; }
+    if (ruoloUtente === "amministratore") {
+      if (nomeView === "statistiche") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
+      setView(nomeView);
+      return;
+    }
     const chiaveSessione = "edc_ok_" + nomeView;
     if (sessionStorage.getItem(chiaveSessione) === "1") { setView(nomeView); return; }
     const rigaPassword = passwordMenu.find((p) => p.vista === nomeView);
@@ -15660,9 +15669,12 @@ export default function App() {
   // rotellina in home: codice distinto da quello amministratore (anche lui
   // modificabile qui dentro), apre il pannello dove impostare tutte le
   // password di sistema e quelle delle singole voci del menù. Il
-  // Programmatore salta subito la richiesta.
+  // Programmatore salta subito la richiesta; l'Amministratore ne resta
+  // sempre escluso (solo chi conosce la password del Programmatore può
+  // cambiare le altre password), lo User vede il prompt come sempre
   function apriRotellinaPassword() {
     if (ruoloUtente === "programmatore") { setView("passwordmenu"); return; }
+    if (ruoloUtente === "amministratore") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
     const codiceRichiesto = passwordSistema("__rotellina", CODICE_ROTELLINA);
     const codice = window.prompt("Codice per impostare le password del menù:");
     if (codice === null) return;
