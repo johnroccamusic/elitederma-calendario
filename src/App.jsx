@@ -2676,7 +2676,7 @@ function PaginaDashboardVenditori({
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{etichettaPeriodoPrecedente}: {numeroChiusurePrecedenti}</div>
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Performance</div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Commissione media</div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                   <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{numeroChiusure > 0 ? fmtEuroErp(round2(commissioneMediaVenditore)) : "—"}</div>
                   {variazionePerformance !== null && (
@@ -2685,7 +2685,6 @@ function PaginaDashboardVenditori({
                     </div>
                   )}
                 </div>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>commissione media</div>
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ticket medio</div>
