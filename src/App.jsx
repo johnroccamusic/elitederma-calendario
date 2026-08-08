@@ -847,22 +847,26 @@ function CardHome({ title, sub, onClick, icona }) {
 // card grande e quadrata della home (griglia 4x2): solo titolo, nessuna
 // icona/sottotitolo. "attivo=false" la mostra spenta con badge "Non
 // attivo", per aree non ancora costruite
+// su mobile le tile sono più basse (non quadrate) e con testo/padding
+// più compatti: le 8 devono stare tutte a schermo, senza scroll, su un
+// iPhone normale — quadrate come su desktop non ci sarebbero mai state
 function TileHome({ title, attivo = true, onClick }) {
+  const isMobile = useIsMobile();
   return (
     <button
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
       style={{
-        ...fontBody, textAlign: "left", width: "100%", boxSizing: "border-box", aspectRatio: "1", position: "relative",
+        ...fontBody, textAlign: "left", width: "100%", boxSizing: "border-box", aspectRatio: isMobile ? "1.9" : "1", position: "relative",
         display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0,
-        background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
-        padding: 22, cursor: attivo ? "pointer" : "default",
+        background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 16,
+        padding: isMobile ? "10px 14px" : 22, cursor: attivo ? "pointer" : "default",
       }}
     >
       {!attivo && (
-        <span style={{ position: "absolute", top: 16, right: 18, ...fontBody, fontSize: 11, color: MUTED }}>Non attivo</span>
+        <span style={{ position: "absolute", top: isMobile ? 8 : 16, right: isMobile ? 10 : 18, ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED }}>Non attivo</span>
       )}
-      <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, lineHeight: 1.25, color: attivo ? NAVY : MUTED }}>{title}</span>
+      <span style={{ ...fontDisplay, fontSize: isMobile ? 16 : 22, fontWeight: 700, lineHeight: 1.2, color: attivo ? NAVY : MUTED }}>{title}</span>
     </button>
   );
 }
@@ -14826,8 +14830,8 @@ export default function App() {
           ogni schermata invece di limitarsi ad affiancarlo */}
       <div style={{ height: 76 }} />
       {view === "home" && (
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "20px 16px 60px" : "28px 28px 60px" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 28 }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "12px 16px 16px" : "28px 28px 60px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: isMobile ? 8 : 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: isMobile ? 12 : 28 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 1.2 }}>ELITEDERMA</div>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
               <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>Amministratore</span>
@@ -14835,10 +14839,10 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 26 : 34, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Gestionale Academy</div>
-          <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 26 }}>Scegli l'area da gestire.</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestionale Academy</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 14 }}>
             <TileHome title="Gestione corsi" onClick={apriGestioneDate} />
             <TileHome title="Dashboard venditori" onClick={apriLoginVenditore} />
             <TileHome title="ERP / Magazzino" onClick={apriErp} />
