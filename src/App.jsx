@@ -3534,6 +3534,20 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [showAssistenteModal, setShowAssistenteModal] = useState(false);
   const [showLevaModal, setShowLevaModal] = useState(false);
   const [showVenditoriModal, setShowVenditoriModal] = useState(false);
+  // il cellulare vive in una colonna a sé, interrogata solo qui (non nel
+  // caricamento generale): così, se in futuro dovesse mai mancare o dare
+  // errore, non rischia di svuotare l'elenco venditori usato ovunque
+  // altrove (login, selezione "Tutor")
+  const [telefoniVenditori, setTelefoniVenditori] = useState({});
+  useEffect(() => {
+    if (!showVenditoriModal) return;
+    supabase.from("venditori").select("id, telefono").then(({ data }) => {
+      setTelefoniVenditori(Object.fromEntries((data || []).map((v) => [v.id, v.telefono || ""])));
+    });
+    // si riallinea anche quando "venditori" cambia (es. dopo aver salvato
+    // un numero: ricarica() in GestioneListaSemplice rifà fetchDati, che
+    // non include più il telefono, quindi va ripreso da qui)
+  }, [showVenditoriModal, venditori]);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
   const [modNomeCorso, setModNomeCorso] = useState("");
@@ -4080,7 +4094,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
           <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (in vista di un futuro login alla propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento — e un numero di cellulare, che useremo per l'integrazione dei messaggi con WhatsApp.</div>
           <GestioneListaSemplice
             nomeSingolare="Venditore" nomeArticolo="un" tabella="venditori"
-            elementi={venditori} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            elementi={venditori.map((v) => ({ ...v, telefono: telefoniVenditori[v.id] || "" }))} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
             mostraPassword passwordDiDefault="0000"
             onImpostaPassword={async (venditoreId, password) => {
@@ -14582,7 +14596,11 @@ export default function App() {
       // niente password_hash/password_salt qui: quelle due colonne le
       // scrive solo l'Edge Function venditori-imposta-password, l'app non
       // le legge mai — così non finiscono nel browser di chi la usa
-      supabase.from("venditori").select("id, nome, ts, telefono").order("nome"),
+      // niente "telefono" qui: è una colonna a sé (Setting > Gestione
+      // venditori la interroga da sola) — se in un futuro dovesse mai
+      // mancare/dare errore, non deve poter svuotare l'elenco venditori
+      // usato ovunque per login e selezione "Tutor"
+      supabase.from("venditori").select("id, nome, ts").order("nome"),
       supabase.from("password_menu").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
