@@ -6304,41 +6304,120 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
   );
 }
 
-// indicatore "iscritti/posti" nelle liste date: due numeri affiancati,
-// barra di riempimento, e sotto quanti liberi restano — o "Completo" con
-// sfondo dorato quando non ce ne sono più
+// indicatore "iscritti/posti" nella colonna Capienza: due numeri
+// affiancati da una lineetta verticale, barra di riempimento sotto, e
+// quanti liberi restano — o "Completo" in oro quando non ce ne sono più
 function IndicatorePosti({ occupati, max, liberi }) {
   const completo = liberi === 0;
   const pct = max > 0 ? Math.min(100, Math.round((occupati / max) * 100)) : 0;
   return (
-    <div style={{ width: 132, flexShrink: 0, borderRadius: 10, padding: "8px 12px 9px", background: completo ? "#FBF3E0" : "#fff", border: `1px solid ${completo ? "#EEDCB4" : CREAM_BORDER}` }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
+    <div style={{ width: "100%" }}>
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", gap: 16, marginBottom: 7 }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
-          <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>iscritti</div>
+          <div style={{ ...fontBody, fontSize: 24, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>iscritti</div>
         </div>
+        <div style={{ width: 1, background: CREAM_BORDER }} />
         <div style={{ textAlign: "center" }}>
-          <div style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
-          <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>posti</div>
+          <div style={{ ...fontBody, fontSize: 24, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>posti</div>
         </div>
       </div>
-      <div style={{ height: 4, borderRadius: 2, background: "#EFE9DC", overflow: "hidden", marginBottom: 5 }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 2 }} />
+      <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", marginBottom: 6 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 3 }} />
       </div>
-      <div style={{ textAlign: "center", ...fontBody, fontSize: 11, fontWeight: completo ? 700 : 400, color: completo ? GOLD : MUTED }}>
+      <div style={{ textAlign: "center", ...fontBody, fontSize: 13, fontWeight: completo ? 700 : 400, color: completo ? GOLD : MUTED }}>
         {completo ? "Completo" : `${liberi} liber${liberi === 1 ? "o" : "i"}`}
       </div>
     </div>
   );
 }
-// etichetta "ISCRITTI / POSTI" sopra la lista, allineata a destra dove
-// sta la colonna dell'indicatore
-function EtichettaColonnaPosti() {
+
+// tastini +/- in alto a destra di una scheda: fanno "zoom" (font +
+// spaziature + icone, tutto insieme) solo dentro quella scheda, un passo
+// per click. Locale al componente: si azzera se la scheda viene
+// smontata/ricaricata, non è salvato da nessuna parte
+function useZoomScheda() {
+  const [zoom, setZoom] = useState(100);
+  const bottoneStyle = { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, fontSize: 15, fontWeight: 700, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+  const controlli = (
+    <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 4, zIndex: 1 }}>
+      <button onClick={() => setZoom((z) => Math.max(70, z - 8))} title="Rimpicciolisci il testo" style={bottoneStyle}>−</button>
+      <button onClick={() => setZoom((z) => Math.min(160, z + 8))} title="Ingrandisci il testo" style={bottoneStyle}>+</button>
+    </div>
+  );
+  return [zoom, controlli];
+}
+
+const ICONA_MATITA_PATH = <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></>;
+const ICONA_CESTINO_PATH = <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></>;
+
+// tabella "Corso e docente / Data / Capienza / Azioni" per una scheda
+// (una città, o l'unica tabella in modalità Cronologico): raggruppa le
+// voci per mese con una striscia di sfondo, come nei calendari
+function TabellaDateCorsi({ mesi, renderRiga }) {
   return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-      <div style={{ width: 132, textAlign: "center", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6 }}>
-        Iscritti / Posti
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 230 }} /><col style={{ width: 110 }} /></colgroup>
+      <thead>
+        <tr style={{ borderBottom: `2px solid ${GOLD}` }}>
+          <th style={{ textAlign: "left", padding: "0 10px 12px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Corso e docente</th>
+          <th style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Data</th>
+          <th style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Capienza</th>
+          <th style={{ textAlign: "right", padding: "0 0 12px 10px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Azioni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Object.keys(mesi).sort().map((chiaveMese) => {
+          const gruppoMese = mesi[chiaveMese];
+          const voci = gruppoMese.voci.slice().sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+          return (
+            <React.Fragment key={chiaveMese}>
+              <tr>
+                <td colSpan={4} style={{ padding: "10px 12px", background: BG }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
+                    <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
+                  </div>
+                </td>
+              </tr>
+              {voci.map((cd, i) => renderRiga(cd, i === 0))}
+            </React.Fragment>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// una scheda "città" (pin + nome + N corsi programmati) con la tabella
+// date dentro — sua propria rotellina di zoom, indipendente dalle altre
+function CardCittaData({ c, renderRiga }) {
+  const [zoom, controlliZoom] = useZoomScheda();
+  const totaleCorsiCitta = Object.values(c.mesi).reduce((tot, m) => tot + m.voci.length, 0);
+  return (
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, zoom: `${zoom}%` }}>
+      {controlliZoom}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+        <IconaPin size={30} color={GOLD} />
+        <div>
+          <div style={{ ...fontDisplay, fontSize: 30, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{toTitleCase(c.nome)}</div>
+          <div style={{ ...fontBody, fontSize: 15, color: MUTED }}>{totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"} programmat{totaleCorsiCitta === 1 ? "o" : "i"}</div>
+        </div>
       </div>
+      <TabellaDateCorsi mesi={c.mesi} renderRiga={renderRiga} />
+    </div>
+  );
+}
+
+// stessa tabella ma senza intestazione città: usata in modalità
+// Cronologico, dove tutte le città stanno in un'unica scheda
+function CardCronologico({ mesi, renderRiga }) {
+  const [zoom, controlliZoom] = useZoomScheda();
+  return (
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, zoom: `${zoom}%` }}>
+      {controlliZoom}
+      <TabellaDateCorsi mesi={mesi} renderRiga={renderRiga} />
     </div>
   );
 }
@@ -6367,115 +6446,66 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
     return <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna data ancora.</div>;
   }
 
-  // riga di un singolo corso: usata sia raggruppata per città (mostraCitta
-  // false, la città è già nell'intestazione della card) sia in modalità
-  // "Cronologico" (mostraCitta true: qui non c'è una card per città, quindi
-  // il nome città va scritto nella riga stessa, accanto al master)
-  function rigaCorso(cd, i, mostraCitta) {
+  // riga (tr) di un singolo corso: usata sia raggruppata per città
+  // (mostraCitta false, la città è già nell'intestazione della card) sia
+  // in modalità "Cronologico" (mostraCitta true: qui non c'è una card
+  // per città, quindi il nome città va scritto nella riga stessa)
+  function rigaCorso(cd, mostraCitta, primaDelGruppo) {
     const corso = corsoById[cd.corso_id];
-    const sfondoRiga = "transparent";
+    const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
+    const occupati = iscritti ? iscritti.filter((i2) => i2.corso_data_id === cd.id).length : 0;
+    const liberi = Math.max(0, max - occupati);
     const rigaCittaMaster = (mostraCitta || cd.master_id) && (
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
         {mostraCitta && toTitleCase(locById[cd.location_id]?.nome || "?")}
         {mostraCitta && cd.master_id && " · "}
         {cd.master_id && `Master: ${toTitleCase(masterById[cd.master_id]?.nome || "?")}`}
       </div>
     );
-    return onEdit ? (
-      <div key={cd.id} style={{ marginBottom: 8 }}>
-        <div style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <span
-            onClick={onApriData ? () => onApriData(cd) : undefined}
-            title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined}
-            style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto", cursor: onApriData ? "pointer" : undefined }}
-          >
-            <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
-            <span style={{ minWidth: 0 }}>
-              <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
-              {rigaCittaMaster}
-            </span>
-          </span>
-          <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
-            {iscritti && (() => {
-              const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-              const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
-              const liberi = Math.max(0, max - occupati);
-              return (
-                <span onClick={onApriData ? () => onApriData(cd) : undefined} title={onApriData ? "Apri la classe: iscritti e dettagli" : undefined} style={{ cursor: onApriData ? "pointer" : undefined }}>
-                  <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />
-                </span>
-              );
-            })()}
-            <button
-              onClick={() => onEdit(cd)}
-              title="Modifica"
-              style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-              </svg>
-            </button>
-            <button
-              onClick={() => onDelete(cd.id)}
-              title="Elimina"
-              style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6" /><path d="M14 11v6" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-            </button>
-            {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
-          </span>
-        </div>
-        {idInModifica === cd.id && renderModifica && renderModifica(cd)}
-      </div>
-    ) : (
-      <div
-        key={cd.id}
-        onClick={() => onApriData?.(cd)}
-        style={{ background: sfondoRiga, borderRadius: 12, padding: "12px 14px", marginBottom: 8, cursor: onApriData ? "pointer" : "default", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: "1 1 auto" }}>
-          <span style={{ width: 4, height: 32, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
-          <span style={{ minWidth: 0 }}>
-            <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
-            {rigaCittaMaster}
-          </span>
-        </span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
-          {iscritti && (() => {
-            const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
-            const occupati = iscritti.filter((i2) => i2.corso_data_id === cd.id).length;
-            const liberi = Math.max(0, max - occupati);
-            return <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />;
-          })()}
-          {onDelete && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }}
-              title="Elimina"
-              style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                <path d="M10 11v6" /><path d="M14 11v6" />
-                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-              </svg>
-            </button>
-          )}
-          {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
-        </span>
-      </div>
+    return (
+      <React.Fragment key={cd.id}>
+        <tr onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}` }}>
+          <td style={{ padding: "16px 10px 16px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+              <span style={{ width: 4, height: 34, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
+                {rigaCittaMaster}
+              </div>
+            </div>
+          </td>
+          <td style={{ padding: "16px 10px", ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "center" }}>
+            {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
+          </td>
+          <td style={{ padding: "16px 10px" }}>
+            {iscritti && <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />}
+          </td>
+          <td style={{ padding: "16px 0 16px 10px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
+              {onEdit && (
+                <button onClick={(e) => { e.stopPropagation(); onEdit(cd); }} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+                </button>
+              )}
+              {onDelete && (
+                <button onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+                </button>
+              )}
+              {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
+            </div>
+          </td>
+        </tr>
+        {idInModifica === cd.id && renderModifica && (
+          <tr>
+            <td colSpan={4} style={{ padding: "0 0 12px" }}>{renderModifica(cd)}</td>
+          </tr>
+        )}
+      </React.Fragment>
     );
   }
 
-  // "Cronologico": tutte le date di tutte le città in un'unica lista,
+  // "Cronologico": tutte le date di tutte le città in un'unica tabella,
   // raggruppata solo per mese e ordinata per data (invece che per città)
   if (cronologico) {
     const mesi = {};
@@ -6485,63 +6515,14 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       if (!mesi[chiaveMese]) mesi[chiaveMese] = { etichetta: `${MESI[parseInt(mese, 10) - 1]} ${anno}`, voci: [] };
       mesi[chiaveMese].voci.push(cd);
     });
-    const chiaviMesi = Object.keys(mesi).sort();
-    return (
-      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
-        {corsiDate.length > 0 && <EtichettaColonnaPosti />}
-        {chiaviMesi.map((chiaveMese, mIdx) => {
-          const gruppoMese = mesi[chiaveMese];
-          return (
-            <div key={chiaveMese} style={{ marginBottom: 14, paddingTop: mIdx > 0 ? 14 : 0, borderTop: mIdx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
-                {gruppoMese.etichetta}
-              </div>
-              {gruppoMese.voci
-                .slice()
-                .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-                .map((cd, i) => rigaCorso(cd, i, true))}
-            </div>
-          );
-        })}
-      </div>
-    );
+    return <CardCronologico mesi={mesi} renderRiga={(cd, primaDelGruppo) => rigaCorso(cd, true, primaDelGruppo)} />;
   }
 
   return (
     <div>
-      {cittaOrdinate.map((c, idx) => {
-        const totaleCorsiCitta = Object.values(c.mesi).reduce((tot, m) => tot + m.voci.length, 0);
-        return (
-          <div key={c.nome} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, marginTop: idx > 0 ? 0 : 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                <IconaPin size={20} />
-                <span style={{ ...fontDisplay, fontSize: 20, color: NAVY }}>{toTitleCase(c.nome)}</span>
-              </div>
-              <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "6px 12px", whiteSpace: "nowrap", flexShrink: 0 }}>
-                {totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"}
-              </span>
-            </div>
-          <EtichettaColonnaPosti />
-          {Object.keys(c.mesi)
-            .sort()
-            .map((chiaveMese, mIdx) => {
-              const gruppoMese = c.mesi[chiaveMese];
-              return (
-                <div key={chiaveMese} style={{ marginBottom: 14, paddingTop: mIdx > 0 ? 14 : 0, borderTop: mIdx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
-                    {gruppoMese.etichetta}
-                  </div>
-                  {gruppoMese.voci
-                    .slice()
-                    .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio))
-                    .map((cd, i) => rigaCorso(cd, i, false))}
-                </div>
-              );
-            })}
-          </div>
-        );
-      })}
+      {cittaOrdinate.map((c) => (
+        <CardCittaData key={c.nome} c={c} renderRiga={(cd, primaDelGruppo) => rigaCorso(cd, false, primaDelGruppo)} />
+      ))}
     </div>
   );
 }
