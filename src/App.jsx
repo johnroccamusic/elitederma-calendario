@@ -2376,11 +2376,13 @@ function PaginaDashboardVenditori({
   const [customDa, setCustomDa] = useState("");
   const [customA, setCustomA] = useState("");
   const [espansoChiusurePerCorso, setEspansoChiusurePerCorso] = useState(false);
+  const [tabDashboardVenditore, setTabDashboardVenditore] = useState("performance"); // performance | corsi
 
   const venditoreSel = venditoreBloccato
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
     : (venditori.find((v) => v.id === venditoreSelId) || null);
   const oggiStr = dataOggiStr();
+  const numeroDateProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
 
   const range = useMemo(() => {
     const oggi = new Date();
@@ -2407,12 +2409,18 @@ function PaginaDashboardVenditori({
 
   // "chiusura" = un'iscrizione venduta da questo venditore, nel periodo
   // scelto (per data di iscrizione, cioè il giorno reale della vendita —
-  // non la data del corso, che può essere mesi dopo)
+  // non la data del corso, che può essere mesi dopo). Le "vecchie
+  // iscrizioni" (inserite oggi per recuperare dati di un'iscrizione
+  // avvenuta tempo fa) sono sempre escluse: la loro data di inserimento
+  // (oggi) non è la vera data della vendita, quindi non vanno mai
+  // conteggiate come chiusura del mese/periodo corrente — stessa
+  // esclusione già in uso per "Ultime iscrizioni" nelle Statistiche
   const chiusure = useMemo(() => {
     if (!venditoreSel) return [];
     const nomeNorm = venditoreSel.nome.trim().toUpperCase();
     return iscritti
       .filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm)
+      .filter((i) => !i.vecchia_iscrizione)
       .filter((i) => {
         const dataIscr = (i.ts || "").slice(0, 10);
         return dataIscr >= range.inizio && dataIscr <= range.fine;
@@ -2469,9 +2477,9 @@ function PaginaDashboardVenditori({
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>
-            {venditoreBloccato ? `Dashboard vendite ${toTitleCase(venditoreSel?.nome || venditoreBloccato.nome || "")}` : "Dashboard venditori"}
+            {venditoreSel ? `Dashboard ${toTitleCase(venditoreSel.nome)}` : "Dashboard venditori"}
           </div>
           {venditoreBloccato ? null : (
             <select style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={venditoreSelId} onChange={(e) => setVenditoreSelId(e.target.value)}>
@@ -2480,11 +2488,37 @@ function PaginaDashboardVenditori({
             </select>
           )}
         </div>
+        {venditoreSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area venditore</div>}
 
         {!venditoreSel ? (
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli un venditore per vedere le sue chiusure e commissioni.</div>
         ) : (
           <>
+            <div style={{ display: "flex", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
+              <button
+                onClick={() => setTabDashboardVenditore("performance")}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "18px 22px" }}
+              >
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>
+                <div style={{ width: 28, height: 3, borderRadius: 2, marginTop: 8, background: tabDashboardVenditore === "performance" ? GOLD : "transparent" }} />
+              </button>
+              <button
+                onClick={() => setTabDashboardVenditore("corsi")}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "18px 22px" }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Corsi in programmazione</div>
+                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
+                </div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Corsi disponibili e prossime date</div>
+                <div style={{ width: 28, height: 3, borderRadius: 2, marginTop: 8, background: tabDashboardVenditore === "corsi" ? GOLD : "transparent" }} />
+              </button>
+            </div>
+
+            {tabDashboardVenditore === "performance" && (
+            <>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Periodo di analisi</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
                 {[["mese", "Ultimo mese"], ["trimestre", "Ultimo trimestre"], ["personalizzato", "Periodo personalizzato"]].map(([v, l]) => (
@@ -2502,7 +2536,8 @@ function PaginaDashboardVenditori({
               )}
             </div>
 
-            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Chiusure e commissioni</div>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Chiusure e commissioni</div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Le "vecchie iscrizioni" (recuperate a posteriori) non contano mai come chiusura del periodo corrente.</div>
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Chiusure</div>
@@ -2585,21 +2620,25 @@ function PaginaDashboardVenditori({
               </div>
             </div>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, marginBottom: 24 }}>Le commissioni diventano incassabili alla data di conclusione del corso.</div>
+            </>
+            )}
+
+            {tabDashboardVenditore === "corsi" && (
+              <SezioneDateCorsi
+                corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+                ricarica={ricarica} onApriData={apriData}
+                filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
+                filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
+                filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
+                cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
+                apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
+                apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
+                apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
+                selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+              />
+            )}
           </>
         )}
-
-        <SezioneDateCorsi
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
-          ricarica={ricarica} onApriData={apriData}
-          filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
-          filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
-          filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
-          cronologicoHome={cronologicoHome} setCronologicoHome={setCronologicoHome}
-          apriFiltroCorsoHome={apriFiltroCorsoHome} setApriFiltroCorsoHome={setApriFiltroCorsoHome}
-          apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
-          apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
-          selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
-        />
       </div>
     </div>
   );
