@@ -1951,19 +1951,74 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
 
 // quante iscrizioni ha fatto ciascun venditore (campo "Tutor" nella scheda
 // iscritto), nel periodo scelto, con il dettaglio corso per corso
+// tonalità della cella "chiusure" nella matrice corso × venditore: vuota
+// se 0, oro chiaro se 1, oro pieno se 2 o più — una heatmap leggera per
+// far risaltare a colpo d'occhio dove si concentrano le vendite
+const COLORE_CELLA_UNA = "#F2E2BE";
+const COLORE_CELLA_DUE = "#D8AE66";
+function coloreCellaChiusure(n) {
+  if (!n) return "transparent";
+  if (n === 1) return COLORE_CELLA_UNA;
+  return COLORE_CELLA_DUE;
+}
+function esportaCsvStatisticaVenditori(righeCorsi, colonneVenditori) {
+  const intestazione = ["Corso", "Totale", ...colonneVenditori.map((v) => v.nome)];
+  const righe = righeCorsi.map((r) => [r.nome, r.totale, ...colonneVenditori.map((v) => r.perVenditore[v.id] || 0)]);
+  const csv = [intestazione, ...righe].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `statistica-venditori-${dataOggiStr()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) {
+  // periodo di default: mese corrente (stessa convenzione di "Ultimo
+  // mese" nella scheda personale del venditore) — così le classifiche
+  // qui sotto mostrano subito dati utili senza dover scegliere un filtro
+  const isMobile = useIsMobile();
+
   // periodo di default: mese corrente (stessa convenzione di "Ultimo
   // mese" nella scheda personale del venditore) — così le classifiche
   // qui sotto mostrano subito dati utili senza dover scegliere un filtro
   const [da, setDa] = useState(() => rangeMese(0).inizio);
   const [a, setA] = useState(() => rangeMese(0).fine);
-  const [periodoSel, setPeriodoSel] = useState("corrente");
+  const [periodoSel, setPeriodoSel] = useState(() => { const o = new Date(); return `${o.getFullYear()}-${String(o.getMonth() + 1).padStart(2, "0")}`; });
+
+  // primo e ultimo giorno del mese "oggi + offsetMesi" (0 = mese corrente, -1 = mese scorso)
+  function rangeMese(offsetMesi) {
+    const oggi = new Date();
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() + offsetMesi, 1);
+    const fine = new Date(oggi.getFullYear(), oggi.getMonth() + offsetMesi + 1, 0);
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return { inizio: fmt(inizio), fine: fmt(fine) };
+  }
+  // ultimi 24 mesi (compreso quello corrente), per la tendina "Periodo rapido"
+  const opzioniMese = useMemo(() => {
+    const oggi = new Date();
+    const opz = [];
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(oggi.getFullYear(), oggi.getMonth() - i, 1);
+      opz.push({ valore: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, etichetta: `${MESI[d.getMonth()]} ${d.getFullYear()}` });
+    }
+    return opz;
+  }, []);
+  function selezionaMese(valore) {
+    setPeriodoSel(valore);
+    if (!valore) return;
+    const [anno, mese] = valore.split("-").map(Number);
+    const inizio = new Date(anno, mese - 1, 1);
+    const fine = new Date(anno, mese, 0);
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    setDa(fmt(inizio)); setA(fmt(fine));
+  }
 
   // larghezza delle colonne trascinabile con il mouse (come in Assegnazione
-  // Master), qui però le colonne sono una per venditore/corso e cambiano in
-  // base ai filtri: la larghezza è quindi una mappa "chiave colonna" -> px
-  // (chiave = "venditore"/"totale" o il nome del corso stesso) invece che
-  // un array a indice fisso, e resta salvata per sempre in questo browser
+  // Master), qui però le colonne sono una per venditore e cambiano in base
+  // ai filtri: la larghezza è quindi una mappa "chiave colonna" -> px
+  // (chiave = "corso"/"totale" o l'id del venditore) invece che un array
+  // a indice fisso, e resta salvata per sempre in questo browser
   const [larghezze, setLarghezze] = useState(() => {
     try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_VENDITORI) || "{}"); } catch { return {}; }
   });
@@ -1991,28 +2046,6 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) 
     });
   }
 
-  // primo e ultimo giorno del mese "oggi + offsetMesi" (0 = mese corrente, -1 = mese scorso)
-  function rangeMese(offsetMesi) {
-    const oggi = new Date();
-    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() + offsetMesi, 1);
-    const fine = new Date(oggi.getFullYear(), oggi.getMonth() + offsetMesi + 1, 0);
-    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    return { inizio: fmt(inizio), fine: fmt(fine) };
-  }
-  function selezionaPeriodo(valore) {
-    setPeriodoSel(valore);
-    if (valore === "corrente") {
-      const { inizio, fine } = rangeMese(0);
-      setDa(inizio); setA(fine);
-    } else if (valore === "scorso") {
-      const { inizio, fine } = rangeMese(-1);
-      setDa(inizio); setA(fine);
-    }
-  }
-  function cancellaFiltri() {
-    setDa(""); setA(""); setPeriodoSel("");
-  }
-
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
 
@@ -2027,48 +2060,86 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) 
     return true;
   });
 
-  // toglie gli accenti per riconoscere come lo stesso venditore "MAURE" e
-  // "MAURÉ" (o qualunque altra variante con/senza accento dello stesso nome)
-  function senzaAccenti(s) {
-    return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
-  }
+  // "Chiusure per corso e venditore": una riga per corso, una colonna per
+  // venditore — i venditori sono quelli della rubrica "Gestione venditori"
+  // (non più il testo libero del campo Tutor), con una colonna in più
+  // "Non mappato" se compare un Tutor che non corrisponde a nessun
+  // venditore della rubrica, così il totale non si "perde" mai in silenzio
+  const [ricercaCorso, setRicercaCorso] = useState("");
+  const [ordinamento, setOrdinamento] = useState("piu"); // piu | meno | alfabetico
+  const [nascondiCorsiSenzaVendite, setNascondiCorsiSenzaVendite] = useState(true);
+  const [venditoriVisibiliFiltro, setVenditoriVisibiliFiltro] = useState("tutti"); // tutti | conVendite
 
-  const perVenditore = {}; // chiave senza accenti -> { totale, perCorso, varianti: {nome scritto: quante volte} }
-  const totaliCorso = {};
-  filtrati.forEach((i) => {
-    const cd = cdById[i.corso_data_id];
-    const corsoNome = cd ? (corsoById[cd.corso_id]?.nome?.toUpperCase() || "?") : "?";
-    const scritto = (i.tutor || "").trim().toUpperCase() || "NON SPECIFICATO";
-    const chiave = senzaAccenti(scritto);
-    if (!perVenditore[chiave]) perVenditore[chiave] = { totale: 0, perCorso: {}, varianti: {} };
-    perVenditore[chiave].totale += 1;
-    perVenditore[chiave].perCorso[corsoNome] = (perVenditore[chiave].perCorso[corsoNome] || 0) + 1;
-    perVenditore[chiave].varianti[scritto] = (perVenditore[chiave].varianti[scritto] || 0) + 1;
-    totaliCorso[corsoNome] = (totaliCorso[corsoNome] || 0) + 1;
-  });
+  const matrice = useMemo(() => {
+    const perVenditoreCorso = {};
+    const totalePerVenditore = {};
+    const totalePerCorso = {};
+    const nonMappatoPerCorso = {};
+    let nonMappatoTotale = 0;
+    filtrati.forEach((i) => {
+      const cd = cdById[i.corso_data_id];
+      const nomeCorso = cd ? (corsoById[cd.corso_id]?.nome?.toUpperCase() || "?") : "?";
+      totalePerCorso[nomeCorso] = (totalePerCorso[nomeCorso] || 0) + 1;
+      const nomeNorm = (i.tutor || "").trim().toUpperCase();
+      const v = venditori.find((vv) => vv.nome.trim().toUpperCase() === nomeNorm);
+      if (v) {
+        if (!perVenditoreCorso[v.id]) perVenditoreCorso[v.id] = {};
+        perVenditoreCorso[v.id][nomeCorso] = (perVenditoreCorso[v.id][nomeCorso] || 0) + 1;
+        totalePerVenditore[v.id] = (totalePerVenditore[v.id] || 0) + 1;
+      } else {
+        nonMappatoPerCorso[nomeCorso] = (nonMappatoPerCorso[nomeCorso] || 0) + 1;
+        nonMappatoTotale += 1;
+      }
+    });
+    return { perVenditoreCorso, totalePerVenditore, totalePerCorso, nonMappatoPerCorso, nonMappatoTotale };
+  }, [filtrati, cdById, corsoById, venditori]);
 
-  // colonne dei corsi ordinate dal più venduto al meno venduto
-  const colonneCorsi = Object.keys(totaliCorso).sort((x, y) => totaliCorso[y] - totaliCorso[x]);
-  // nome da mostrare per ogni venditore: se tra le varianti scritte ce n'è
-  // una con l'accento la si preferisce sempre (la più frequente tra quelle
-  // accentate), altrimenti la variante scritta più frequente
-  function nomeDaMostrare(varianti) {
-    const voci = Object.entries(varianti);
-    const conAccento = voci.filter(([nome]) => nome !== senzaAccenti(nome));
-    const scelta = conAccento.length > 0 ? conAccento : voci;
-    scelta.sort((x, y) => y[1] - x[1]);
-    return scelta[0][0];
-  }
-  // venditori ordinati da chi ha venduto di più a chi ha venduto di meno
-  const righeVenditori = Object.entries(perVenditore)
-    .map(([, dati]) => ({ nome: nomeDaMostrare(dati.varianti), totale: dati.totale, perCorso: dati.perCorso }))
-    .sort((x, y) => y.totale - x.totale || x.nome.localeCompare(y.nome));
+  const colonneVenditori = useMemo(() => {
+    const base = venditoriVisibiliFiltro === "conVendite"
+      ? venditori.filter((v) => (matrice.totalePerVenditore[v.id] || 0) > 0)
+      : venditori;
+    const ordinati = base.slice().sort((x, y) => x.nome.localeCompare(y.nome));
+    if (matrice.nonMappatoTotale > 0) ordinati.push({ id: "__nonmappato", nome: "Non mappato", nonMappato: true });
+    return ordinati;
+  }, [venditori, venditoriVisibiliFiltro, matrice]);
+
+  // tutti i corsi noti (anagrafica "Definisci corsi") uniti a quelli che
+  // compaiono nel periodo ma non sono più in anagrafica — così spuntando
+  // via "Nascondi corsi senza vendite" si vedono anche quelli mai venduti
+  const nomiCorsiConosciuti = useMemo(() => {
+    const set = new Set(corsi.map((c) => (c.nome || "").toUpperCase()).filter(Boolean));
+    Object.keys(matrice.totalePerCorso).forEach((n) => set.add(n));
+    return Array.from(set);
+  }, [corsi, matrice]);
+
+  const righeCorsi = useMemo(() => {
+    let righe = nomiCorsiConosciuti.map((nome) => ({
+      nome,
+      totale: matrice.totalePerCorso[nome] || 0,
+      perVenditore: Object.fromEntries(colonneVenditori.map((v) => [
+        v.id,
+        v.nonMappato ? (matrice.nonMappatoPerCorso[nome] || 0) : (matrice.perVenditoreCorso[v.id]?.[nome] || 0),
+      ])),
+    }));
+    if (nascondiCorsiSenzaVendite) righe = righe.filter((r) => r.totale > 0);
+    if (ricercaCorso.trim()) {
+      const q = ricercaCorso.trim().toUpperCase();
+      righe = righe.filter((r) => r.nome.includes(q));
+    }
+    righe.sort((x, y) => {
+      if (ordinamento === "alfabetico") return x.nome.localeCompare(y.nome);
+      if (ordinamento === "meno") return x.totale - y.totale || x.nome.localeCompare(y.nome);
+      return y.totale - x.totale || x.nome.localeCompare(y.nome);
+    });
+    return righe;
+  }, [nomiCorsiConosciuti, matrice, colonneVenditori, nascondiCorsiSenzaVendite, ricercaCorso, ordinamento]);
+
+  const numeroTipologieVendute = Object.keys(matrice.totalePerCorso).length;
+  const numeroVenditoriConVendite = venditori.filter((v) => (matrice.totalePerVenditore[v.id] || 0) > 0).length;
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV, whiteSpace: "nowrap" };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
-
-  const isMobile = useIsMobile();
 
   // "Classifiche venditori" (Corsi venduti / Performance): stesso periodo
   // scelto qui sopra (filtrati), col confronto rispetto al periodo
@@ -2152,82 +2223,159 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) 
   })();
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Statistica venditori" onBack={onBack} />
-      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
-        Numero di iscrizioni registrate per ciascun venditore (campo "Tutor" nella scheda iscritto), nel periodo scelto.
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
+        <div>
+          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>Statistiche venditori</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Corsi chiusi da ciascun venditore nel periodo selezionato</div>
+        </div>
+        <button
+          onClick={() => esportaCsvStatisticaVenditori(righeCorsi, colonneVenditori)}
+          style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "10px 18px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", flexShrink: 0 }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="M7 8l5-5 5 5" /><path d="M5 21h14" /></svg>
+          Esporta
+        </button>
       </div>
 
-      <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginBottom: 24, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginTop: 20, marginBottom: 16, flexWrap: "wrap" }}>
         <Field label="Periodo rapido">
-          <select style={inputStyle} value={periodoSel} onChange={(e) => selezionaPeriodo(e.target.value)}>
-            <option value="">Scegli un periodo…</option>
-            <option value="corrente">Mese corrente</option>
-            <option value="scorso">Mese scorso</option>
+          <select style={inputStyle} value={periodoSel} onChange={(e) => selezionaMese(e.target.value)}>
+            <option value="">Personalizzato</option>
+            {opzioniMese.map((o) => <option key={o.valore} value={o.valore}>{o.etichetta}</option>)}
           </select>
         </Field>
-        <Field label="Da">
+        <Field label="Dal">
           <input type="date" style={inputStyle} value={da} onChange={(e) => { setDa(e.target.value); setPeriodoSel(""); }} />
         </Field>
-        <Field label="A">
+        <Field label="Al">
           <input type="date" style={inputStyle} value={a} onChange={(e) => { setA(e.target.value); setPeriodoSel(""); }} />
         </Field>
-        {(da || a || periodoSel) && (
-          <Button variant="ghost" onClick={cancellaFiltri}>Cancella filtri</Button>
-        )}
       </div>
 
-      {righeVenditori.length === 0 ? (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna iscrizione trovata nel periodo scelto.</div>
-      ) : (() => {
-        // colonne effettive di questa tabella, con la loro chiave di
-        // ridimensionamento e larghezza (salvata o di default): cambia in
-        // base ai corsi presenti nel periodo filtrato, quindi calcolata qui
-        // invece di un array fisso come in Assegnazione Master
-        const colonne = [
-          { chiave: "venditore", etichetta: "Venditore", larghezzaDefault: 160 },
-          { chiave: "totale", etichetta: "Totale", larghezzaDefault: 90 },
-          ...colonneCorsi.map((c) => ({ chiave: c, etichetta: `${c} ${totaliCorso[c]}`, larghezzaDefault: 110 })),
-        ].map((c) => ({ ...c, larghezza: larghezzaDi(c.chiave, c.larghezzaDefault) }));
-        const larghezzaTabella = colonne.reduce((tot, c) => tot + c.larghezza, 0);
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 22, ...fontBody, fontSize: 13.5, color: NAVY }}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={GOLD} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20V10" /><path d="M12 20V4" /><path d="M20 20v-7" /></svg>
+        <b>{filtrati.length}</b>&nbsp;chiusure&nbsp;<span style={{ color: MUTED }}>·</span>&nbsp;<b>{numeroTipologieVendute}</b>&nbsp;tipologie&nbsp;<span style={{ color: MUTED }}>·</span>&nbsp;<b>{numeroVenditoriConVendite}</b>&nbsp;venditori
+      </div>
 
-        return (
-          <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-            <table style={{ borderCollapse: "collapse", width: larghezzaTabella, tableLayout: "fixed" }}>
-              <colgroup>{colonne.map((c) => <col key={c.chiave} style={{ width: c.larghezza }} />)}</colgroup>
-              <thead>
-                <tr>
-                  {colonne.map((c, i) => (
-                    <th key={c.chiave} style={{ ...thStyle, position: "relative", borderRight: i === colonne.length - 1 ? "none" : bordoV }}>
-                      {c.etichetta}
-                      <div
-                        onPointerDown={(e) => iniziaRidimensionamento(e, c.chiave, c.larghezza)}
-                        onPointerMove={muoviRidimensionamento}
-                        onPointerUp={fineRidimensionamento}
-                        onPointerCancel={fineRidimensionamento}
-                        style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
-                      />
-                    </th>
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 20, marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", marginBottom: 16 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Chiusure per corso e venditore</div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>I corsi sono ordinati per numero totale di chiusure</div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <input value={ricercaCorso} onChange={(e) => setRicercaCorso(e.target.value)} placeholder="Cerca corso" style={{ ...inputStyle, width: 180 }} />
+            <select style={inputStyle} value={ordinamento} onChange={(e) => setOrdinamento(e.target.value)}>
+              <option value="piu">Ordina: più venduti</option>
+              <option value="meno">Ordina: meno venduti</option>
+              <option value="alfabetico">Ordina: alfabetico</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 20, rowGap: 10, flexWrap: "wrap", marginBottom: 14, paddingBottom: 14, borderBottom: bordoV }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: MUTED }}>
+              <span style={{ width: 16, height: 16, borderRadius: 4, border: `1px solid ${CREAM_BORDER}`, background: "#fff", display: "inline-block" }} /> 0
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: MUTED }}>
+              <span style={{ width: 16, height: 16, borderRadius: 4, background: COLORE_CELLA_UNA, display: "inline-block" }} /> 1
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: MUTED }}>
+              <span style={{ width: 16, height: 16, borderRadius: 4, background: COLORE_CELLA_DUE, display: "inline-block" }} /> 2+
+            </span>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 12.5, color: NAVY, cursor: "pointer" }}>
+            <input type="checkbox" checked={nascondiCorsiSenzaVendite} onChange={(e) => setNascondiCorsiSenzaVendite(e.target.checked)} />
+            Nascondi corsi senza vendite
+          </label>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 12.5, color: NAVY }}>
+            Venditori visibili:
+            <select style={{ ...inputStyle, padding: "5px 8px", fontSize: 12.5 }} value={venditoriVisibiliFiltro} onChange={(e) => setVenditoriVisibiliFiltro(e.target.value)}>
+              <option value="tutti">Tutti</option>
+              <option value="conVendite">Solo con vendite</option>
+            </select>
+          </div>
+        </div>
+
+        {righeCorsi.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "16px 0" }}>Nessun corso trovato.</div>
+        ) : (() => {
+          // colonne effettive di questa tabella, con la loro chiave di
+          // ridimensionamento e larghezza (salvata o di default): cambia in
+          // base ai venditori visibili, quindi calcolata qui invece di un
+          // array fisso come in Assegnazione Master
+          const colonne = [
+            { chiave: "corso", etichetta: "Corso", larghezzaDefault: 200 },
+            { chiave: "totale", etichetta: "Totale", larghezzaDefault: 90 },
+            ...colonneVenditori.map((v) => ({ chiave: v.id, larghezzaDefault: 130, venditore: v })),
+          ].map((c) => ({ ...c, larghezza: larghezzaDi(c.chiave, c.larghezzaDefault) }));
+          const larghezzaTabella = colonne.reduce((tot, c) => tot + c.larghezza, 0);
+
+          return (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ borderCollapse: "collapse", width: larghezzaTabella, tableLayout: "fixed" }}>
+                <colgroup>{colonne.map((c) => <col key={c.chiave} style={{ width: c.larghezza }} />)}</colgroup>
+                <thead>
+                  <tr>
+                    {colonne.map((c, i) => (
+                      <th key={c.chiave} style={{ ...thStyle, position: "relative", borderRight: i === colonne.length - 1 ? "none" : bordoV, textAlign: c.venditore ? "center" : "left" }}>
+                        {c.venditore ? (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textTransform: "none" }}>
+                            <div style={{ width: 26, height: 26, borderRadius: "50%", border: `1.5px solid ${GOLD}`, color: NAVY, ...fontBody, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" }}>
+                              {c.venditore.nome.trim().slice(0, 1).toUpperCase()}
+                            </div>
+                            <div style={{ textTransform: "uppercase", fontSize: 11 }}>{c.venditore.nonMappato ? "NON MAPPATO" : c.venditore.nome.trim().split(/\s+/)[0].toUpperCase()}</div>
+                            <div style={{ ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "none" }}>
+                              {c.venditore.nonMappato ? matrice.nonMappatoTotale : (matrice.totalePerVenditore[c.venditore.id] || 0)}
+                            </div>
+                          </div>
+                        ) : c.etichetta}
+                        <div
+                          onPointerDown={(e) => iniziaRidimensionamento(e, c.chiave, c.larghezza)}
+                          onPointerMove={muoviRidimensionamento}
+                          onPointerUp={fineRidimensionamento}
+                          onPointerCancel={fineRidimensionamento}
+                          style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+                        />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {righeCorsi.map((r) => (
+                    <tr key={r.nome}>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(r.nome)}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700 }}>{r.totale}</td>
+                      {colonneVenditori.map((v) => {
+                        const n = r.perVenditore[v.id] || 0;
+                        return (
+                          <td key={v.id} style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: n > 0 ? 700 : 400, textAlign: "center", background: coloreCellaChiusure(n) }}>
+                            {n}
+                          </td>
+                        );
+                      })}
+                    </tr>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {righeVenditori.map((r) => (
-                  <tr key={r.nome}>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</td>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700 }}>{r.totale}</td>
-                    {colonneCorsi.map((c) => (
-                      <td key={c} style={{ ...celStyle, ...fontBody, fontSize: 13, color: r.perCorso[c] ? NAVY : MUTED, textAlign: "center" }}>
-                        {r.perCorso[c] || 0}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: BG }}>Totale del periodo</td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: BG }}>{filtrati.length}</td>
+                    {colonneVenditori.map((v) => (
+                      <td key={v.id} style={{ ...celStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textAlign: "center", background: BG }}>
+                        {v.nonMappato ? matrice.nonMappatoTotale : (matrice.totalePerVenditore[v.id] || 0)}
                       </td>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        );
-      })()}
+                </tfoot>
+              </table>
+            </div>
+          );
+        })()}
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 14 }}>{righeCorsi.length} tipologi{righeCorsi.length === 1 ? "a" : "e"} visualizzat{righeCorsi.length === 1 ? "a" : "e"}</div>
+      </div>
 
       {classifichePeriodo && (classifichePeriodo.corsi.length > 0) && (
         <>
