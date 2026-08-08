@@ -3760,7 +3760,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
         { etichetta: "Definisci Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
         { etichetta: "Definisci Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
         { etichetta: "Definisci Master", Icona: IconaMasterRiga, onClick: () => setShowMasterModal(true) },
-        { etichetta: "Definisci venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
+        { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
       ],
     },
     {
@@ -4076,8 +4076,8 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       )}
 
       {showVenditoriModal && (
-        <Modal title="Venditori" onClose={() => setShowVenditoriModal(false)}>
-          <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (in vista di un futuro login alla propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento.</div>
+        <Modal title="Gestione venditori" onClose={() => setShowVenditoriModal(false)}>
+          <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (in vista di un futuro login alla propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento — e un numero di cellulare, che useremo per l'integrazione dei messaggi con WhatsApp.</div>
           <GestioneListaSemplice
             nomeSingolare="Venditore" nomeArticolo="un" tabella="venditori"
             elementi={venditori} ricarica={ricarica} msg={msg} setMsg={setMsg}
@@ -4087,6 +4087,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
               const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId, password } });
               if (error || data?.errore) setMsg("Errore password: " + (data?.errore || error.message));
             }}
+            mostraTelefono
           />
         </Modal>
       )}
@@ -6140,7 +6141,38 @@ function RigaPasswordVenditore({ valoreDiDefault, onImposta }) {
     </div>
   );
 }
-function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraFirmaCheckbox, mostraPassword, onImpostaPassword, passwordDiDefault }) {
+// cellulare del venditore, per la futura integrazione messaggi WhatsApp:
+// stesso pattern "campo + Salva" già in uso per la password
+function RigaTelefonoVenditore({ valoreDiDefault, onSalva }) {
+  const [telefono, setTelefono] = useState(valoreDiDefault || "");
+  const [salvando, setSalvando] = useState(false);
+  const [fatto, setFatto] = useState(false);
+  async function salva() {
+    setSalvando(true); setFatto(false);
+    await onSalva(telefono.trim());
+    setSalvando(false); setFatto(true);
+    setTimeout(() => setFatto(false), 2000);
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <IconaWhatsapp size={16} />
+      <input
+        style={{ ...inputStyle, maxWidth: 160, padding: "6px 10px" }}
+        placeholder="Cellulare (WhatsApp)"
+        value={telefono}
+        onChange={(e) => setTelefono(e.target.value)}
+      />
+      <button
+        onClick={salva}
+        disabled={salvando}
+        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 10px", cursor: salvando ? "default" : "pointer" }}
+      >
+        {salvando ? "Salvo…" : fatto ? "Salvato ✓" : "Salva"}
+      </button>
+    </div>
+  );
+}
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraFirmaCheckbox, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono }) {
   const [nome, setNome] = useState("");
   const [inModifica, setInModifica] = useState(null);
   const [modNome, setModNome] = useState("");
@@ -6169,6 +6201,11 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
     const { error } = await supabase.from(tabella).delete().eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg(`${nomeSingolare} eliminat${nomeArticolo === "un" ? "o" : "a"}.`);
+    ricarica();
+  }
+  async function salvaTelefono(id, telefono) {
+    const { error } = await supabase.from(tabella).update({ telefono }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
   function apriModifica(el) {
@@ -6213,6 +6250,9 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
           )}
           {mostraPassword && (
             <RigaPasswordVenditore valoreDiDefault={passwordDiDefault || "0000"} onImposta={(pwd) => onImpostaPassword(el.id, pwd)} />
+          )}
+          {mostraTelefono && (
+            <RigaTelefonoVenditore valoreDiDefault={el.telefono || ""} onSalva={(tel) => salvaTelefono(el.id, tel)} />
           )}
           {inModifica === el.id && (
             <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -14542,7 +14582,7 @@ export default function App() {
       // niente password_hash/password_salt qui: quelle due colonne le
       // scrive solo l'Edge Function venditori-imposta-password, l'app non
       // le legge mai — così non finiscono nel browser di chi la usa
-      supabase.from("venditori").select("id, nome, ts").order("nome"),
+      supabase.from("venditori").select("id, nome, ts, telefono").order("nome"),
       supabase.from("password_menu").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));

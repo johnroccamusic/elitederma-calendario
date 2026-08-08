@@ -1444,4 +1444,9 @@ alter table public.password_menu enable row level security;
 drop policy if exists "password_menu_all" on public.password_menu;
 create policy "password_menu_all" on public.password_menu for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 39) Cellulare venditori, per la futura integrazione messaggi WhatsApp.
+-- ---------------------------------------------------------
+alter table public.venditori add column if not exists telefono text;
+
 notify pgrst, 'reload schema';
