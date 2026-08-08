@@ -1951,10 +1951,13 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
 
 // quante iscrizioni ha fatto ciascun venditore (campo "Tutor" nella scheda
 // iscritto), nel periodo scelto, con il dettaglio corso per corso
-function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
-  const [da, setDa] = useState("");
-  const [a, setA] = useState("");
-  const [periodoSel, setPeriodoSel] = useState("");
+function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) {
+  // periodo di default: mese corrente (stessa convenzione di "Ultimo
+  // mese" nella scheda personale del venditore) — così le classifiche
+  // qui sotto mostrano subito dati utili senza dover scegliere un filtro
+  const [da, setDa] = useState(() => rangeMese(0).inizio);
+  const [a, setA] = useState(() => rangeMese(0).fine);
+  const [periodoSel, setPeriodoSel] = useState("corrente");
 
   // larghezza delle colonne trascinabile con il mouse (come in Assegnazione
   // Master), qui però le colonne sono una per venditore/corso e cambiano in
@@ -2056,15 +2059,97 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
     scelta.sort((x, y) => y[1] - x[1]);
     return scelta[0][0];
   }
-  // venditori in ordine alfabetico: man mano che ne compaiono di nuovi si
-  // inseriscono al posto giusto da soli, senza bisogno di toccare il codice
+  // venditori ordinati da chi ha venduto di più a chi ha venduto di meno
   const righeVenditori = Object.entries(perVenditore)
     .map(([, dati]) => ({ nome: nomeDaMostrare(dati.varianti), totale: dati.totale, perCorso: dati.perCorso }))
-    .sort((x, y) => x.nome.localeCompare(y.nome));
+    .sort((x, y) => y.totale - x.totale || x.nome.localeCompare(y.nome));
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV, whiteSpace: "nowrap" };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
+
+  const isMobile = useIsMobile();
+
+  // "Classifiche venditori" (Corsi venduti / Performance): stesso periodo
+  // scelto qui sopra (filtrati), col confronto rispetto al periodo
+  // immediatamente precedente di pari durata
+  const [mostraCorsiPeriodoCompleto, setMostraCorsiPeriodoCompleto] = useState(false);
+  const [mostraPerformancePeriodoCompleto, setMostraPerformancePeriodoCompleto] = useState(false);
+  const [mostraCorsiStoricoCompleto, setMostraCorsiStoricoCompleto] = useState(false);
+  const [mostraIncassoStoricoCompleto, setMostraIncassoStoricoCompleto] = useState(false);
+
+  const rangePrecedenteClassifiche = useMemo(() => {
+    if (!da || !a) return null;
+    const [ay, am, ad] = da.split("-").map(Number);
+    const [by, bm, bd] = a.split("-").map(Number);
+    const inizioCorrente = new Date(ay, am - 1, ad);
+    const fineCorrente = new Date(by, bm - 1, bd);
+    const giorni = Math.round((fineCorrente - inizioCorrente) / 86400000) + 1;
+    const finePrecedente = new Date(inizioCorrente);
+    finePrecedente.setDate(finePrecedente.getDate() - 1);
+    const inizioPrecedente = new Date(finePrecedente);
+    inizioPrecedente.setDate(inizioPrecedente.getDate() - (giorni - 1));
+    return { inizio: fmtDataIso(inizioPrecedente), fine: fmtDataIso(finePrecedente) };
+  }, [da, a]);
+
+  const classifichePeriodo = useMemo(() => {
+    if (!venditori || venditori.length === 0) return null;
+    const corrente = statsVenditoriPerPeriodo(filtrati, venditori);
+    const filtratiPrecedenti = rangePrecedenteClassifiche
+      ? iscritti.filter((i) => !i.vecchia_iscrizione && i.ts && i.ts.slice(0, 10) >= rangePrecedenteClassifiche.inizio && i.ts.slice(0, 10) <= rangePrecedenteClassifiche.fine)
+      : [];
+    const precedente = statsVenditoriPerPeriodo(filtratiPrecedenti, venditori);
+    const corsiRanked = rankCorsiConTrend(corrente, precedente);
+    const { righe: performanceRanked, mediaPerformance } = rankPerformanceConTrend(corrente, precedente);
+    const mediaCorsi = corrente.length > 0 ? round2(corrente.reduce((s, r) => s + r.corsi, 0) / corrente.length) : 0;
+    return { corsi: corsiRanked, performance: performanceRanked, mediaCorsi, mediaPerformance };
+  }, [filtrati, iscritti, venditori, rangePrecedenteClassifiche]);
+
+  // dati "da sempre": non risentono del filtro periodo qui sopra — servono
+  // per le due classifiche storiche (più venduto/più incassato di sempre)
+  // e per la specializzazione per corso di ciascun venditore. Includono
+  // anche le "vecchie iscrizioni" perché qui rappresentano vendite
+  // realmente avvenute di quel corso (diversamente dalle statistiche per
+  // periodo, dove non vanno attribuite al mese in cui sono state inserite)
+  const storico = useMemo(() => {
+    if (!venditori || venditori.length === 0) return { classificaCorsi: [], classificaIncasso: [], schede: [], mediaCorsi: 0, mediaIncasso: 0 };
+    const perVenditore = {};
+    venditori.forEach((v) => { perVenditore[v.id] = { venditore: v, corsi: 0, valore: 0, perCorso: {} }; });
+    iscritti.forEach((i) => {
+      const nomeNorm = (i.tutor || "").trim().toUpperCase();
+      const v = venditori.find((vv) => vv.nome.trim().toUpperCase() === nomeNorm);
+      if (!v || !perVenditore[v.id]) return;
+      const cd = cdById[i.corso_data_id];
+      const nomeCorso = cd ? (corsoById[cd.corso_id]?.nome || "—") : "—";
+      perVenditore[v.id].corsi += 1;
+      perVenditore[v.id].valore += i.totale_pattuito || 0;
+      perVenditore[v.id].perCorso[nomeCorso] = (perVenditore[v.id].perCorso[nomeCorso] || 0) + 1;
+    });
+    const attivi = Object.values(perVenditore).filter((r) => r.corsi > 0);
+    const classificaCorsi = attivi.slice().sort((x, y) => y.corsi - x.corsi).map((r, i) => ({ ...r, posizione: i + 1 }));
+    const classificaIncasso = attivi.slice().sort((x, y) => y.valore - x.valore).map((r, i) => ({ ...r, posizione: i + 1 }));
+    const schede = attivi
+      .map((r) => ({
+        venditore: r.venditore,
+        totale: r.corsi,
+        righeCorsi: Object.entries(r.perCorso)
+          .map(([nome, n]) => ({ nome, n, pct: r.corsi > 0 ? Math.round((n / r.corsi) * 100) : 0 }))
+          .sort((x, y) => y.n - x.n),
+      }))
+      .sort((x, y) => y.totale - x.totale);
+    const mediaCorsi = attivi.length > 0 ? round2(attivi.reduce((s, r) => s + r.corsi, 0) / attivi.length) : 0;
+    const mediaIncasso = attivi.length > 0 ? round2(attivi.reduce((s, r) => s + r.valore, 0) / attivi.length) : 0;
+    return { classificaCorsi, classificaIncasso, schede, mediaCorsi, mediaIncasso };
+  }, [iscritti, venditori, cdById, corsoById]);
+
+  const etichettaPeriodoClassifiche = (() => {
+    if (!da && !a) return "Storico completo";
+    if (!da || !a) return "Periodo personalizzato";
+    const [ay, am, ad] = da.split("-").map(Number);
+    const [by, bm, bd] = a.split("-").map(Number);
+    if (am === bm && ay === by) return `${String(ad).padStart(2, "0")}–${String(bd).padStart(2, "0")} ${MESI_ABBR[am - 1]} ${ay}`;
+    return `${String(ad).padStart(2, "0")} ${MESI_ABBR[am - 1]} ${ay} – ${String(bd).padStart(2, "0")} ${MESI_ABBR[bm - 1]} ${by}`;
+  })();
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", padding: "40px 20px" }}>
@@ -2143,6 +2228,92 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, onBack }) {
           </div>
         );
       })()}
+
+      {classifichePeriodo && (classifichePeriodo.corsi.length > 0) && (
+        <>
+        <div style={{ marginTop: 44, marginBottom: 12 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Classifiche venditori</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>Periodo: {etichettaPeriodoClassifiche}</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 20 }}>
+          <ColonnaClassifica
+            titolo="Corsi venduti" sottotitolo="Numero di chiusure nel periodo"
+            righe={classifichePeriodo.corsi} chiaveValore="corsi" tipoTrend="posizioni"
+            etichettaMedia={`${classifichePeriodo.mediaCorsi} corsi`}
+            formatValore={(v) => String(v)}
+            mostraTutti={mostraCorsiPeriodoCompleto} onToggleMostraTutti={() => setMostraCorsiPeriodoCompleto((v) => !v)}
+          />
+          <ColonnaClassifica
+            titolo="Performance" sottotitolo="Ticket medio corretto per il volume di vendite"
+            righe={classifichePeriodo.performance} chiaveValore="performance" tipoTrend="posizioni"
+            etichettaMedia={`${classifichePeriodo.mediaPerformance} pt`}
+            formatValore={(v) => String(Math.round(v))}
+            coloreValore={coloreScorePerformance}
+            mostraTutti={mostraPerformancePeriodoCompleto} onToggleMostraTutti={() => setMostraPerformancePeriodoCompleto((v) => !v)}
+          />
+        </div>
+        </>
+      )}
+
+      {storico.classificaCorsi.length > 0 && (
+        <>
+        <div style={{ marginTop: 24, marginBottom: 12 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Classifiche da sempre</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>Non risentono del periodo scelto qui sopra — calcolate su tutto lo storico</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 20 }}>
+          <ColonnaClassifica
+            titolo="Più corsi venduti" sottotitolo="Numero di chiusure da sempre"
+            righe={storico.classificaCorsi} chiaveValore="corsi"
+            etichettaMedia={`${storico.mediaCorsi} corsi`}
+            formatValore={(v) => String(v)}
+            mostraTutti={mostraCorsiStoricoCompleto} onToggleMostraTutti={() => setMostraCorsiStoricoCompleto((v) => !v)}
+          />
+          <ColonnaClassifica
+            titolo="Incasso generato" sottotitolo="Valore venduto da sempre"
+            righe={storico.classificaIncasso} chiaveValore="valore"
+            etichettaMedia={fmtEuroErp(storico.mediaIncasso)}
+            formatValore={(v) => fmtEuroErp(round2(v))}
+            mostraTutti={mostraIncassoStoricoCompleto} onToggleMostraTutti={() => setMostraIncassoStoricoCompleto((v) => !v)}
+          />
+        </div>
+        </>
+      )}
+
+      {storico.schede.length > 0 && (
+        <>
+        <div style={{ marginTop: 24, marginBottom: 12 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Specializzazione per venditore</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>I corsi più venduti da sempre da ciascun venditore, non risentono del periodo scelto qui sopra</div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, marginBottom: 20 }}>
+          {storico.schede.map((s) => (
+            <div key={s.venditore.id} style={cardStyle}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: coloreAvatarClassifica(s.venditore.nome), color: "#fff", ...fontBody, fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  {s.venditore.nome.trim().slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toTitleCase(s.venditore.nome)}</div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{s.totale} cors{s.totale === 1 ? "o" : "i"} venduti da sempre</div>
+                </div>
+              </div>
+              {s.righeCorsi.slice(0, 5).map((r, i) => (
+                <div key={r.nome} style={{ marginBottom: i < Math.min(4, s.righeCorsi.length - 1) ? 10 : 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+                    <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toTitleCase(r.nome)}</span>
+                    <span style={{ ...fontBody, fontSize: 11, color: MUTED, flexShrink: 0 }}>{r.n} · {r.pct}%</span>
+                  </div>
+                  <div style={{ height: 5, background: BG, borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${(r.n / s.righeCorsi[0].n) * 100}%`, background: i === 0 ? GOLD : NAVY, borderRadius: 3 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        </>
+      )}
     </div>
   );
 }
@@ -2555,71 +2726,18 @@ function PaginaDashboardVenditori({
     function statsMese({ anno, mese }) {
       const inizio = fmtDataIso(new Date(anno, mese, 1));
       const fine = fmtDataIso(new Date(anno, mese + 1, 0));
-      const base = venditori.map((v) => ({ venditore: v, corsi: 0, valore: 0 }));
-      const byId = Object.fromEntries(base.map((r) => [r.venditore.id, r]));
-      iscritti.forEach((i) => {
-        if (i.vecchia_iscrizione) return;
-        const d = (i.ts || "").slice(0, 10);
-        if (d < inizio || d > fine) return;
-        const nomeNorm = (i.tutor || "").trim().toUpperCase();
-        const v = venditori.find((vv) => vv.nome.trim().toUpperCase() === nomeNorm);
-        if (!v || !byId[v.id]) return;
-        byId[v.id].corsi += 1;
-        byId[v.id].valore += i.totale_pattuito || 0;
-      });
-      return base.map((r) => ({ ...r, ticketMedio: r.corsi > 0 ? r.valore / r.corsi : 0 }));
+      const inPeriodo = iscritti.filter((i) => !i.vecchia_iscrizione && (i.ts || "").slice(0, 10) >= inizio && (i.ts || "").slice(0, 10) <= fine);
+      return statsVenditoriPerPeriodo(inPeriodo, venditori);
     }
     const corrente = statsMese(meseClassifica);
     const mesePrecObj = meseClassifica.mese === 0 ? { anno: meseClassifica.anno - 1, mese: 11 } : { anno: meseClassifica.anno, mese: meseClassifica.mese - 1 };
     const precedente = statsMese(mesePrecObj);
-    const precedenteById = Object.fromEntries(precedente.map((r) => [r.venditore.id, r]));
 
-    const rankCorsiPrecedente = precedente.slice().sort((a, b) => b.corsi - a.corsi);
-    const posPrecCorsiById = Object.fromEntries(rankCorsiPrecedente.map((r, i) => [r.venditore.id, i + 1]));
-
-    const corsiRanked = corrente.slice().sort((a, b) => b.corsi - a.corsi).map((r, i) => ({
-      ...r,
-      posizione: i + 1,
-      trendPosizioni: r.corsi > 0 && posPrecCorsiById[r.venditore.id] ? posPrecCorsiById[r.venditore.id] - (i + 1) : null,
-    }));
-
-    // Performance = ticket medio "corretto" per il volume di vendite
-    // (Bayesian shrinkage verso la media del team, così un campione di
-    // 2-3 vendite di alto valore non scavalca chi ne ha chiuse molte di
-    // più) più un indice di volume, pesati 60/40 — calcolata sul proprio
-    // mese per non far dipendere il confronto da baseline diverse
-    function calcolaPerformance(righeMese) {
-      const attivi = righeMese.filter((r) => r.corsi > 0);
-      const venditeTotali = attivi.reduce((s, r) => s + r.corsi, 0);
-      const fatturatoTotale = attivi.reduce((s, r) => s + r.valore, 0);
-      const numeroVenditoriAttivi = attivi.length;
-      if (venditeTotali === 0 || numeroVenditoriAttivi === 0) return { righe: [], mediaPerformance: 0 };
-      const ticketMedioTeam = fatturatoTotale / venditeTotali;
-      const venditeMedieTeam = venditeTotali / numeroVenditoriAttivi;
-      const righe = attivi.map((r) => {
-        const n = r.corsi;
-        const ticketMedioAggiustato = (n * r.ticketMedio + venditeMedieTeam * ticketMedioTeam) / (n + venditeMedieTeam);
-        const indiceQualita = (ticketMedioAggiustato / ticketMedioTeam) * 100;
-        const indiceVolume = (n / venditeMedieTeam) * 100;
-        return { ...r, performance: indiceQualita * 0.6 + indiceVolume * 0.4 };
-      });
-      const mediaPerformance = righe.reduce((s, r) => s + r.performance, 0) / righe.length;
-      return { righe, mediaPerformance };
-    }
-    const perfCorrente = calcolaPerformance(corrente);
-    const perfPrecedente = calcolaPerformance(precedente);
-    const posPrecPerformanceById = Object.fromEntries(
-      perfPrecedente.righe.slice().sort((a, b) => b.performance - a.performance).map((r, i) => [r.venditore.id, i + 1])
-    );
-    const performanceRanked = perfCorrente.righe.slice().sort((a, b) => b.performance - a.performance).map((r, i) => ({
-      ...r,
-      posizione: i + 1,
-      trendPosizioni: posPrecPerformanceById[r.venditore.id] ? posPrecPerformanceById[r.venditore.id] - (i + 1) : null,
-    }));
-
+    const corsiRanked = rankCorsiConTrend(corrente, precedente);
+    const { righe: performanceRanked, mediaPerformance } = rankPerformanceConTrend(corrente, precedente);
     const mediaCorsi = corrente.length > 0 ? round2(corrente.reduce((s, r) => s + r.corsi, 0) / corrente.length) : 0;
 
-    return { corsi: corsiRanked, performance: performanceRanked, mediaCorsi, mediaPerformance: Math.round(perfCorrente.mediaPerformance) };
+    return { corsi: corsiRanked, performance: performanceRanked, mediaCorsi, mediaPerformance };
   }, [iscritti, venditori, meseClassifica]);
   const etichettaMeseClassifica = `${MESI[meseClassifica.mese].toUpperCase()} ${meseClassifica.anno}`;
   const meseClassificaFuturo = (() => { const o = new Date(); return meseClassifica.anno > o.getFullYear() || (meseClassifica.anno === o.getFullYear() && meseClassifica.mese >= o.getMonth()); })();
@@ -2918,6 +3036,70 @@ function coloreScorePerformance(score) {
   if (score >= 120) return VERDE;
   if (score <= 100) return interpolaColore(ROSSO, NAVY, (score - 85) / 15);
   return interpolaColore(NAVY, VERDE, (score - 100) / 20);
+}
+
+// helper condivisi per le classifiche venditori (usati sia nella scheda
+// personale del venditore sia nella pagina Statistiche > Statistica
+// venditori): raggruppano un elenco di iscritti già filtrato per periodo
+// in {venditore, corsi, valore, ticketMedio} e calcolano i due ranking
+// (per numero di chiusure, per Performance) col confronto sul periodo
+// immediatamente precedente
+function statsVenditoriPerPeriodo(iscrittiInPeriodo, venditori) {
+  const base = venditori.map((v) => ({ venditore: v, corsi: 0, valore: 0 }));
+  const byId = Object.fromEntries(base.map((r) => [r.venditore.id, r]));
+  iscrittiInPeriodo.forEach((i) => {
+    const nomeNorm = (i.tutor || "").trim().toUpperCase();
+    const v = venditori.find((vv) => vv.nome.trim().toUpperCase() === nomeNorm);
+    if (!v || !byId[v.id]) return;
+    byId[v.id].corsi += 1;
+    byId[v.id].valore += i.totale_pattuito || 0;
+  });
+  return base.map((r) => ({ ...r, ticketMedio: r.corsi > 0 ? r.valore / r.corsi : 0 }));
+}
+function rankCorsiConTrend(corrente, precedente) {
+  const posPrecById = Object.fromEntries(
+    precedente.slice().sort((a, b) => b.corsi - a.corsi).map((r, i) => [r.venditore.id, i + 1])
+  );
+  return corrente.slice().sort((a, b) => b.corsi - a.corsi).map((r, i) => ({
+    ...r,
+    posizione: i + 1,
+    trendPosizioni: r.corsi > 0 && posPrecById[r.venditore.id] ? posPrecById[r.venditore.id] - (i + 1) : null,
+  }));
+}
+// Performance = ticket medio "corretto" per il volume di vendite
+// (Bayesian shrinkage verso la media del team, così un campione di 2-3
+// vendite di alto valore non scavalca chi ne ha chiuse molte di più)
+// più un indice di volume, pesati 60/40
+function calcolaPerformanceTeam(righeMese) {
+  const attivi = righeMese.filter((r) => r.corsi > 0);
+  const venditeTotali = attivi.reduce((s, r) => s + r.corsi, 0);
+  const fatturatoTotale = attivi.reduce((s, r) => s + r.valore, 0);
+  const numeroVenditoriAttivi = attivi.length;
+  if (venditeTotali === 0 || numeroVenditoriAttivi === 0) return { righe: [], mediaPerformance: 0 };
+  const ticketMedioTeam = fatturatoTotale / venditeTotali;
+  const venditeMedieTeam = venditeTotali / numeroVenditoriAttivi;
+  const righe = attivi.map((r) => {
+    const n = r.corsi;
+    const ticketMedioAggiustato = (n * r.ticketMedio + venditeMedieTeam * ticketMedioTeam) / (n + venditeMedieTeam);
+    const indiceQualita = (ticketMedioAggiustato / ticketMedioTeam) * 100;
+    const indiceVolume = (n / venditeMedieTeam) * 100;
+    return { ...r, performance: indiceQualita * 0.6 + indiceVolume * 0.4 };
+  });
+  const mediaPerformance = righe.reduce((s, r) => s + r.performance, 0) / righe.length;
+  return { righe, mediaPerformance };
+}
+function rankPerformanceConTrend(corrente, precedente) {
+  const perfCorrente = calcolaPerformanceTeam(corrente);
+  const perfPrecedente = calcolaPerformanceTeam(precedente);
+  const posPrecById = Object.fromEntries(
+    perfPrecedente.righe.slice().sort((a, b) => b.performance - a.performance).map((r, i) => [r.venditore.id, i + 1])
+  );
+  const righe = perfCorrente.righe.slice().sort((a, b) => b.performance - a.performance).map((r, i) => ({
+    ...r,
+    posizione: i + 1,
+    trendPosizioni: posPrecById[r.venditore.id] ? posPrecById[r.venditore.id] - (i + 1) : null,
+  }));
+  return { righe, mediaPerformance: Math.round(perfCorrente.mediaPerformance) };
 }
 
 const COLORI_AVATAR_CLASSIFICA = ["#2E5C8A", "#8A6D1D", "#2E7D32", "#7B4B94", "#B0552F", "#456", "#1F6F78"];
@@ -15634,7 +15816,7 @@ export default function App() {
       )}
 
       {view === "statisticavenditori" && (
-        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} onBack={() => setView("statistiche")} />
+        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} venditori={venditori} onBack={() => setView("statistiche")} />
       )}
 
       {view === "ultimeiscrizioni" && (
