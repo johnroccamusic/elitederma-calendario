@@ -6314,12 +6314,12 @@ function IndicatorePosti({ occupati, max, liberi }) {
     <div style={{ width: "100%" }}>
       <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", gap: 16, marginBottom: 7 }}>
         <div style={{ textAlign: "center" }}>
-          <div style={{ ...fontBody, fontSize: 24, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
+          <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>iscritti</div>
         </div>
         <div style={{ width: 1, background: CREAM_BORDER }} />
         <div style={{ textAlign: "center" }}>
-          <div style={{ ...fontBody, fontSize: 24, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
+          <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
           <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>posti</div>
         </div>
       </div>
