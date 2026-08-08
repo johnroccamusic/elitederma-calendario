@@ -2523,6 +2523,29 @@ function PaginaDashboardVenditori({
   });
   const commissioniInArrivo = Object.values(perEdizione).sort((a, b) => a.corsoData.data_fine.localeCompare(b.corsoData.data_fine));
 
+  // "Specializzazione di vendita": su quali corsi il venditore chiude di
+  // più, calcolato su TUTTO lo storico (non sul "Periodo di analisi" qui
+  // sopra, che è per definizione una finestra corta) — include anche le
+  // "vecchie iscrizioni", perché qui contano come vendita realmente
+  // avvenuta di quel corso, a differenza delle statistiche "chiusure del
+  // periodo" dove non vanno attribuite al mese di inserimento
+  const specializzazione = useMemo(() => {
+    if (!venditoreSel) return { righe: [], totale: 0 };
+    const nomeNorm = venditoreSel.nome.trim().toUpperCase();
+    const tutte = iscritti.filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm);
+    const perCorsoStorico = {};
+    tutte.forEach((i) => {
+      const cd = corsoDataById[i.corso_data_id];
+      const nomeCorso = cd ? (corsoById[cd.corso_id]?.nome || "—") : "—";
+      perCorsoStorico[nomeCorso] = (perCorsoStorico[nomeCorso] || 0) + 1;
+    });
+    const totale = tutte.length;
+    const righe = Object.entries(perCorsoStorico)
+      .map(([nome, n]) => ({ nome, n, pct: totale > 0 ? Math.round((n / totale) * 100) : 0 }))
+      .sort((a, b) => b.n - a.n);
+    return { righe, totale };
+  }, [iscritti, venditoreSel, corsoDataById, corsoById]);
+
   // classifica del team: chiusure e ticket medio di TUTTI i venditori nel
   // mese scelto, indipendente dal "Periodo di analisi" qui sopra (che
   // riguarda solo la scheda personale) — il confronto con il mese
@@ -2764,6 +2787,60 @@ function PaginaDashboardVenditori({
               </div>
             </div>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, marginBottom: 24 }}>Le commissioni diventano incassabili alla data di conclusione del corso.</div>
+
+            {specializzazione.totale > 0 && (
+              <>
+              <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+                <div>
+                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Specializzazione di vendita</div>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>I corsi che {toTitleCase((venditoreSel.nome.trim().split(/\s+/)[0] || ""))} vende di più nel lungo periodo</div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "8px 14px", display: "flex", alignItems: "center", gap: 6 }}>
+                    Storico completo <IconaChevronGiuErp size={12} color={MUTED} />
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>Dall'inizio dell'attività</div>
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 24 }}>
+                <div style={cardStyle}>
+                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 16 }}>Classifica per corsi venduti</div>
+                  {specializzazione.righe.slice(0, 5).map((r, i) => (
+                    <div key={r.nome} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: i < Math.min(4, specializzazione.righe.length - 1) ? 16 : 0 }}>
+                      <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: i === 0 ? GOLD : MUTED, width: 20, textAlign: "center", flexShrink: 0 }}>{i + 1}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+                          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toTitleCase(r.nome)}</span>
+                          <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0, whiteSpace: "nowrap" }}>{r.n} vendite  <b style={{ color: NAVY }}>{r.pct}%</b></span>
+                        </div>
+                        <div style={{ height: 6, background: BG, borderRadius: 3, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${(r.n / specializzazione.righe[0].n) * 100}%`, background: i === 0 ? GOLD : NAVY, borderRadius: 3 }} />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ ...cardStyle, background: "#FBF3E4", border: `1px solid ${GOLD}` }}>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#8A6D1D", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>Specializzazione principale</div>
+                  <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{toTitleCase(specializzazione.righe[0].nome)}</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: "#8A6D1D", marginBottom: 14 }}>1 vendita su {Math.max(1, Math.round(specializzazione.totale / specializzazione.righe[0].n))} riguarda questo corso</div>
+                  <div style={{ ...fontDisplay, fontSize: 34, fontWeight: 700, color: GOLD, marginBottom: 2 }}>{specializzazione.righe[0].pct}%</div>
+                  <div style={{ ...fontBody, fontSize: 12, color: "#8A6D1D", marginBottom: 16 }}>del totale storico</div>
+                  {specializzazione.righe[1] && (
+                    <div style={{ borderTop: "1px solid rgba(201,162,109,0.35)", paddingTop: 12, marginBottom: 14 }}>
+                      <div style={{ ...fontBody, fontSize: 11, color: "#8A6D1D", marginBottom: 4 }}>Seconda specializzazione</div>
+                      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(specializzazione.righe[1].nome)} · {specializzazione.righe[1].pct}%</div>
+                    </div>
+                  )}
+                  <div style={{ borderTop: "1px solid rgba(201,162,109,0.35)", paddingTop: 12 }}>
+                    <div style={{ ...fontBody, fontSize: 11, color: "#8A6D1D", marginBottom: 4 }}>Totale storico</div>
+                    <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{specializzazione.totale} corsi venduti</div>
+                    <div style={{ ...fontBody, fontSize: 11, color: "#8A6D1D", marginTop: 4 }}>Calcolato su tutte le chiusure registrate</div>
+                  </div>
+                </div>
+              </div>
+              </>
+            )}
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
               <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Classifiche venditori</div>
