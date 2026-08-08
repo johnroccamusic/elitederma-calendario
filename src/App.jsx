@@ -8499,6 +8499,24 @@ const TASTI_HOME = [
   { chiave: "statistiche", etichetta: "Statistiche" },
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
+// Logistica prodotti: le 5 fasi di spedizione di un'edizione (in ordine)
+// e i 7 elementi della checklist di preparazione kit
+const FASI_LOGISTICA = [
+  { chiave: "da_preparare", etichetta: "Da preparare" },
+  { chiave: "kit_pronto", etichetta: "Kit pronto" },
+  { chiave: "bolla_stampata", etichetta: "Bolla stampata" },
+  { chiave: "ritirato_corriere", etichetta: "Ritirato dal corriere" },
+  { chiave: "consegna_verificata", etichetta: "Consegna verificata" },
+];
+const CHECKLIST_KIT_ITEMS = [
+  { chiave: "tovagliette", etichetta: "Tovagliette inserite" },
+  { chiave: "materiali_consumo", etichetta: "Materiali di consumo" },
+  { chiave: "materiale_didattico", etichetta: "Materiale didattico" },
+  { chiave: "indirizzo_verificato", etichetta: "Indirizzo verificato" },
+  { chiave: "pacchi_etichettati", etichetta: "Pacchi etichettati" },
+  { chiave: "spedizione_prenotata", etichetta: "Spedizione prenotata" },
+  { chiave: "tracking_inserito", etichetta: "Tracking inserito" },
+];
 // unica password "di sistema" rimasta fuori dalla tabella "Gestione
 // utenti" (Utente generico/Amministratore/Programmatore sono righe di
 // quella tabella, in utenti_app): il codice per aprire questa stessa
@@ -13634,6 +13652,439 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 }
 
+// ---------- Logistica prodotti (kit corsi) ----------
+// una "pillola" di fase nella riga di un'edizione: verde spuntata se già
+// superata, rossa con "!" se è quella attuale, vuota se ancora da
+// raggiungere — cliccarla imposta quella fase come fase attuale
+function PillaFaseLogistica({ fase, faseCorrente, onClick }) {
+  const idx = FASI_LOGISTICA.findIndex((f) => f.chiave === fase.chiave);
+  const idxCorrente = FASI_LOGISTICA.findIndex((f) => f.chiave === faseCorrente);
+  const stato = idx < idxCorrente ? "fatto" : idx === idxCorrente ? "corrente" : "futuro";
+  const stile = {
+    fatto: { background: "#E8F3EA", border: "1px solid #2E7D32", color: "#2E7D32" },
+    corrente: { background: "#FBEAE4", border: "1px solid #C0392B", color: "#C0392B" },
+    futuro: { background: "#fff", border: `1px solid ${CREAM_BORDER}`, color: MUTED },
+  }[stato];
+  return (
+    <button
+      onClick={onClick}
+      style={{ ...fontBody, fontSize: 11, fontWeight: 700, borderRadius: 10, padding: "9px 6px", cursor: "pointer", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.25, ...stile }}
+    >
+      <div style={{ fontSize: 13, marginBottom: 3 }}>{stato === "fatto" ? "✓" : stato === "corrente" ? "!" : "○"}</div>
+      {fase.etichetta}
+    </button>
+  );
+}
+// una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
+// attuale in etichetta e le 5 pillole cliccabili per cambiarla
+function RigaCorsoLogistica({ corsoData, corso, loc, numeroPartecipanti, faseCorrente, selezionato, onSeleziona, onCambiaFase }) {
+  const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
+  const etichettaFase = FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichetta || "";
+  return (
+    <div
+      onClick={onSeleziona}
+      style={{ padding: "16px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", background: selezionato ? "#FBF3E4" : "transparent", borderRadius: 10 }}
+    >
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
+        <div style={{ background: BG, borderRadius: 10, padding: "6px 11px", textAlign: "center", flexShrink: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{gg}</div>
+          <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>Ora: {etichettaFase}</div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{toTitleCase(loc?.nome || "—")} · {numeroPartecipanti} partecipant{numeroPartecipanti === 1 ? "e" : "i"}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {FASI_LOGISTICA.map((f) => (
+          <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(f.chiave); }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+// pannello destro "Preparazione kit" per l'edizione selezionata: kit per
+// iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
+// da "Contenuto kit"), accessori con quantità inviata, scarico magazzino
+function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate, prodottiShop, onSalvaCampi, onScaricaMagazzino, onAnnullaScarico }) {
+  const checklist = statoEdizione.checklist || {};
+  const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
+  const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
+  const prodottiKit = kitTemplate.filter((r) => r.tipo === "kit");
+  const accessori = kitTemplate.filter((r) => r.tipo === "accessorio");
+  const nomeProdotto = (id) => prodottiShop.find((p) => p.id === id)?.nome || "—";
+  const labelStyle = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
+
+  return (
+    <div>
+      <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Preparazione kit</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>{corso?.nome || "—"} · {fmtData(corsoData.data_inizio)}</div>
+
+      {mancanti > 0 && (
+        <div style={{ background: "#FBEAE4", border: "1px solid #C0392B", borderRadius: 10, padding: 12, marginBottom: 18, ...fontBody, fontSize: 13, fontWeight: 600, color: "#C0392B" }}>
+          Mancano {mancanti} element{mancanti === 1 ? "o" : "i"}: il kit non è ancora pronto.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <div style={{ flex: 1 }}>
+          <div style={labelStyle}>Kit per iscritti</div>
+          <input
+            type="number" min="0" style={inputStyle}
+            value={statoEdizione.kit_per_iscritti ?? ""} placeholder="0"
+            onChange={(e) => onSalvaCampi({ kit_per_iscritti: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={labelStyle}>Kit di riserva</div>
+          <input
+            type="number" min="0" style={inputStyle}
+            value={statoEdizione.kit_di_riserva ?? ""} placeholder="0"
+            onChange={(e) => onSalvaCampi({ kit_di_riserva: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+          />
+        </div>
+      </div>
+
+      {CHECKLIST_KIT_ITEMS.map((c) => (
+        <label key={c.chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+          <input
+            type="checkbox" checked={!!checklist[c.chiave]}
+            onChange={(e) => onSalvaCampi({ checklist: { ...checklist, [c.chiave]: e.target.checked } })}
+          />
+          <span style={{ ...fontBody, fontSize: 14, color: NAVY }}>{c.etichetta}</span>
+        </label>
+      ))}
+
+      {prodottiKit.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={labelStyle}>Contenuto kit</div>
+          {prodottiKit.map((r) => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
+              <span>{nomeProdotto(r.prodotto_id)}</span><span>{r.quantita}x</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {accessori.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={labelStyle}>Altri accessori inviati</div>
+          {accessori.map((r) => (
+            <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{nomeProdotto(r.prodotto_id)}</span>
+              <input
+                type="number" min="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }}
+                value={statoEdizione.accessori_quantita?.[r.prodotto_id] ?? ""} placeholder="0"
+                onChange={(e) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.prodotto_id]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 24 }}>
+        {statoEdizione.magazzino_scaricato ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>✓ Scaricato dal magazzino</div>
+            <button onClick={onAnnullaScarico} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer" }}>
+              Annulla scarico
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onScaricaMagazzino}
+            disabled={prodottiKit.length === 0 && accessori.length === 0}
+            style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: prodottiKit.length === 0 && accessori.length === 0 ? MUTED : NAVY, border: "none", borderRadius: 10, padding: "13px 16px", cursor: prodottiKit.length === 0 && accessori.length === 0 ? "default" : "pointer", width: "100%" }}
+          >
+            Scarica dal magazzino
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+// pagina principale "Logistica prodotti": elenco corsi in arrivo con le
+// fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
+// destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
+// volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, onBack, onApriContenutoKit, ricarica }) {
+  const isMobile = useIsMobile();
+  const oggiStr = dataOggiStr();
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const edizioniInArrivo = useMemo(
+    () => corsiDate.filter((cd) => cd.data_fine >= oggiStr).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
+    [corsiDate, oggiStr]
+  );
+  const [edizioneSelId, setEdizioneSelId] = useState(null);
+  const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
+
+  function statoDi(corsoDataId) {
+    return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || { corso_data_id: corsoDataId, fase: "da_preparare", kit_per_iscritti: null, kit_di_riserva: null, checklist: {}, accessori_quantita: {}, magazzino_scaricato: false, scarico_dettaglio: {} };
+  }
+  async function salvaCampiEdizione(corsoDataId, campi) {
+    const esistente = logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId);
+    const { error } = esistente
+      ? await supabase.from("logistica_kit_edizioni").update(campi).eq("id", esistente.id)
+      : await supabase.from("logistica_kit_edizioni").insert({ corso_data_id: corsoDataId, ...campi });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function scaricaMagazzino(corsoData) {
+    const stato = statoDi(corsoData.id);
+    const kitTemplate = corsiKitProdotti.filter((r) => r.corso_id === corsoData.corso_id);
+    const totaleKit = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
+    const dettaglio = {};
+    kitTemplate.filter((r) => r.tipo === "kit").forEach((r) => {
+      if (totaleKit > 0) dettaglio[r.prodotto_id] = (dettaglio[r.prodotto_id] || 0) + r.quantita * totaleKit;
+    });
+    kitTemplate.filter((r) => r.tipo === "accessorio").forEach((r) => {
+      const q = stato.accessori_quantita?.[r.prodotto_id] || 0;
+      if (q > 0) dettaglio[r.prodotto_id] = (dettaglio[r.prodotto_id] || 0) + q;
+    });
+    if (Object.keys(dettaglio).length === 0) { window.alert("Niente da scaricare: imposta \"Kit per iscritti\"/\"Kit di riserva\" o le quantità degli accessori."); return; }
+    if (!window.confirm("Scaricare questi prodotti dal magazzino? Le giacenze si aggiornano subito.")) return;
+    await Promise.all(Object.entries(dettaglio).map(([prodottoId, quantita]) => {
+      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+      if (!prodotto) return null;
+      return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) - quantita }).eq("id", prodottoId);
+    }));
+    await salvaCampiEdizione(corsoData.id, { magazzino_scaricato: true, scarico_dettaglio: dettaglio });
+  }
+  async function annullaScarico(corsoData) {
+    const stato = statoDi(corsoData.id);
+    if (!window.confirm("Annullare lo scarico? Le quantità verranno ripristinate nel magazzino.")) return;
+    const dettaglio = stato.scarico_dettaglio || {};
+    await Promise.all(Object.entries(dettaglio).map(([prodottoId, quantita]) => {
+      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+      if (!prodotto) return null;
+      return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) + quantita }).eq("id", prodottoId);
+    }));
+    await salvaCampiEdizione(corsoData.id, { magazzino_scaricato: false, scarico_dettaglio: {} });
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>Logistica prodotti</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra.</div>
+            </div>
+          </div>
+          <button
+            onClick={onApriContenutoKit}
+            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "10px 18px", cursor: "pointer", flexShrink: 0 }}
+          >
+            Contenuto kit
+          </button>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Corsi in arrivo</div>
+            {edizioniInArrivo.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "20px 0" }}>Nessun corso in programma.</div>
+            ) : edizioniInArrivo.map((cd) => (
+              <RigaCorsoLogistica
+                key={cd.id}
+                corsoData={cd}
+                corso={corsoById[cd.corso_id]}
+                loc={locById[cd.location_id]}
+                numeroPartecipanti={iscritti.filter((i) => i.corso_data_id === cd.id).length}
+                faseCorrente={statoDi(cd.id).fase}
+                selezionato={edizioneSel?.id === cd.id}
+                onSeleziona={() => setEdizioneSelId(cd.id)}
+                onCambiaFase={(fase) => { setEdizioneSelId(cd.id); salvaCampiEdizione(cd.id, { fase }); }}
+              />
+            ))}
+          </div>
+
+          <div style={{ ...cardStyle, marginBottom: 0, position: isMobile ? "static" : "sticky", top: 20 }}>
+            {!edizioneSel ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
+            ) : (
+              <PannelloPreparazioneKit
+                corsoData={edizioneSel}
+                corso={corsoById[edizioneSel.corso_id]}
+                statoEdizione={statoDi(edizioneSel.id)}
+                kitTemplate={corsiKitProdotti.filter((r) => r.corso_id === edizioneSel.corso_id)}
+                prodottiShop={prodottiShop}
+                onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
+                onScaricaMagazzino={() => scaricaMagazzino(edizioneSel)}
+                onAnnullaScarico={() => annullaScarico(edizioneSel)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// scheda di un corso in "Contenuto kit": ricerca+aggiungi prodotti al
+// kit (con quantità per kit) e agli "altri accessori" (senza quantità:
+// la scrive chi prepara la spedizione, edizione per edizione)
+function SchedaKitCorso({ corso, righe, prodottiShop, ricarica }) {
+  const [ricercaKit, setRicercaKit] = useState("");
+  const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
+  const [ricercaAcc, setRicercaAcc] = useState("");
+  const [mostraRicercaAcc, setMostraRicercaAcc] = useState(false);
+
+  const prodottiKit = righe.filter((r) => r.tipo === "kit");
+  const accessori = righe.filter((r) => r.tipo === "accessorio");
+  const idsUsati = new Set(righe.map((r) => r.prodotto_id));
+
+  async function aggiungiProdotto(prodottoId, tipo) {
+    const { error } = await supabase.from("corsi_kit_prodotti").insert({ corso_id: corso.id, prodotto_id: prodottoId, tipo, quantita: 1 });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setMostraRicercaKit(false); setMostraRicercaAcc(false); setRicercaKit(""); setRicercaAcc("");
+    ricarica();
+  }
+  async function cambiaQuantita(rigaId, quantita) {
+    const { error } = await supabase.from("corsi_kit_prodotti").update({ quantita }).eq("id", rigaId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function rimuovi(rigaId) {
+    const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  const risultatiKit = ricercaKit.trim()
+    ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaKit.trim().toLowerCase())).slice(0, 8)
+    : [];
+  const risultatiAcc = ricercaAcc.trim()
+    ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaAcc.trim().toLowerCase())).slice(0, 8)
+    : [];
+  const pillBtn = { ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer" };
+  const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 14 }}>
+      <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>{corso.nome}</div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Contenuto kit</div>
+        <button onClick={() => setMostraRicercaKit((v) => !v)} style={pillBtn}>+ Aggiungi prodotto</button>
+      </div>
+      {mostraRicercaKit && (
+        <div style={{ marginBottom: 10 }}>
+          <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
+          {risultatiKit.map((p) => (
+            <div key={p.id} onClick={() => aggiungiProdotto(p.id, "kit")} style={rigaRisultato}>
+              {p.nome} <span style={{ color: MUTED, fontSize: 12 }}>· giacenza {p.giacenza ?? 0}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {prodottiKit.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Nessun prodotto nel kit.</div>
+      ) : prodottiKit.map((r) => {
+        const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+        return (
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
+            <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 60, padding: "5px 8px" }} />
+            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+          </div>
+        );
+      })}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 18, marginBottom: 8 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Altri accessori</div>
+        <button onClick={() => setMostraRicercaAcc((v) => !v)} style={pillBtn}>+ Aggiungi accessorio</button>
+      </div>
+      {mostraRicercaAcc && (
+        <div style={{ marginBottom: 10 }}>
+          <CampoRicerca value={ricercaAcc} onChange={(e) => setRicercaAcc(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
+          {risultatiAcc.map((p) => (
+            <div key={p.id} onClick={() => aggiungiProdotto(p.id, "accessorio")} style={rigaRisultato}>{p.nome}</div>
+          ))}
+        </div>
+      )}
+      {accessori.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio.</div>
+      ) : accessori.map((r) => {
+        const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+        return (
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
+            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+// pagina "Contenuto kit": template kit per corso-tipo, condiviso da
+// tutte le edizioni di quel corso (stesso principio di "corsi_giorni")
+function PaginaContenutoKit({ corsi, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
+  const isMobile = useIsMobile();
+  const [mostraForm, setMostraForm] = useState(false);
+  const [corsoNuovoId, setCorsoNuovoId] = useState("");
+  const [corsoAppenaCreato, setCorsoAppenaCreato] = useState(null);
+
+  const idsConKit = useMemo(() => new Set(corsiKitProdotti.map((r) => r.corso_id)), [corsiKitProdotti]);
+  const corsiVisibili = useMemo(() => {
+    const ids = new Set(idsConKit);
+    if (corsoAppenaCreato) ids.add(corsoAppenaCreato);
+    return corsi.filter((c) => ids.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [corsi, idsConKit, corsoAppenaCreato]);
+  const corsiSenzaKit = corsi.filter((c) => !idsConKit.has(c.id) && c.id !== corsoAppenaCreato);
+
+  function creaNuovoKit() {
+    if (!corsoNuovoId) { window.alert("Scegli un corso."); return; }
+    setCorsoAppenaCreato(corsoNuovoId);
+    setMostraForm(false);
+    setCorsoNuovoId("");
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Contenuto kit</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Vale per tutte le edizioni dello stesso corso.</div>
+            </div>
+          </div>
+          <button
+            onClick={() => setMostraForm((v) => !v)}
+            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "10px 18px", cursor: "pointer", flexShrink: 0 }}
+          >
+            + Crea nuovo kit
+          </button>
+        </div>
+
+        {mostraForm && (
+          <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
+            <select value={corsoNuovoId} onChange={(e) => setCorsoNuovoId(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 180 }}>
+              <option value="">— scegli il tipo di corso —</option>
+              {corsiSenzaKit.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <button onClick={creaNuovoKit} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}>Crea</button>
+          </div>
+        )}
+
+        {corsiVisibili.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit definito. Crea il primo con "+ Crea nuovo kit".</div>
+        ) : corsiVisibili.map((c) => (
+          <SchedaKitCorso key={c.id} corso={c} righe={corsiKitProdotti.filter((r) => r.corso_id === c.id)} prodottiShop={prodottiShop} ricarica={ricarica} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Costi operativi ----------
 function IconaTortaCostiErp({ size = 20, color = "currentColor" }) {
   return (
@@ -15506,6 +15957,13 @@ export default function App() {
   const [venditori, setVenditori] = useState([]);
   const [passwordMenu, setPasswordMenu] = useState([]);
   const [utentiApp, setUtentiApp] = useState([]);
+  // "Logistica prodotti": corsiKitProdotti è il template (per corso-tipo,
+  // quali prodotti del magazzino compongono il kit e quali sono "altri
+  // accessori"); logisticaKitEdizioni è lo stato operativo per singola
+  // edizione (corsi_date) — fase di spedizione, kit per iscritti/riserva,
+  // checklist, quantità accessori inviati, se già scaricato dal magazzino
+  const [corsiKitProdotti, setCorsiKitProdotti] = useState([]);
+  const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -15538,7 +15996,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -15579,6 +16037,8 @@ export default function App() {
       supabase.from("venditori").select("id, nome, ts").order("nome"),
       supabase.from("password_menu").select("*"),
       supabase.from("utenti_app").select("*").order("nome"),
+      supabase.from("corsi_kit_prodotti").select("*"),
+      supabase.from("logistica_kit_edizioni").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -15613,6 +16073,8 @@ export default function App() {
     setVenditori(ve.data || []);
     setPasswordMenu(pm.data || []);
     setUtentiApp(ua.data || []);
+    setCorsiKitProdotti(ckp.data || []);
+    setLogisticaKitEdizioni(lke.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -15893,6 +16355,7 @@ export default function App() {
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
+  function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -16001,7 +16464,7 @@ export default function App() {
             <TileHome title="Gestione corsi" attivo={tastoAbilitato("gestionedate")} onClick={apriGestioneDate} />
             <TileHome title="Dashboard venditori" attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
             <TileHome title="ERP / Magazzino" attivo={tastoAbilitato("erp")} onClick={apriErp} />
-            <TileHome title="Logistica prodotti" attivo={false} />
+            <TileHome title="Logistica prodotti" attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
             <TileHome title="Assegna logo" attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
             <TileHome title="Gestione modelle" attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
             <TileHome title="Statistiche" attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
@@ -16159,6 +16622,21 @@ export default function App() {
           apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
           apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+        />
+      )}
+
+      {view === "logisticaprodotti" && (
+        <PaginaLogisticaProdotti
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
+          ricarica={fetchDati} onBack={() => setView("home")} onApriContenutoKit={() => setView("contenutokit")}
+        />
+      )}
+
+      {view === "contenutokit" && (
+        <PaginaContenutoKit
+          corsi={corsi} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
+          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
         />
       )}
 

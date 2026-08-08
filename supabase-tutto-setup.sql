@@ -1471,4 +1471,40 @@ alter table public.utenti_app enable row level security;
 drop policy if exists "utenti_app_all" on public.utenti_app;
 create policy "utenti_app_all" on public.utenti_app for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 41) Logistica prodotti (kit corsi): template kit per corso-tipo
+-- (corsi_kit_prodotti, stesso pattern di corsi_giorni) più lo stato
+-- operativo per singola edizione (logistica_kit_edizioni: fase di
+-- spedizione, kit per iscritti/riserva, checklist, quantità accessori
+-- inviati, scarico dal magazzino).
+-- ---------------------------------------------------------
+create table if not exists public.corsi_kit_prodotti (
+  id uuid primary key default gen_random_uuid(),
+  corso_id uuid not null references public.corsi(id) on delete cascade,
+  prodotto_id uuid not null references public.prodotti_shop(id) on delete cascade,
+  tipo text not null default 'kit',
+  quantita integer not null default 1,
+  ts timestamptz not null default now(),
+  unique (corso_id, prodotto_id, tipo)
+);
+alter table public.corsi_kit_prodotti enable row level security;
+drop policy if exists "corsi_kit_prodotti_all" on public.corsi_kit_prodotti;
+create policy "corsi_kit_prodotti_all" on public.corsi_kit_prodotti for all to anon using (true) with check (true);
+
+create table if not exists public.logistica_kit_edizioni (
+  id uuid primary key default gen_random_uuid(),
+  corso_data_id uuid not null references public.corsi_date(id) on delete cascade unique,
+  fase text not null default 'da_preparare',
+  kit_per_iscritti integer,
+  kit_di_riserva integer,
+  checklist jsonb not null default '{}',
+  accessori_quantita jsonb not null default '{}',
+  magazzino_scaricato boolean not null default false,
+  scarico_dettaglio jsonb not null default '{}',
+  ts timestamptz not null default now()
+);
+alter table public.logistica_kit_edizioni enable row level security;
+drop policy if exists "logistica_kit_edizioni_all" on public.logistica_kit_edizioni;
+create policy "logistica_kit_edizioni_all" on public.logistica_kit_edizioni for all to anon using (true) with check (true);
+
 notify pgrst, 'reload schema';
