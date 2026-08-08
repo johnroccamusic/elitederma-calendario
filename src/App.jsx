@@ -2429,6 +2429,8 @@ function PaginaDashboardVenditori({
   }, [iscritti, venditoreSel, range, corsoDataById]);
 
   const numeroChiusure = chiusure.length;
+  const valoreVenduto = round2(chiusure.reduce((s, { iscritto }) => s + (iscritto.totale_pattuito || 0), 0));
+  const ticketMedio = numeroChiusure > 0 ? round2(valoreVenduto / numeroChiusure) : 0;
   const commissioniGenerate = round2(chiusure.reduce((s, { iscritto }) => s + (iscritto.quota_venditore || 0), 0));
 
   // periodo immediatamente precedente a quello scelto, stessa durata:
@@ -2604,7 +2606,7 @@ function PaginaDashboardVenditori({
 
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Chiusure e commissioni</div>
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12 }}>Le "vecchie iscrizioni" (recuperate a posteriori) non contano mai come chiusura del periodo corrente.</div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(5, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Chiusure</div>
                 <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{numeroChiusure}</div>
@@ -2614,6 +2616,11 @@ function PaginaDashboardVenditori({
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Performance</div>
                 <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: colorePerformance }}>{livelloPerformance}</div>
                 {numeroChiusure > 0 && <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{fmtEuroErp(round2(commissioneMediaVenditore))} commissione media</div>}
+              </div>
+              <div style={{ ...cardStyle, marginBottom: 0 }}>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ticket medio</div>
+                <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp(ticketMedio)}</div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>valore venduto / chiusure</div>
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Commissioni generate</div>
