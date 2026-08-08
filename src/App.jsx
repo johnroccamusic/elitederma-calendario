@@ -6335,15 +6335,28 @@ function IndicatorePosti({ occupati, max, liberi }) {
 
 // tastini +/- in alto a destra di una scheda: fanno "zoom" (font +
 // spaziature + icone, tutto insieme) solo dentro quella scheda, un passo
-// per click. Locale al componente: si azzera se la scheda viene
-// smontata/ricaricata, non è salvato da nessuna parte
+// per click. Salvato in localStorage (chiave unica per tutte le schede
+// "Date corsi"): resta impostato per questa persona/dispositivo anche
+// dopo un refresh o riaprendo l'app, ma non è condiviso con nessun altro
+// utente — è una preferenza visiva locale, non un dato del gestionale
+const CHIAVE_ZOOM_DATE_CORSI = "edc_zoom_date_corsi";
 function useZoomScheda() {
-  const [zoom, setZoom] = useState(100);
+  const [zoom, setZoom] = useState(() => {
+    const salvato = parseInt(localStorage.getItem(CHIAVE_ZOOM_DATE_CORSI), 10);
+    return Number.isFinite(salvato) ? salvato : 100;
+  });
+  function cambiaZoom(delta) {
+    setZoom((z) => {
+      const nuovo = Math.min(160, Math.max(70, z + delta));
+      localStorage.setItem(CHIAVE_ZOOM_DATE_CORSI, String(nuovo));
+      return nuovo;
+    });
+  }
   const bottoneStyle = { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, fontSize: 15, fontWeight: 700, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
   const controlli = (
     <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 4, zIndex: 1 }}>
-      <button onClick={() => setZoom((z) => Math.max(70, z - 8))} title="Rimpicciolisci il testo" style={bottoneStyle}>−</button>
-      <button onClick={() => setZoom((z) => Math.min(160, z + 8))} title="Ingrandisci il testo" style={bottoneStyle}>+</button>
+      <button onClick={() => cambiaZoom(-8)} title="Rimpicciolisci il testo" style={bottoneStyle}>−</button>
+      <button onClick={() => cambiaZoom(8)} title="Ingrandisci il testo" style={bottoneStyle}>+</button>
     </div>
   );
   return [zoom, controlli];
