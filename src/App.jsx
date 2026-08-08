@@ -2255,7 +2255,7 @@ function SezioneDateCorsi({
           </div>
         </>
       )}
-      <input style={{ ...inputStyle, marginBottom: 12 }} placeholder="Cerca allievo, corso, sede o master…" value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} />
+      <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
       <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
         <FiltroPill
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
@@ -3163,7 +3163,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
-        <input style={{ ...inputStyle, flex: "2 1 260px" }} placeholder="Cerca città, corso, master o tipologia…" value={ricerca} onChange={(e) => setRicerca(e.target.value)} />
+        <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca città, corso, master o tipologia…" style={{ flex: "2 1 260px" }} />
         <select style={{ ...inputStyle, flex: "1 1 150px" }} value={filtroCitta} onChange={(e) => setFiltroCitta(e.target.value)}>
           <option value="">Tutte le città</option>
           {cittaPresenti.map((c) => <option key={c} value={c}>{c.toUpperCase()}</option>)}
@@ -3887,7 +3887,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
               <div style={hStyle}>Aggiungi corso</div>
               <div style={{ ...subStyle, marginBottom: 16 }}>Nome, colore univoco per il calendario, posti massimi di default.</div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
-                <input style={{ ...inputStyle, maxWidth: 260 }} placeholder="Cerca" value={ricercaCorsi} onChange={(e) => setRicercaCorsi(e.target.value)} />
+                <CampoRicerca value={ricercaCorsi} onChange={(e) => setRicercaCorsi(e.target.value)} placeholder="Cerca" style={{ maxWidth: 260 }} />
                 <Button onClick={apriNuovoCorso}>+ Nuovo tipo di corso</Button>
               </div>
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>{corsiFiltrati.length} tipologie</div>
@@ -6361,6 +6361,37 @@ function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
     <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.25, wordBreak: "keep-all", overflowWrap: "normal" }}>
       {testo}
     </span>
+  );
+}
+
+// campo di ricerca con un tasto "Cerca" sulla destra: su Android digitare
+// in un campo di testo apre la tastiera a schermo, che poi resta aperta
+// finché non si tocca esplicitamente altrove — il tasto (e il tasto
+// "invio"/lente della tastiera stessa, grazie a enterKeyHint) tolgono il
+// focus dal campo, così la tastiera si chiude subito
+function CampoRicerca({ value, onChange, placeholder, style }) {
+  const ref = React.useRef(null);
+  return (
+    <div style={{ position: "relative", ...style }}>
+      <input
+        ref={ref}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        enterKeyHint="search"
+        onKeyDown={(e) => { if (e.key === "Enter") ref.current?.blur(); }}
+        style={{ ...inputStyle, paddingRight: 44, width: "100%", boxSizing: "border-box" }}
+      />
+      <button
+        type="button"
+        onClick={() => ref.current?.blur()}
+        title="Cerca"
+        aria-label="Cerca"
+        style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 34, height: 34, borderRadius: "50%", border: "none", background: NAVY, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+      </button>
+    </div>
   );
 }
 
@@ -11891,7 +11922,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
             <option value="">Tutte le categorie</option>
             {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
-          <input style={{ ...inputStyle, width: "auto", minWidth: 180 }} placeholder="Cerca prodotto…" value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} />
+          <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 180 }} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 14 }}>
@@ -12669,7 +12700,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione Shop</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Categorie, prodotti e immagini dello shop online, sincronizzati con WooCommerce.</div>
           </div>
-          <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} placeholder="Cerca prodotto…" value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} />
+          <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} placeholder="Cerca prodotto…" style={{ minWidth: 220 }} />
         </div>
 
         {isMobile ? (
@@ -14762,6 +14793,27 @@ export default function App() {
     setSottoVistaScheda(successivo.sottoVistaScheda);
     setSchedaKey((k) => k + 1);
   }
+
+  // tasto/gesto "Indietro" fisico di Android: essendo una web app senza un
+  // vero router, di default farebbe uscire dall'app (torna alla pagina
+  // precedente nella cronologia del browser). Si tiene sempre un
+  // "cuscinetto" nella cronologia del browser (una voce in più, aggiunta
+  // subito dopo ogni pressione): quando arriva, invece di lasciar uscire,
+  // si va indietro DENTRO l'app (stessa funzione di "Indietro" in alto) —
+  // mai più un'uscita accidentale. Il ref tiene sempre l'ultima versione
+  // di vaiIndietro (cambia ad ogni render), pur registrando l'ascoltatore
+  // una sola volta sola al montaggio
+  const vaiIndietroRef = React.useRef(vaiIndietro);
+  vaiIndietroRef.current = vaiIndietro;
+  useEffect(() => {
+    window.history.pushState({ elitederma: true }, "");
+    function onPopState() {
+      window.history.pushState({ elitederma: true }, "");
+      vaiIndietroRef.current();
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   // swipe da sinistra a destra su mobile → un passo indietro nella cronologia,
   // swipe da destra a sinistra → un passo avanti (stessa cosa dei pulsanti
