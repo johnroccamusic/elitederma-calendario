@@ -1450,19 +1450,23 @@ create policy "password_menu_all" on public.password_menu for all to anon using 
 alter table public.venditori add column if not exists telefono text;
 
 -- ---------------------------------------------------------
--- 40) Utenti nominali dell'app (rotellina > Utenti e permessi): ogni
+-- 40) Utenti nominali dell'app (rotellina > Gestione utenti): ogni
 -- utente ha la propria password e un elenco di "permessi" (le chiavi dei
 -- tasti della home che può usare, vedi TASTI_HOME in App.jsx). In home,
 -- i tasti non presenti in "permessi" restano disattivati e non
 -- cliccabili — niente più richiesta di password al click per loro.
+-- "chiave_sistema" identifica le 3 righe di sistema (Utente generico/
+-- Amministratore/Programmatore), sempre presenti e non eliminabili.
 -- ---------------------------------------------------------
 create table if not exists public.utenti_app (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
   password text not null,
   permessi jsonb not null default '[]',
+  chiave_sistema text unique,
   ts timestamptz not null default now()
 );
+alter table public.utenti_app add column if not exists chiave_sistema text unique;
 alter table public.utenti_app enable row level security;
 drop policy if exists "utenti_app_all" on public.utenti_app;
 create policy "utenti_app_all" on public.utenti_app for all to anon using (true) with check (true);

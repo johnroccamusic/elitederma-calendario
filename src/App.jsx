@@ -1286,39 +1286,44 @@ function Gate({ onOk }) {
       </div>
     </div>
   );
-  // le 3 password di accesso (User generico, Amministratore, Programmatore)
-  // sono impostabili dalla rotellina e vivono in password_menu — qui, prima
-  // del login, non sono ancora caricate in memoria (fetchDati parte solo
-  // dopo essere entrati), quindi si interrogano al volo con una query
-  // dedicata; se non è mai stata impostata una versione personalizzata si
-  // ricade sui valori di sempre (env var, o "1234" per il Programmatore).
-  // In aggiunta, si controlla anche se il codice corrisponde alla password
-  // di un utente nominale (utenti_app, gestito dalla rotellina): se sì,
-  // entra come "user" ma con i permessi (tasti home) di quello specifico
-  // utente, così l'app sa già quali tasti mostrargli senza altre password
+  // Tutte le identità (Utente generico, Amministratore, Programmatore,
+  // più qualunque utente nominale) vivono ora nella stessa tabella
+  // utenti_app, gestita dalla rotellina > Gestione utenti — ognuna con la
+  // propria password e i propri "permessi" (i tasti della home
+  // cliccabili). Le 3 righe di sistema (chiave_sistema valorizzata)
+  // esistono sempre anche se non ancora salvate: finché non vengono
+  // personalizzate si ricade sui valori di sempre (RIGHE_SISTEMA_DEFAULT)
   async function check() {
     setVerificando(true);
-    const [{ data }, { data: utenti }] = await Promise.all([
-      supabase.from("password_menu").select("vista, password").in("vista", ["__user", "__admin", "__programmatore"]),
-      supabase.from("utenti_app").select("id, nome, password, permessi"),
-    ]);
+    const { data: utenti } = await supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema");
     setVerificando(false);
-    const valoreDi = (v) => (data || []).find((r) => r.vista === v)?.password;
-    const pwProgrammatore = valoreDi("__programmatore") || "1234";
-    const pwAmministratore = valoreDi("__admin") || ADMIN_CODE;
-    const pwUser = valoreDi("__user") || ACCESS_CODE;
-    const utenteTrovato = (utenti || []).find((u) => code && u.password === code);
-    let ruolo = null;
-    if (pwProgrammatore && code === pwProgrammatore) ruolo = "programmatore";
-    else if (pwAmministratore && code === pwAmministratore) ruolo = "amministratore";
-    else if (utenteTrovato) ruolo = "user";
-    else if (!pwUser || code === pwUser) ruolo = "user";
+    const righe = utenti || [];
+    function rigaSistema(chiave) {
+      const trovata = righe.find((u) => u.chiave_sistema === chiave);
+      const def = RIGHE_SISTEMA_DEFAULT.find((d) => d.chiave === chiave);
+      return {
+        id: trovata?.id || null,
+        nome: trovata?.nome || def.nome,
+        password: trovata?.password || def.passwordDefault,
+        permessi: trovata?.permessi || def.permessiDefault,
+        chiave_sistema: chiave,
+      };
+    }
+    const sUser = rigaSistema("__user");
+    const sAdmin = rigaSistema("__admin");
+    const sProgrammatore = rigaSistema("__programmatore");
+    const nominale = righe.find((u) => !u.chiave_sistema && code && u.password === code);
+
+    let ruolo = null, utente = null;
+    if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
+    else if (sAdmin.password && code === sAdmin.password) { ruolo = "amministratore"; utente = sAdmin; }
+    else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
+    else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
+
     if (ruolo) {
-      const utente = utenteTrovato ? { id: utenteTrovato.id, nome: utenteTrovato.nome, permessi: utenteTrovato.permessi || [] } : null;
       sessionStorage.setItem("edc_ok", "1");
       sessionStorage.setItem("edc_ruolo", ruolo);
-      if (utente) sessionStorage.setItem("edc_utente", JSON.stringify(utente));
-      else sessionStorage.removeItem("edc_utente");
+      sessionStorage.setItem("edc_utente", JSON.stringify(utente));
       onOk(ruolo, utente);
     } else {
       setErr(true);
@@ -4108,21 +4113,29 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
   );
 }
 
-// una riga della sezione "Utenti e permessi": nome + password modificabili
-// (Salva esplicito, come le altre password del pannello) e un quadratino
-// per ogni tasto della home (TASTI_HOME) — spuntarlo/togliere lo spunto
-// scrive subito su utenti_app, senza bisogno di un Salva a parte, così il
-// risultato in home è immediato
-function RigaUtenteApp({ utente, ricarica }) {
+// una riga della tabella "Gestione utenti": nome + password modificabili
+// (Salva esplicito) e un quadratino per ogni tasto della home
+// (TASTI_HOME) — spuntarlo/togliere lo spunto scrive subito su
+// utenti_app, senza bisogno di un Salva a parte, così il risultato in
+// home è immediato. Le 3 righe di sistema non ancora salvate (id nullo,
+// mostrate coi valori di sempre) vengono create al primo salvataggio
+function RigaTabellaUtente({ utente, ricarica }) {
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
   const [salvando, setSalvando] = useState(false);
   const [fatto, setFatto] = useState(false);
+  const sistema = !!utente.chiave_sistema;
 
+  async function persist(campi) {
+    if (utente.id) return supabase.from("utenti_app").update(campi).eq("id", utente.id);
+    return supabase.from("utenti_app").insert({
+      nome: utente.nome, password: utente.password, permessi: utente.permessi, chiave_sistema: utente.chiave_sistema || null, ...campi,
+    });
+  }
   async function salvaCampi() {
     if (!nome.trim() || !password.trim()) { window.alert("Nome e password non possono essere vuoti."); return; }
     setSalvando(true); setFatto(false);
-    const { error } = await supabase.from("utenti_app").update({ nome: nome.trim(), password: password.trim() }).eq("id", utente.id);
+    const { error } = await persist({ nome: nome.trim(), password: password.trim() });
     setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
     setFatto(true);
@@ -4132,81 +4145,124 @@ function RigaUtenteApp({ utente, ricarica }) {
   async function toggleTasto(chiave, checked) {
     const attuali = utente.permessi || [];
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
-    const { error } = await supabase.from("utenti_app").update({ permessi: nuovi }).eq("id", utente.id);
+    const { error } = await persist({ permessi: nuovi });
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
   async function elimina() {
+    if (!utente.id) return;
     if (!window.confirm(`Eliminare l'utente "${utente.nome}"? Non potrà più entrare nell'app con questa password.`)) return;
     const { error } = await supabase.from("utenti_app").delete().eq("id", utente.id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
 
+  const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
   return (
-    <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
-        <input style={{ ...inputStyle, maxWidth: 170 }} placeholder="Nome utente" value={nome} onChange={(e) => setNome(e.target.value)} />
-        <input style={{ ...inputStyle, maxWidth: 150 }} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <button
-          onClick={salvaCampi}
-          disabled={salvando}
-          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: salvando ? "default" : "pointer" }}
-        >
-          {salvando ? "Salvo…" : fatto ? "Salvato ✓" : "Salva"}
-        </button>
-        <button
-          onClick={elimina}
-          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "8px 12px", cursor: "pointer", marginLeft: "auto" }}
-        >
-          Elimina
-        </button>
-      </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-        {TASTI_HOME.map((t) => (
-          <label key={t.chiave} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: NAVY, cursor: "pointer" }}>
-            <input type="checkbox" checked={(utente.permessi || []).includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
-            {t.etichetta}
-          </label>
-        ))}
-      </div>
-    </div>
+    <tr>
+      <td style={tdStyle}>
+        <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 13, fontWeight: 700 }} />
+      </td>
+      <td style={tdStyle}>
+        <input value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
+      </td>
+      {TASTI_HOME.map((t) => (
+        <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
+          <input type="checkbox" checked={(utente.permessi || []).includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+        </td>
+      ))}
+      <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+          <button
+            onClick={salvaCampi}
+            disabled={salvando}
+            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "6px 10px", cursor: salvando ? "default" : "pointer" }}
+          >
+            {salvando ? "…" : fatto ? "✓" : "Salva"}
+          </button>
+          {!sistema && (
+            <button
+              onClick={elimina}
+              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
+            >
+              Elimina
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }
-// form per creare un nuovo utente nominale: nasce senza nessun tasto
-// spuntato (nessun accesso), da concedere subito dopo coi quadratini
-function FormNuovoUtenteApp({ ricarica }) {
-  const [nome, setNome] = useState("");
-  const [password, setPassword] = useState("");
+// tasto "Genera nuovo utente": crea subito una riga (nome/password
+// placeholder, nessun tasto spuntato) pronta da rinominare e configurare
+// direttamente nella tabella, senza un modulo separato da compilare prima
+function BottoneGeneraUtente({ utentiApp, ricarica }) {
   const [salvando, setSalvando] = useState(false);
-  async function aggiungi() {
-    if (!nome.trim() || !password.trim()) { window.alert("Inserisci nome e password del nuovo utente."); return; }
+  async function genera() {
     setSalvando(true);
-    const { error } = await supabase.from("utenti_app").insert({ nome: nome.trim(), password: password.trim(), permessi: [] });
+    const numero = utentiApp.filter((u) => !u.chiave_sistema).length + 1;
+    const password = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const { error } = await supabase.from("utenti_app").insert({ nome: `Nuovo utente ${numero}`, password, permessi: [] });
     setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setNome(""); setPassword("");
     ricarica();
   }
   return (
-    <div style={{ ...cardStyle, padding: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-      <input style={{ ...inputStyle, maxWidth: 170 }} placeholder="Nome nuovo utente" value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungi()} />
-      <input style={{ ...inputStyle, maxWidth: 150 }} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungi()} />
-      <button
-        onClick={aggiungi}
-        disabled={salvando}
-        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}
-      >
-        {salvando ? "Aggiungo…" : "+ Aggiungi utente"}
-      </button>
+    <button
+      onClick={genera}
+      disabled={salvando}
+      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "10px 16px", cursor: salvando ? "default" : "pointer", flexShrink: 0 }}
+    >
+      {salvando ? "Genero…" : "+ Genera nuovo utente"}
+    </button>
+  );
+}
+// tabella "Gestione utenti": una riga per ogni identità che può entrare
+// nell'app — le 3 di sistema (Utente generico/Amministratore/
+// Programmatore, sempre presenti, coi valori di sempre finché non
+// personalizzate) più gli utenti nominali creati col tasto qui sopra —
+// e una colonna per ogni tasto della home (TASTI_HOME): un tasto non
+// spuntato per una riga resta disattivato e non cliccabile in home per
+// chi entra con quella password, senza dover chiedere nessuna password
+function TabellaGestioneUtenti({ utentiApp, ricarica }) {
+  const righeSistema = RIGHE_SISTEMA_DEFAULT.map((def) => {
+    const esistente = utentiApp.find((u) => u.chiave_sistema === def.chiave);
+    return esistente || { id: null, chiave_sistema: def.chiave, nome: def.nome, password: def.passwordDefault, permessi: def.permessiDefault };
+  });
+  const righeNominali = utentiApp.filter((u) => !u.chiave_sistema);
+  const righe = [...righeSistema, ...righeNominali];
+  const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
+        <div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Gestione utenti</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Configura gli accessi alla home page per ogni utente.</div>
+        </div>
+        <BottoneGeneraUtente utentiApp={utentiApp} ricarica={ricarica} />
+      </div>
+      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginTop: 14 }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820 }}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Nome utente</th>
+              <th style={thStyle}>Password</th>
+              {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
+              <th style={thStyle}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} ricarica={ricarica} />)}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-// pannello dietro la rotellina in home (codice CODICE_ROTELLINA): imposta,
-// voce per voce, la password che sblocca ciascuna area protetta della
-// home — un modo per delegare l'accesso a una singola area senza dare il
-// codice amministratore generale, che invece continua a funzionare ovunque
+// pannello dietro la rotellina in home (codice CODICE_ROTELLINA): gestione
+// utenti e permessi, più la password di questa stessa rotellina
 function PaginaPasswordMenu({ passwordMenu, utentiApp, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
@@ -4218,51 +4274,30 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, ricarica, onBack }) {
   }
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+      <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Password menù</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di accesso all'app</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
-          Le password inserite nella schermata di ingresso. Cambiale qui in qualsiasi momento.
-        </div>
-        {PASSWORD_SISTEMA_MENU.map((v) => {
-          const riga = passwordMenu.find((p) => p.vista === v.vista);
-          return (
-            <div key={v.vista} style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
-              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 3 }}>{v.etichetta}</div>
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>{v.descrizione}</div>
-              <RigaPasswordMenu valoreDiDefault={riga?.password || v.fallback} onSalva={(pwd) => salvaPassword(v.vista, pwd)} />
-            </div>
-          );
-        })}
 
-        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 24 }}>Utenti e permessi</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
-          Ogni utente entra con la propria password e vede in home solo i tasti spuntati qui sotto — gli altri restano disattivati, non cliccabili, senza chiedere nessuna password. Aggiungendo in futuro una nuova area alla home, comparirà qui come nuovo quadratino per tutti gli utenti già creati.
-        </div>
-        {utentiApp.length === 0 && (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessun utente creato: tutti entrano ancora con la password utente generica qui sopra, che mostra tutti i tasti (protetti singolarmente al click).</div>
-        )}
-        {utentiApp.map((u) => <RigaUtenteApp key={u.id} utente={u} ricarica={ricarica} />)}
-        <div style={{ marginBottom: 24 }}>
-          <FormNuovoUtenteApp ricarica={ricarica} />
+        <div style={{ marginBottom: 28 }}>
+          <TabellaGestioneUtenti utentiApp={utentiApp} ricarica={ricarica} />
         </div>
 
-        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 24 }}>Password per singola voce del menù</div>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
-          Imposta una password per ogni voce protetta della home: chi la conosce entra solo in quella voce. Il codice amministratore generale continua a funzionare ovunque, in aggiunta. Campo vuoto = resta valido solo il codice amministratore.
+        <div style={{ maxWidth: 400 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di questa rotellina</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+            Il codice per aprire questo stesso pannello e gestire utenti e permessi.
+          </div>
+          {PASSWORD_SISTEMA_MENU.map((v) => {
+            const riga = passwordMenu.find((p) => p.vista === v.vista);
+            return (
+              <div key={v.vista} style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+                <RigaPasswordMenu valoreDiDefault={riga?.password || v.fallback} onSalva={(pwd) => salvaPassword(v.vista, pwd)} />
+              </div>
+            );
+          })}
         </div>
-        {VISTE_PROTETTE_MENU.map((v) => {
-          const riga = passwordMenu.find((p) => p.vista === v.vista);
-          return (
-            <div key={v.vista} style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
-              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{v.etichetta}</div>
-              <RigaPasswordMenu valoreDiDefault={riga?.password || ""} onSalva={(pwd) => salvaPassword(v.vista, pwd)} />
-            </div>
-          );
-        })}
         {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
       </div>
     </div>
@@ -8464,24 +8499,23 @@ const TASTI_HOME = [
   { chiave: "statistiche", etichetta: "Statistiche" },
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
-// le voci della home protette da apriViewProtetta, gestibili dalla rotellina
-const VISTE_PROTETTE_MENU = [
-  { vista: "gestionedate", etichetta: "Gestione corsi" },
-  { vista: "erp", etichetta: "ERP / Magazzino" },
-  { vista: "generazioneloghi", etichetta: "Assegna logo" },
-  { vista: "gestionemodelle", etichetta: "Gestione modelle" },
-  { vista: "statistiche", etichetta: "Statistiche" },
-  { vista: "impostazioni", etichetta: "Setting" },
-];
-// le 4 password "di sistema": accesso generale (Gate), amministratore,
-// programmatore (entra ovunque senza reinserire nulla) e quella per
-// aprire questa stessa rotellina — modificabili qui, con fallback al
-// valore di sempre finché non viene impostato qualcosa di personalizzato
+// unica password "di sistema" rimasta fuori dalla tabella "Gestione
+// utenti" (Utente generico/Amministratore/Programmatore sono righe di
+// quella tabella, in utenti_app): il codice per aprire questa stessa
+// rotellina, apposta separato dagli altri così anche chi lo conosce non
+// ha automaticamente accesso a tutto il resto
 const PASSWORD_SISTEMA_MENU = [
-  { vista: "__user", etichetta: "Password utente (accesso generale)", fallback: ACCESS_CODE, descrizione: "La password che usano tutti per entrare nell'app. Chi entra con questa vede \"User\" in alto." },
-  { vista: "__admin", etichetta: "Password amministratore", fallback: ADMIN_CODE, descrizione: "Chi entra con questa (\"ED26\" di default) vede subito tutte le voci protette tranne Statistiche e questa rotellina, senza dover reinserire nessuna password." },
-  { vista: "__programmatore", etichetta: "Password programmatore", fallback: "1234", descrizione: "Entra ovunque nell'app senza dover reinserire nessun'altra password, nemmeno per le voci protette." },
-  { vista: "__rotellina", etichetta: "Password di questa rotellina", fallback: CODICE_ROTELLINA, descrizione: "Il codice per aprire questo stesso pannello e cambiare tutte le password." },
+  { vista: "__rotellina", etichetta: "Password di questa rotellina", fallback: CODICE_ROTELLINA, descrizione: "Il codice per aprire questo stesso pannello e gestire utenti e permessi." },
+];
+// righe "di sistema" della tabella Gestione utenti: Utente generico,
+// Amministratore, Programmatore. Esistono sempre (non si possono
+// eliminare) e finché non vengono salvate almeno una volta in
+// utenti_app (chiave_sistema valorizzata) si mostrano con questi valori
+// di sempre — stesso comportamento di prima del login nominale
+const RIGHE_SISTEMA_DEFAULT = [
+  { chiave: "__user", nome: "Utente generico", passwordDefault: ACCESS_CODE, permessiDefault: ["dashboardvenditori"] },
+  { chiave: "__admin", nome: "Amministratore", passwordDefault: ADMIN_CODE, permessiDefault: TASTI_HOME.filter((t) => t.chiave !== "statistiche").map((t) => t.chiave) },
+  { chiave: "__programmatore", nome: "Programmatore", passwordDefault: "1234", permessiDefault: TASTI_HOME.map((t) => t.chiave) },
 ];
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
@@ -15753,10 +15787,18 @@ export default function App() {
   // venditore entra, venditoreLoggato blocca la Dashboard venditori sui
   // suoi soli dati; se entra con il codice amministratore, venditoreLoggato
   // resta null e la Dashboard si apre sbloccata (tendina "scegli venditore")
-  // password di sistema (Amministratore/Programmatore/rotellina): valore
-  // impostato dalla rotellina se presente, altrimenti quello di sempre
+  // password di sistema (solo __rotellina resta qui: le altre 3 vivono in
+  // utenti_app, vedi passwordAmministratoreAttuale) — valore impostato
+  // dalla rotellina se presente, altrimenti quello di sempre
   function passwordSistema(chiave, fallback) {
     return passwordMenu.find((p) => p.vista === chiave)?.password || fallback;
+  }
+  // password Amministratore attualmente valida (da utenti_app, riga
+  // chiave_sistema="__admin"): usata come "codice universale" di riserva
+  // per le sezioni più interne (es. sotto-voci di ERP/Impostazioni) non
+  // ancora tra i tasti configurabili della home
+  function passwordAmministratoreAttuale() {
+    return utentiApp.find((u) => u.chiave_sistema === "__admin")?.password || ADMIN_CODE;
   }
   function apriLoginVenditore() {
     // il Programmatore entra ovunque senza reinserire nessuna password
@@ -15781,48 +15823,34 @@ export default function App() {
     setUtenteLoggato(null);
   }
   // true se il tasto (chiave in TASTI_HOME) è cliccabile in home per chi
-  // ha fatto accesso ora: Programmatore sempre, Amministratore tutto
-  // tranne Statistiche, un utente nominale solo se il tasto è tra i suoi
-  // permessi (spuntati dalla rotellina), altrimenti — accesso con la
-  // password generica di sistema, nessun utente nominale riconosciuto —
-  // tutti i tasti restano visibili come prima, protetti singolarmente
-  // dalla password per-voce al momento del click
+  // ha fatto accesso ora: dipende solo dai "permessi" della riga di
+  // utenti_app corrispondente a chi è loggato (utenteLoggato) — sia essa
+  // una delle 3 righe di sistema (Utente generico/Amministratore/
+  // Programmatore, coi valori di sempre finché non personalizzate dalla
+  // rotellina) sia un utente nominale creato apposta
   function tastoAbilitato(chiave) {
-    if (ruoloUtente === "programmatore") return true;
-    if (ruoloUtente === "amministratore") return chiave !== "statistiche";
-    if (utenteLoggato) return (utenteLoggato.permessi || []).includes(chiave);
-    return true;
+    return !!(utenteLoggato && (utenteLoggato.permessi || []).includes(chiave));
   }
-  // Ogni voce protetta ha il proprio sblocco di sessione (edc_ok_<vista>):
-  // entrare in una non sblocca automaticamente le altre. La password
-  // richiesta è quella impostata per quella vista nella rotellina
-  // (Impostazioni > password menù); se non è stata impostata, o se si
-  // digita comunque il codice amministratore generale, funziona sempre
-  // anche quello, come prima. Il Programmatore salta subito la richiesta.
-  // L'Amministratore (password "ED26" di default) salta anche lui la
-  // richiesta per tutto TRANNE Statistiche, che resta fuori portata anche
-  // per lui. Un utente nominale (utenti_app) salta la richiesta per i
-  // tasti tra i suoi permessi — l'accesso è già deciso dai quadratini
-  // spuntati nella rotellina, niente più password ripetute per lui. Solo
-  // chi è entrato con la password generica di sistema (nessun utente
-  // nominale riconosciuto) vede ancora il prompt password per le singole
-  // voci, come sempre
+  // Le viste che sono anche un tasto della home (TASTI_HOME) non
+  // chiedono più nessuna password: l'accesso è già deciso dai permessi
+  // di chi ha fatto login (in teoria il tasto è già disabilitato in home
+  // se non permesso, qui si ricontrolla solo per sicurezza). Le viste più
+  // interne che non sono tasti della home (es. sotto-sezioni di ERP o
+  // Impostazioni) restano protette come prima: bypass automatico per
+  // Programmatore e Amministratore, altrimenti il classico prompt
+  // password (per-voce, o il codice Amministratore attuale come fallback)
   function apriViewProtetta(nomeView) {
     if (ruoloUtente === "programmatore") { setView(nomeView); return; }
-    if (ruoloUtente === "amministratore") {
-      if (nomeView === "statistiche") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
-      setView(nomeView);
+    if (TASTI_HOME.some((t) => t.chiave === nomeView)) {
+      if (utenteLoggato && (utenteLoggato.permessi || []).includes(nomeView)) setView(nomeView);
       return;
     }
-    if (utenteLoggato) {
-      if ((utenteLoggato.permessi || []).includes(nomeView)) setView(nomeView);
-      return;
-    }
+    if (ruoloUtente === "amministratore") { setView(nomeView); return; }
     const chiaveSessione = "edc_ok_" + nomeView;
     if (sessionStorage.getItem(chiaveSessione) === "1") { setView(nomeView); return; }
     const rigaPassword = passwordMenu.find((p) => p.vista === nomeView);
     const codiceRichiesto = (rigaPassword?.password || "").trim();
-    const codiceAdmin = passwordSistema("__admin", ADMIN_CODE);
+    const codiceAdmin = passwordAmministratoreAttuale();
     const codice = window.prompt("Codice per accedere:");
     if (codice === null) return;
     if (codiceRichiesto && codice === codiceRichiesto) {
@@ -15837,15 +15865,15 @@ export default function App() {
     }
   }
   // rotellina in home: codice distinto da quello amministratore (anche lui
-  // modificabile qui dentro), apre il pannello dove impostare tutte le
-  // password di sistema, i permessi degli utenti nominali e quelle delle
-  // singole voci del menù. Il Programmatore salta subito la richiesta;
-  // l'Amministratore e qualunque utente nominale ne restano sempre esclusi
-  // (solo chi conosce la password del Programmatore può cambiare permessi
-  // e password), lo User con la password generica vede il prompt come sempre
+  // modificabile qui dentro), apre il pannello dove gestire utenti,
+  // permessi e questa stessa password. Il Programmatore salta subito la
+  // richiesta; l'Amministratore e qualunque utente nominale ne restano
+  // sempre esclusi (solo chi conosce la password del Programmatore può
+  // cambiare permessi e password); lo Utente generico vede il prompt come sempre
   function apriRotellinaPassword() {
     if (ruoloUtente === "programmatore") { setView("passwordmenu"); return; }
-    if (ruoloUtente === "amministratore" || utenteLoggato) { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
+    if (ruoloUtente === "amministratore") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
+    if (utenteLoggato && utenteLoggato.chiave_sistema !== "__user") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
     const codiceRichiesto = passwordSistema("__rotellina", CODICE_ROTELLINA);
     const codice = window.prompt("Codice per impostare le password del menù:");
     if (codice === null) return;
@@ -15983,7 +16011,7 @@ export default function App() {
       )}
 
       {mostraLoginVenditore && (
-        <ModaleLoginVenditore venditori={venditori} onClose={() => setMostraLoginVenditore(false)} onEntra={onEntraVenditore} codiceAdmin={passwordSistema("__admin", ADMIN_CODE)} />
+        <ModaleLoginVenditore venditori={venditori} onClose={() => setMostraLoginVenditore(false)} onEntra={onEntraVenditore} codiceAdmin={passwordAmministratoreAttuale()} />
       )}
 
       {view === "archivio" && (
