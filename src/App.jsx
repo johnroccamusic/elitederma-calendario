@@ -2429,8 +2429,74 @@ function PaginaDashboardVenditori({
   }, [iscritti, venditoreSel, range, corsoDataById]);
 
   const numeroChiusure = chiusure.length;
-  const valoreVenduto = round2(chiusure.reduce((s, { iscritto }) => s + (iscritto.totale_pattuito || 0), 0));
   const commissioniGenerate = round2(chiusure.reduce((s, { iscritto }) => s + (iscritto.quota_venditore || 0), 0));
+
+  // periodo immediatamente precedente a quello scelto, stessa durata:
+  // mese prima se "Ultimo mese", trimestre prima se "Ultimo trimestre",
+  // altrimenti (personalizzato) lo stesso numero di giorni appena prima
+  // dell'inizio scelto — dà un confronto, non solo il numero assoluto
+  const rangePrecedente = useMemo(() => {
+    const oggi = new Date();
+    if (periodo === "mese") {
+      return { inizio: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() - 1, 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 0)) };
+    }
+    if (periodo === "trimestre") {
+      const t = Math.floor(oggi.getMonth() / 3);
+      return { inizio: fmtDataIso(new Date(oggi.getFullYear(), (t - 1) * 3, 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), t * 3, 0)) };
+    }
+    const [ay, am, ad] = range.inizio.split("-").map(Number);
+    const [by, bm, bd] = range.fine.split("-").map(Number);
+    const inizioCorrente = new Date(ay, am - 1, ad);
+    const fineCorrente = new Date(by, bm - 1, bd);
+    const giorni = Math.round((fineCorrente - inizioCorrente) / 86400000) + 1;
+    const finePrecedente = new Date(inizioCorrente);
+    finePrecedente.setDate(finePrecedente.getDate() - 1);
+    const inizioPrecedente = new Date(finePrecedente);
+    inizioPrecedente.setDate(inizioPrecedente.getDate() - (giorni - 1));
+    return { inizio: fmtDataIso(inizioPrecedente), fine: fmtDataIso(finePrecedente) };
+  }, [periodo, range]);
+  const etichettaPeriodoPrecedente = periodo === "mese" ? "Mese precedente" : periodo === "trimestre" ? "Trimestre precedente" : "Periodo precedente";
+  const numeroChiusurePrecedenti = useMemo(() => {
+    if (!venditoreSel) return 0;
+    const nomeNorm = venditoreSel.nome.trim().toUpperCase();
+    return iscritti
+      .filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm)
+      .filter((i) => !i.vecchia_iscrizione)
+      .filter((i) => {
+        const d = (i.ts || "").slice(0, 10);
+        return d >= rangePrecedente.inizio && d <= rangePrecedente.fine;
+      }).length;
+  }, [iscritti, venditoreSel, rangePrecedente]);
+
+  // "Performance" al posto del semplice valore venduto: stima quanto sono
+  // di valore le chiusure di questo venditore, confrontando la sua
+  // commissione media per chiusura con quella media di TUTTI i venditori
+  // nello stesso periodo — chi chiude corsi con commissioni più alte
+  // (in proporzione) ha una performance "Alta", chi chiude molti corsetti
+  // di poco valore ha "Bassa", indipendentemente dal numero di chiusure
+  const commissioneMediaVenditore = numeroChiusure > 0 ? commissioniGenerate / numeroChiusure : 0;
+  const commissioneMediaGenerale = useMemo(() => {
+    const chiusureTutti = iscritti
+      .filter((i) => (i.tutor || "").trim() !== "")
+      .filter((i) => !i.vecchia_iscrizione)
+      .filter((i) => {
+        const d = (i.ts || "").slice(0, 10);
+        return d >= range.inizio && d <= range.fine;
+      });
+    if (chiusureTutti.length === 0) return 0;
+    return chiusureTutti.reduce((s, i) => s + (i.quota_venditore || 0), 0) / chiusureTutti.length;
+  }, [iscritti, range]);
+  let livelloPerformance = "—", colorePerformance = MUTED;
+  if (numeroChiusure > 0) {
+    if (commissioneMediaGenerale <= 0) {
+      livelloPerformance = "Media"; colorePerformance = NAVY;
+    } else {
+      const rapporto = commissioneMediaVenditore / commissioneMediaGenerale;
+      if (rapporto >= 1.15) { livelloPerformance = "Alta"; colorePerformance = "#2E7D32"; }
+      else if (rapporto <= 0.85) { livelloPerformance = "Bassa"; colorePerformance = "#C0392B"; }
+      else { livelloPerformance = "Media"; colorePerformance = NAVY; }
+    }
+  }
   // la commissione diventa incassabile da sola alla fine del corso (stessa
   // logica già usata per "Archivio corsi", nessun interruttore manuale):
   // finché il corso non è concluso resta "in arrivo"
@@ -2542,10 +2608,12 @@ function PaginaDashboardVenditori({
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Chiusure</div>
                 <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{numeroChiusure}</div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{etichettaPeriodoPrecedente}: {numeroChiusurePrecedenti}</div>
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore venduto</div>
-                <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreVenduto)}</div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Performance</div>
+                <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: colorePerformance }}>{livelloPerformance}</div>
+                {numeroChiusure > 0 && <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{fmtEuroErp(round2(commissioneMediaVenditore))} commissione media</div>}
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Commissioni generate</div>
