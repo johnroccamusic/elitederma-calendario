@@ -857,16 +857,16 @@ function TileHome({ title, attivo = true, onClick }) {
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
       style={{
-        ...fontBody, textAlign: "left", width: "100%", boxSizing: "border-box", aspectRatio: isMobile ? "1.9" : "1", position: "relative",
+        ...fontBody, textAlign: "left", width: "100%", boxSizing: "border-box", aspectRatio: "1", position: "relative",
         display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0,
-        background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 16,
-        padding: isMobile ? "10px 14px" : 22, cursor: attivo ? "pointer" : "default",
+        background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 10 : 16,
+        padding: isMobile ? "8px 10px" : 22, cursor: attivo ? "pointer" : "default",
       }}
     >
       {!attivo && (
-        <span style={{ position: "absolute", top: isMobile ? 8 : 16, right: isMobile ? 10 : 18, ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED }}>Non attivo</span>
+        <span style={{ position: "absolute", top: isMobile ? 6 : 16, right: isMobile ? 8 : 18, ...fontBody, fontSize: isMobile ? 8 : 11, color: MUTED }}>Non attivo</span>
       )}
-      <span style={{ ...fontDisplay, fontSize: isMobile ? 16 : 22, fontWeight: 700, lineHeight: 1.2, color: attivo ? NAVY : MUTED }}>{title}</span>
+      <span style={{ ...fontDisplay, fontSize: isMobile ? 13 : 22, fontWeight: 700, lineHeight: 1.15, color: attivo ? NAVY : MUTED }}>{title}</span>
     </button>
   );
 }
@@ -1257,6 +1257,7 @@ function TopBar({ title }) {
 function Gate({ onOk }) {
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
+  const [verificando, setVerificando] = useState(false);
   const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(VITE_SUPABASE_URL non impostata)";
   return (
     <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", textAlign: "center" }}>
@@ -1272,7 +1273,7 @@ function Gate({ onOk }) {
           style={{ ...inputStyle, width: "100%", textAlign: "center", marginBottom: 12 }}
           onKeyDown={(e) => e.key === "Enter" && check()}
         />
-        <Button onClick={check} style={{ width: "100%" }}>Entra</Button>
+        <Button onClick={check} disabled={verificando} style={{ width: "100%" }}>{verificando ? "Verifico…" : "Entra"}</Button>
         {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
       </div>
       <div>
@@ -1285,11 +1286,31 @@ function Gate({ onOk }) {
       </div>
     </div>
   );
-  function check() {
-    if (!ACCESS_CODE || code === ACCESS_CODE) {
+  // le 3 password di accesso (User generico, Amministratore, Programmatore)
+  // sono impostabili dalla rotellina e vivono in password_menu — qui, prima
+  // del login, non sono ancora caricate in memoria (fetchDati parte solo
+  // dopo essere entrati), quindi si interrogano al volo con una query
+  // dedicata; se non è mai stata impostata una versione personalizzata si
+  // ricade sui valori di sempre (env var, o "1234" per il Programmatore)
+  async function check() {
+    setVerificando(true);
+    const { data } = await supabase.from("password_menu").select("vista, password").in("vista", ["__user", "__admin", "__programmatore"]);
+    setVerificando(false);
+    const valoreDi = (v) => (data || []).find((r) => r.vista === v)?.password;
+    const pwProgrammatore = valoreDi("__programmatore") || "1234";
+    const pwAmministratore = valoreDi("__admin") || ADMIN_CODE;
+    const pwUser = valoreDi("__user") || ACCESS_CODE;
+    let ruolo = null;
+    if (pwProgrammatore && code === pwProgrammatore) ruolo = "programmatore";
+    else if (pwAmministratore && code === pwAmministratore) ruolo = "amministratore";
+    else if (!pwUser || code === pwUser) ruolo = "user";
+    if (ruolo) {
       sessionStorage.setItem("edc_ok", "1");
-      onOk();
-    } else setErr(true);
+      sessionStorage.setItem("edc_ruolo", ruolo);
+      onOk(ruolo);
+    } else {
+      setErr(true);
+    }
   }
 }
 
@@ -2296,7 +2317,7 @@ function SezioneDateCorsi({
 // la Dashboard resta "sbloccata", con la tendina per scegliere
 // qualunque venditore — così l'amministratore non perde la possibilità
 // di controllare le performance di tutti.
-function ModaleLoginVenditore({ venditori, onClose, onEntra }) {
+function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
   const [venditoreId, setVenditoreId] = useState("");
   const [password, setPassword] = useState("");
   const [errore, setErrore] = useState("");
@@ -2306,7 +2327,7 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra }) {
     if (!venditoreId) { setErrore("Scegli il tuo nome."); return; }
     if (!password) { setErrore("Scrivi la password."); return; }
     setErrore(""); setVerificando(true);
-    if (ADMIN_CODE && password === ADMIN_CODE) {
+    if (codiceAdmin && password === codiceAdmin) {
       setVerificando(false);
       onEntra({ modalitaAdmin: true });
       return;
@@ -3329,6 +3350,22 @@ function PaginaPasswordMenu({ passwordMenu, ricarica, onBack }) {
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Password menù</div>
         </div>
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di accesso all'app</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+          Le password inserite nella schermata di ingresso. Cambiale qui in qualsiasi momento.
+        </div>
+        {PASSWORD_SISTEMA_MENU.map((v) => {
+          const riga = passwordMenu.find((p) => p.vista === v.vista);
+          return (
+            <div key={v.vista} style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 3 }}>{v.etichetta}</div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>{v.descrizione}</div>
+              <RigaPasswordMenu valoreDiDefault={riga?.password || v.fallback} onSalva={(pwd) => salvaPassword(v.vista, pwd)} />
+            </div>
+          );
+        })}
+
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 24 }}>Password per singola voce del menù</div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
           Imposta una password per ogni voce protetta della home: chi la conosce entra solo in quella voce. Il codice amministratore generale continua a funzionare ovunque, in aggiunta. Campo vuoto = resta valido solo il codice amministratore.
         </div>
@@ -6358,8 +6395,9 @@ function useZoomScheda() {
   }
   const bottoneStyle = { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, fontSize: 15, fontWeight: 700, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
   const controlli = (
-    <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 4, zIndex: 1 }}>
+    <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, zIndex: 1 }}>
       <button onClick={() => cambiaZoom(-8)} title="Rimpicciolisci il testo" style={bottoneStyle}>−</button>
+      <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, minWidth: 30, textAlign: "center" }}>{zoom}%</span>
       <button onClick={() => cambiaZoom(8)} title="Ingrandisci il testo" style={bottoneStyle}>+</button>
     </div>
   );
@@ -7447,6 +7485,16 @@ const VISTE_PROTETTE_MENU = [
   { vista: "gestionemodelle", etichetta: "Gestione modelle" },
   { vista: "statistiche", etichetta: "Statistiche" },
   { vista: "impostazioni", etichetta: "Setting" },
+];
+// le 4 password "di sistema": accesso generale (Gate), amministratore,
+// programmatore (entra ovunque senza reinserire nulla) e quella per
+// aprire questa stessa rotellina — modificabili qui, con fallback al
+// valore di sempre finché non viene impostato qualcosa di personalizzato
+const PASSWORD_SISTEMA_MENU = [
+  { vista: "__user", etichetta: "Password utente (accesso generale)", fallback: ACCESS_CODE, descrizione: "La password che usano tutti per entrare nell'app. Chi entra con questa vede \"User\" in alto." },
+  { vista: "__admin", etichetta: "Password amministratore", fallback: ADMIN_CODE, descrizione: "Sblocca le voci protette (Gestione corsi, ERP, Assegna logo, Gestione modelle, Statistiche, Setting) una per volta." },
+  { vista: "__programmatore", etichetta: "Password programmatore", fallback: "1234", descrizione: "Entra ovunque nell'app senza dover reinserire nessun'altra password, nemmeno per le voci protette." },
+  { vista: "__rotellina", etichetta: "Password di questa rotellina", fallback: CODICE_ROTELLINA, descrizione: "Il codice per aprire questo stesso pannello e cambiare tutte le password." },
 ];
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
@@ -14369,6 +14417,10 @@ export default function App() {
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
+  // chi ha fatto accesso: "user" (password generica, tutti), "amministratore"
+  // o "programmatore" (entra ovunque senza dover reinserire nessun'altra
+  // password) — deciso dal Gate in base a quale delle password corrisponde
+  const [ruoloUtente, setRuoloUtente] = useState(sessionStorage.getItem("edc_ruolo") || "user");
   const isMobile = useIsMobile();
   const [view, setView] = useState("home");
   // login venditore dalla home: vanno dichiarati qui (prima dei return
@@ -14645,7 +14697,7 @@ export default function App() {
     };
   }, [pilaIndietro, pilaAvanti]);
 
-  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={() => setOk(true)} /></div>;
+  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo) => { setRuoloUtente(ruolo); setOk(true); }} /></div>;
 
   if (loading) {
     return (
@@ -14678,7 +14730,16 @@ export default function App() {
   // venditore entra, venditoreLoggato blocca la Dashboard venditori sui
   // suoi soli dati; se entra con il codice amministratore, venditoreLoggato
   // resta null e la Dashboard si apre sbloccata (tendina "scegli venditore")
-  function apriLoginVenditore() { setMostraLoginVenditore(true); }
+  // password di sistema (Amministratore/Programmatore/rotellina): valore
+  // impostato dalla rotellina se presente, altrimenti quello di sempre
+  function passwordSistema(chiave, fallback) {
+    return passwordMenu.find((p) => p.vista === chiave)?.password || fallback;
+  }
+  function apriLoginVenditore() {
+    // il Programmatore entra ovunque senza reinserire nessuna password
+    if (ruoloUtente === "programmatore") { setVenditoreLoggato(null); setView("dashboardvenditori"); return; }
+    setMostraLoginVenditore(true);
+  }
   function onEntraVenditore({ modalitaAdmin, venditoreId, nome }) {
     setMostraLoginVenditore(false);
     setVenditoreLoggato(modalitaAdmin ? null : { id: venditoreId, nome });
@@ -14690,6 +14751,7 @@ export default function App() {
   function esci() {
     sessionStorage.removeItem("edc_ok");
     sessionStorage.removeItem("edc_admin_ok");
+    sessionStorage.removeItem("edc_ruolo");
     Object.keys(sessionStorage).filter((k) => k.startsWith("edc_ok_")).forEach((k) => sessionStorage.removeItem(k));
     setOk(false);
   }
@@ -14698,18 +14760,20 @@ export default function App() {
   // richiesta è quella impostata per quella vista nella rotellina
   // (Impostazioni > password menù); se non è stata impostata, o se si
   // digita comunque il codice amministratore generale, funziona sempre
-  // anche quello, come prima.
+  // anche quello, come prima. Il Programmatore salta subito la richiesta.
   function apriViewProtetta(nomeView) {
+    if (ruoloUtente === "programmatore") { setView(nomeView); return; }
     const chiaveSessione = "edc_ok_" + nomeView;
     if (sessionStorage.getItem(chiaveSessione) === "1") { setView(nomeView); return; }
     const rigaPassword = passwordMenu.find((p) => p.vista === nomeView);
     const codiceRichiesto = (rigaPassword?.password || "").trim();
+    const codiceAdmin = passwordSistema("__admin", ADMIN_CODE);
     const codice = window.prompt("Codice per accedere:");
     if (codice === null) return;
     if (codiceRichiesto && codice === codiceRichiesto) {
       sessionStorage.setItem(chiaveSessione, "1");
       setView(nomeView);
-    } else if (ADMIN_CODE && codice === ADMIN_CODE) {
+    } else if (codiceAdmin && codice === codiceAdmin) {
       sessionStorage.setItem(chiaveSessione, "1");
       sessionStorage.setItem("edc_admin_ok", "1");
       setView(nomeView);
@@ -14717,12 +14781,16 @@ export default function App() {
       window.alert("Codice non corretto.");
     }
   }
-  // rotellina in home: codice fisso e distinto dall'ADMIN_CODE, apre il
-  // pannello dove impostare le password delle singole voci del menù
+  // rotellina in home: codice distinto da quello amministratore (anche lui
+  // modificabile qui dentro), apre il pannello dove impostare tutte le
+  // password di sistema e quelle delle singole voci del menù. Il
+  // Programmatore salta subito la richiesta.
   function apriRotellinaPassword() {
+    if (ruoloUtente === "programmatore") { setView("passwordmenu"); return; }
+    const codiceRichiesto = passwordSistema("__rotellina", CODICE_ROTELLINA);
     const codice = window.prompt("Codice per impostare le password del menù:");
     if (codice === null) return;
-    if (codice === CODICE_ROTELLINA) {
+    if (codice === codiceRichiesto) {
       setView("passwordmenu");
     } else {
       window.alert("Codice non corretto.");
@@ -14834,7 +14902,7 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: isMobile ? 8 : 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: isMobile ? 12 : 28 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 1.2 }}>ELITEDERMA</div>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>Amministratore</span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{toTitleCase(ruoloUtente)}</span>
               <button onClick={esci} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0 }}>Esci</button>
             </div>
           </div>
@@ -14842,7 +14910,7 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestionale Academy</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 14 }}>
             <TileHome title="Gestione corsi" onClick={apriGestioneDate} />
             <TileHome title="Dashboard venditori" onClick={apriLoginVenditore} />
             <TileHome title="ERP / Magazzino" onClick={apriErp} />
@@ -14856,7 +14924,7 @@ export default function App() {
       )}
 
       {mostraLoginVenditore && (
-        <ModaleLoginVenditore venditori={venditori} onClose={() => setMostraLoginVenditore(false)} onEntra={onEntraVenditore} />
+        <ModaleLoginVenditore venditori={venditori} onClose={() => setMostraLoginVenditore(false)} onEntra={onEntraVenditore} codiceAdmin={passwordSistema("__admin", ADMIN_CODE)} />
       )}
 
       {view === "archivio" && (
