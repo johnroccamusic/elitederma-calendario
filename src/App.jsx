@@ -2461,47 +2461,29 @@ function PaginaDashboardVenditori({
     return { inizio: fmtDataIso(inizioPrecedente), fine: fmtDataIso(finePrecedente) };
   }, [periodo, range]);
   const etichettaPeriodoPrecedente = periodo === "mese" ? "Mese precedente" : periodo === "trimestre" ? "Trimestre precedente" : "Periodo precedente";
-  const numeroChiusurePrecedenti = useMemo(() => {
-    if (!venditoreSel) return 0;
+  const statsPrecedenti = useMemo(() => {
+    if (!venditoreSel) return { count: 0, commissioni: 0 };
     const nomeNorm = venditoreSel.nome.trim().toUpperCase();
-    return iscritti
+    const righe = iscritti
       .filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm)
       .filter((i) => !i.vecchia_iscrizione)
       .filter((i) => {
         const d = (i.ts || "").slice(0, 10);
         return d >= rangePrecedente.inizio && d <= rangePrecedente.fine;
-      }).length;
-  }, [iscritti, venditoreSel, rangePrecedente]);
-
-  // "Performance" al posto del semplice valore venduto: stima quanto sono
-  // di valore le chiusure di questo venditore, confrontando la sua
-  // commissione media per chiusura con quella media di TUTTI i venditori
-  // nello stesso periodo — chi chiude corsi con commissioni più alte
-  // (in proporzione) ha una performance "Alta", chi chiude molti corsetti
-  // di poco valore ha "Bassa", indipendentemente dal numero di chiusure
-  const commissioneMediaVenditore = numeroChiusure > 0 ? commissioniGenerate / numeroChiusure : 0;
-  const commissioneMediaGenerale = useMemo(() => {
-    const chiusureTutti = iscritti
-      .filter((i) => (i.tutor || "").trim() !== "")
-      .filter((i) => !i.vecchia_iscrizione)
-      .filter((i) => {
-        const d = (i.ts || "").slice(0, 10);
-        return d >= range.inizio && d <= range.fine;
       });
-    if (chiusureTutti.length === 0) return 0;
-    return chiusureTutti.reduce((s, i) => s + (i.quota_venditore || 0), 0) / chiusureTutti.length;
-  }, [iscritti, range]);
-  let livelloPerformance = "—", colorePerformance = MUTED;
-  if (numeroChiusure > 0) {
-    if (commissioneMediaGenerale <= 0) {
-      livelloPerformance = "Media"; colorePerformance = NAVY;
-    } else {
-      const rapporto = commissioneMediaVenditore / commissioneMediaGenerale;
-      if (rapporto >= 1.15) { livelloPerformance = "Alta"; colorePerformance = "#2E7D32"; }
-      else if (rapporto <= 0.85) { livelloPerformance = "Bassa"; colorePerformance = "#C0392B"; }
-      else { livelloPerformance = "Media"; colorePerformance = NAVY; }
-    }
-  }
+    return { count: righe.length, commissioni: righe.reduce((s, i) => s + (i.quota_venditore || 0), 0) };
+  }, [iscritti, venditoreSel, rangePrecedente]);
+  const numeroChiusurePrecedenti = statsPrecedenti.count;
+
+  // "Performance" = commissione media per chiusura (somma commissioni /
+  // numero chiusure), col confronto in % rispetto allo stesso valore nel
+  // periodo precedente — niente più fasce fisse Alta/Media/Bassa, il
+  // numero e la sua variazione parlano da soli
+  const commissioneMediaVenditore = numeroChiusure > 0 ? commissioniGenerate / numeroChiusure : 0;
+  const commissioneMediaPrecedente = statsPrecedenti.count > 0 ? statsPrecedenti.commissioni / statsPrecedenti.count : 0;
+  const variazionePerformance = numeroChiusure > 0 && commissioneMediaPrecedente > 0
+    ? Math.round(((commissioneMediaVenditore - commissioneMediaPrecedente) / commissioneMediaPrecedente) * 100)
+    : null;
   // la commissione diventa incassabile da sola alla fine del corso (stessa
   // logica già usata per "Archivio corsi", nessun interruttore manuale):
   // finché il corso non è concluso resta "in arrivo"
@@ -2577,17 +2559,44 @@ function PaginaDashboardVenditori({
       posizione: i + 1,
       trendPosizioni: r.corsi > 0 && posPrecCorsiById[r.venditore.id] ? posPrecCorsiById[r.venditore.id] - (i + 1) : null,
     }));
-    const ticketRanked = corrente.slice().sort((a, b) => b.ticketMedio - a.ticketMedio).map((r, i) => {
-      const prec = precedenteById[r.venditore.id];
-      const trendPct = r.ticketMedio > 0 && prec && prec.ticketMedio > 0 ? Math.round(((r.ticketMedio - prec.ticketMedio) / prec.ticketMedio) * 100) : null;
-      return { ...r, posizione: i + 1, trendPct };
-    });
 
-    const conCorsi = corrente.filter((r) => r.corsi > 0);
+    // Performance = ticket medio "corretto" per il volume di vendite
+    // (Bayesian shrinkage verso la media del team, così un campione di
+    // 2-3 vendite di alto valore non scavalca chi ne ha chiuse molte di
+    // più) più un indice di volume, pesati 60/40 — calcolata sul proprio
+    // mese per non far dipendere il confronto da baseline diverse
+    function calcolaPerformance(righeMese) {
+      const attivi = righeMese.filter((r) => r.corsi > 0);
+      const venditeTotali = attivi.reduce((s, r) => s + r.corsi, 0);
+      const fatturatoTotale = attivi.reduce((s, r) => s + r.valore, 0);
+      const numeroVenditoriAttivi = attivi.length;
+      if (venditeTotali === 0 || numeroVenditoriAttivi === 0) return { righe: [], mediaPerformance: 0 };
+      const ticketMedioTeam = fatturatoTotale / venditeTotali;
+      const venditeMedieTeam = venditeTotali / numeroVenditoriAttivi;
+      const righe = attivi.map((r) => {
+        const n = r.corsi;
+        const ticketMedioAggiustato = (n * r.ticketMedio + venditeMedieTeam * ticketMedioTeam) / (n + venditeMedieTeam);
+        const indiceQualita = (ticketMedioAggiustato / ticketMedioTeam) * 100;
+        const indiceVolume = (n / venditeMedieTeam) * 100;
+        return { ...r, performance: indiceQualita * 0.6 + indiceVolume * 0.4 };
+      });
+      const mediaPerformance = righe.reduce((s, r) => s + r.performance, 0) / righe.length;
+      return { righe, mediaPerformance };
+    }
+    const perfCorrente = calcolaPerformance(corrente);
+    const perfPrecedente = calcolaPerformance(precedente);
+    const posPrecPerformanceById = Object.fromEntries(
+      perfPrecedente.righe.slice().sort((a, b) => b.performance - a.performance).map((r, i) => [r.venditore.id, i + 1])
+    );
+    const performanceRanked = perfCorrente.righe.slice().sort((a, b) => b.performance - a.performance).map((r, i) => ({
+      ...r,
+      posizione: i + 1,
+      trendPosizioni: posPrecPerformanceById[r.venditore.id] ? posPrecPerformanceById[r.venditore.id] - (i + 1) : null,
+    }));
+
     const mediaCorsi = corrente.length > 0 ? round2(corrente.reduce((s, r) => s + r.corsi, 0) / corrente.length) : 0;
-    const mediaTicket = conCorsi.length > 0 ? round2(conCorsi.reduce((s, r) => s + r.ticketMedio, 0) / conCorsi.length) : 0;
 
-    return { corsi: corsiRanked, ticket: ticketRanked, mediaCorsi, mediaTicket };
+    return { corsi: corsiRanked, performance: performanceRanked, mediaCorsi, mediaPerformance: Math.round(perfCorrente.mediaPerformance) };
   }, [iscritti, venditori, meseClassifica]);
   const etichettaMeseClassifica = `${MESI[meseClassifica.mese].toUpperCase()} ${meseClassifica.anno}`;
   const meseClassificaFuturo = (() => { const o = new Date(); return meseClassifica.anno > o.getFullYear() || (meseClassifica.anno === o.getFullYear() && meseClassifica.mese >= o.getMonth()); })();
@@ -2668,8 +2677,15 @@ function PaginaDashboardVenditori({
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Performance</div>
-                <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: colorePerformance }}>{livelloPerformance}</div>
-                {numeroChiusure > 0 && <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{fmtEuroErp(round2(commissioneMediaVenditore))} commissione media</div>}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{numeroChiusure > 0 ? fmtEuroErp(round2(commissioneMediaVenditore)) : "—"}</div>
+                  {variazionePerformance !== null && (
+                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: variazionePerformance >= 0 ? "#2E7D32" : "#C0392B" }}>
+                      {variazionePerformance >= 0 ? `+${variazionePerformance}%` : `${variazionePerformance}%`}
+                    </div>
+                  )}
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>commissione media</div>
               </div>
               <div style={{ ...cardStyle, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ticket medio</div>
@@ -2778,10 +2794,11 @@ function PaginaDashboardVenditori({
                 mostraTutti={classificaCorsiCompleta} onToggleMostraTutti={() => setClassificaCorsiCompleta((v) => !v)}
               />
               <ColonnaClassifica
-                titolo="Ticket medio" sottotitolo="Valore medio per iscrizione"
-                righe={classifiche.ticket} chiaveValore="ticketMedio" tipoTrend="percentuale"
-                etichettaMedia={fmtEuroErp(classifiche.mediaTicket)}
-                formatValore={(v) => fmtEuroErp(round2(v))}
+                titolo="Performance" sottotitolo="Ticket medio corretto per il volume di vendite"
+                righe={classifiche.performance} chiaveValore="performance" tipoTrend="posizioni"
+                etichettaMedia={`${classifiche.mediaPerformance} pt`}
+                formatValore={(v) => String(Math.round(v))}
+                coloreValore={coloreScorePerformance}
                 venditoreSelId={venditoreSel?.id}
                 mostraTutti={classificaTicketCompleta} onToggleMostraTutti={() => setClassificaTicketCompleta((v) => !v)}
               />
@@ -2810,6 +2827,23 @@ function PaginaDashboardVenditori({
   );
 }
 
+// colore in continuo per il punteggio Performance, centrato su 100 (in
+// linea con la media team): rosso sotto 85, transizione verso il navy
+// intorno a 100, verde sopra 120 — niente fasce fisse alta/media/bassa
+function interpolaColore(hex1, hex2, t) {
+  const c1 = [1, 3, 5].map((i) => parseInt(hex1.slice(i, i + 2), 16));
+  const c2 = [1, 3, 5].map((i) => parseInt(hex2.slice(i, i + 2), 16));
+  const c = c1.map((v, i) => Math.round(v + (c2[i] - v) * t));
+  return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+function coloreScorePerformance(score) {
+  const ROSSO = "#C0392B", VERDE = "#2E7D32";
+  if (score <= 85) return ROSSO;
+  if (score >= 120) return VERDE;
+  if (score <= 100) return interpolaColore(ROSSO, NAVY, (score - 85) / 15);
+  return interpolaColore(NAVY, VERDE, (score - 100) / 20);
+}
+
 const COLORI_AVATAR_CLASSIFICA = ["#2E5C8A", "#8A6D1D", "#2E7D32", "#7B4B94", "#B0552F", "#456", "#1F6F78"];
 function coloreAvatarClassifica(nome) {
   let h = 0;
@@ -2818,13 +2852,11 @@ function coloreAvatarClassifica(nome) {
 }
 
 // una colonna della classifica venditori (vedi PaginaDashboardVenditori):
-// mostra i primi 5 per il valore scelto (chiusure o ticket medio), con
+// mostra i primi 5 per il valore scelto (chiusure o Performance), con
 // il proprio venditore sempre visibile — aggiunto in coda se fuori dal
-// primo 5 — e un confronto col mese precedente: per "chiusure" è il
-// movimento in classifica (posizioni salite/scese), per "ticket medio"
-// è la variazione % del valore (ha senso confrontarlo come importo,
-// non come posizione, essendo una media e non un conteggio)
-function ColonnaClassifica({ titolo, sottotitolo, righe, chiaveValore, tipoTrend, etichettaMedia, formatValore, venditoreSelId, mostraTutti, onToggleMostraTutti }) {
+// primo 5 — e un confronto col mese precedente espresso come movimento
+// in classifica (posizioni salite/scese)
+function ColonnaClassifica({ titolo, sottotitolo, righe, chiaveValore, tipoTrend, etichettaMedia, formatValore, coloreValore, venditoreSelId, mostraTutti, onToggleMostraTutti }) {
   const proprioIdx = righe.findIndex((r) => r.venditore.id === venditoreSelId);
   const max = Math.max(1, ...righe.map((r) => r[chiaveValore]));
   let daMostrare = righe.slice(0, 5);
@@ -2852,7 +2884,7 @@ function ColonnaClassifica({ titolo, sottotitolo, righe, chiaveValore, tipoTrend
       {daMostrare.map((r, i) => (
         <React.Fragment key={r.venditore.id}>
           {mostraSeparatore && i === 5 && <div style={{ ...fontBody, fontSize: 11, color: MUTED, textAlign: "center", padding: "4px 0" }}>⋯</div>}
-          <RigaClassifica r={r} max={max} chiaveValore={chiaveValore} tipoTrend={tipoTrend} formatValore={formatValore} evidenzia={r.venditore.id === venditoreSelId} />
+          <RigaClassifica r={r} max={max} chiaveValore={chiaveValore} tipoTrend={tipoTrend} formatValore={formatValore} coloreValore={coloreValore} evidenzia={r.venditore.id === venditoreSelId} />
         </React.Fragment>
       ))}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -2867,7 +2899,7 @@ function ColonnaClassifica({ titolo, sottotitolo, righe, chiaveValore, tipoTrend
   );
 }
 
-function RigaClassifica({ r, max, chiaveValore, tipoTrend, formatValore, evidenzia }) {
+function RigaClassifica({ r, max, chiaveValore, tipoTrend, formatValore, coloreValore, evidenzia }) {
   const iniziali = r.venditore.nome.trim().slice(0, 2).toUpperCase();
   const valore = r[chiaveValore];
   let trendTesto = "–", trendColore = MUTED;
@@ -2876,6 +2908,7 @@ function RigaClassifica({ r, max, chiaveValore, tipoTrend, formatValore, evidenz
   } else if (tipoTrend === "percentuale") {
     if (r.trendPct) { trendTesto = r.trendPct > 0 ? `+${r.trendPct}%` : `${r.trendPct}%`; trendColore = r.trendPct > 0 ? "#2E7D32" : "#C0392B"; }
   }
+  const coloreValoreFinale = coloreValore ? coloreValore(valore) : NAVY;
   return (
     <div style={{ padding: "8px 8px", marginBottom: 4, borderRadius: 10, background: evidenzia ? "#FBF3E4" : "transparent", border: evidenzia ? `1px solid ${GOLD}` : "1px solid transparent" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -2885,11 +2918,11 @@ function RigaClassifica({ r, max, chiaveValore, tipoTrend, formatValore, evidenz
           <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toTitleCase(r.venditore.nome)}</span>
           {evidenzia && <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", background: GOLD, borderRadius: 8, padding: "1px 6px", flexShrink: 0 }}>TU</span>}
         </div>
-        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{formatValore(valore)}</div>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: coloreValoreFinale, flexShrink: 0 }}>{formatValore(valore)}</div>
         <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: trendColore, width: 34, textAlign: "right", flexShrink: 0 }}>{trendTesto}</div>
       </div>
       <div style={{ height: 5, background: BG, borderRadius: 3, overflow: "hidden", marginTop: 6, marginLeft: 40 }}>
-        <div style={{ height: "100%", width: `${Math.min(100, (valore / max) * 100)}%`, background: evidenzia ? GOLD : NAVY, borderRadius: 3 }} />
+        <div style={{ height: "100%", width: `${Math.min(100, (valore / max) * 100)}%`, background: evidenzia ? GOLD : coloreValoreFinale, borderRadius: 3 }} />
       </div>
     </div>
   );
