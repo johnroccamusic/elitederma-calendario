@@ -1291,23 +1291,35 @@ function Gate({ onOk }) {
   // del login, non sono ancora caricate in memoria (fetchDati parte solo
   // dopo essere entrati), quindi si interrogano al volo con una query
   // dedicata; se non è mai stata impostata una versione personalizzata si
-  // ricade sui valori di sempre (env var, o "1234" per il Programmatore)
+  // ricade sui valori di sempre (env var, o "1234" per il Programmatore).
+  // In aggiunta, si controlla anche se il codice corrisponde alla password
+  // di un utente nominale (utenti_app, gestito dalla rotellina): se sì,
+  // entra come "user" ma con i permessi (tasti home) di quello specifico
+  // utente, così l'app sa già quali tasti mostrargli senza altre password
   async function check() {
     setVerificando(true);
-    const { data } = await supabase.from("password_menu").select("vista, password").in("vista", ["__user", "__admin", "__programmatore"]);
+    const [{ data }, { data: utenti }] = await Promise.all([
+      supabase.from("password_menu").select("vista, password").in("vista", ["__user", "__admin", "__programmatore"]),
+      supabase.from("utenti_app").select("id, nome, password, permessi"),
+    ]);
     setVerificando(false);
     const valoreDi = (v) => (data || []).find((r) => r.vista === v)?.password;
     const pwProgrammatore = valoreDi("__programmatore") || "1234";
     const pwAmministratore = valoreDi("__admin") || ADMIN_CODE;
     const pwUser = valoreDi("__user") || ACCESS_CODE;
+    const utenteTrovato = (utenti || []).find((u) => code && u.password === code);
     let ruolo = null;
     if (pwProgrammatore && code === pwProgrammatore) ruolo = "programmatore";
     else if (pwAmministratore && code === pwAmministratore) ruolo = "amministratore";
+    else if (utenteTrovato) ruolo = "user";
     else if (!pwUser || code === pwUser) ruolo = "user";
     if (ruolo) {
+      const utente = utenteTrovato ? { id: utenteTrovato.id, nome: utenteTrovato.nome, permessi: utenteTrovato.permessi || [] } : null;
       sessionStorage.setItem("edc_ok", "1");
       sessionStorage.setItem("edc_ruolo", ruolo);
-      onOk(ruolo);
+      if (utente) sessionStorage.setItem("edc_utente", JSON.stringify(utente));
+      else sessionStorage.removeItem("edc_utente");
+      onOk(ruolo, utente);
     } else {
       setErr(true);
     }
@@ -4096,11 +4108,106 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
   );
 }
 
+// una riga della sezione "Utenti e permessi": nome + password modificabili
+// (Salva esplicito, come le altre password del pannello) e un quadratino
+// per ogni tasto della home (TASTI_HOME) — spuntarlo/togliere lo spunto
+// scrive subito su utenti_app, senza bisogno di un Salva a parte, così il
+// risultato in home è immediato
+function RigaUtenteApp({ utente, ricarica }) {
+  const [nome, setNome] = useState(utente.nome);
+  const [password, setPassword] = useState(utente.password);
+  const [salvando, setSalvando] = useState(false);
+  const [fatto, setFatto] = useState(false);
+
+  async function salvaCampi() {
+    if (!nome.trim() || !password.trim()) { window.alert("Nome e password non possono essere vuoti."); return; }
+    setSalvando(true); setFatto(false);
+    const { error } = await supabase.from("utenti_app").update({ nome: nome.trim(), password: password.trim() }).eq("id", utente.id);
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setFatto(true);
+    setTimeout(() => setFatto(false), 2000);
+    ricarica();
+  }
+  async function toggleTasto(chiave, checked) {
+    const attuali = utente.permessi || [];
+    const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
+    const { error } = await supabase.from("utenti_app").update({ permessi: nuovi }).eq("id", utente.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function elimina() {
+    if (!window.confirm(`Eliminare l'utente "${utente.nome}"? Non potrà più entrare nell'app con questa password.`)) return;
+    const { error } = await supabase.from("utenti_app").delete().eq("id", utente.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+        <input style={{ ...inputStyle, maxWidth: 170 }} placeholder="Nome utente" value={nome} onChange={(e) => setNome(e.target.value)} />
+        <input style={{ ...inputStyle, maxWidth: 150 }} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <button
+          onClick={salvaCampi}
+          disabled={salvando}
+          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: salvando ? "default" : "pointer" }}
+        >
+          {salvando ? "Salvo…" : fatto ? "Salvato ✓" : "Salva"}
+        </button>
+        <button
+          onClick={elimina}
+          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "8px 12px", cursor: "pointer", marginLeft: "auto" }}
+        >
+          Elimina
+        </button>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        {TASTI_HOME.map((t) => (
+          <label key={t.chiave} style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: NAVY, cursor: "pointer" }}>
+            <input type="checkbox" checked={(utente.permessi || []).includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+            {t.etichetta}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+// form per creare un nuovo utente nominale: nasce senza nessun tasto
+// spuntato (nessun accesso), da concedere subito dopo coi quadratini
+function FormNuovoUtenteApp({ ricarica }) {
+  const [nome, setNome] = useState("");
+  const [password, setPassword] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  async function aggiungi() {
+    if (!nome.trim() || !password.trim()) { window.alert("Inserisci nome e password del nuovo utente."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("utenti_app").insert({ nome: nome.trim(), password: password.trim(), permessi: [] });
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setNome(""); setPassword("");
+    ricarica();
+  }
+  return (
+    <div style={{ ...cardStyle, padding: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <input style={{ ...inputStyle, maxWidth: 170 }} placeholder="Nome nuovo utente" value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungi()} />
+      <input style={{ ...inputStyle, maxWidth: 150 }} placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungi()} />
+      <button
+        onClick={aggiungi}
+        disabled={salvando}
+        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}
+      >
+        {salvando ? "Aggiungo…" : "+ Aggiungi utente"}
+      </button>
+    </div>
+  );
+}
+
 // pannello dietro la rotellina in home (codice CODICE_ROTELLINA): imposta,
 // voce per voce, la password che sblocca ciascuna area protetta della
 // home — un modo per delegare l'accesso a una singola area senza dare il
 // codice amministratore generale, che invece continua a funzionare ovunque
-function PaginaPasswordMenu({ passwordMenu, ricarica, onBack }) {
+function PaginaPasswordMenu({ passwordMenu, utentiApp, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -4130,6 +4237,18 @@ function PaginaPasswordMenu({ passwordMenu, ricarica, onBack }) {
             </div>
           );
         })}
+
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 24 }}>Utenti e permessi</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+          Ogni utente entra con la propria password e vede in home solo i tasti spuntati qui sotto — gli altri restano disattivati, non cliccabili, senza chiedere nessuna password. Aggiungendo in futuro una nuova area alla home, comparirà qui come nuovo quadratino per tutti gli utenti già creati.
+        </div>
+        {utentiApp.length === 0 && (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessun utente creato: tutti entrano ancora con la password utente generica qui sopra, che mostra tutti i tasti (protetti singolarmente al click).</div>
+        )}
+        {utentiApp.map((u) => <RigaUtenteApp key={u.id} utente={u} ricarica={ricarica} />)}
+        <div style={{ marginBottom: 24 }}>
+          <FormNuovoUtenteApp ricarica={ricarica} />
+        </div>
 
         <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4, marginTop: 24 }}>Password per singola voce del menù</div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
@@ -8328,6 +8447,23 @@ const ADMIN_CODE = import.meta.env.VITE_ADMIN_CODE || "ED26";
 // solo questo può gestire le password delle voci senza avere accesso
 // amministratore ovunque
 const CODICE_ROTELLINA = "RCCGLC68H03L719U";
+// ogni tasto della home page, in ordine — unica fonte per: (1) l'elenco
+// dei quadratini da spuntare per ogni utente nominale nella rotellina,
+// (2) quali tasti sono cliccabili in home per l'utente che ha fatto
+// accesso. Aggiungendo un tasto nuovo in home in futuro, aggiungere qui
+// la sua chiave: comparirà da sola come nuovo quadratino per tutti gli
+// utenti già esistenti (semplicemente assente dai loro permessi finché
+// non lo si spunta)
+const TASTI_HOME = [
+  { chiave: "gestionedate", etichetta: "Gestione corsi" },
+  { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
+  { chiave: "erp", etichetta: "ERP / Magazzino" },
+  { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
+  { chiave: "generazioneloghi", etichetta: "Assegna logo" },
+  { chiave: "gestionemodelle", etichetta: "Gestione modelle" },
+  { chiave: "statistiche", etichetta: "Statistiche" },
+  { chiave: "impostazioni", etichetta: "Setting" },
+];
 // le voci della home protette da apriViewProtetta, gestibili dalla rotellina
 const VISTE_PROTETTE_MENU = [
   { vista: "gestionedate", etichetta: "Gestione corsi" },
@@ -15272,6 +15408,14 @@ export default function App() {
   // o "programmatore" (entra ovunque senza dover reinserire nessun'altra
   // password) — deciso dal Gate in base a quale delle password corrisponde
   const [ruoloUtente, setRuoloUtente] = useState(sessionStorage.getItem("edc_ruolo") || "user");
+  // utente nominale che ha fatto accesso (utenti_app, gestiti dalla
+  // rotellina): null se si è entrati con una delle password di sistema
+  // generiche (User/Amministratore/Programmatore) invece che con la
+  // password di uno specifico utente — in quel caso i suoi "permessi"
+  // decidono quali tasti della home sono cliccabili
+  const [utenteLoggato, setUtenteLoggato] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem("edc_utente") || "null"); } catch { return null; }
+  });
   const isMobile = useIsMobile();
   const [view, setView] = useState("home");
   // login venditore dalla home: vanno dichiarati qui (prima dei return
@@ -15327,6 +15471,7 @@ export default function App() {
   // venditori/tutor selezionabili in fase di iscrizione
   const [venditori, setVenditori] = useState([]);
   const [passwordMenu, setPasswordMenu] = useState([]);
+  const [utentiApp, setUtentiApp] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
   // amministrativo di una classe (non da "Analisi costi di gestione"):
@@ -15359,7 +15504,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -15399,6 +15544,7 @@ export default function App() {
       // usato ovunque per login e selezione "Tutor"
       supabase.from("venditori").select("id, nome, ts").order("nome"),
       supabase.from("password_menu").select("*"),
+      supabase.from("utenti_app").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -15432,6 +15578,7 @@ export default function App() {
     setCorsiTipiModella(ctm.data || []);
     setVenditori(ve.data || []);
     setPasswordMenu(pm.data || []);
+    setUtentiApp(ua.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -15573,7 +15720,7 @@ export default function App() {
     };
   }, [pilaIndietro, pilaAvanti]);
 
-  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo) => { setRuoloUtente(ruolo); setOk(true); }} /></div>;
+  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => { setRuoloUtente(ruolo); setUtenteLoggato(utente); setOk(true); }} /></div>;
 
   if (loading) {
     return (
@@ -15628,8 +15775,23 @@ export default function App() {
     sessionStorage.removeItem("edc_ok");
     sessionStorage.removeItem("edc_admin_ok");
     sessionStorage.removeItem("edc_ruolo");
+    sessionStorage.removeItem("edc_utente");
     Object.keys(sessionStorage).filter((k) => k.startsWith("edc_ok_")).forEach((k) => sessionStorage.removeItem(k));
     setOk(false);
+    setUtenteLoggato(null);
+  }
+  // true se il tasto (chiave in TASTI_HOME) è cliccabile in home per chi
+  // ha fatto accesso ora: Programmatore sempre, Amministratore tutto
+  // tranne Statistiche, un utente nominale solo se il tasto è tra i suoi
+  // permessi (spuntati dalla rotellina), altrimenti — accesso con la
+  // password generica di sistema, nessun utente nominale riconosciuto —
+  // tutti i tasti restano visibili come prima, protetti singolarmente
+  // dalla password per-voce al momento del click
+  function tastoAbilitato(chiave) {
+    if (ruoloUtente === "programmatore") return true;
+    if (ruoloUtente === "amministratore") return chiave !== "statistiche";
+    if (utenteLoggato) return (utenteLoggato.permessi || []).includes(chiave);
+    return true;
   }
   // Ogni voce protetta ha il proprio sblocco di sessione (edc_ok_<vista>):
   // entrare in una non sblocca automaticamente le altre. La password
@@ -15639,13 +15801,21 @@ export default function App() {
   // anche quello, come prima. Il Programmatore salta subito la richiesta.
   // L'Amministratore (password "ED26" di default) salta anche lui la
   // richiesta per tutto TRANNE Statistiche, che resta fuori portata anche
-  // per lui — solo lo User (che non ha loggato con "ED26") vede ancora il
-  // prompt password per le singole voci, incluse Statistiche se protetta
+  // per lui. Un utente nominale (utenti_app) salta la richiesta per i
+  // tasti tra i suoi permessi — l'accesso è già deciso dai quadratini
+  // spuntati nella rotellina, niente più password ripetute per lui. Solo
+  // chi è entrato con la password generica di sistema (nessun utente
+  // nominale riconosciuto) vede ancora il prompt password per le singole
+  // voci, come sempre
   function apriViewProtetta(nomeView) {
     if (ruoloUtente === "programmatore") { setView(nomeView); return; }
     if (ruoloUtente === "amministratore") {
       if (nomeView === "statistiche") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
       setView(nomeView);
+      return;
+    }
+    if (utenteLoggato) {
+      if ((utenteLoggato.permessi || []).includes(nomeView)) setView(nomeView);
       return;
     }
     const chiaveSessione = "edc_ok_" + nomeView;
@@ -15668,13 +15838,14 @@ export default function App() {
   }
   // rotellina in home: codice distinto da quello amministratore (anche lui
   // modificabile qui dentro), apre il pannello dove impostare tutte le
-  // password di sistema e quelle delle singole voci del menù. Il
-  // Programmatore salta subito la richiesta; l'Amministratore ne resta
-  // sempre escluso (solo chi conosce la password del Programmatore può
-  // cambiare le altre password), lo User vede il prompt come sempre
+  // password di sistema, i permessi degli utenti nominali e quelle delle
+  // singole voci del menù. Il Programmatore salta subito la richiesta;
+  // l'Amministratore e qualunque utente nominale ne restano sempre esclusi
+  // (solo chi conosce la password del Programmatore può cambiare permessi
+  // e password), lo User con la password generica vede il prompt come sempre
   function apriRotellinaPassword() {
     if (ruoloUtente === "programmatore") { setView("passwordmenu"); return; }
-    if (ruoloUtente === "amministratore") { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
+    if (ruoloUtente === "amministratore" || utenteLoggato) { window.alert("Questa sezione non è disponibile per il tuo profilo."); return; }
     const codiceRichiesto = passwordSistema("__rotellina", CODICE_ROTELLINA);
     const codice = window.prompt("Codice per impostare le password del menù:");
     if (codice === null) return;
@@ -15799,14 +15970,14 @@ export default function App() {
           <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 14 }}>
-            <TileHome title="Gestione corsi" onClick={apriGestioneDate} />
-            <TileHome title="Dashboard venditori" onClick={apriLoginVenditore} />
-            <TileHome title="ERP / Magazzino" onClick={apriErp} />
+            <TileHome title="Gestione corsi" attivo={tastoAbilitato("gestionedate")} onClick={apriGestioneDate} />
+            <TileHome title="Dashboard venditori" attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
+            <TileHome title="ERP / Magazzino" attivo={tastoAbilitato("erp")} onClick={apriErp} />
             <TileHome title="Logistica prodotti" attivo={false} />
-            <TileHome title="Assegna logo" onClick={apriGenerazioneLoghi} />
-            <TileHome title="Gestione modelle" onClick={apriGestioneModelle} />
-            <TileHome title="Statistiche" onClick={apriStatistiche} />
-            <TileHome title="Setting" onClick={apriImpostazioni} />
+            <TileHome title="Assegna logo" attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
+            <TileHome title="Gestione modelle" attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
+            <TileHome title="Statistiche" attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
+            <TileHome title="Setting" attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
           </div>
         </div>
       )}
@@ -15964,7 +16135,7 @@ export default function App() {
       )}
 
       {view === "passwordmenu" && (
-        <PaginaPasswordMenu passwordMenu={passwordMenu} ricarica={fetchDati} onBack={() => setView("home")} />
+        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (
