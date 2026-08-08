@@ -2375,6 +2375,7 @@ function PaginaDashboardVenditori({
   const [periodo, setPeriodo] = useState("mese"); // mese | trimestre | personalizzato
   const [customDa, setCustomDa] = useState("");
   const [customA, setCustomA] = useState("");
+  const [espansoChiusurePerCorso, setEspansoChiusurePerCorso] = useState(false);
 
   const venditoreSel = venditoreBloccato
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
@@ -2437,6 +2438,21 @@ function PaginaDashboardVenditori({
   });
   const righeChiusurePerCorso = Object.entries(perCorso).sort((a, b) => b[1] - a[1]);
   const maxChiusurePerCorso = Math.max(1, ...righeChiusurePerCorso.map(([, n]) => n));
+
+  // dettaglio di "Chiusure per corso": per ogni corso-tipo, quante
+  // chiusure in ciascuna edizione (città + date) — mostrato solo quando
+  // si espande, per non appesantire la vista compatta di default
+  const perCorsoEdizioni = {};
+  chiusure.forEach(({ corsoData }) => {
+    if (!corsoData) return;
+    const nomeCorso = corsoById[corsoData.corso_id]?.nome || "—";
+    if (!perCorsoEdizioni[nomeCorso]) perCorsoEdizioni[nomeCorso] = {};
+    if (!perCorsoEdizioni[nomeCorso][corsoData.id]) perCorsoEdizioni[nomeCorso][corsoData.id] = { corsoData, totale: 0 };
+    perCorsoEdizioni[nomeCorso][corsoData.id].totale += 1;
+  });
+  function edizioniDi(nomeCorso) {
+    return Object.values(perCorsoEdizioni[nomeCorso] || {}).sort((a, b) => a.corsoData.data_inizio.localeCompare(b.corsoData.data_inizio));
+  }
 
   const perEdizione = {};
   chiusureInAttesa.forEach(({ iscritto, corsoData }) => {
@@ -2511,8 +2527,19 @@ function PaginaDashboardVenditori({
 
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 4 }}>
               <div style={cardStyle}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Chiusure per corso</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12, gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Chiusure per corso</div>
+                    {righeChiusurePerCorso.length > 0 && (
+                      <button
+                        onClick={() => setEspansoChiusurePerCorso((v) => !v)}
+                        title={espansoChiusurePerCorso ? "Comprimi il dettaglio" : "Espandi il dettaglio per edizione"}
+                        style={{ width: 22, height: 22, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, fontSize: 14, fontWeight: 700, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      >
+                        {espansoChiusurePerCorso ? "−" : "+"}
+                      </button>
+                    )}
+                  </div>
                   <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{numeroChiusure} chiusure</div>
                 </div>
                 {righeChiusurePerCorso.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna chiusura nel periodo.</div>}
@@ -2524,6 +2551,16 @@ function PaginaDashboardVenditori({
                     <div style={{ height: 6, background: BG, borderRadius: 3, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${(n / maxChiusurePerCorso) * 100}%`, background: NAVY, borderRadius: 3 }} />
                     </div>
+                    {espansoChiusurePerCorso && (
+                      <div style={{ marginTop: 6, paddingLeft: 4 }}>
+                        {edizioniDi(nome).map(({ corsoData, totale }) => (
+                          <div key={corsoData.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12, color: MUTED, padding: "3px 0" }}>
+                            <span>{toTitleCase(locById[corsoData.location_id]?.nome || "—")} · {fmtDataCompatta(corsoData.data_inizio, corsoData.data_fine)}</span>
+                            <span>n. {totale}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
