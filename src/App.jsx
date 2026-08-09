@@ -9128,7 +9128,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 2 }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         {pilloleMesi.map(({ m, y }) => {
           const attivo = m === mese && y === anno;
           return (
@@ -9137,10 +9137,10 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
               type="button"
               onClick={() => { setMese(m); setAnno(y); }}
               style={{
-                ...fontBody, fontSize: 12, fontWeight: 500, textTransform: "lowercase",
+                ...fontBody, fontSize: 13, fontWeight: 500, textTransform: "lowercase",
                 border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 999,
-                padding: "6px 12px", background: attivo ? NAVY : "transparent", color: attivo ? "#fff" : NAVY,
-                cursor: "pointer", flex: "0 0 auto",
+                padding: "8px 4px", background: attivo ? NAVY : "transparent", color: attivo ? "#fff" : NAVY,
+                cursor: "pointer", flex: "1 1 0", minWidth: 0, textAlign: "center",
               }}
             >
               {MESI_ABBR[m].toLowerCase()}
@@ -9149,7 +9149,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
         })}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 0, paddingBottom: 6, marginBottom: 4, borderBottom: `1px solid ${CREAM_BORDER}` }}>
         {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 10, color: MUTED, textAlign: "center" }}>{g}</div>)}
       </div>
 
@@ -9169,19 +9169,22 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
         const rowHeight = 20 + numLane * barH + Math.max(0, numLane - 1) * 3 + 4;
 
         return (
-          <div key={wi} style={{ position: "relative", marginBottom: 3 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3 }}>
+          <div key={wi} style={{ position: "relative" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 0 }}>
               {settimana.map((d, i) => {
-                if (!d) return <div key={i} style={{ height: rowHeight }} />;
+                // niente più caselle "a riquadro": solo una sottile riga di
+                // divisione tra i giorni (destra) e tra le settimane (sotto)
+                const bordoDestro = i < 6 ? `1px solid ${CREAM_BORDER}` : "none";
+                if (!d) return <div key={i} style={{ height: rowHeight, borderRight: bordoDestro, borderBottom: `1px solid ${CREAM_BORDER}` }} />;
                 return (
                   <div
                     key={i}
                     onClick={() => onClickGiorno(dateStr(d))}
                     style={{
                       height: rowHeight,
-                      borderRadius: 6,
                       background: i === 5 ? COLORE_SABATO : i === 6 ? COLORE_DOMENICA : "#fff",
-                      border: `1px solid ${CREAM_BORDER}`,
+                      borderRight: bordoDestro,
+                      borderBottom: `1px solid ${CREAM_BORDER}`,
                       cursor: "pointer",
                       boxSizing: "border-box",
                     }}
@@ -9191,7 +9194,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                 );
               })}
             </div>
-            <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: barH, gap: 3, pointerEvents: "none" }}>
+            <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: barH, rowGap: 3, columnGap: 0, pointerEvents: "none" }}>
               {eventiConLane.map((ev) => {
                 const primoIdxValido = settimana.findIndex((d) => d !== null);
                 const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
