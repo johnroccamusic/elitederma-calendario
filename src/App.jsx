@@ -9667,7 +9667,7 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
   );
 }
 
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -9768,6 +9768,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   );
   const [salvandoCosti, setSalvandoCosti] = useState(false);
   const [sceltaCategoriaCosto, setSceltaCategoriaCosto] = useState(false);
+  // "Altri incassi al corso": prodotti venduti in più durante il corso
+  // (non le quote di iscrizione), scelti dal magazzino — ognuno con
+  // quantità, importo e metodo (contribuisce a Contanti o Pos)
+  const [incassiExtra, setIncassiExtra] = useState(
+    Array.isArray(corsoData.incassi_extra) ? corsoData.incassi_extra.map((c) => ({ prodotto_id: c.prodotto_id || "", quantita: c.quantita != null ? String(c.quantita) : "1", valore: c.valore != null ? String(c.valore) : "", metodo: c.metodo || "Contanti" })) : []
+  );
 
   // segnala al genitore ogni cambiamento di sotto-vista (lista/form,
   // quale iscritto in modifica, contabilità aperta o no): è così che i
@@ -9840,8 +9846,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // corso arrivano prima, con bonifico/sito, e non passano dalle mani
   // del master in aula — per questo il riepilogo costi si basa solo su
   // questi importi, non sul totale generale della classe
-  const contantiClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Contanti" ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0));
-  const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0));
+  const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
+  const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
+  const contantiClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Contanti" ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
+  const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
   const daIncassareClasse = round2(contantiClasse + posClasse);
   // la quota venditore di ogni iscritto è un costo della classe a tutti gli
   // effetti (va pagata al venditore): fa parte del totale costi anche prima
@@ -9873,10 +9881,31 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   function rimuoviVoceCosto(idx) {
     setCostiExtra((prev) => prev.filter((_, i) => i !== idx));
   }
+  // "Altri incassi": ogni riga parte dal prodotto scelto — l'importo si
+  // pre-compila dal prezzo del prodotto (per quantità 1) ma resta libero,
+  // per gestire sconti o prezzi diversi da quello di listino
+  function aggiungiVoceIncasso() {
+    setIncassiExtra((prev) => [...prev, { prodotto_id: "", quantita: "1", valore: "", metodo: "Contanti" }]);
+  }
+  function modificaVoceIncasso(idx, campo, valore) {
+    setIncassiExtra((prev) => prev.map((c, i) => {
+      if (i !== idx) return c;
+      const aggiornata = { ...c, [campo]: valore };
+      if (campo === "prodotto_id" || campo === "quantita") {
+        const prodotto = (prodottiShop || []).find((p) => p.id === aggiornata.prodotto_id);
+        if (prodotto && prodotto.prezzo_vendita != null) aggiornata.valore = String(round2(prodotto.prezzo_vendita * (parseNum(aggiornata.quantita) || 1)));
+      }
+      return aggiornata;
+    }));
+  }
+  function rimuoviVoceIncasso(idx) {
+    setIncassiExtra((prev) => prev.filter((_, i) => i !== idx));
+  }
   async function salvaCostiClasse() {
     setSalvandoCosti(true);
     const { error } = await supabase.from("corsi_date").update({
       costi_extra: costiExtra.filter((c) => c.titolo.trim() !== "" || c.valore !== "").map((c) => ({ titolo: c.titolo.trim(), valore: parseNum(c.valore), categoria: c.categoria || null, sottovoce: c.sottovoce || null })),
+      incassi_extra: incassiExtra.filter((c) => c.prodotto_id !== "" || c.valore !== "").map((c) => ({ prodotto_id: c.prodotto_id || null, quantita: parseNum(c.quantita) || 1, valore: parseNum(c.valore), metodo: c.metodo })),
     }).eq("id", corsoData.id);
     setSalvandoCosti(false);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -10792,20 +10821,81 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </div>
               </div>
 
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Altri incassi al corso</div>
+                <button
+                  type="button" onClick={aggiungiVoceIncasso}
+                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+                >
+                  + Aggiungi
+                </button>
+              </div>
+              {incassiExtra.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Prodotti venduti in più durante il corso, oltre alle quote di iscrizione.</div>
+              ) : (
+                <div style={{ marginBottom: 12 }}>
+                  {incassiExtra.map((voce, idx) => (
+                    <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+                      <div style={{ flex: "2 1 160px", minWidth: 0 }}>
+                        <Field label="Prodotto">
+                          <select style={inputStyle} value={voce.prodotto_id} onChange={(e) => modificaVoceIncasso(idx, "prodotto_id", e.target.value)}>
+                            <option value="">— scegli dal magazzino —</option>
+                            {(prodottiShop || []).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                          </select>
+                        </Field>
+                      </div>
+                      <div style={{ flex: "0 1 80px", minWidth: 0 }}>
+                        <Field label="Qtà"><input type="number" min="1" style={inputStyle} value={voce.quantita} onChange={(e) => modificaVoceIncasso(idx, "quantita", e.target.value)} /></Field>
+                      </div>
+                      <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+                        <Field label="Importo"><input style={inputStyle} inputMode="decimal" value={voce.valore} onChange={(e) => modificaVoceIncasso(idx, "valore", e.target.value)} /></Field>
+                      </div>
+                      <div style={{ flex: "1 1 130px", minWidth: 0, display: "flex", gap: 12, alignItems: "center", ...fontBody, fontSize: 13, color: NAVY, paddingBottom: 10 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                          <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Contanti"} onChange={() => modificaVoceIncasso(idx, "metodo", "Contanti")} />
+                          Contanti
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                          <input type="radio" name={`incasso-metodo-${idx}`} checked={voce.metodo === "Pos"} onChange={() => modificaVoceIncasso(idx, "metodo", "Pos")} />
+                          Pos
+                        </label>
+                      </div>
+                      <button
+                        onClick={() => rimuoviVoceIncasso(idx)}
+                        title="Rimuovi voce"
+                        style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                          <path d="M10 11v6" /><path d="M14 11v6" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Costi della classe</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
-                {CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => (
-                  <Field key={c.chiave} label={c.etichetta}>
-                    <button
-                      type="button"
-                      onClick={() => onApriNuovaSpesaPerClasse(corsoData.id, c.categoriaId, c.sottocategoriaId)}
-                      title="Aggiungi spesa"
-                      style={{ ...inputStyle, textAlign: "left", cursor: "pointer", background: "#fff", color: totaliRiepilogo[c.chiave] ? NAVY : MUTED }}
-                    >
-                      {totaliRiepilogo[c.chiave] ? `€ ${totaliRiepilogo[c.chiave]}` : "+ Aggiungi"}
-                    </button>
-                  </Field>
-                ))}
+                {CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => {
+                  // se una spesa per questa classe+sottocategoria esiste già,
+                  // il click deve riaprire QUELLA per modificarla — non
+                  // crearne una seconda identica (duplicava il costo)
+                  const spesaEsistente = (spese || []).find((s) => s.classe_id === corsoData.id && s.sottocategoria_id === c.sottocategoriaId);
+                  return (
+                    <Field key={c.chiave} label={c.etichetta}>
+                      <button
+                        type="button"
+                        onClick={() => (spesaEsistente ? onApriModificaSpesaPerClasse(spesaEsistente.id, corsoData.id, c.categoriaId, c.sottocategoriaId) : onApriNuovaSpesaPerClasse(corsoData.id, c.categoriaId, c.sottocategoriaId))}
+                        title={spesaEsistente ? "Modifica spesa" : "Aggiungi spesa"}
+                        style={{ ...inputStyle, textAlign: "left", cursor: "pointer", background: "#fff", color: totaliRiepilogo[c.chiave] ? NAVY : MUTED }}
+                      >
+                        {totaliRiepilogo[c.chiave] ? `€ ${totaliRiepilogo[c.chiave]}` : "+ Aggiungi"}
+                      </button>
+                    </Field>
+                  );
+                })}
               </div>
 
               {costiExtra.map((voce, idx) => (
@@ -10839,6 +10929,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 <div>
                   <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale costi</div>
                   <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCostiClasse}</div>
+                  {quoteVenditoreClasse > 0 && (
+                    <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>di cui € {quoteVenditoreClasse} quota venditore</div>
+                  )}
                 </div>
                 <div>
                   <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Risultato classe</div>
@@ -17754,6 +17847,15 @@ export default function App() {
     setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
     apriViewProtetta("spesaform");
   }
+  // riapre per la modifica una spesa già esistente per quella casella del
+  // Riepilogo amministrativo (invece di "Nuova spesa", che ne creerebbe
+  // una seconda identica) — spesaPrefill resta valorizzato solo per far
+  // tornare "Indietro" su questa stessa scheda, non su Costi operativi
+  function apriModificaSpesaPerClasse(spesaId, classeId, categoriaId, sottocategoriaId) {
+    setSpesaInModifica(spesaId);
+    setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
+    apriViewProtetta("spesaform");
+  }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -18117,11 +18219,13 @@ export default function App() {
           tipiModella={tipiModella}
           corsiTipiModella={corsiTipiModella}
           venditori={venditori}
+          prodottiShop={prodottiShop}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
           onCambiaSottoVista={setSottoVistaScheda}
           onApriNuovaSpesaPerClasse={apriNuovaSpesaPerClasse}
+          onApriModificaSpesaPerClasse={apriModificaSpesaPerClasse}
           origineGestioneModelle={vieneDaGestioneModelle}
           onTornaGestioneModelle={() => setView("gestionemodelle")}
         />

@@ -1640,4 +1640,10 @@ alter table public.prodotti_aperti_magazzino enable row level security;
 drop policy if exists "prodotti_aperti_magazzino_all" on public.prodotti_aperti_magazzino;
 create policy "prodotti_aperti_magazzino_all" on public.prodotti_aperti_magazzino for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 47) "Altri incassi al corso" nel Riepilogo amministrativo: prodotti
+-- venduti in più durante il corso, scelti dal magazzino.
+-- ---------------------------------------------------------
+alter table public.corsi_date add column if not exists incassi_extra jsonb not null default '[]';
+
 notify pgrst, 'reload schema';
