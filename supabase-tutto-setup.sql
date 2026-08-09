@@ -1504,8 +1504,9 @@ create table if not exists public.corsi_kit_prodotti (
 alter table public.corsi_kit_prodotti add column if not exists kit_id uuid references public.kit_definizioni(id) on delete cascade;
 alter table public.corsi_kit_prodotti alter column corso_id drop not null;
 do $$
-declare r record;
-declare nuovo_kit_id uuid;
+declare
+  r record;
+  nuovo_kit_id uuid;
 begin
   for r in select distinct corso_id from public.corsi_kit_prodotti where kit_id is null and corso_id is not null loop
     select id into nuovo_kit_id from public.kit_definizioni where corso_id = r.corso_id limit 1;
