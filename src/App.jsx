@@ -3889,7 +3889,7 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
         if (g.richiede_modella_master) {
           const modelleMaster = Array.isArray(cd.modelle_master) ? cd.modelle_master : [];
           const entry = modelleMaster.find((m) => m.numero_giorno === g.numero_giorno);
-          if (!entry?.la_porta_master) slot.push({
+          if (entry?.cercare_per_master) slot.push({
             ...base, id: `${cd.id}-master-${g.numero_giorno}`, ruolo: "master", numeroGiorno: g.numero_giorno,
             tipo: g.tipo_modella_master || "Modella del Master", allievoNome: null,
             nomeModella: entry?.nome_modella || "", telefonoModella: entry?.telefono_modella || "",
@@ -11250,22 +11250,27 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
                   {g.richiede_modella_master && (
                     <div style={{ marginBottom: g.richiede_modelle_allievi ? 16 : 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 6 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: modellaMaster.cercare_per_master ? 6 : 0 }}>
                         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>
                           Modella del Master{g.tipo_modella_master ? ` — ${g.tipo_modella_master}` : ""}
                         </div>
                         <CheckboxOttimistica
-                          valore={modellaMaster.la_porta_master}
-                          onCambia={(v) => aggiornaModellaMaster(g.numero_giorno, "la_porta_master", v)}
+                          valore={modellaMaster.cercare_per_master}
+                          onCambia={(v) => aggiornaModellaMaster(g.numero_giorno, "cercare_per_master", v)}
                         >
-                          La porta la master
+                          Cercare per master
                         </CheckboxOttimistica>
                       </div>
-                      <RigaModella
-                        modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
-                        primaRiga
-                        onSalva={(campo, valore) => aggiornaModellaMaster(g.numero_giorno, campo, valore)}
-                      />
+                      {/* di default la master non ha bisogno di una modella:
+                          la riga di ricerca/assegnazione compare solo dopo
+                          aver spuntato "Cercare per master" */}
+                      {modellaMaster.cercare_per_master && (
+                        <RigaModella
+                          modella={{ ...modellaMaster, tipo: g.tipo_modella_master }}
+                          primaRiga
+                          onSalva={(campo, valore) => aggiornaModellaMaster(g.numero_giorno, campo, valore)}
+                        />
+                      )}
                     </div>
                   )}
 
