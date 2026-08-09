@@ -1484,8 +1484,10 @@ create table if not exists public.kit_definizioni (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
   corso_id uuid references public.corsi(id) on delete set null,
+  ordine integer not null default 0,
   ts timestamptz not null default now()
 );
+alter table public.kit_definizioni add column if not exists ordine integer not null default 0;
 alter table public.kit_definizioni enable row level security;
 drop policy if exists "kit_definizioni_all" on public.kit_definizioni;
 create policy "kit_definizioni_all" on public.kit_definizioni for all to anon using (true) with check (true);
@@ -1550,5 +1552,12 @@ alter table public.logistica_kit_edizioni add column if not exists accessori_sca
 alter table public.logistica_kit_edizioni enable row level security;
 drop policy if exists "logistica_kit_edizioni_all" on public.logistica_kit_edizioni;
 create policy "logistica_kit_edizioni_all" on public.logistica_kit_edizioni for all to anon using (true) with check (true);
+
+-- ---------------------------------------------------------
+-- 42) Dashboard master (Password menù > Password Master): la password di
+-- ciascuna master vive direttamente sulla riga "master" già esistente,
+-- si aggiorna da sola con Setting > Definisci Master.
+-- ---------------------------------------------------------
+alter table public.master add column if not exists password text;
 
 notify pgrst, 'reload schema';

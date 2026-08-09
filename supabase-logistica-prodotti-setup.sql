@@ -13,8 +13,10 @@ create table if not exists public.kit_definizioni (
   id uuid primary key default gen_random_uuid(),
   nome text not null,
   corso_id uuid references public.corsi(id) on delete set null,
+  ordine integer not null default 0,
   ts timestamptz not null default now()
 );
+alter table public.kit_definizioni add column if not exists ordine integer not null default 0;
 alter table public.kit_definizioni enable row level security;
 drop policy if exists "kit_definizioni_all" on public.kit_definizioni;
 create policy "kit_definizioni_all" on public.kit_definizioni for all to anon using (true) with check (true);

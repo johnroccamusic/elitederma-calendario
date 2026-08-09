@@ -1303,7 +1303,10 @@ function Gate({ onOk }) {
   // personalizzate si ricade sui valori di sempre (RIGHE_SISTEMA_DEFAULT)
   async function check() {
     setVerificando(true);
-    const { data: utenti } = await supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema");
+    const [{ data: utenti }, { data: masterRighe }] = await Promise.all([
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema"),
+      supabase.from("master").select("id, nome, password"),
+    ]);
     setVerificando(false);
     const righe = utenti || [];
     function rigaSistema(chiave) {
@@ -1321,10 +1324,17 @@ function Gate({ onOk }) {
     const sAdmin = rigaSistema("__admin");
     const sProgrammatore = rigaSistema("__programmatore");
     const nominale = righe.find((u) => !u.chiave_sistema && code && u.password === code);
+    // le master entrano con la propria password (Password menù > Password
+    // Master), impostata voce per voce sulla riga "master" già esistente
+    // in Setting — a differenza dei venditori, non scelgono il proprio
+    // nome da una tendina: la password stessa identifica la master, e
+    // l'unico tasto che vedono è "Dashboard master", già sulla propria scheda
+    const masterTrovata = (masterRighe || []).find((m) => !!m.password && code && m.password === code);
 
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
     else if (sAdmin.password && code === sAdmin.password) { ruolo = "amministratore"; utente = sAdmin; }
+    else if (masterTrovata) { ruolo = "user"; utente = { id: masterTrovata.id, nome: masterTrovata.nome, permessi: ["dashboardmaster"], chiave_sistema: null, masterId: masterTrovata.id }; }
     else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
 
@@ -3194,6 +3204,98 @@ function PaginaDashboardVenditori({
   );
 }
 
+// ---------- Dashboard master ----------
+// una data assegnata alla master, con link ai biglietti di viaggio già
+// caricati da "Assegnazione Master" (stesso file, stesso bucket
+// "allegati-iscritti" — qui è solo in lettura, il caricamento resta un
+// compito di chi gestisce l'assegnazione)
+function CardDataMaster({ corsoData, corso, loc }) {
+  const biglietti = corsoData.viaggio_file || [];
+  return (
+    <div style={{ ...cardStyle, marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>
+            {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} · {toTitleCase(loc?.nome || "—")}
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: corsoData.viaggio_prenotato ? "#2E7D32" : "#C0392B" }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: corsoData.viaggio_prenotato ? "#2E7D32" : "#C0392B" }} />
+          {corsoData.viaggio_prenotato ? "Viaggio prenotato" : "Viaggio da prenotare"}
+        </div>
+      </div>
+      {biglietti.length > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti di viaggio</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {biglietti.map((percorso, i) => (
+              <AllegatoLink key={i} percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// Dashboard master: chi entra con la password di una specifica master
+// (Password menù > Password Master) trova già selezionata la propria
+// scheda, senza tendina — a differenza della Dashboard venditori, non
+// c'è nessuna schermata di login secondaria. Chi invece ha solo il
+// permesso sul tasto (staff/Amministratore) vede la tendina per
+// scegliere quale master guardare
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLoggataId, onBack }) {
+  const isMobile = useIsMobile();
+  const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
+  const masterSel = master.find((m) => m.id === masterSelId) || null;
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const oggiStr = dataOggiStr();
+  const prossimeDate = useMemo(
+    () => corsiDate.filter((cd) => cd.master_id === masterSelId && cd.data_fine >= oggiStr).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
+    [corsiDate, masterSelId, oggiStr]
+  );
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
+          {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : "Dashboard master"}
+        </div>
+        {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area master</div>}
+
+        {!masterLoggataId && (
+          <select
+            style={{ ...inputStyle, width: "auto", minWidth: 220, marginBottom: 20 }}
+            value={masterSelId} onChange={(e) => setMasterSelId(e.target.value)}
+          >
+            <option value="">— scegli master —</option>
+            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+          </select>
+        )}
+
+        {!masterSel ? (
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli una master per vedere i suoi prossimi corsi.</div>
+        ) : (
+          <>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prossimi corsi</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>Data, località e biglietti di viaggio già caricati.</div>
+            {prossimeDate.length === 0 ? (
+              <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessun corso in programma al momento.</div>
+            ) : prossimeDate.map((cd) => (
+              <CardDataMaster key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]} />
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // colore in continuo per il punteggio Performance, centrato su 100 (in
 // linea con la media team): rosso sotto 85, transizione verso il navy
 // intorno a 100, verde sopra 120 — niente fasce fisse alta/media/bassa
@@ -4271,7 +4373,56 @@ function TabellaGestioneUtenti({ utentiApp, ricarica }) {
 
 // pannello dietro la rotellina in home (codice CODICE_ROTELLINA): gestione
 // utenti e permessi, più la password di questa stessa rotellina
-function PaginaPasswordMenu({ passwordMenu, utentiApp, ricarica, onBack }) {
+// una riga di "Password Master": nome (di sola lettura, si aggiorna da
+// solo in base a Setting > Definisci Master) + password modificabile,
+// scritta direttamente sulla riga "master" già esistente
+function RigaPasswordMaster({ masterRec, ricarica }) {
+  const [password, setPassword] = useState(masterRec.password || "");
+  const [salvando, setSalvando] = useState(false);
+  const [fatto, setFatto] = useState(false);
+  async function salva() {
+    setSalvando(true); setFatto(false);
+    const { error } = await supabase.from("master").update({ password: password.trim() || null }).eq("id", masterRec.id);
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setFatto(true);
+    setTimeout(() => setFatto(false), 2000);
+    ricarica();
+  }
+  return (
+    <div style={{ ...cardStyle, marginBottom: 10, padding: 14, display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{masterRec.nome}</div>
+      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Nessuna password" style={{ ...inputStyle, width: 160 }} />
+      <button
+        onClick={salva} disabled={salvando}
+        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: salvando ? "default" : "pointer", flexShrink: 0 }}
+      >
+        {salvando ? "Salvo…" : fatto ? "Salvato ✓" : "Salva"}
+      </button>
+    </div>
+  );
+}
+// sezione "Password Master": una riga per ogni master già definita in
+// Setting > Definisci Master, sempre allineata a quella lista (nessuna
+// creazione/eliminazione qui: si aggiungono/tolgono master da Setting).
+// Chi entra con la password di una master trova già la sua Dashboard
+// master aperta sulla propria scheda, senza scegliere nulla
+function TabellaPasswordMaster({ master, ricarica }) {
+  const masterOrdinate = master.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password Master</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+        Ogni master entra con la propria password e trova subito la sua Dashboard master, senza scegliere nulla. L'elenco si aggiorna da solo insieme a Setting &gt; Definisci Master.
+      </div>
+      {masterOrdinate.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
+      ) : masterOrdinate.map((m) => <RigaPasswordMaster key={m.id} masterRec={m} ricarica={ricarica} />)}
+    </div>
+  );
+}
+
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -4290,6 +4441,10 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, ricarica, onBack }) {
 
         <div style={{ marginBottom: 28 }}>
           <TabellaGestioneUtenti utentiApp={utentiApp} ricarica={ricarica} />
+        </div>
+
+        <div style={{ maxWidth: 400 }}>
+          <TabellaPasswordMaster master={master} ricarica={ricarica} />
         </div>
 
         <div style={{ maxWidth: 400 }}>
@@ -8501,6 +8656,7 @@ const CODICE_ROTELLINA = "RCCGLC68H03L719U";
 const TASTI_HOME = [
   { chiave: "gestionedate", etichetta: "Gestione corsi" },
   { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
+  { chiave: "dashboardmaster", etichetta: "Dashboard master" },
   { chiave: "erp", etichetta: "ERP / Magazzino" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
   { chiave: "generazioneloghi", etichetta: "Assegna logo" },
@@ -14073,7 +14229,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 // aggiungi prodotti (con quantità per kit) e "altri accessori" (senza
 // quantità: la scrive chi prepara la spedizione, edizione per edizione)
 // — il "+" per aggiungere prodotti sta sulla riga del nome del pacchetto
-function SchedaPacchetto({ kit, righe, prodottiShop, ricarica }) {
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, trascinando }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
@@ -14125,8 +14281,20 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica }) {
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
 
   return (
-    <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+    <div
+      onDragOver={(e) => { e.preventDefault(); onDragOver && onDragOver(); }}
+      onDrop={() => onDrop && onDrop(kit.id)}
+      style={{ ...cardStyle, marginBottom: 10, padding: 14, opacity: trascinando ? 0.4 : 1, border: `1px solid ${trascinando ? GOLD : CREAM_BORDER}` }}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (mostraRicercaKit || mostraRicercaAcc || prodottiKit.length > 0 || accessori.length > 0) ? 10 : 0 }}>
+        <span
+          draggable
+          onDragStart={() => onDragStart && onDragStart(kit.id)}
+          title="Trascina per riordinare"
+          style={{ cursor: "grab", color: MUTED, fontSize: 15, lineHeight: 1, padding: "0 2px", flexShrink: 0, userSelect: "none" }}
+        >
+          ⠿
+        </span>
         <input
           value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaNome}
           style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120 }}
@@ -14185,14 +14353,38 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiSho
   const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const trascinamentoRef = useRef(null);
+  const [trascinatoId, setTrascinatoId] = useState(null);
 
   async function creaPacchetto() {
     if (!nomeNuovo.trim()) return;
     setSalvando(true);
-    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corso?.id || null });
+    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corso?.id || null, ordine: pacchetti.length });
     setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
     setNomeNuovo(""); setMostraNuovo(false);
+    ricarica();
+  }
+  // trascina-e-rilascia per riordinare i pacchetti di questo corso: al
+  // drop, riassegna un "ordine" progressivo a tutti i pacchetti della
+  // sezione secondo la nuova sequenza — stesso pattern già in uso per
+  // riordinare le immagini prodotto in "Gestione shop"
+  function iniziaTrascinamento(idOrigine) {
+    trascinamentoRef.current = idOrigine;
+    setTrascinatoId(idOrigine);
+  }
+  async function rilascia(idDestinazione) {
+    const idOrigine = trascinamentoRef.current;
+    trascinamentoRef.current = null;
+    setTrascinatoId(null);
+    if (!idOrigine || idOrigine === idDestinazione) return;
+    const nuovi = [...pacchetti];
+    const idxOrigine = nuovi.findIndex((k) => k.id === idOrigine);
+    const idxDestinazione = nuovi.findIndex((k) => k.id === idDestinazione);
+    if (idxOrigine < 0 || idxDestinazione < 0) return;
+    const [spostato] = nuovi.splice(idxOrigine, 1);
+    nuovi.splice(idxDestinazione, 0, spostato);
+    await Promise.all(nuovi.map((k, i) => supabase.from("kit_definizioni").update({ ordine: i }).eq("id", k.id)));
     ricarica();
   }
 
@@ -14221,7 +14413,10 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiSho
       {pacchetti.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun pacchetto ancora.</div>
       ) : pacchetti.map((k) => (
-        <SchedaPacchetto key={k.id} kit={k} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica} />
+        <SchedaPacchetto
+          key={k.id} kit={k} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica}
+          onDragStart={iniziaTrascinamento} onDragOver={() => {}} onDrop={rilascia} trascinando={trascinatoId === k.id}
+        />
       ))}
     </div>
   );
@@ -14233,7 +14428,8 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiSho
 function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const corsiOrdinati = corsi.slice().sort((a, b) => a.nome.localeCompare(b.nome));
-  const pacchettiSpeciali = kitDefinizioni.filter((k) => !k.corso_id);
+  const ordinaPacchetti = (arr) => arr.slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
+  const pacchettiSpeciali = ordinaPacchetti(kitDefinizioni.filter((k) => !k.corso_id));
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -14251,7 +14447,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiS
         ) : corsiOrdinati.map((c) => (
           <SezioneCorsoPacchetti
             key={c.id} corso={c}
-            pacchetti={kitDefinizioni.filter((k) => k.corso_id === c.id)}
+            pacchetti={ordinaPacchetti(kitDefinizioni.filter((k) => k.corso_id === c.id))}
             corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop} ricarica={ricarica}
           />
         ))}
@@ -16539,6 +16735,7 @@ export default function App() {
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
+  function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -16646,6 +16843,7 @@ export default function App() {
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 14 }}>
             <TileHome title="Gestione corsi" attivo={tastoAbilitato("gestionedate")} onClick={apriGestioneDate} />
             <TileHome title="Dashboard venditori" attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
+            <TileHome title="Dashboard master" attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
             <TileHome title="ERP / Magazzino" attivo={tastoAbilitato("erp")} onClick={apriErp} />
             <TileHome title="Logistica prodotti" attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
             <TileHome title="Assegna logo" attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
@@ -16793,6 +16991,14 @@ export default function App() {
         />
       )}
 
+      {view === "dashboardmaster" && (
+        <PaginaDashboardMaster
+          master={master} corsi={corsi} location={location} corsiDate={corsiDate}
+          masterLoggataId={utenteLoggato?.masterId || null}
+          onBack={() => setView("home")}
+        />
+      )}
+
       {view === "gestionemodelle" && (
         <PaginaGestioneModelle
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
@@ -16824,7 +17030,7 @@ export default function App() {
       )}
 
       {view === "passwordmenu" && (
-        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} ricarica={fetchDati} onBack={() => setView("home")} />
+        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} master={master} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (
