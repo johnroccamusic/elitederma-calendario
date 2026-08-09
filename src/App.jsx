@@ -14804,16 +14804,16 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 // tramite "corso_id" su corsi_kit_prodotti (kit_id resta nullo)
 function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto }) {
   const [ricerca, setRicerca] = useState("");
-  // la scelta "crea nuova lista / carica da un corso" si mostra solo al
-  // primo apertura a lista vuota (il componente si smonta e rimonta ogni
-  // volta che torna vuoto+chiuso, quindi lo stato iniziale basta)
-  const [modalitaScelta, setModalitaScelta] = useState(righe.length === 0);
   const [corsoOrigineId, setCorsoOrigineId] = useState("");
   const [copiando, setCopiando] = useState(false);
+  const [avvisoDuplicati, setAvvisoDuplicati] = useState("");
   const idsUsati = new Set(righe.map((r) => r.prodotto_id));
   const risultati = ricerca.trim()
     ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricerca.trim().toLowerCase())).slice(0, 8)
     : [];
+  // "carica da un corso" resta sempre disponibile, non solo la prima
+  // volta a lista vuota: si può ripetere per aggiungere altri prodotti
+  // già raccolti in un'altra lista, in qualunque momento
   const corsiConLista = useMemo(() => {
     const idsCorsiConAccessori = new Set(
       tuttiCorsiKitProdotti.filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id).map((r) => r.corso_id)
@@ -14824,6 +14824,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
     const { error } = await supabase.from("corsi_kit_prodotti").insert({ corso_id: corso?.id || null, kit_id: null, prodotto_id: prodottoId, tipo: "accessorio", quantita: 1 });
     if (error) { window.alert("Errore: " + error.message); return; }
     setRicerca("");
+    setAvvisoDuplicati("");
     ricarica();
   }
   async function rimuovi(rigaId) {
@@ -14831,17 +14832,29 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
+  // importa i prodotti della lista scelta: quelli già presenti in questa
+  // lista (stesso prodotto aggiunto singolarmente) non vengono duplicati
+  // — restano quelli già qui, e si segnalano per nome
   async function caricaDaCorso() {
     if (!corsoOrigineId) return;
     const origine = tuttiCorsiKitProdotti.filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === corsoOrigineId);
     if (origine.length === 0) return;
+    const daImportare = origine.filter((r) => !idsUsati.has(r.prodotto_id));
+    const duplicati = origine.filter((r) => idsUsati.has(r.prodotto_id));
     setCopiando(true);
-    const { error } = await supabase.from("corsi_kit_prodotti").insert(
-      origine.map((r) => ({ corso_id: corso?.id || null, kit_id: null, prodotto_id: r.prodotto_id, tipo: "accessorio", quantita: 1 }))
-    );
+    if (daImportare.length > 0) {
+      const { error } = await supabase.from("corsi_kit_prodotti").insert(
+        daImportare.map((r) => ({ corso_id: corso?.id || null, kit_id: null, prodotto_id: r.prodotto_id, tipo: "accessorio", quantita: 1 }))
+      );
+      if (error) { setCopiando(false); window.alert("Errore: " + error.message); return; }
+    }
     setCopiando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    setModalitaScelta(false);
+    setCorsoOrigineId("");
+    setAvvisoDuplicati(
+      duplicati.length > 0
+        ? `Prodotto duplicato: ${duplicati.map((r) => prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—").join(", ")}`
+        : ""
+    );
     ricarica();
   }
   if (!aperto && righe.length === 0) return null;
@@ -14850,52 +14863,44 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
     <div style={{ ...cardStyle, marginTop: 4, padding: 14 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>Accessori didattica</div>
 
-      {aperto && righe.length === 0 && modalitaScelta ? (
-        <div>
-          <button
-            onClick={() => setModalitaScelta(false)}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", width: "100%", marginBottom: corsiConLista.length > 0 ? 10 : 0 }}
-          >
-            + Crea nuova lista
-          </button>
-          {corsiConLista.length > 0 && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <select value={corsoOrigineId} onChange={(e) => setCorsoOrigineId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
-                <option value="">— carica lista da un corso —</option>
-                {corsiConLista.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
-              <button
-                onClick={caricaDaCorso} disabled={!corsoOrigineId || copiando}
-                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: (!corsoOrigineId || copiando) ? "default" : "pointer", flexShrink: 0 }}
-              >
-                {copiando ? "Carico…" : "Carica"}
-              </button>
-            </div>
-          )}
+      {aperto && (
+        <div style={{ marginBottom: 10 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
+          {risultati.map((p) => (
+            <div key={p.id} onClick={() => aggiungi(p.id)} style={rigaRisultato}>{p.nome}</div>
+          ))}
         </div>
-      ) : (
-        <>
-          {aperto && (
-            <div style={{ marginBottom: righe.length > 0 ? 10 : 0 }}>
-              <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
-              {risultati.map((p) => (
-                <div key={p.id} onClick={() => aggiungi(p.id)} style={rigaRisultato}>{p.nome}</div>
-              ))}
-            </div>
-          )}
-          {righe.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio ancora.</div>
-          ) : righe.map((r) => {
-            const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
-            return (
-              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-                <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
-                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-              </div>
-            );
-          })}
-        </>
       )}
+
+      {aperto && corsiConLista.length > 0 && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <select value={corsoOrigineId} onChange={(e) => setCorsoOrigineId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+            <option value="">— carica lista da un corso —</option>
+            {corsiConLista.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </select>
+          <button
+            onClick={caricaDaCorso} disabled={!corsoOrigineId || copiando}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: (!corsoOrigineId || copiando) ? "default" : "pointer", flexShrink: 0 }}
+          >
+            {copiando ? "Carico…" : "Carica"}
+          </button>
+        </div>
+      )}
+      {aperto && avvisoDuplicati && (
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: "#C0392B", marginBottom: 10 }}>{avvisoDuplicati}</div>
+      )}
+
+      {righe.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio ancora.</div>
+      ) : righe.map((r) => {
+        const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+        return (
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
+            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+          </div>
+        );
+      })}
     </div>
   );
 }
