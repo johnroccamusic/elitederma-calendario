@@ -4436,7 +4436,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi }) {
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -4720,6 +4720,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
       voci: [
         { etichetta: "Setting diplomi", Icona: IconaDiplomaRiga, onClick: onApriFontDiplomi },
         { etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
+        { etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
   ];
@@ -8765,7 +8766,44 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+// campo "Pacchetto/Kit" del modulo di iscrizione: se per questo corso
+// sono stati definiti dei pacchetti (Setting > Documenti e brand >
+// Tipologie di kit), mostra una tendina con quelli invece del testo
+// libero di sempre, più una voce per scrivere comunque a mano. Se il
+// valore già presente (iscrizione esistente) non corrisponde a nessun
+// pacchetto — testo scritto a mano prima che esistesse questa tendina —
+// resta in modalità libera così com'è, senza toccarlo, finché qualcuno
+// non lo sostituisce scegliendo un pacchetto dalla lista
+function CampoPacchettoKit({ value, onChange, opzioni }) {
+  const nomiOpzioni = opzioni.map((o) => o.nome);
+  const [modoLibero, setModoLibero] = useState(() => (!!value && !nomiOpzioni.includes(value)) || opzioni.length === 0);
+
+  if (modoLibero) {
+    return (
+      <div>
+        <input value={value} onChange={(e) => onChange(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Scrivi il pacchetto/kit" />
+        {opzioni.length > 0 && (
+          <button type="button" onClick={() => setModoLibero(false)} style={{ ...fontBody, fontSize: 12, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "6px 0 0" }}>
+            Scegli da un pacchetto già definito
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <select
+      value={nomiOpzioni.includes(value) ? value : ""}
+      onChange={(e) => { if (e.target.value === "__libero__") setModoLibero(true); else onChange(e.target.value); }}
+      style={inputStyle}
+    >
+      <option value="">— scegli pacchetto —</option>
+      {opzioni.map((o) => <option key={o.id} value={o.nome}>{o.nome}</option>)}
+      <option value="__libero__">✎ Scrivi il kit manualmente</option>
+    </select>
+  );
+}
+
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -10131,7 +10169,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             )}
           </div>
           <Field label="Pacchetto/Kit">
-            <input value={pacchettoKit} onChange={(e) => setPacchettoKit(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+            <CampoPacchettoKit
+              key={modificandoId || "nuovo"}
+              value={pacchettoKit} onChange={setPacchettoKit}
+              opzioni={kitDefinizioni.filter((k) => k.corso_id === corso?.id)}
+            />
           </Field>
           <BloccoQuota
             titolo="Quota acconto"
@@ -10610,6 +10652,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     <span style={{ color: MUTED, fontWeight: 400, fontSize: 14 }}>{idx + 1}.</span>
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
+                    {i.pacchetto_kit && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
                   {i.telefono && (
@@ -14026,11 +14069,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   );
 }
 
-// scheda di un kit in "Contenuto kit": nome modificabile, corso di
-// default, ricerca+aggiungi prodotti al kit (con quantità per kit) e
-// agli "altri accessori" (senza quantità: la scrive chi prepara la
-// spedizione, edizione per edizione)
-function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
+// scheda compatta di un pacchetto/kit: nome modificabile, ricerca+
+// aggiungi prodotti (con quantità per kit) e "altri accessori" (senza
+// quantità: la scrive chi prepara la spedizione, edizione per edizione)
+// — il "+" per aggiungere prodotti sta sulla riga del nome del pacchetto
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
@@ -14040,7 +14083,6 @@ function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
   const accessori = righe.filter((r) => r.tipo === "accessorio");
   const idsUsati = new Set(righe.map((r) => r.prodotto_id));
-  const corsoDefault = corsi.find((c) => c.id === kit.corso_id);
 
   async function salvaNome() {
     if (!nome.trim() || nome.trim() === kit.nome) { setNome(kit.nome); return; }
@@ -14049,7 +14091,7 @@ function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
     ricarica();
   }
   async function elimina() {
-    if (!window.confirm(`Eliminare il kit "${kit.nome}"? Rimuove anche il suo contenuto (non tocca le edizioni che lo hanno già usato).`)) return;
+    if (!window.confirm(`Eliminare il pacchetto "${kit.nome}"? Rimuove anche il suo contenuto (non tocca le edizioni che lo hanno già usato).`)) return;
     const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
@@ -14065,6 +14107,8 @@ function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
+  // rimuove un singolo prodotto/accessorio dal contenuto del pacchetto
+  // (a differenza di "elimina", che rimuove l'intero pacchetto)
   async function rimuovi(rigaId) {
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -14077,28 +14121,21 @@ function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
   const risultatiAcc = ricercaAcc.trim()
     ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaAcc.trim().toLowerCase())).slice(0, 8)
     : [];
-  const pillBtn = { ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer" };
+  const pillBtn = { ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" };
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
 
   return (
-    <div style={{ ...cardStyle, marginBottom: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 2 }}>
+    <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (mostraRicercaKit || mostraRicercaAcc || prodottiKit.length > 0 || accessori.length > 0) ? 10 : 0 }}>
         <input
           value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaNome}
-          style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 0 }}
+          style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120 }}
         />
-        <button onClick={elimina} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "6px 10px", cursor: "pointer", flexShrink: 0 }}>
-          Elimina kit
-        </button>
-      </div>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
-        {corsoDefault ? `Kit di default per: ${corsoDefault.nome}` : "Kit speciale (nessun corso di default)"}
+        <button onClick={() => setMostraRicercaKit((v) => !v)} style={pillBtn}>+ Prodotto</button>
+        <button onClick={() => setMostraRicercaAcc((v) => !v)} style={pillBtn}>+ Accessorio</button>
+        <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Contenuto kit</div>
-        <button onClick={() => setMostraRicercaKit((v) => !v)} style={pillBtn}>+ Aggiungi prodotto</button>
-      </div>
       {mostraRicercaKit && (
         <div style={{ marginBottom: 10 }}>
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
@@ -14109,107 +14146,120 @@ function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
           ))}
         </div>
       )}
-      {prodottiKit.length === 0 ? (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Nessun prodotto nel kit.</div>
-      ) : prodottiKit.map((r) => {
+      {prodottiKit.map((r) => {
         const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
         return (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
             <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
-            <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 60, padding: "5px 8px" }} />
-            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+            <input type="number" min="1" value={r.quantita} onChange={(e) => cambiaQuantita(r.id, Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 56, padding: "4px 6px" }} />
+            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
           </div>
         );
       })}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 18, marginBottom: 8 }}>
-        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Altri accessori</div>
-        <button onClick={() => setMostraRicercaAcc((v) => !v)} style={pillBtn}>+ Aggiungi accessorio</button>
-      </div>
       {mostraRicercaAcc && (
-        <div style={{ marginBottom: 10 }}>
-          <CampoRicerca value={ricercaAcc} onChange={(e) => setRicercaAcc(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
+        <div style={{ marginTop: prodottiKit.length > 0 ? 8 : 0, marginBottom: 10 }}>
+          <CampoRicerca value={ricercaAcc} onChange={(e) => setRicercaAcc(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
           {risultatiAcc.map((p) => (
             <div key={p.id} onClick={() => aggiungiProdotto(p.id, "accessorio")} style={rigaRisultato}>{p.nome}</div>
           ))}
         </div>
       )}
-      {accessori.length === 0 ? (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio.</div>
-      ) : accessori.map((r) => {
+      {accessori.map((r) => {
         const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
         return (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
-            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
-            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"} <span style={{ fontSize: 11 }}>(accessorio)</span></span>
+            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
           </div>
         );
       })}
     </div>
   );
 }
-// pagina "Contenuto kit": catalogo di kit creati liberamente (non più
-// legati 1:1 al corso) — ognuno ha un nome e, facoltativamente, un corso
-// di default usato per la preselezione in "Preparazione kit"
-function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
-  const isMobile = useIsMobile();
-  const [mostraForm, setMostraForm] = useState(false);
+// una sezione di "Tipologie di kit": il corso (o, per corso=null, i
+// pacchetti speciali senza corso) con i suoi pacchetti sotto e il tasto
+// per crearne uno nuovo — sempre visibile, senza bisogno di "creare" un
+// contenitore prima di poter vedere l'elenco dei corsi
+function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiShop, ricarica }) {
+  const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
-  const [corsoDefaultNuovo, setCorsoDefaultNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
 
-  const kitOrdinati = kitDefinizioni.slice().sort((a, b) => a.nome.localeCompare(b.nome));
-
-  async function creaNuovoKit() {
-    if (!nomeNuovo.trim()) { window.alert("Dai un nome al kit (es. \"Micro Base\" o \"Kit Speciale VIP\")."); return; }
+  async function creaPacchetto() {
+    if (!nomeNuovo.trim()) return;
     setSalvando(true);
-    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corsoDefaultNuovo || null });
+    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corso?.id || null });
     setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setNomeNuovo(""); setCorsoDefaultNuovo(""); setMostraForm(false);
+    setNomeNuovo(""); setMostraNuovo(false);
     ricarica();
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-            <div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Contenuto kit</div>
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Ogni kit è selezionabile per qualunque edizione, anche come kit speciale aggiuntivo.</div>
-            </div>
-          </div>
-          <button
-            onClick={() => setMostraForm((v) => !v)}
-            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "10px 18px", cursor: "pointer", flexShrink: 0 }}
-          >
-            + Crea nuovo kit
+    <div style={{ marginBottom: 26 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{corso ? corso.nome : "Pacchetti speciali (senza corso)"}</div>
+        <button
+          onClick={() => setMostraNuovo((v) => !v)}
+          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+        >
+          + Nuovo pacchetto
+        </button>
+      </div>
+      {mostraNuovo && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input
+            value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} placeholder="Nome pacchetto (es. BASE, PRO, VIP)"
+            style={{ ...inputStyle, flex: 1 }} onKeyDown={(e) => e.key === "Enter" && creaPacchetto()}
+          />
+          <button onClick={creaPacchetto} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
+            {salvando ? "Creo…" : "Crea"}
           </button>
         </div>
+      )}
+      {pacchetti.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun pacchetto ancora.</div>
+      ) : pacchetti.map((k) => (
+        <SchedaPacchetto key={k.id} kit={k} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica} />
+      ))}
+    </div>
+  );
+}
+// pagina "Tipologie di kit" (raggiungibile sia da Logistica prodotti sia
+// da Setting > Documenti e brand): tutti i corsi sono sempre visibili,
+// con i loro pacchetti sotto — ogni pacchetto è anche ciò che compare
+// nella tendina "Pacchetto/Kit" del modulo di iscrizione per quel corso
+function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
+  const isMobile = useIsMobile();
+  const corsiOrdinati = corsi.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  const pacchettiSpeciali = kitDefinizioni.filter((k) => !k.corso_id);
 
-        {mostraForm && (
-          <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
-            <input
-              value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} placeholder="Nome kit (es. Micro Base, Kit Speciale VIP)"
-              style={{ ...inputStyle, flex: 1, minWidth: 200 }}
-            />
-            <select value={corsoDefaultNuovo} onChange={(e) => setCorsoDefaultNuovo(e.target.value)} style={{ ...inputStyle, minWidth: 200 }}>
-              <option value="">Nessun corso di default (kit speciale)</option>
-              {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-            <button onClick={creaNuovoKit} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
-              {salvando ? "Creo…" : "Crea"}
-            </button>
-          </div>
-        )}
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Tipologie di kit</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
+          Per ogni corso, i pacchetti selezionabili nel modulo di iscrizione ("Pacchetto/Kit") e il loro contenuto per la preparazione dei kit in Logistica prodotti.
+        </div>
 
-        {kitOrdinati.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit definito. Crea il primo con "+ Crea nuovo kit".</div>
-        ) : kitOrdinati.map((k) => (
-          <SchedaKitDefinizione key={k.id} kit={k} corsi={corsi} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica} />
+        {corsiOrdinati.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso definito.</div>
+        ) : corsiOrdinati.map((c) => (
+          <SezioneCorsoPacchetti
+            key={c.id} corso={c}
+            pacchetti={kitDefinizioni.filter((k) => k.corso_id === c.id)}
+            corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop} ricarica={ricarica}
+          />
         ))}
+
+        <SezioneCorsoPacchetti
+          corso={null} pacchetti={pacchettiSpeciali}
+          corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop} ricarica={ricarica}
+        />
       </div>
     </div>
   );
@@ -16629,7 +16679,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} />
       )}
 
       {view === "gestionedate" && (
@@ -16814,6 +16864,7 @@ export default function App() {
           key={schedaKey}
           ruoloUtente={ruoloUtente}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
+          kitDefinizioni={kitDefinizioni}
           corsoData={corsoDataApertaObj}
           corsi={corsi}
           location={location}
