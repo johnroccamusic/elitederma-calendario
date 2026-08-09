@@ -119,6 +119,7 @@ function leggiSlugData(testo) {
 }
 const GIORNI = ["L","M","M","G","V","S","D"];
 const GIORNI_ABBR = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"]; // solo per l'intestazione del Calendario mensile
+const GIORNI_ABBR_LUNGHI = ["Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato","Domenica"]; // intestazione delle carte dell'Agenda
 const COLORE_SABATO = "#F4F9FD"; // celeste tenuissimo, indice 5 = S
 const COLORE_DOMENICA = "#F2F2F2"; // grigio molto chiaro, indice 6 = D
 
@@ -3704,49 +3705,102 @@ function coloreVoceAgenda(id) {
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return COLORI_VOCE_AGENDA[h % COLORI_VOCE_AGENDA.length];
 }
-// un singolo mese dell'agenda: stessa griglia 7 colonne del Calendario
-// corsi (MeseGriglia), ma con etichette a singolo giorno invece di barre
-// multi-giorno — un appuntamento non ha una "durata", solo una data
-function MeseGrigliaAgenda({ anno, mese, voci, onClickGiorno, onClickVoce }) {
+// una singola "pagina" di taccuino: quella di un giorno (con gli
+// appuntamenti) o quella note della settimana (ottava carta della riga)
+function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
   const isMobile = useIsMobile();
-  const settimane = generaSettimane(anno, mese);
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        position: "relative", flex: "1 1 0", minWidth: isMobile ? 140 : 150, cursor: onClick ? "pointer" : "default",
+        background: evidenziata ? "#FBF3E4" : "#FFFDF8",
+        backgroundImage: "repeating-linear-gradient(to bottom, transparent, transparent 22px, #EAE4D6 23px)",
+        backgroundPosition: "0 34px",
+        border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
+        boxShadow: "0 6px 14px -8px rgba(14,27,51,0.25)",
+        minHeight: isMobile ? 150 : 190, overflow: "hidden",
+      }}
+    >
+      <div style={{ position: "absolute", top: 0, bottom: 0, left: 26, width: 1, background: "#E4B8AE" }} />
+      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, textAlign: "center", padding: "10px 6px 8px", position: "relative", zIndex: 1 }}>
+        {intestazione}
+      </div>
+      <div style={{ padding: "0 8px 8px 32px", position: "relative", zIndex: 1 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+// una settimana (sempre da lunedì) dell'agenda: riga di carte stile
+// taccuino, 7 giorni + un'ottava carta per gli appunti liberi della
+// settimana — invece della classica griglia a caselle numerate
+function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
   function dateStr(d) { return dateStrFor(anno, mese, d); }
   const oggiStr = dataOggiStr();
+  const [testoNota, setTestoNota] = useState(nota?.testo || "");
+  useEffect(() => { setTestoNota(nota?.testo || ""); }, [nota?.testo]);
+  const primoGiornoValido = settimana.find((d) => d !== null);
+  const settimanaInizio = primoGiornoValido ? dateStr(primoGiornoValido) : null;
+
   return (
-    <div style={{ marginBottom: 34 }}>
-      <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>{MESI[mese]} {anno}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 1, marginBottom: 4 }}>
-        {GIORNI_ABBR.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: isMobile ? 13 : 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
-      </div>
-      {settimane.map((settimana, wi) => (
-        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 1, marginBottom: 1 }}>
-          {settimana.map((d, di) => {
-            if (!d) return <div key={di} />;
-            const ds = dateStr(d);
-            const vociGiorno = voci.filter((v) => v.data === ds);
-            const isOggi = ds === oggiStr;
-            return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
+      {settimana.map((d, di) => {
+        if (!d) return <div key={di} style={{ flex: "1 1 0", minWidth: 150 }} />;
+        const ds = dateStr(d);
+        const vociGiorno = voci.filter((v) => v.data === ds);
+        const isOggi = ds === oggiStr;
+        return (
+          <CartaAgendaQuaderno key={di} evidenziata={isOggi} onClick={() => onClickGiorno(ds)} intestazione={`${GIORNI_ABBR_LUNGHI[di]} ${d}`}>
+            {vociGiorno.map((v) => (
               <div
-                key={di}
-                onClick={() => onClickGiorno(ds)}
-                style={{ minHeight: isMobile ? 66 : 82, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: 4, cursor: "pointer", background: isOggi ? "#FBF3E4" : "#fff", overflow: "hidden" }}
+                key={v.id}
+                onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 4, padding: "2px 6px", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: isOggi ? 700 : 400, color: isOggi ? GOLD : NAVY, marginBottom: 3 }}>{d}</div>
-                {vociGiorno.slice(0, 3).map((v) => (
-                  <div
-                    key={v.id}
-                    onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
-                    style={{ ...fontBody, fontSize: 10, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 4, padding: "2px 4px", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                  >
-                    {v.titolo}
-                  </div>
-                ))}
-                {vociGiorno.length > 3 && <div style={{ ...fontBody, fontSize: 9, color: MUTED }}>+{vociGiorno.length - 3} altri</div>}
+                {v.titolo}
               </div>
-            );
-          })}
-        </div>
-      ))}
+            ))}
+          </CartaAgendaQuaderno>
+        );
+      })}
+      {settimanaInizio && (
+        <CartaAgendaQuaderno intestazione="Note">
+          <textarea
+            value={testoNota}
+            onChange={(e) => setTestoNota(e.target.value)}
+            onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
+            placeholder="Appunti della settimana…"
+            style={{ ...fontBody, fontSize: 12, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: 130, lineHeight: "23px", padding: 0 }}
+          />
+        </CartaAgendaQuaderno>
+      )}
+    </div>
+  );
+}
+// un mese dell'agenda: titolo grande che fa da separatore, poi le sue
+// settimane (sempre da lunedì) impilate verticalmente, ciascuna come
+// riga di carte stile taccuino — sostituisce la vecchia griglia a caselle
+function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, onClickGiorno, onClickVoce, onSalvaNota }) {
+  const settimane = generaSettimane(anno, mese);
+  const noteByInizio = Object.fromEntries((noteSettimanali || []).map((n) => [n.settimana_inizio, n]));
+  return (
+    <div style={{ marginBottom: 30 }}>
+      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, padding: "6px 0 10px", marginBottom: 16, borderBottom: `2px solid ${GOLD}` }}>
+        {MESI[mese]} {anno}
+      </div>
+      {settimane.map((settimana, wi) => {
+        const primoGiornoValido = settimana.find((d) => d !== null);
+        const settimanaInizio = primoGiornoValido ? dateStrFor(anno, mese, primoGiornoValido) : null;
+        return (
+          <SettimanaAgendaQuaderno
+            key={wi} anno={anno} mese={mese} settimana={settimana} voci={voci}
+            onClickGiorno={onClickGiorno} onClickVoce={onClickVoce}
+            nota={settimanaInizio ? noteByInizio[settimanaInizio] : null}
+            onSalvaNota={onSalvaNota}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -3756,7 +3810,7 @@ function MeseGrigliaAgenda({ anno, mese, voci, onClickGiorno, onClickVoce }) {
 // di tasti fra cui scegliere quale aprire. Solo il Programmatore può
 // crearne/eliminarle (e vede sempre tutte); chiunque acceda a un'agenda
 // può aggiungere/togliere le sue voci
-function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica, onBack }) {
+function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, ruoloUtente, utenteLoggato, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const isProgrammatore = ruoloUtente === "programmatore";
   const isStaff = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
@@ -3793,6 +3847,15 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
     setPopupVoce(null);
     ricarica();
   }
+  // ottava carta della settimana: upsert su (agenda_id, settimana_inizio),
+  // così il testo resta legato alla settimana anche dopo un refresh
+  async function salvaNotaSettimana(settimanaInizio, testo) {
+    const { error } = await supabase
+      .from("agenda_note_settimanali")
+      .upsert({ agenda_id: agendaAperta.id, settimana_inizio: settimanaInizio, testo }, { onConflict: "agenda_id,settimana_inizio" });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   // vista a calendario, identica nello spirito al Calendario corsi: elenco
   // continuo di mesi (da 6 mesi fa a 12 avanti) su cui scorrere invece di
@@ -3821,7 +3884,7 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: agendaAperta ? 820 : 720, margin: "0 auto" }}>
+      <div style={{ maxWidth: agendaAperta ? 1320 : 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
@@ -3847,7 +3910,7 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
 
         {agendaAperta && (
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-            Scorri su o giù per vedere gli altri mesi. Clicca un giorno per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo.
+            Scorri verso il basso per vedere le altre settimane e i mesi successivi, la settimana riparte sempre da lunedì. Clicca una carta per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo. L'ottava carta di ogni settimana è per gli appunti liberi.
           </div>
         )}
 
@@ -3879,8 +3942,10 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
             <div key={`${anno}-${mese}`} style={{ scrollMarginTop: 54 }} ref={(el) => { refPerMese.current[`${anno}-${mese}`] = el; }}>
               <MeseGrigliaAgenda
                 anno={anno} mese={mese} voci={vociAgendaAperta}
+                noteSettimanali={(agendaNoteSettimanali || []).filter((n) => n.agenda_id === agendaAperta.id)}
                 onClickGiorno={(ds) => setPopupNuovo(ds)}
                 onClickVoce={(v) => setPopupVoce(v)}
+                onSalvaNota={salvaNotaSettimana}
               />
             </div>
           ))
@@ -17574,6 +17639,7 @@ export default function App() {
   // trova già aperta cliccando il tasto home, senza scegliere nulla
   const [agende, setAgende] = useState([]);
   const [agendaVoci, setAgendaVoci] = useState([]);
+  const [agendaNoteSettimanali, setAgendaNoteSettimanali] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
   // corrente"): una riga per (location_id, tipo, riferimento), l'ultima
@@ -17617,7 +17683,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -17665,6 +17731,7 @@ export default function App() {
       supabase.from("agenda_voci").select("*"),
       supabase.from("inventario_sede").select("*"),
       supabase.from("prodotti_aperti_magazzino").select("*"),
+      supabase.from("agenda_note_settimanali").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -17704,6 +17771,7 @@ export default function App() {
     setKitDefinizioni(kd.data || []);
     setAgende(ag.data || []);
     setAgendaVoci(av.data || []);
+    setAgendaNoteSettimanali(ans.data || []);
     setInventarioSede(invs.data || []);
     setProdottiApertiMagazzino(pam.data || []);
   }
@@ -18302,7 +18370,7 @@ export default function App() {
 
       {view === "agenda" && (
         <PaginaAgenda
-          agende={agende} agendaVoci={agendaVoci} ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
+          agende={agende} agendaVoci={agendaVoci} agendaNoteSettimanali={agendaNoteSettimanali} ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
