@@ -14113,10 +14113,15 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
   const voci = Object.entries(conteggio).sort((a, b) => b[1] - a[1]);
   if (voci.length === 0) return null;
   const totale = voci.reduce((s, [, n]) => s + n, 0);
+  const righe = [...voci.map(([nome, n]) => [n, `KIT ${nome.toUpperCase()}`]), [totale, "KIT TOTALI"]];
   return (
-    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textAlign: "right", lineHeight: 1.5, whiteSpace: "nowrap", ...style }}>
-      {voci.map(([nome, n]) => <div key={nome}>{n} KIT {nome.toUpperCase()}</div>)}
-      <div>{totale} KIT TOTALI</div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, ...style }}>
+      {righe.map(([n, etichetta], idx) => (
+        <div key={idx} style={{ display: "flex", alignItems: "center", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9 }}>
+          <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{n}</span>
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap" }}>{etichetta}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -14139,9 +14144,9 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
-            <div style={{ textAlign: "right" }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
               <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>Ora: {etichettaFase}</div>
-              <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} style={{ marginTop: 4 }} />
+              <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
             </div>
           </div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{toTitleCase(loc?.nome || "—")} · {numeroPartecipanti} partecipant{numeroPartecipanti === 1 ? "e" : "i"}</div>
