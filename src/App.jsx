@@ -3707,35 +3707,51 @@ function coloreVoceAgenda(id) {
 }
 // una singola "pagina" di taccuino: quella di un giorno (con gli
 // appuntamenti) o quella note della settimana (ottava carta della riga)
+// carattere per le intestazioni delle carte: serif, diverso di proposito
+// dal resto dell'app (Prompt/Roboto) per dare l'aria di un vero taccuino
+const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
+// una "pagina" del taccuino (un giorno con i suoi appuntamenti, o l'ottava
+// carta delle note): rilegatura a spirale sul bordo sinistro, margine
+// rosso, righe orizzontali, e una seconda pagina leggermente sfalsata
+// dietro per dare l'effetto di un blocco di fogli impilati
 function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
-  const isMobile = useIsMobile();
   return (
-    <div
-      onClick={onClick}
-      style={{
-        position: "relative", flex: "1 1 0", minWidth: isMobile ? 140 : 150, cursor: onClick ? "pointer" : "default",
-        background: evidenziata ? "#FBF3E4" : "#FFFDF8",
-        backgroundImage: "repeating-linear-gradient(to bottom, transparent, transparent 22px, #EAE4D6 23px)",
-        backgroundPosition: "0 34px",
-        border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
-        boxShadow: "0 6px 14px -8px rgba(14,27,51,0.25)",
-        minHeight: isMobile ? 150 : 190, overflow: "hidden",
-      }}
-    >
-      <div style={{ position: "absolute", top: 0, bottom: 0, left: 26, width: 1, background: "#E4B8AE" }} />
-      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, textAlign: "center", padding: "10px 6px 8px", position: "relative", zIndex: 1 }}>
-        {intestazione}
-      </div>
-      <div style={{ padding: "0 8px 8px 32px", position: "relative", zIndex: 1 }}>
-        {children}
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "absolute", top: 5, left: 5, right: -5, bottom: -5, background: "#EDE6D6", borderRadius: 9, border: `1px solid ${CREAM_BORDER}` }} />
+      <div
+        onClick={onClick}
+        style={{
+          position: "relative", cursor: onClick ? "pointer" : "default",
+          background: evidenziata ? "#FBF3E4" : "#FFFDF7",
+          backgroundImage: "repeating-linear-gradient(to bottom, transparent, transparent 22px, #E9E3D4 23px)",
+          backgroundPosition: "0 40px",
+          border: `1px solid ${CREAM_BORDER}`, borderRadius: 9,
+          boxShadow: "0 10px 18px -12px rgba(14,27,51,0.4)",
+          minHeight: 190, overflow: "hidden", paddingLeft: 16,
+        }}
+      >
+        {/* rilegatura a spirale: striscia di anelli lungo il bordo sinistro */}
+        <div style={{
+          position: "absolute", top: 0, bottom: 0, left: 0, width: 16,
+          backgroundImage: "radial-gradient(circle, #fff 2.5px, #C9C2AE 3px)",
+          backgroundSize: "100% 16px", backgroundPosition: "center 6px", backgroundRepeat: "repeat-y",
+        }} />
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: 26, width: 1, background: "#E4A79B" }} />
+        <div style={{ ...fontQuaderno, fontSize: 15, fontWeight: 700, color: NAVY, textAlign: "center", padding: "12px 8px 10px", position: "relative", zIndex: 1 }}>
+          {intestazione}
+        </div>
+        <div style={{ padding: "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
+          {children}
+        </div>
       </div>
     </div>
   );
 }
-// una settimana (sempre da lunedì) dell'agenda: riga di carte stile
-// taccuino, 7 giorni + un'ottava carta per gli appunti liberi della
-// settimana — invece della classica griglia a caselle numerate
+// una settimana (sempre da lunedì) dell'agenda: griglia fissa a 4
+// colonne — 7 carte-giorno + l'ottava carta delle note, sempre disposte
+// su 2 righe da 4, mai una fila unica che scorre in orizzontale
 function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
+  const isMobile = useIsMobile();
   function dateStr(d) { return dateStrFor(anno, mese, d); }
   const oggiStr = dataOggiStr();
   const [testoNota, setTestoNota] = useState(nota?.testo || "");
@@ -3744,9 +3760,9 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
   const settimanaInizio = primoGiornoValido ? dateStr(primoGiornoValido) : null;
 
   return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 14, overflowX: "auto", paddingBottom: 4 }}>
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 18, marginBottom: 26 }}>
       {settimana.map((d, di) => {
-        if (!d) return <div key={di} style={{ flex: "1 1 0", minWidth: 150 }} />;
+        if (!d) return <div key={di} />;
         const ds = dateStr(d);
         const vociGiorno = voci.filter((v) => v.data === ds);
         const isOggi = ds === oggiStr;
@@ -3756,7 +3772,7 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
               <div
                 key={v.id}
                 onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
-                style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 4, padding: "2px 6px", marginBottom: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 5, padding: "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {v.titolo}
               </div>
@@ -3771,7 +3787,7 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
             onChange={(e) => setTestoNota(e.target.value)}
             onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
             placeholder="Appunti della settimana…"
-            style={{ ...fontBody, fontSize: 12, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: 130, lineHeight: "23px", padding: 0 }}
+            style={{ ...fontBody, fontSize: 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: 140, lineHeight: "22px", padding: 0 }}
           />
         </CartaAgendaQuaderno>
       )}
@@ -3780,13 +3796,14 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
 }
 // un mese dell'agenda: titolo grande che fa da separatore, poi le sue
 // settimane (sempre da lunedì) impilate verticalmente, ciascuna come
-// riga di carte stile taccuino — sostituisce la vecchia griglia a caselle
+// griglia 4x2 di carte stile taccuino — sostituisce la vecchia griglia
+// a caselle numerate del Calendario corsi
 function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, onClickGiorno, onClickVoce, onSalvaNota }) {
   const settimane = generaSettimane(anno, mese);
   const noteByInizio = Object.fromEntries((noteSettimanali || []).map((n) => [n.settimana_inizio, n]));
   return (
-    <div style={{ marginBottom: 30 }}>
-      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, padding: "6px 0 10px", marginBottom: 16, borderBottom: `2px solid ${GOLD}` }}>
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, padding: "6px 0 10px", marginBottom: 20, borderBottom: `2px solid ${GOLD}` }}>
         {MESI[mese]} {anno}
       </div>
       {settimane.map((settimana, wi) => {
