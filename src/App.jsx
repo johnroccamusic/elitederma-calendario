@@ -12634,7 +12634,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriGestioneDate, onApriImpostazioni, onApriCercaIscritto, onApriCostiOperativi, onApriNuovaSpesa, onApriVenditeShop, onApriMagazzino }) {
+function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriImpostazioni, onApriCostiOperativi, onApriNuovaSpesa, onApriVenditeShop, onApriMagazzino }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
@@ -12716,12 +12716,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
 
   const vociNav = [
     { chiave: "dashboard", etichetta: "Dashboard", attiva: true, corrente: true },
-    { chiave: "calendario", etichetta: "Calendario", attiva: true, onClick: onApriGestioneDate },
-    { chiave: "corsi", etichetta: "Corsi", attiva: true, onClick: onApriImpostazioni },
-    { chiave: "allievi", etichetta: "Allievi", attiva: true, onClick: onApriCercaIscritto },
     { chiave: "crm", etichetta: "CRM & vendite", attiva: false },
-    { chiave: "sedi", etichetta: "Sedi", attiva: true, onClick: onApriImpostazioni },
-    { chiave: "team", etichetta: "Team", attiva: true, onClick: onApriImpostazioni },
     { chiave: "contabilita", etichetta: "Contabilità", attiva: true, onClick: onApriCostiOperativi },
     { chiave: "venditeshop", etichetta: "Vendite shop", attiva: true, onClick: onApriVenditeShop },
     { chiave: "magazzino", etichetta: "Magazzino", attiva: true, onClick: onApriMagazzino },
@@ -17940,9 +17935,7 @@ export default function App() {
           spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
           ricarica={fetchDati}
           onBack={() => setView("home")}
-          onApriGestioneDate={apriGestioneDate}
           onApriImpostazioni={apriImpostazioni}
-          onApriCercaIscritto={() => setView("cercaiscritto")}
           onApriCostiOperativi={apriCostiOperativi}
           onApriNuovaSpesa={apriNuovaSpesa}
           onApriVenditeShop={apriVenditeShop}
