@@ -12271,6 +12271,33 @@ function rangePrecedenteErp(range) {
   const inizioPrec = new Date(finePrec.getFullYear(), finePrec.getMonth(), finePrec.getDate() - giorni + 1);
   return { inizio: fmt(inizioPrec), fine: fmt(finePrec) };
 }
+// periodi di "Inserimento costi e ricavi": ultimo mese/trimestre sono
+// finestre mobili di 30/90 giorni (come rangePeriodoErp), "sempre attivo"
+// non applica alcun filtro di data, "ultimo anno accademico" riusa lo
+// stesso cutoff del 1° settembre di annoScolasticoDi (vedi rangeMagazzino)
+// ma come finestra mobile fino a oggi, non un anno scolastico intero
+function rangePeriodoInserimento(periodo, personalizzato) {
+  const oggi = new Date();
+  const oggiStr = dataOggiStr();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (periodo === "ultimomese") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate() - 29);
+    return { inizio: fmt(inizio), fine: oggiStr };
+  }
+  if (periodo === "ultimotrimestre") {
+    const inizio = new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1);
+    return { inizio: fmt(inizio), fine: oggiStr };
+  }
+  if (periodo === "ultimoannoaccademico") {
+    const annoSett = annoScolasticoDi(oggiStr);
+    return { inizio: `${annoSett}-09-01`, fine: oggiStr };
+  }
+  if (periodo === "personalizzato") {
+    return { inizio: personalizzato?.da || oggiStr, fine: personalizzato?.a || oggiStr };
+  }
+  // "sempreattivo": nessun filtro di data
+  return { inizio: "0000-01-01", fine: "9999-12-31" };
+}
 // periodi della pagina "Costi operativi" (diversi da quelli della
 // dashboard ERP: qui servono "ultimo mese"/"mese precedente" come mesi
 // di calendario interi, non gli ultimi 30 giorni)
@@ -12424,15 +12451,15 @@ function GaugeMargineErp({ percentuale }) {
 // un'iscrizione (es. vendita in accademia di un prodotto a un cliente
 // occasionale). Stessa struttura/UX di "Uscita", ma senza voce di costo:
 // qui la descrizione libera indica cosa è stato venduto/incassato
-function ModaleNuovaEntrata({ location, onClose, onSalvato }) {
-  const [data, setData] = useState(dataOggiStr());
-  const [citta, setCitta] = useState("");
-  const [descrizione, setDescrizione] = useState("");
-  const [imponibile, setImponibile] = useState("");
-  const [totale, setTotale] = useState("");
-  const [iva, setIva] = useState(22);
-  const [esenteIva, setEsenteIva] = useState(false);
-  const [metodo, setMetodo] = useState("");
+function ModaleNuovaEntrata({ location, onClose, onSalvato, entrataEsistente }) {
+  const [data, setData] = useState(entrataEsistente?.data || dataOggiStr());
+  const [citta, setCitta] = useState(entrataEsistente?.sede_id || "");
+  const [descrizione, setDescrizione] = useState(entrataEsistente?.descrizione || "");
+  const [imponibile, setImponibile] = useState(entrataEsistente ? String(entrataEsistente.imponibile) : "");
+  const [totale, setTotale] = useState(entrataEsistente ? String(entrataEsistente.totale) : "");
+  const [iva, setIva] = useState(entrataEsistente?.iva_percentuale ?? 22);
+  const [esenteIva, setEsenteIva] = useState(entrataEsistente ? entrataEsistente.iva_percentuale === 0 && entrataEsistente.metodo_pagamento !== "Cash no iva" : false);
+  const [metodo, setMetodo] = useState(entrataEsistente?.metodo_pagamento || "");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -12474,7 +12501,7 @@ function ModaleNuovaEntrata({ location, onClose, onSalvato }) {
     const imp = parseNum(imponibile);
     if (!imp) { setMsg("Inserisci un imponibile."); return; }
     setSalvando(true);
-    const { error } = await supabase.from("entrate_manuali").insert({
+    const riga = {
       descrizione: descrizione.trim() || null,
       sede_id: citta || null,
       imponibile: imp,
@@ -12482,14 +12509,17 @@ function ModaleNuovaEntrata({ location, onClose, onSalvato }) {
       totale: totale === "" ? imp : round2(parseNum(totale)),
       data,
       metodo_pagamento: metodo || null,
-    });
+    };
+    const { error } = entrataEsistente
+      ? await supabase.from("entrate_manuali").update(riga).eq("id", entrataEsistente.id)
+      : await supabase.from("entrate_manuali").insert(riga);
     setSalvando(false);
     if (error) { setMsg("Errore: " + error.message); return; }
     onSalvato();
   }
 
   return (
-    <Modal title="Nuova entrata" onClose={onClose}>
+    <Modal title={entrataEsistente ? "Modifica entrata" : "Nuova entrata"} onClose={onClose}>
       <div style={{ display: "flex", gap: 14 }}>
         <div style={{ flex: 1 }}>
           <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
@@ -12634,12 +12664,52 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali, ricarica, onBack, onApriImpostazioni, onApriCostiOperativi, onApriNuovaSpesa, onApriVenditeShop, onApriMagazzino }) {
+// hub d'ingresso di "ERP / Magazzino": griglia di tasti stile Home (stesso
+// TileHome usato lì), ciascuno dedicato a una sola area — sostituisce la
+// vecchia dashboard con barra di navigazione orizzontale in cima
+function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriDashboardAnalisi }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+      <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
+          </button>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>ERP</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
+            <IconaIngranaggioErp color="#fff" />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>ERP / Magazzino</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
+          <TileHome title="Inserimento costi e ricavi" onClick={onApriInserimentoCostiRicavi} />
+          <TileHome title="Catalogo categorie" onClick={onApriCatalogoCategorieCosti} />
+          <TileHome title="Gestione magazzino" onClick={onApriMagazzino} />
+          <TileHome title="Gestione shop" onClick={onApriGestioneShop} />
+          <TileHome title="Vendite shop" onClick={onApriVenditeShop} />
+          <TileHome title="Dashboard analisi" onClick={onApriDashboardAnalisi} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Analisi andamento": prima sezione di "Dashboard analisi" — ex corpo di
+// PaginaErp (KPI/grafici/andamento per sede), meno "+ Nuova operazione"
+// (si trova ora in "Inserimento costi e ricavi") e meno il click sulla
+// card "Costi operativi" (qui è solo un KPI, la vista dedicata non c'è più)
+function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, costiCategorie, entrateManuali }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
-  const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
-  const [modaleEntrataAperta, setModaleEntrataAperta] = useState(false);
   const [confrontoAnnualeAperto, setConfrontoAnnualeAperto] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -12714,111 +12784,20 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
     return max > 0 && (n / max) * 100 < SOGLIA_RIEMPIMENTO_BASSO_ERP;
   }).length;
 
-  const vociNav = [
-    { chiave: "dashboard", etichetta: "Dashboard", attiva: true, corrente: true },
-    { chiave: "crm", etichetta: "CRM & vendite", attiva: false },
-    { chiave: "contabilita", etichetta: "Contabilità", attiva: true, onClick: onApriCostiOperativi },
-    { chiave: "venditeshop", etichetta: "Vendite shop", attiva: true, onClick: onApriVenditeShop },
-    { chiave: "magazzino", etichetta: "Magazzino", attiva: true, onClick: onApriMagazzino },
-    { chiave: "report", etichetta: "Report", attiva: false },
-  ];
-
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
-      <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
-            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
-          </button>
-          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>ERP</div>
-        </div>
-        {!isMobile && (
-          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.08)", borderRadius: 10, padding: "8px 12px", maxWidth: 420, opacity: 0.55 }} title="Ricerca non ancora disponibile">
-            <IconaRicercaErp size={16} color="#fff" />
-            <input disabled placeholder="Cerca allievi, corsi, fatture…" style={{ background: "transparent", border: "none", outline: "none", color: "#fff", fontSize: 13, flex: 1, cursor: "not-allowed" }} />
-          </div>
-        )}
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
-          <div style={{ opacity: 0.4, cursor: "not-allowed", display: "flex" }} title="Notifiche non ancora disponibili"><IconaCampanellaErp color="#fff" /></div>
-          <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
-            <IconaIngranaggioErp color="#fff" />
-          </button>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", ...fontDisplay, fontSize: 12, fontWeight: 700, flexShrink: 0 }}>GR</div>
-            {!isMobile && (
-              <div>
-                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", lineHeight: 1.2, whiteSpace: "nowrap" }}>GianLuca Rocca</div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: "rgba(255,255,255,0.6)", lineHeight: 1.2 }}>Amministratore</div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+    <div>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi andamento</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Ecco come sta andando Elitederma, {fmtDataLunga(dataOggiStr())}.</div>
 
-      <div style={{ background: "#fff", borderBottom: `1px solid ${CREAM_BORDER}`, padding: isMobile ? "0 12px" : "0 28px", display: "flex", gap: 4, overflowX: "auto" }}>
-        {vociNav.map((v) => (
-          <button
-            key={v.chiave}
-            onClick={v.attiva ? v.onClick : undefined}
-            disabled={!v.attiva}
-            title={v.attiva ? undefined : "Sezione non ancora collegata a dati reali"}
-            style={{
-              ...fontBody, fontSize: 13.5, fontWeight: 600, padding: "14px 12px", whiteSpace: "nowrap",
-              background: "transparent", border: "none", borderBottom: v.corrente ? `2px solid ${GOLD}` : "2px solid transparent",
-              color: v.corrente ? NAVY : v.attiva ? MUTED : "#C7C9D4",
-              cursor: v.attiva ? "pointer" : "default",
-            }}
-          >
-            {v.etichetta}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ maxWidth: 1300, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1, marginBottom: 6 }}>
-          Control center · {fmtDataLunga(dataOggiStr())}
-        </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 26 : 32, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Buongiorno, GianLuca.</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 24 }}>Ecco come sta andando Elitederma oggi.</div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-            {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
-              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
-                {p.l}
-              </button>
-            ))}
-          </div>
-          <div style={{ position: "relative" }}>
-            <button
-              onClick={() => setMenuNuovaOperazione((v) => !v)}
-              style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}
-            >
-              + Nuova operazione
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+              {p.l}
             </button>
-            {menuNuovaOperazione && (
-              <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)", overflow: "hidden", minWidth: 160 }}>
-                <button
-                  onClick={() => { setMenuNuovaOperazione(false); onApriNuovaSpesa(); }}
-                  style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", background: "transparent", color: NAVY, cursor: "pointer" }}
-                >
-                  Uscita
-                </button>
-                <button
-                  onClick={() => { setMenuNuovaOperazione(false); setModaleEntrataAperta(true); }}
-                  style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, background: "transparent", color: NAVY, cursor: "pointer" }}
-                >
-                  Entrata
-                </button>
-              </div>
-            )}
+          ))}
           </div>
         </div>
-
-        {modaleEntrataAperta && (
-          <ModaleNuovaEntrata location={location} onClose={() => setModaleEntrataAperta(false)} onSalvato={() => { setModaleEntrataAperta(false); ricarica(); }} />
-        )}
 
         {confrontoAnnualeAperto && (
           <PannelloConfrontoAnnuale
@@ -12845,7 +12824,7 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
           <CardKpiErp titolo="Ricavi totali" valore={fmtEuroKErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
-          <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" onClick={onApriCostiOperativi} />
+          <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
           <CardKpiErp titolo="Utile netto" valore={fmtEuroKErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
         </div>
@@ -13016,8 +12995,240 @@ function PaginaErp({ corsi, location, master, corsiDate, iscritti, spese, costiC
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna criticità rilevata nel periodo selezionato.</div>
             )}
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 14, lineHeight: 1.5 }}>
-              Le fatture in scadenza non sono ancora tracciate nel gestionale: comparirà qui non appena questa sezione sarà collegata a dati reali. Le scorte di magazzino sono già tracciate — vedi "Magazzino" nel menu qui sopra.
+              Le fatture in scadenza non sono ancora tracciate nel gestionale: comparirà qui non appena questa sezione sarà collegata a dati reali. Le scorte di magazzino sono già tracciate — vedi "Gestione magazzino" in ERP / Magazzino.
             </div>
+          </div>
+        </div>
+    </div>
+  );
+}
+
+// "Dashboard analisi": sesto tasto dell'hub ERP — impila le tre sezioni di
+// sola lettura (ex PaginaErp, ex parte analitica di PaginaAnalisiCosti,
+// ex parte analitica di PaginaMagazzino), separate da un titolo grande
+function PaginaDashboardAnalisi({
+  corsi, location, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali,
+  eventi, fornitori, speseAttribuzioni, costiBudget, costiSoglieAllerta,
+  categorieProdotti, prodottiShop, prodottiCategorie, venditeShop,
+  onApriModificaSpesa, ricarica, onBack,
+}) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Dashboard analisi</div>
+        </div>
+
+        <SezioneAnalisiAndamento
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
+          costiCategorie={costiCategorie} entrateManuali={entrateManuali}
+        />
+
+        <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, margin: "40px 0 30px" }} />
+
+        <SezioneAnalisiCosti
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} eventi={eventi} fornitori={fornitori}
+          spese={spese} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
+          ricarica={ricarica} onApriModificaSpesa={onApriModificaSpesa}
+        />
+
+        <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, margin: "40px 0 30px" }} />
+
+        <SezioneAnalisiMagazzino
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
+        />
+      </div>
+    </div>
+  );
+}
+
+// "Inserimento costi e ricavi": primo tasto dell'hub ERP — import/export/
+// budget + "Nuova operazione" (entrata/uscita) spostati qui da PaginaErp,
+// più due colonne con l'elenco di tutte le spese e di tutti i ricavi
+// manuali del periodo, ciascuna con modifica ed elimina
+function PaginaInserimentoCostiRicavi({ spese, entrateManuali, location, costiCategorie, costiSottocategorie, fornitori, ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("ultimomese");
+  const [customDa, setCustomDa] = useState(dataOggiStr());
+  const [customA, setCustomA] = useState(dataOggiStr());
+  const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
+  const [modaleEntrataAperta, setModaleEntrataAperta] = useState(false);
+  const [entrataInModifica, setEntrataInModifica] = useState(null);
+  const [importCsvAperto, setImportCsvAperto] = useState(false);
+
+  const range = rangePeriodoInserimento(periodo, { da: customDa, a: customA });
+
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
+  const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+  const costiSottocategorieById = Object.fromEntries((costiSottocategorie || []).map((v) => [v.id, v]));
+  const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+
+  const speseFiltrate = (spese || [])
+    .filter((s) => s.data_documento && s.data_documento >= range.inizio && s.data_documento <= range.fine)
+    .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+  const entrateFiltrate = (entrateManuali || [])
+    .filter((e) => e.data && e.data >= range.inizio && e.data <= range.fine)
+    .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+
+  const totaleSpese = round2(speseFiltrate.reduce((s, sp) => s + (sp.totale || 0), 0));
+  const totaleEntrate = round2(entrateFiltrate.reduce((s, e) => s + (e.totale || 0), 0));
+
+  async function eliminaSpesa(id) {
+    if (!window.confirm("Eliminare questa spesa?")) return;
+    const { error } = await supabase.from("spese").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function eliminaEntrata(id) {
+    if (!window.confirm("Eliminare questa entrata?")) return;
+    const { error } = await supabase.from("entrate_manuali").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+              <IconaFrecciaSinistra size={20} />
+            </button>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>ERP / Magazzino</div>
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
+            <button onClick={() => esportaCsvSpese(speseFiltrate.map((s) => ({ spesa: s, importo: s.totale })), costiCategorieById, costiSottocategorieById)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
+            <button onClick={() => window.print()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta PDF</button>
+            <button onClick={onApriBudget} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Budget</button>
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setMenuNuovaOperazione((v) => !v)}
+                style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}
+              >
+                + Nuova operazione
+              </button>
+              {menuNuovaOperazione && (
+                <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)", overflow: "hidden", minWidth: 160 }}>
+                  <button
+                    onClick={() => { setMenuNuovaOperazione(false); onApriNuovaSpesa(); }}
+                    style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", background: "transparent", color: NAVY, cursor: "pointer" }}
+                  >
+                    Uscita
+                  </button>
+                  <button
+                    onClick={() => { setMenuNuovaOperazione(false); setEntrataInModifica(null); setModaleEntrataAperta(true); }}
+                    style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, background: "transparent", color: NAVY, cursor: "pointer" }}
+                  >
+                    Entrata
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {importCsvAperto && (
+          <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
+        )}
+        {modaleEntrataAperta && (
+          <ModaleNuovaEntrata
+            location={location} entrataEsistente={entrataInModifica}
+            onClose={() => { setModaleEntrataAperta(false); setEntrataInModifica(null); }}
+            onSalvato={() => { setModaleEntrataAperta(false); setEntrataInModifica(null); ricarica(); }}
+          />
+        )}
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Inserimento costi e ricavi</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese e i ricavi inseriti manualmente, con modifica ed eliminazione.</div>
+
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: periodo === "personalizzato" ? 10 : 0 }}>
+            {[
+              { v: "ultimomese", l: "Ultimo mese" },
+              { v: "sempreattivo", l: "Sempre attivo" },
+              { v: "ultimotrimestre", l: "Ultimo trimestre" },
+              { v: "ultimoannoaccademico", l: "Ultimo anno accademico" },
+              { v: "personalizzato", l: "Data personalizzata" },
+            ].map((p) => (
+              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 12px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
+                {p.l}
+              </button>
+            ))}
+          </div>
+          {periodo === "personalizzato" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
+              <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Spese</div>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B" }}>{fmtEuroErp(totaleSpese)}</div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>{speseFiltrate.length} vo{speseFiltrate.length === 1 ? "ce" : "ci"}</div>
+            {speseFiltrate.map((spesa) => (
+              <div key={spesa.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{spesa.descrizione || costiSottocategorieById[spesa.sottocategoria_id]?.nome || "Spesa"}</div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                      {spesa.data_documento ? fmtData(spesa.data_documento) : "—"}
+                      {costiCategorieById[spesa.categoria_id] ? ` · ${costiCategorieById[spesa.categoria_id].nome}` : ""}
+                      {spesa.fornitore_id ? ` · ${fornitoriById[spesa.fornitore_id]?.nome}` : ""}
+                      {" · "}{etichettaOpzione(STATI_SPESA, spesa.stato)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(spesa.totale)}</span>
+                    <button onClick={() => onApriModificaSpesa(spesa.id)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                    </button>
+                    <button onClick={() => eliminaSpesa(spesa.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {speseFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>}
+          </div>
+
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Ricavi</div>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>{fmtEuroErp(totaleEntrate)}</div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>{entrateFiltrate.length} vo{entrateFiltrate.length === 1 ? "ce" : "ci"}</div>
+            {entrateFiltrate.map((entrata) => (
+              <div key={entrata.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{entrata.descrizione || "Entrata"}</div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                      {entrata.data ? fmtData(entrata.data) : "—"}
+                      {entrata.sede_id && locationById[entrata.sede_id] ? ` · ${toTitleCase(locationById[entrata.sede_id].nome)}` : ""}
+                      {entrata.metodo_pagamento ? ` · ${entrata.metodo_pagamento}` : ""}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(entrata.totale)}</span>
+                    <button onClick={() => { setEntrataInModifica(entrata); setModaleEntrataAperta(true); }} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                    </button>
+                    <button onClick={() => eliminaEntrata(entrata.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {entrateFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun ricavo nel periodo.</div>}
           </div>
         </div>
       </div>
@@ -13490,17 +13701,18 @@ function GraficoTrendBarre({ voci }) {
   );
 }
 
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack, onApriGestioneShop }) {
+// "Gestione magazzino": versione asciugata (solo filtri + segnalazioni +
+// tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
+// si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
+// SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
   const [periodo, setPeriodo] = useState("annuale");
   const [anno, setAnno] = useState(oggi.getFullYear());
   const [meseSel, setMeseSel] = useState(oggi.getMonth());
-  const [confrontoTipo, setConfrontoTipo] = useState("periodoprecedente");
-  const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
   const [categoriaSel, setCategoriaSel] = useState("");
-  const [vistaTrend, setVistaTrend] = useState("categoria");
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
@@ -13534,29 +13746,12 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   }
 
   const range = rangeMagazzino(periodo, anno, meseSel);
-  const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo);
   const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
-  // etichette CONCRETE (non generiche "periodo precedente") di quale
-  // periodo esatto sta nella barra/riga "selezionato" e quale in quella
-  // "precedente": tolgono l'ambiguità su "rispetto a cosa" è calcolata
-  // ogni % — usate sia nel sottotitolo che nella legenda dei grafici
-  const etichettaPeriodoSelezionato = periodo === "annuale" ? `${anno}`
-    : periodo === "mensile" ? `${MESI[meseSel]} ${anno}`
-    : periodo === "settimanale" ? "questa settimana"
-    : `${anno}/${String((anno + 1) % 100).padStart(2, "0")}`;
-  const [annoMesePrecedente, numMesePrecedente] = rangePrecedente.inizio.split("-").map(Number);
-  const etichettaPeriodoPrecedente = periodo === "annuale" ? `${anno - 1}`
-    : periodo === "mensile" ? `${MESI[numMesePrecedente - 1]} ${annoMesePrecedente}`
-    : periodo === "settimanale" ? "settimana precedente"
-    : `${anno - 1}/${String(anno % 100).padStart(2, "0")}`;
-  const etichettaConfronto = `vs ${etichettaPeriodoPrecedente}`;
 
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
   (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
-  const categorieIdPerNomeProdotto = {};
-  (prodottiShop || []).forEach((p) => { categorieIdPerNomeProdotto[(p.nome || "").trim().toLowerCase()] = categorieIdPerProdottoId[p.id] || []; });
 
   // il collegamento vendita<->prodotto è per nome: vendite_shop non ha
   // un riferimento diretto al prodotto, solo la descrizione della riga
@@ -13576,7 +13771,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     return mappa;
   }
   const venditePerNome = aggregaVenditePerNome(range.inizio, range.fine);
-  const venditePerNomePrecedente = aggregaVenditePerNome(rangePrecedente.inizio, rangePrecedente.fine);
 
   // "fermi da oltre 90 giorni": guarda TUTTO lo storico vendite, non solo il periodo selezionato
   const mappaUltimaVendita = {};
@@ -13618,120 +13812,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
 
-  const piuVenduto = [...prodottiConStato].filter((p) => p.quantitaVenduta > 0).sort((a, b) => b.quantitaVenduta - a.quantitaVenduta)[0] || null;
-  const maggiorFatturato = [...prodottiConStato].filter((p) => p.fatturato > 0).sort((a, b) => b.fatturato - a.fatturato)[0] || null;
-  const migliorMargine = [...prodottiConStato].filter((p) => p.margine != null).sort((a, b) => b.margine - a.margine)[0] || null;
-
-  const valoreGiacenzaVendita = round2(prodottiConStato.reduce((s, p) => s + (p.prezzo_vendita != null ? (p.giacenza || 0) * p.prezzo_vendita : 0), 0));
-  const valoreGiacenzaCosto = round2(prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? (p.giacenza || 0) * p.costo_acquisto : 0), 0));
-  const totGiacenza = prodottiConStato.reduce((s, p) => s + (p.giacenza || 0), 0);
-  const totQuantitaVendutaAttivi = prodottiConStato.reduce((s, p) => s + p.quantitaVenduta, 0);
-  const rotazione = totGiacenza > 0 ? round2(totQuantitaVendutaAttivi / totGiacenza) : null;
-  const rotazioneBadge = rotazione == null ? null : rotazione < 0.5 ? { testo: "Bassa", colore: "#C0392B", sfondo: "#FBE4E1" } : rotazione < 2 ? { testo: "Media", colore: "#B8860B", sfondo: "#FBF1D9" } : { testo: "Alta", colore: "#2E7D32", sfondo: "#E3F3E5" };
-
-  // i totali di riepilogo vengono dalle vendite REALI del periodo (tutte
-  // le righe), non dalla somma dei soli prodotti ancora nel catalogo:
-  // così una vendita di un prodotto poi rinominato/rimosso non sparisce
-  const totQuantitaSelezionato = Object.values(venditePerNome).reduce((s, v) => s + v.quantita, 0);
-  const totFatturatoSelezionato = round2(Object.values(venditePerNome).reduce((s, v) => s + v.fatturato, 0));
-  const totQuantitaPrecedente = Object.values(venditePerNomePrecedente).reduce((s, v) => s + v.quantita, 0);
-  const totFatturatoPrecedente = round2(Object.values(venditePerNomePrecedente).reduce((s, v) => s + v.fatturato, 0));
-  const varQuantita = totQuantitaPrecedente > 0 ? round1Erp(((totQuantitaSelezionato - totQuantitaPrecedente) / totQuantitaPrecedente) * 100) : null;
-  const varFatturato = totFatturatoPrecedente > 0 ? round1Erp(((totFatturatoSelezionato - totFatturatoPrecedente) / totFatturatoPrecedente) * 100) : null;
-
-  function carrelloMedioPeriodo(inizio, fine) {
-    const ordini = (venditeShop || []).filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= inizio && d <= fine; });
-    if (!ordini.length) return null;
-    return round2(ordini.reduce((s, v) => s + (v.totale || 0), 0) / ordini.length);
-  }
-  const carrelloMedio = carrelloMedioPeriodo(range.inizio, range.fine);
-  const carrelloMedioPrecedente = carrelloMedioPeriodo(rangePrecedente.inizio, rangePrecedente.fine);
-  const varCarrello = carrelloMedio != null && carrelloMedioPrecedente > 0 ? round1Erp(((carrelloMedio - carrelloMedioPrecedente) / carrelloMedioPrecedente) * 100) : null;
-
-  // bucketizzazione: dipende dal periodo scelto, non solo dalla durata
-  // (vedi rangeMagazzino) — "Annuale"/"Mensile" riusano la
-  // bucketizzazione generica già usata da "Costi operativi" (per
-  // Annuale, un anno solare supera sempre i 120gg → bucket mensili; per
-  // Mensile, un mese sta sempre sotto i 45gg → bucket giornalieri, i
-  // giorni 1..28/30/31 richiesti); gli altri periodi hanno bucket dedicati
-  function bucketsPerPeriodo(r) {
-    if (periodo === "trimestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 4);
-    if (periodo === "semestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 2);
-    if (periodo === "settimanale") return bucketsGiorniSettimana(r);
-    return bucketizzaPeriodoCosti(r.inizio, r.fine);
-  }
-  const buckets = bucketsPerPeriodo(range);
-  const bucketsPrecedenti = bucketsPerPeriodo(rangePrecedente);
-
-  function sommaBucketVendite(inizio, fine) {
-    let quantita = 0, fatturato = 0;
-    (venditeShop || []).forEach((v) => {
-      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
-      if (!d || d < inizio || d > fine) return;
-      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => { quantita += Number(p.quantita) || 0; fatturato += Number(p.totale_riga) || 0; });
-    });
-    return { quantita, fatturato: round2(fatturato) };
-  }
-
-  const puntiAndamento = buckets.map((b, i) => {
-    const sel = sommaBucketVendite(b.da, b.a);
-    const bPrec = bucketsPrecedenti[i];
-    const prec = bPrec ? sommaBucketVendite(bPrec.da, bPrec.a) : null;
-    return {
-      etichetta: b.etichetta,
-      selezionato: vistaAnalisi === "quantita" ? sel.quantita : sel.fatturato,
-      precedente: prec ? (vistaAnalisi === "quantita" ? prec.quantita : prec.fatturato) : null,
-    };
-  });
-
-  const puntiCarrelloMedio = buckets.map((b) => ({ etichetta: b.etichetta, valore: carrelloMedioPeriodo(b.da, b.a) }));
-
-  // "Trend per categoria/prodotto": non è più una serie nel tempo, ma un
-  // singolo valore (periodo selezionato) con la variazione % vs il
-  // periodo precedente, una barra per categoria o per prodotto (top 10)
-  function valoreVendite(v) { return vistaAnalisi === "quantita" ? v.quantita : v.fatturato; }
-  // classifica dal calo maggiore al calo minore (e poi le crescite): chi
-  // non ha un periodo precedente da confrontare (N/D) va in fondo, non è
-  // né un calo né una crescita misurabile
-  function ordinaPerCaloTrend(a, b) {
-    if (a.trend == null && b.trend == null) return 0;
-    if (a.trend == null) return 1;
-    if (b.trend == null) return -1;
-    return a.trend - b.trend;
-  }
-  const totaliTrendCategoria = {};
-  Object.entries(venditePerNome).forEach(([chiave, v]) => {
-    (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
-      (totaliTrendCategoria[catId] ||= { corrente: 0, precedente: 0 }).corrente += valoreVendite(v);
-    });
-  });
-  Object.entries(venditePerNomePrecedente).forEach(([chiave, v]) => {
-    (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
-      (totaliTrendCategoria[catId] ||= { corrente: 0, precedente: 0 }).precedente += valoreVendite(v);
-    });
-  });
-  const trendCategorie = Object.entries(totaliTrendCategoria)
-    .map(([catId, t]) => ({
-      nome: categoriaNomeById[catId],
-      valore: round2(t.corrente),
-      trend: t.precedente > 0 ? round1Erp(((t.corrente - t.precedente) / t.precedente) * 100) : null,
-    }))
-    .filter((v) => v.nome && v.valore > 0)
-    .sort(ordinaPerCaloTrend)
-    .slice(0, 10);
-  const trendProdotti = (prodottiShop || [])
-    .filter((p) => p.attivo !== false)
-    .filter((p) => !categoriaSel || (categorieIdPerProdottoId[p.id] || []).includes(categoriaSel))
-    .map((p) => {
-      const chiave = (p.nome || "").trim().toLowerCase();
-      const corrente = valoreVendite(venditePerNome[chiave] || { quantita: 0, fatturato: 0 });
-      const precedente = valoreVendite(venditePerNomePrecedente[chiave] || { quantita: 0, fatturato: 0 });
-      return { nome: p.nome, valore: round2(corrente), trend: precedente > 0 ? round1Erp(((corrente - precedente) / precedente) * 100) : null };
-    })
-    .filter((v) => v.valore > 0)
-    .sort(ordinaPerCaloTrend)
-    .slice(0, 10);
-
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
   if (ricercaProdotto.trim()) { const q = ricercaProdotto.trim().toLowerCase(); prodottiVisti = prodottiVisti.filter((p) => p.nome.toLowerCase().includes(q)); }
@@ -13757,15 +13837,12 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>ERP / Magazzino</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Magazzino</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione magazzino</div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <Button variant="ghost" onClick={onApriGestioneShop}>Gestione Shop</Button>
-              <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
-            </div>
+            <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
             {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
           </div>
         </div>
@@ -13794,128 +13871,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
             {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
           <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 180 }} />
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 14 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore potenziale</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaVendita)}</div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>a prezzo di vendita — {fmtEuroErp(valoreGiacenzaCosto)} a costo</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Rotazione magazzino</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{rotazione != null ? rotazione : "N/D"}</div>
-              {rotazioneBadge && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: rotazioneBadge.colore, background: rotazioneBadge.sfondo, borderRadius: 8, padding: "2px 8px" }}>{rotazioneBadge.testo}</span>}
-            </div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0, cursor: "pointer" }} onClick={() => setFiltroRapido("tutti")}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Segnalazioni</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: totSegnalazioni > 0 ? "#C0392B" : NAVY }}>{totSegnalazioni}</div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>richiedono attenzione</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0, cursor: "pointer" }} onClick={() => setFiltroRapido("senzacosto")}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Dati da completare</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{senzaCosto.length}</div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>prodotti senza costo</div>
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto</div>
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVenduto ? piuVenduto.nome : "—"}</div>
-            {piuVenduto && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{piuVenduto.quantitaVenduta} pezzi</div>}
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Maggior fatturato</div>
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{maggiorFatturato ? maggiorFatturato.nome : "—"}</div>
-            {maggiorFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp(maggiorFatturato.fatturato)}</div>}
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Miglior margine</div>
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{migliorMargine ? migliorMargine.nome : "Non disponibile"}</div>
-            {migliorMargine ? <div style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700 }}>{fmtPctErp(migliorMargine.margine)}</div> : <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Completa i costi per calcolarlo</div>}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.6fr) minmax(0,1fr)", gap: 14, marginBottom: 22, alignItems: "start" }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Analisi vendite</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {periodo === "annuale" || periodo === "mensile" ? (
-                  <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
-                    <option value="periodoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? "periodo prec." : MESI[(meseSel + 11) % 12]}</option>
-                    <option value="annoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? anno - 1 : `${MESI[meseSel]} ${anno - 1}`}</option>
-                  </select>
-                ) : (
-                  <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{etichettaConfronto}</div>
-                )}
-                <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
-                  {[{ v: "quantita", l: "Quantità" }, { v: "fatturato", l: "Fatturato" }].map((o) => (
-                    <button key={o.v} onClick={() => setVistaAnalisi(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaAnalisi === o.v ? NAVY : "transparent", color: vistaAnalisi === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14, marginBottom: 16 }}>
-              <div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Quantità venduta</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{totQuantitaSelezionato} pz</div>
-                  {varQuantita != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varQuantita >= 0 ? "#2E7D32" : "#C0392B" }}>{varQuantita >= 0 ? "+" : ""}{fmtPctErp(varQuantita)}</span>}
-                </div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
-              </div>
-              <div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fatturato</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totFatturatoSelezionato)}</div>
-                  {varFatturato != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varFatturato >= 0 ? "#2E7D32" : "#C0392B" }}>{varFatturato >= 0 ? "+" : ""}{fmtPctErp(varFatturato)}</span>}
-                </div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
-              </div>
-              <div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Carrello medio</div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
-                  {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)}</span>}
-                </div>
-                <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
-              </div>
-            </div>
-            <GraficoBarreVendite punti={puntiAndamento} />
-            <div style={{ display: "flex", gap: 14, marginTop: 8, ...fontBody, fontSize: 11.5, color: MUTED }}>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />{etichettaPeriodoSelezionato}</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: GOLD, display: "inline-block" }} />{etichettaPeriodoPrecedente}</span>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ ...cardStyle, marginBottom: 0 }}>
-              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Carrello medio</div>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
-                {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)} {etichettaConfronto}</span>}
-              </div>
-              <GraficoLineaSemplice punti={puntiCarrelloMedio} />
-            </div>
-            <div style={{ ...cardStyle, marginBottom: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 2, flexWrap: "wrap" }}>
-                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Trend {vistaTrend === "categoria" ? "per categoria" : "per prodotto"}</div>
-                <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
-                  {[{ v: "categoria", l: "Per categoria" }, { v: "prodotto", l: "Per prodotto" }].map((o) => (
-                    <button key={o.v} onClick={() => setVistaTrend(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaTrend === o.v ? NAVY : "transparent", color: vistaTrend === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
-                  ))}
-                </div>
-              </div>
-              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
-                {vistaAnalisi === "quantita" ? "Quantità venduta" : "Fatturato"} nel periodo, {etichettaConfronto}
-              </div>
-              <GraficoTrendBarre voci={vistaTrend === "categoria" ? trendCategorie : trendProdotti} />
-            </div>
-          </div>
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
@@ -14003,6 +13958,315 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           onFatto={() => { setProdottoModifica(null); ricarica(); }}
         />
       )}
+    </div>
+  );
+}
+
+// "Analisi Magazzino": terza sezione di "Dashboard analisi" — ex parte
+// analitica di PaginaMagazzino (KPI incluso Valore potenziale, prodotti
+// migliori, andamento vendite/carrello/trend), meno "Dettaglio prodotti"
+// (resta in "Gestione magazzino"). Periodo indipendente da quella pagina.
+function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop }) {
+  const isMobile = useIsMobile();
+  const oggi = new Date();
+  const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
+  const [periodo, setPeriodo] = useState("annuale");
+  const [anno, setAnno] = useState(oggi.getFullYear());
+  const [meseSel, setMeseSel] = useState(oggi.getMonth());
+  const [confrontoTipo, setConfrontoTipo] = useState("periodoprecedente");
+  const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
+  const [categoriaSel, setCategoriaSel] = useState("");
+  const [vistaTrend, setVistaTrend] = useState("categoria");
+
+  function selezionaPeriodo(nuovoPeriodo) {
+    setPeriodo(nuovoPeriodo);
+    if (nuovoPeriodo === "annuale") setAnno(oggi.getFullYear());
+    else if (nuovoPeriodo === "trimestrale" || nuovoPeriodo === "semestrale") setAnno(annoScolasticoDi(oggiStr));
+    else if (nuovoPeriodo === "mensile") { setAnno(oggi.getFullYear()); setMeseSel(oggi.getMonth()); }
+  }
+
+  const range = rangeMagazzino(periodo, anno, meseSel);
+  const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo);
+  const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
+  const etichettaPeriodoSelezionato = periodo === "annuale" ? `${anno}`
+    : periodo === "mensile" ? `${MESI[meseSel]} ${anno}`
+    : periodo === "settimanale" ? "questa settimana"
+    : `${anno}/${String((anno + 1) % 100).padStart(2, "0")}`;
+  const [annoMesePrecedente, numMesePrecedente] = rangePrecedente.inizio.split("-").map(Number);
+  const etichettaPeriodoPrecedente = periodo === "annuale" ? `${anno - 1}`
+    : periodo === "mensile" ? `${MESI[numMesePrecedente - 1]} ${annoMesePrecedente}`
+    : periodo === "settimanale" ? "settimana precedente"
+    : `${anno - 1}/${String(anno % 100).padStart(2, "0")}`;
+  const etichettaConfronto = `vs ${etichettaPeriodoPrecedente}`;
+
+  const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
+  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const categorieIdPerProdottoId = {};
+  (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  const categorieIdPerNomeProdotto = {};
+  (prodottiShop || []).forEach((p) => { categorieIdPerNomeProdotto[(p.nome || "").trim().toLowerCase()] = categorieIdPerProdottoId[p.id] || []; });
+
+  function aggregaVenditePerNome(inizio, fine) {
+    const mappa = {};
+    (venditeShop || []).forEach((v) => {
+      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+      if (!d || d < inizio || d > fine) return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+        const chiave = (p.nome || "").trim().toLowerCase();
+        if (!chiave) return;
+        if (!mappa[chiave]) mappa[chiave] = { quantita: 0, fatturato: 0 };
+        mappa[chiave].quantita += Number(p.quantita) || 0;
+        mappa[chiave].fatturato += Number(p.totale_riga) || 0;
+      });
+    });
+    return mappa;
+  }
+  const venditePerNome = aggregaVenditePerNome(range.inizio, range.fine);
+  const venditePerNomePrecedente = aggregaVenditePerNome(rangePrecedente.inizio, rangePrecedente.fine);
+
+  const prodottiConStato = (prodottiShop || []).filter((p) => p.attivo !== false).map((p) => {
+    const chiave = (p.nome || "").trim().toLowerCase();
+    const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
+    const margine = p.costo_acquisto != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - p.costo_acquisto) / p.prezzo_vendita) * 100) : null;
+    const categorieIds = categorieIdPerProdottoId[p.id] || [];
+    return { ...p, quantitaVenduta: venduto.quantita, fatturato: round2(venduto.fatturato), margine, categorieIds };
+  });
+
+  const piuVenduto = [...prodottiConStato].filter((p) => p.quantitaVenduta > 0).sort((a, b) => b.quantitaVenduta - a.quantitaVenduta)[0] || null;
+  const maggiorFatturato = [...prodottiConStato].filter((p) => p.fatturato > 0).sort((a, b) => b.fatturato - a.fatturato)[0] || null;
+  const migliorMargine = [...prodottiConStato].filter((p) => p.margine != null).sort((a, b) => b.margine - a.margine)[0] || null;
+
+  const valoreGiacenzaVendita = round2(prodottiConStato.reduce((s, p) => s + (p.prezzo_vendita != null ? (p.giacenza || 0) * p.prezzo_vendita : 0), 0));
+  const valoreGiacenzaCosto = round2(prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? (p.giacenza || 0) * p.costo_acquisto : 0), 0));
+  const totGiacenza = prodottiConStato.reduce((s, p) => s + (p.giacenza || 0), 0);
+  const totQuantitaVendutaAttivi = prodottiConStato.reduce((s, p) => s + p.quantitaVenduta, 0);
+  const rotazione = totGiacenza > 0 ? round2(totQuantitaVendutaAttivi / totGiacenza) : null;
+  const rotazioneBadge = rotazione == null ? null : rotazione < 0.5 ? { testo: "Bassa", colore: "#C0392B", sfondo: "#FBE4E1" } : rotazione < 2 ? { testo: "Media", colore: "#B8860B", sfondo: "#FBF1D9" } : { testo: "Alta", colore: "#2E7D32", sfondo: "#E3F3E5" };
+
+  const totQuantitaSelezionato = Object.values(venditePerNome).reduce((s, v) => s + v.quantita, 0);
+  const totFatturatoSelezionato = round2(Object.values(venditePerNome).reduce((s, v) => s + v.fatturato, 0));
+  const totQuantitaPrecedente = Object.values(venditePerNomePrecedente).reduce((s, v) => s + v.quantita, 0);
+  const totFatturatoPrecedente = round2(Object.values(venditePerNomePrecedente).reduce((s, v) => s + v.fatturato, 0));
+  const varQuantita = totQuantitaPrecedente > 0 ? round1Erp(((totQuantitaSelezionato - totQuantitaPrecedente) / totQuantitaPrecedente) * 100) : null;
+  const varFatturato = totFatturatoPrecedente > 0 ? round1Erp(((totFatturatoSelezionato - totFatturatoPrecedente) / totFatturatoPrecedente) * 100) : null;
+
+  function carrelloMedioPeriodo(inizio, fine) {
+    const ordini = (venditeShop || []).filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= inizio && d <= fine; });
+    if (!ordini.length) return null;
+    return round2(ordini.reduce((s, v) => s + (v.totale || 0), 0) / ordini.length);
+  }
+  const carrelloMedio = carrelloMedioPeriodo(range.inizio, range.fine);
+  const carrelloMedioPrecedente = carrelloMedioPeriodo(rangePrecedente.inizio, rangePrecedente.fine);
+  const varCarrello = carrelloMedio != null && carrelloMedioPrecedente > 0 ? round1Erp(((carrelloMedio - carrelloMedioPrecedente) / carrelloMedioPrecedente) * 100) : null;
+
+  function bucketsPerPeriodo(r) {
+    if (periodo === "trimestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 4);
+    if (periodo === "semestrale") return bucketsAnnoScolasticoGruppi(parseInt(r.inizio.slice(0, 4), 10), 2);
+    if (periodo === "settimanale") return bucketsGiorniSettimana(r);
+    return bucketizzaPeriodoCosti(r.inizio, r.fine);
+  }
+  const buckets = bucketsPerPeriodo(range);
+  const bucketsPrecedenti = bucketsPerPeriodo(rangePrecedente);
+
+  function sommaBucketVendite(inizio, fine) {
+    let quantita = 0, fatturato = 0;
+    (venditeShop || []).forEach((v) => {
+      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+      if (!d || d < inizio || d > fine) return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => { quantita += Number(p.quantita) || 0; fatturato += Number(p.totale_riga) || 0; });
+    });
+    return { quantita, fatturato: round2(fatturato) };
+  }
+
+  const puntiAndamento = buckets.map((b, i) => {
+    const sel = sommaBucketVendite(b.da, b.a);
+    const bPrec = bucketsPrecedenti[i];
+    const prec = bPrec ? sommaBucketVendite(bPrec.da, bPrec.a) : null;
+    return {
+      etichetta: b.etichetta,
+      selezionato: vistaAnalisi === "quantita" ? sel.quantita : sel.fatturato,
+      precedente: prec ? (vistaAnalisi === "quantita" ? prec.quantita : prec.fatturato) : null,
+    };
+  });
+
+  const puntiCarrelloMedio = buckets.map((b) => ({ etichetta: b.etichetta, valore: carrelloMedioPeriodo(b.da, b.a) }));
+
+  function valoreVendite(v) { return vistaAnalisi === "quantita" ? v.quantita : v.fatturato; }
+  function ordinaPerCaloTrend(a, b) {
+    if (a.trend == null && b.trend == null) return 0;
+    if (a.trend == null) return 1;
+    if (b.trend == null) return -1;
+    return a.trend - b.trend;
+  }
+  const totaliTrendCategoria = {};
+  Object.entries(venditePerNome).forEach(([chiave, v]) => {
+    (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
+      (totaliTrendCategoria[catId] ||= { corrente: 0, precedente: 0 }).corrente += valoreVendite(v);
+    });
+  });
+  Object.entries(venditePerNomePrecedente).forEach(([chiave, v]) => {
+    (categorieIdPerNomeProdotto[chiave] || []).forEach((catId) => {
+      (totaliTrendCategoria[catId] ||= { corrente: 0, precedente: 0 }).precedente += valoreVendite(v);
+    });
+  });
+  const trendCategorie = Object.entries(totaliTrendCategoria)
+    .map(([catId, t]) => ({ nome: categoriaNomeById[catId], valore: round2(t.corrente), trend: t.precedente > 0 ? round1Erp(((t.corrente - t.precedente) / t.precedente) * 100) : null }))
+    .filter((v) => v.nome && v.valore > 0)
+    .sort(ordinaPerCaloTrend)
+    .slice(0, 10);
+  const trendProdotti = (prodottiShop || [])
+    .filter((p) => p.attivo !== false)
+    .filter((p) => !categoriaSel || (categorieIdPerProdottoId[p.id] || []).includes(categoriaSel))
+    .map((p) => {
+      const chiave = (p.nome || "").trim().toLowerCase();
+      const corrente = valoreVendite(venditePerNome[chiave] || { quantita: 0, fatturato: 0 });
+      const precedente = valoreVendite(venditePerNomePrecedente[chiave] || { quantita: 0, fatturato: 0 });
+      return { nome: p.nome, valore: round2(corrente), trend: precedente > 0 ? round1Erp(((corrente - precedente) / precedente) * 100) : null };
+    })
+    .filter((v) => v.valore > 0)
+    .sort(ordinaPerCaloTrend)
+    .slice(0, 10);
+
+  return (
+    <div>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi Magazzino</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Valore delle scorte, rotazione, prodotti migliori e andamento vendite.</div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+          {[{ v: "annuale", l: "Annuale" }, { v: "semestrale", l: "Semestrale" }, { v: "trimestrale", l: "Trimestrale" }, { v: "mensile", l: "Mensile" }, { v: "settimanale", l: "Settimanale" }].map((p) => (
+            <button key={p.v} onClick={() => selezionaPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>
+              {p.l}
+            </button>
+          ))}
+        </div>
+        {periodo === "mensile" && (
+          <select style={{ ...inputStyle, width: "auto" }} value={meseSel} onChange={(e) => setMeseSel(Number(e.target.value))}>
+            {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
+          </select>
+        )}
+        {(periodo === "annuale" || periodo === "trimestrale" || periodo === "semestrale" || periodo === "mensile") && (
+          <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
+            {anniDisponibili.map((a) => <option key={a} value={a}>{periodo === "annuale" || periodo === "mensile" ? a : `${a}/${String((a + 1) % 100).padStart(2, "0")}`}</option>)}
+          </select>
+        )}
+        <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+          <option value="">Tutte le categorie</option>
+          {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 14 }}>
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore potenziale</div>
+          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaVendita)}</div>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>a prezzo di vendita — {fmtEuroErp(valoreGiacenzaCosto)} a costo</div>
+        </div>
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Rotazione magazzino</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{rotazione != null ? rotazione : "N/D"}</div>
+            {rotazioneBadge && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: rotazioneBadge.colore, background: rotazioneBadge.sfondo, borderRadius: 8, padding: "2px 8px" }}>{rotazioneBadge.testo}</span>}
+          </div>
+        </div>
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Più venduto</div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{piuVenduto ? piuVenduto.nome : "—"}</div>
+          {piuVenduto && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{piuVenduto.quantitaVenduta} pezzi</div>}
+        </div>
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Maggior fatturato</div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{maggiorFatturato ? maggiorFatturato.nome : "—"}</div>
+          {maggiorFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp(maggiorFatturato.fatturato)}</div>}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Miglior margine</div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{migliorMargine ? migliorMargine.nome : "Non disponibile"}</div>
+          {migliorMargine ? <div style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontWeight: 700 }}>{fmtPctErp(migliorMargine.margine)}</div> : <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Completa i costi per calcolarlo</div>}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.6fr) minmax(0,1fr)", gap: 14, marginBottom: 22, alignItems: "start" }}>
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Analisi vendite</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {periodo === "annuale" || periodo === "mensile" ? (
+                <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
+                  <option value="periodoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? "periodo prec." : MESI[(meseSel + 11) % 12]}</option>
+                  <option value="annoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? anno - 1 : `${MESI[meseSel]} ${anno - 1}`}</option>
+                </select>
+              ) : (
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{etichettaConfronto}</div>
+              )}
+              <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
+                {[{ v: "quantita", l: "Quantità" }, { v: "fatturato", l: "Fatturato" }].map((o) => (
+                  <button key={o.v} onClick={() => setVistaAnalisi(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaAnalisi === o.v ? NAVY : "transparent", color: vistaAnalisi === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14, marginBottom: 16 }}>
+            <div>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Quantità venduta</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{totQuantitaSelezionato} pz</div>
+                {varQuantita != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varQuantita >= 0 ? "#2E7D32" : "#C0392B" }}>{varQuantita >= 0 ? "+" : ""}{fmtPctErp(varQuantita)}</span>}
+              </div>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
+            </div>
+            <div>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fatturato</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totFatturatoSelezionato)}</div>
+                {varFatturato != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varFatturato >= 0 ? "#2E7D32" : "#C0392B" }}>{varFatturato >= 0 ? "+" : ""}{fmtPctErp(varFatturato)}</span>}
+              </div>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
+            </div>
+            <div>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Carrello medio</div>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
+                {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)}</span>}
+              </div>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
+            </div>
+          </div>
+          <GraficoBarreVendite punti={puntiAndamento} />
+          <div style={{ display: "flex", gap: 14, marginTop: 8, ...fontBody, fontSize: 11.5, color: MUTED }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />{etichettaPeriodoSelezionato}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: GOLD, display: "inline-block" }} />{etichettaPeriodoPrecedente}</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Carrello medio</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
+              {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)} {etichettaConfronto}</span>}
+            </div>
+            <GraficoLineaSemplice punti={puntiCarrelloMedio} />
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 2, flexWrap: "wrap" }}>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Trend {vistaTrend === "categoria" ? "per categoria" : "per prodotto"}</div>
+              <div style={{ display: "flex", background: BG, borderRadius: 16, padding: 3, gap: 2 }}>
+                {[{ v: "categoria", l: "Per categoria" }, { v: "prodotto", l: "Per prodotto" }].map((o) => (
+                  <button key={o.v} onClick={() => setVistaTrend(o.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "6px 12px", borderRadius: 13, border: "none", background: vistaTrend === o.v ? NAVY : "transparent", color: vistaTrend === o.v ? "#fff" : NAVY, cursor: "pointer" }}>{o.l}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+              {vistaAnalisi === "quantita" ? "Quantità venduta" : "Fatturato"} nel periodo, {etichettaConfronto}
+            </div>
+            <GraficoTrendBarre voci={vistaTrend === "categoria" ? trendCategorie : trendProdotti} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -15937,10 +16201,14 @@ function BarraComparativaCosti({ voci }) {
 // cruscotto principale: filtri, KPI, grafici, tabella "Voci di spesa
 // principali", segnalazioni gestionali, drill-down — legge SOLO dati
 // reali già tracciati nel gestionale più il registro "spese"
-function PaginaAnalisiCosti({
-  corsi, location, master, corsiDate, iscritti, costiCategorie, costiSottocategorie, eventi, fornitori,
-  spese, speseAttribuzioni, costiBudget, costiSoglieAllerta, ricarica, onBack,
-  onApriCatalogo, onApriNuovaSpesa, onApriBudget, onApriModificaSpesa,
+// "Analisi costi di gestione": seconda sezione di "Dashboard analisi" — ex
+// corpo di PaginaAnalisiCosti, meno la barra pulsanti di gestione
+// (Importa/Esporta/Budget/Catalogo/+Nuova spesa: ora in "Inserimento
+// costi e ricavi"), diventa una pagina di sola lettura
+function SezioneAnalisiCosti({
+  corsi, location, corsiDate, iscritti, costiCategorie, costiSottocategorie, eventi, fornitori,
+  spese, speseAttribuzioni, costiBudget, costiSoglieAllerta, ricarica,
+  onApriModificaSpesa,
 }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
@@ -15963,7 +16231,6 @@ function PaginaAnalisiCosti({
   const [origine, setOrigine] = useState("");
   const [drillDown, setDrillDown] = useState(null);
   const [segnalazioniAperte, setSegnalazioniAperte] = useState(true);
-  const [importCsvAperto, setImportCsvAperto] = useState(false);
 
   const range = rangePeriodoAnalisiCosti(periodo, { da: customDa, a: customA });
   const rangeConfronto = (confronto === "nessuno" || confronto === "budget") ? null : rangeConfrontoAnalisiCosti(range, confronto);
@@ -16040,32 +16307,12 @@ function PaginaAnalisiCosti({
   const opzioniFornitore = fornitori.map((f) => ({ id: f.id, nome: f.nome.toUpperCase() }));
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
-      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-              <IconaFrecciaSinistra size={20} />
-            </button>
-            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
-            <button onClick={() => esportaCsvSpese(kpi.vociIncluse, Object.fromEntries(costiCategorie.map((c) => [c.id, c])), Object.fromEntries(costiSottocategorie.map((v) => [v.id, v])))} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
-            <button onClick={() => window.print()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta PDF</button>
-            <button onClick={onApriBudget} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Budget</button>
-            <button onClick={onApriCatalogo} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Catalogo categorie</button>
-            <button onClick={onApriNuovaSpesa} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}>+ Nuova spesa</button>
-          </div>
-        </div>
-        {importCsvAperto && (
-          <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
-        )}
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Analisi costi di gestione</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Quanto spendiamo, dove incide di più, cosa sta crescendo, cosa possiamo ridurre.</div>
+    <div>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi costi di gestione</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Quanto spendiamo, dove incide di più, cosa sta crescendo, cosa possiamo ridurre.</div>
 
-        {/* barra filtri */}
-        <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
+      {/* barra filtri */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
             <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
               {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "semestre", l: "Semestre" }, { v: "anno", l: "Anno" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
@@ -16256,7 +16503,6 @@ function PaginaAnalisiCosti({
             onApriModificaSpesa={onApriModificaSpesa} ricarica={ricarica}
           />
         )}
-      </div>
     </div>
   );
 }
@@ -17742,7 +17988,8 @@ export default function App() {
   function apriImpostazioni() { apriViewProtetta("impostazioni"); }
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   function apriErp() { apriViewProtetta("erp"); }
-  function apriCostiOperativi() { apriViewProtetta("costioperativi"); }
+  function apriInserimentoCostiRicavi() { apriViewProtetta("inserimentocostiricavi"); }
+  function apriDashboardAnalisi() { apriViewProtetta("dashboardanalisi"); }
   function apriVenditeShop() { apriViewProtetta("venditeshop"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
@@ -17931,15 +18178,33 @@ export default function App() {
 
       {view === "erp" && (
         <PaginaErp
-          corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
-          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
-          ricarica={fetchDati}
           onBack={() => setView("home")}
           onApriImpostazioni={apriImpostazioni}
-          onApriCostiOperativi={apriCostiOperativi}
-          onApriNuovaSpesa={apriNuovaSpesa}
-          onApriVenditeShop={apriVenditeShop}
+          onApriInserimentoCostiRicavi={apriInserimentoCostiRicavi}
+          onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
           onApriMagazzino={apriMagazzino}
+          onApriGestioneShop={apriGestioneShop}
+          onApriVenditeShop={apriVenditeShop}
+          onApriDashboardAnalisi={apriDashboardAnalisi}
+        />
+      )}
+
+      {view === "inserimentocostiricavi" && (
+        <PaginaInserimentoCostiRicavi
+          spese={spese} entrateManuali={entrateManuali} location={location}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
+          ricarica={fetchDati} onBack={() => setView("erp")}
+          onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
+        />
+      )}
+
+      {view === "dashboardanalisi" && (
+        <PaginaDashboardAnalisi
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
+          eventi={eventi} fornitori={fornitori} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
+          onApriModificaSpesa={apriModificaSpesa} ricarica={fetchDati} onBack={() => setView("erp")}
         />
       )}
 
@@ -17951,39 +18216,27 @@ export default function App() {
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("erp")}
-          onApriGestioneShop={apriGestioneShop}
         />
       )}
 
       {view === "gestioneshop" && (
         <PaginaGestioneShop
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("magazzino")}
-        />
-      )}
-
-      {view === "costioperativi" && (
-        <PaginaAnalisiCosti
-          corsi={corsi} location={location} master={master} corsiDate={corsiDate} iscritti={iscritti}
-          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} eventi={eventi} fornitori={fornitori}
-          spese={spese} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
-          ricarica={fetchDati} onBack={() => setView("erp")}
-          onApriCatalogo={apriCatalogoCategorieCosti} onApriBudget={apriBudgetCosti}
-          onApriNuovaSpesa={apriNuovaSpesa} onApriModificaSpesa={apriModificaSpesa}
+          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("erp")}
         />
       )}
 
       {view === "catalogocategoriecosti" && (
         <PaginaCatalogoCategorieCosti
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} costiSoglieAllerta={costiSoglieAllerta}
-          ricarica={fetchDati} onBack={() => setView("costioperativi")}
+          ricarica={fetchDati} onBack={() => setView("erp")}
         />
       )}
 
       {view === "budgetcosti" && (
         <PaginaBudgetCosti
           costiCategorie={costiCategorie} location={location} corsi={corsi} costiBudget={costiBudget}
-          ricarica={fetchDati} onBack={() => setView("costioperativi")}
+          ricarica={fetchDati} onBack={() => setView("inserimentocostiricavi")}
         />
       )}
 
@@ -17995,7 +18248,7 @@ export default function App() {
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
-          onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView("costioperativi"); } }}
+          onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView("inserimentocostiricavi"); } }}
         />
       )}
 
