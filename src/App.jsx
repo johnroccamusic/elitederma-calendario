@@ -3320,67 +3320,100 @@ function BottoneNuovaAgenda({ ricarica }) {
   );
 }
 // una voce dell'agenda: data, titolo, nota libera — eliminabile
-function RigaVoceAgenda({ voce, ricarica }) {
-  async function elimina() {
-    if (!window.confirm("Eliminare questo appuntamento?")) return;
-    const { error } = await supabase.from("agenda_voci").delete().eq("id", voce.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  return (
-    <div style={{ ...cardStyle, marginBottom: 10, padding: 14, display: "flex", alignItems: "flex-start", gap: 12 }}>
-      <div style={{ background: BG, borderRadius: 10, padding: "6px 11px", textAlign: "center", flexShrink: 0, minWidth: 44 }}>
-        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{voce.data ? fmtData(voce.data) : "—"}</div>
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{voce.titolo}</div>
-        {voce.nota && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, whiteSpace: "pre-wrap" }}>{voce.nota}</div>}
-      </div>
-      <button onClick={elimina} title="Elimina" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#C0392B", flexShrink: 0, padding: 4 }}>✕</button>
-    </div>
-  );
-}
-// form "+ Nuovo appuntamento" a scomparsa: data, titolo, nota libera
-function FormNuovaVoceAgenda({ agendaId, ricarica }) {
-  const [aperto, setAperto] = useState(false);
-  const [data, setData] = useState(dataOggiStr());
+// popup "Nuovo appuntamento": si apre cliccando un giorno vuoto del
+// calendario, con la data già fissata da quel giorno (stesso schema di
+// PopupNuovaData nel Calendario corsi)
+function PopupNuovaVoceAgenda({ dataClic, onSalva, onChiudi }) {
   const [titolo, setTitolo] = useState("");
   const [nota, setNota] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  async function salva() {
-    if (!titolo.trim()) { window.alert("Il titolo non può essere vuoto."); return; }
-    setSalvando(true);
-    const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaId, data: data || null, titolo: titolo.trim(), nota: nota.trim() || null });
-    setSalvando(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    setTitolo(""); setNota(""); setAperto(false);
-    ricarica();
-  }
-  if (!aperto) {
-    return (
-      <button
-        onClick={() => setAperto(true)}
-        style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "10px 16px", cursor: "pointer", marginBottom: 16 }}
-      >
-        + Nuovo appuntamento
-      </button>
-    );
-  }
   return (
-    <div style={{ ...cardStyle, marginBottom: 16, padding: 14 }}>
-      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-        <input type="date" value={data} onChange={(e) => setData(e.target.value)} style={{ ...inputStyle, width: 150 }} />
-        <input value={titolo} onChange={(e) => setTitolo(e.target.value)} placeholder="Titolo" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+    <Modal title={`Nuovo appuntamento — ${fmtData(dataClic)}`} onClose={onChiudi}>
+      <Field label="Titolo">
+        <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} autoFocus />
+      </Field>
+      <Field label="Nota (facoltativa)">
+        <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={nota} onChange={(e) => setNota(e.target.value)} />
+      </Field>
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), nota: nota.trim() || null })}>Salva</Button>
+        <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
       </div>
-      <textarea value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (facoltativa)" style={{ ...inputStyle, width: "100%", minHeight: 60, marginBottom: 10, resize: "vertical" }} />
-      <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={salva} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}>
-          {salvando ? "Salvo…" : "Salva"}
-        </button>
-        <button onClick={() => setAperto(false)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>
-          Annulla
-        </button>
+    </Modal>
+  );
+}
+// popup di un appuntamento esistente (click sulla sua etichetta nel
+// calendario): modificabile o eliminabile
+function PopupVoceAgenda({ voce, onSalva, onElimina, onChiudi }) {
+  const [titolo, setTitolo] = useState(voce.titolo);
+  const [nota, setNota] = useState(voce.nota || "");
+  return (
+    <Modal title={fmtData(voce.data)} onClose={onChiudi}>
+      <Field label="Titolo">
+        <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} />
+      </Field>
+      <Field label="Nota (facoltativa)">
+        <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={nota} onChange={(e) => setNota(e.target.value)} />
+      </Field>
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), nota: nota.trim() || null })}>Salva</Button>
+        <Button variant="danger" onClick={onElimina}>Elimina</Button>
+        <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
       </div>
+    </Modal>
+  );
+}
+// colore stabile (derivato dall'id) per l'etichetta di un appuntamento
+// nel calendario: la stessa voce ha sempre lo stesso colore, anche dopo
+// un refresh, senza bisogno di salvare un colore scelto a mano
+const COLORI_VOCE_AGENDA = ["#DCE8FB", "#FBEAE4", "#E8F3EA", "#F5E6FB", "#FBF3E0"];
+function coloreVoceAgenda(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return COLORI_VOCE_AGENDA[h % COLORI_VOCE_AGENDA.length];
+}
+// un singolo mese dell'agenda: stessa griglia 7 colonne del Calendario
+// corsi (MeseGriglia), ma con etichette a singolo giorno invece di barre
+// multi-giorno — un appuntamento non ha una "durata", solo una data
+function MeseGrigliaAgenda({ anno, mese, voci, onClickGiorno, onClickVoce }) {
+  const isMobile = useIsMobile();
+  const settimane = generaSettimane(anno, mese);
+  function dateStr(d) { return dateStrFor(anno, mese, d); }
+  const oggiStr = dataOggiStr();
+  return (
+    <div style={{ marginBottom: 34 }}>
+      <div style={{ ...fontDisplay, fontSize: 20, color: NAVY, marginBottom: 10 }}>{MESI[mese]} {anno}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 1, marginBottom: 4 }}>
+        {GIORNI_ABBR.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: isMobile ? 13 : 11, color: MUTED, textAlign: "center" }}>{g}</div>)}
+      </div>
+      {settimane.map((settimana, wi) => (
+        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 1, marginBottom: 1 }}>
+          {settimana.map((d, di) => {
+            if (!d) return <div key={di} />;
+            const ds = dateStr(d);
+            const vociGiorno = voci.filter((v) => v.data === ds);
+            const isOggi = ds === oggiStr;
+            return (
+              <div
+                key={di}
+                onClick={() => onClickGiorno(ds)}
+                style={{ minHeight: isMobile ? 66 : 82, border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: 4, cursor: "pointer", background: isOggi ? "#FBF3E4" : "#fff", overflow: "hidden" }}
+              >
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: isOggi ? 700 : 400, color: isOggi ? GOLD : NAVY, marginBottom: 3 }}>{d}</div>
+                {vociGiorno.slice(0, 3).map((v) => (
+                  <div
+                    key={v.id}
+                    onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
+                    style={{ ...fontBody, fontSize: 10, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 4, padding: "2px 4px", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                  >
+                    {v.titolo}
+                  </div>
+                ))}
+                {vociGiorno.length > 3 && <div style={{ ...fontBody, fontSize: 9, color: MUTED }}>+{vociGiorno.length - 3} altri</div>}
+              </div>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -3398,6 +3431,8 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
   const agendeVisibili = isStaff ? agende : agende.filter((a) => mieId.includes(a.id));
   const [agendaApertaId, setAgendaApertaId] = useState(agendeVisibili.length === 1 ? agendeVisibili[0].id : null);
   const agendaAperta = agende.find((a) => a.id === agendaApertaId) || null;
+  const [popupNuovo, setPopupNuovo] = useState(null); // data "yyyy-mm-dd" cliccata, o null
+  const [popupVoce, setPopupVoce] = useState(null); // voce cliccata, o null
 
   async function eliminaAgenda(a) {
     if (!window.confirm(`Eliminare l'agenda "${a.nome}"? Elimina anche tutti i suoi appuntamenti.`)) return;
@@ -3406,17 +3441,82 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
     if (agendaApertaId === a.id) setAgendaApertaId(null);
     ricarica();
   }
+  async function salvaNuovaVoce(campi) {
+    const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaAperta.id, data: popupNuovo, ...campi });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setPopupNuovo(null);
+    ricarica();
+  }
+  async function salvaModificaVoce(campi) {
+    const { error } = await supabase.from("agenda_voci").update(campi).eq("id", popupVoce.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setPopupVoce(null);
+    ricarica();
+  }
+  async function eliminaVoce() {
+    if (!window.confirm("Eliminare questo appuntamento?")) return;
+    const { error } = await supabase.from("agenda_voci").delete().eq("id", popupVoce.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setPopupVoce(null);
+    ricarica();
+  }
+
+  // vista a calendario, identica nello spirito al Calendario corsi: elenco
+  // continuo di mesi (da 6 mesi fa a 12 avanti) su cui scorrere invece di
+  // usare frecce avanti/indietro, più un selettore per saltare a un mese
+  // preciso e un tasto per tornare subito a oggi
+  const oggi = new Date();
+  const mesi = useMemo(() => {
+    const arr = [];
+    for (let i = -6; i <= 12; i++) {
+      const d = new Date(oggi.getFullYear(), oggi.getMonth() + i, 1);
+      arr.push({ anno: d.getFullYear(), mese: d.getMonth() });
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const refPerMese = useRef({});
+  function vaiAMese(anno, mese) {
+    refPerMese.current[`${anno}-${mese}`]?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+  useEffect(() => {
+    if (agendaAperta) refPerMese.current[`${oggi.getFullYear()}-${oggi.getMonth()}`]?.scrollIntoView({ block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agendaAperta?.id]);
+
+  const vociAgendaAperta = agendaAperta ? agendaVoci.filter((v) => v.agenda_id === agendaAperta.id) : [];
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <button
-            onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
-            title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}
-          ><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : "Agenda"}</div>
+      <div style={{ maxWidth: agendaAperta ? 820 : 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
+              title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}
+            ><IconaFrecciaSinistra size={20} /></button>
+            <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : "Agenda"}</div>
+          </div>
+          {agendaAperta && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                value=""
+                onChange={(e) => { if (!e.target.value) return; const [a, m] = e.target.value.split("-").map(Number); vaiAMese(a, m); }}
+                style={{ ...inputStyle, width: "auto" }}
+              >
+                <option value="">Vai al mese…</option>
+                {mesi.map(({ anno, mese }) => <option key={`${anno}-${mese}`} value={`${anno}-${mese}`}>{MESI[mese]} {anno}</option>)}
+              </select>
+              <Button variant="ghost" onClick={() => vaiAMese(oggi.getFullYear(), oggi.getMonth())}>Oggi</Button>
+            </div>
+          )}
         </div>
+
+        {agendaAperta && (
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
+            Scorri su o giù per vedere gli altri mesi. Clicca un giorno per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo.
+          </div>
+        )}
 
         {!agendaAperta ? (
           <>
@@ -3442,20 +3542,24 @@ function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica
             )}
           </>
         ) : (
-          <>
-            <FormNuovaVoceAgenda agendaId={agendaAperta.id} ricarica={ricarica} />
-            {agendaVoci.filter((v) => v.agenda_id === agendaAperta.id).length === 0 ? (
-              <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun appuntamento in questa agenda.</div>
-            ) : (
-              agendaVoci
-                .filter((v) => v.agenda_id === agendaAperta.id)
-                .slice()
-                .sort((a, b) => (a.data || "").localeCompare(b.data || ""))
-                .map((v) => <RigaVoceAgenda key={v.id} voce={v} ricarica={ricarica} />)
-            )}
-          </>
+          mesi.map(({ anno, mese }) => (
+            <div key={`${anno}-${mese}`} style={{ scrollMarginTop: 54 }} ref={(el) => { refPerMese.current[`${anno}-${mese}`] = el; }}>
+              <MeseGrigliaAgenda
+                anno={anno} mese={mese} voci={vociAgendaAperta}
+                onClickGiorno={(ds) => setPopupNuovo(ds)}
+                onClickVoce={(v) => setPopupVoce(v)}
+              />
+            </div>
+          ))
         )}
       </div>
+
+      {popupNuovo && (
+        <PopupNuovaVoceAgenda dataClic={popupNuovo} onSalva={salvaNuovaVoce} onChiudi={() => setPopupNuovo(null)} />
+      )}
+      {popupVoce && (
+        <PopupVoceAgenda voce={popupVoce} onSalva={salvaModificaVoce} onElimina={eliminaVoce} onChiudi={() => setPopupVoce(null)} />
+      )}
     </div>
   );
 }
