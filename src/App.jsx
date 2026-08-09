@@ -9695,24 +9695,28 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
 }
 
 // un tasto della barra sopra la scheda corso: oro/pieno se "primario"
-// (azione principale), altrimenti un link sottile — stesso stile sia
-// nella barra a due righe di "lista" sia nel tasto singolo delle altre viste
+// (azione principale), blu quando "attivo" (il pannello che rappresenta
+// è aperto — Contabilità classe/Riepilogo amministrativo sono mutuamente
+// esclusivi, mai attivi insieme), altrimenti un link sottile. Il testo
+// va a capo su due righe (mai il tasto stesso), così i 4 tasti oro
+// restano sempre affiancati sulla stessa riga anche su schermi stretti
 function BottonePulsanteScheda({ p }) {
   return (
     <button
       onClick={p.onClick}
       disabled={p.disabled}
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
-        padding: p.primario ? "12px 22px" : "10px 14px",
+        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 6,
+        padding: p.primario ? "10px 8px" : "10px 14px",
         borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
-        background: p.primario ? GOLD : "transparent",
-        color: NAVY, opacity: p.disabled ? 0.5 : 1,
-        textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap",
+        background: p.attivo ? NAVY : p.primario ? GOLD : "transparent",
+        color: p.attivo ? "#fff" : NAVY, opacity: p.disabled ? 0.5 : 1,
+        textTransform: "uppercase", letterSpacing: 0.3,
+        flex: p.primario ? "1 1 0" : "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={17} color={p.primario ? NAVY : GOLD} />
-      {p.etichetta}
+      <p.Icona size={16} color={p.attivo ? "#fff" : p.primario ? NAVY : GOLD} />
+      <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "left", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
 }
@@ -9965,10 +9969,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // sblocca (con lo stesso codice amministratore, chiesto una sola volta
   // a sessione) e attiva un pannello protetto — riusata sia per
   // "Contabilità classe" (solo le faccende degli allievi) sia per
-  // "Riepilogo amministrativo" (incassi/costi/saldo), ora due pannelli
-  // separati e indipendenti invece di uno dentro l'altro
-  function sbloccaEAttiva(attivo, setAttivo, messaggioCodice) {
+  // "Riepilogo amministrativo" (incassi/costi/saldo). Sono mutuamente
+  // esclusivi: aprirne uno chiude sempre l'altro, come due schede — mai
+  // visibili insieme
+  function sbloccaEAttiva(attivo, setAttivo, messaggioCodice, chiudiAltro) {
     if (attivo) { setAttivo(false); return; }
+    chiudiAltro();
     if (adminSbloccato) { setAttivo(true); return; }
     const codice = window.prompt(messaggioCodice);
     if (codice === null) return;
@@ -9980,8 +9986,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       window.alert("Codice non corretto.");
     }
   }
-  function apriGestioneClasse() { sbloccaEAttiva(mostraGestione, setMostraGestione, "Codice amministratore per aprire la contabilità classe:"); }
-  function apriRiepilogoAmministrativo() { sbloccaEAttiva(costiAperto, setCostiAperto, "Codice amministratore per aprire il riepilogo amministrativo:"); }
+  function apriGestioneClasse() { sbloccaEAttiva(mostraGestione, setMostraGestione, "Codice amministratore per aprire la contabilità classe:", () => setCostiAperto(false)); }
+  function apriRiepilogoAmministrativo() { sbloccaEAttiva(costiAperto, setCostiAperto, "Codice amministratore per aprire il riepilogo amministrativo:", () => setMostraGestione(false)); }
 
   // "rgb" di pdf-lib arriva solo al primo utilizzo (import dinamico: vedi
   // getPdfLib in cima al file) — stampaDiplomi/stampaSegnaposti la
@@ -10787,9 +10793,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         ];
         const primari = [
           { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
-          { chiave: "contabilita", etichetta: mostraGestione ? "Esci da contabilità" : "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true },
+          { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true, attivo: mostraGestione },
           { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true },
-          { chiave: "riepilogo", etichetta: costiAperto ? "Chiudi riepilogo" : "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true },
+          { chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: costiAperto },
         ];
 
         return (
@@ -10798,7 +10804,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
                 {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexWrap: "nowrap" }}>
                 {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
               </div>
             </div>
@@ -11667,7 +11673,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         );
       })()}
 
-      {vista === "lista" && (
+      {vista === "lista" && !costiAperto && (
         <>
           <div style={{ ...hStyle, marginBottom: 12 }}>Iscritti ({listaIscritti.length})</div>
           {listaIscritti.length === 0 && (
