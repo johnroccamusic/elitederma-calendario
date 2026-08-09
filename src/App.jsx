@@ -14195,9 +14195,12 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
   const kitDaSincronizzare = quantitaKitAttuale !== (statoEdizione.quantita_scaricata_magazzino || 0);
   const quantitaSpecialeAttuale = (statoEdizione.kit_speciale_per_iscritti || 0) + (statoEdizione.kit_speciale_di_riserva || 0);
   const specialeDaSincronizzare = quantitaSpecialeAttuale !== (statoEdizione.kit_speciale_scaricato || 0);
-  const accessoriPrincipale = contenutoPrincipale.filter((r) => r.tipo === "accessorio").map((r) => ({ ...r, chiave: `${kitPrincipaleId}::${r.prodotto_id}` }));
-  const accessoriSpeciale = contenutoSpeciale.filter((r) => r.tipo === "accessorio").map((r) => ({ ...r, chiave: `${kitSpecialeId}::${r.prodotto_id}` }));
-  const tuttiAccessori = [...accessoriPrincipale, ...accessoriSpeciale];
+  // accessori didattica: non appartengono a un kit specifico ma a tutto
+  // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
+  // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
+  const tuttiAccessori = corsiKitProdotti
+    .filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null))
+    .map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }));
   const accessoriDaSincronizzare = tuttiAccessori.some((r) => {
     const target = statoEdizione.accessori_quantita?.[r.chiave] || 0;
     const scaricato = statoEdizione.accessori_scaricati?.[r.chiave] || 0;
@@ -14473,12 +14476,9 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
-  const [ricercaAcc, setRicercaAcc] = useState("");
-  const [mostraRicercaAcc, setMostraRicercaAcc] = useState(false);
 
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
-  const accessori = righe.filter((r) => r.tipo === "accessorio");
-  const idsUsati = new Set(righe.map((r) => r.prodotto_id));
+  const idsUsati = new Set(prodottiKit.map((r) => r.prodotto_id));
 
   async function salvaNome() {
     if (!nome.trim() || nome.trim() === kit.nome) { setNome(kit.nome); return; }
@@ -14492,10 +14492,10 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  async function aggiungiProdotto(prodottoId, tipo) {
-    const { error } = await supabase.from("corsi_kit_prodotti").insert({ kit_id: kit.id, prodotto_id: prodottoId, tipo, quantita: 1 });
+  async function aggiungiProdotto(prodottoId) {
+    const { error } = await supabase.from("corsi_kit_prodotti").insert({ kit_id: kit.id, prodotto_id: prodottoId, tipo: "kit", quantita: 1 });
     if (error) { window.alert("Errore: " + error.message); return; }
-    setMostraRicercaKit(false); setMostraRicercaAcc(false); setRicercaKit(""); setRicercaAcc("");
+    setMostraRicercaKit(false); setRicercaKit("");
     ricarica();
   }
   async function cambiaQuantita(rigaId, quantita) {
@@ -14503,8 +14503,8 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  // rimuove un singolo prodotto/accessorio dal contenuto del pacchetto
-  // (a differenza di "elimina", che rimuove l'intero pacchetto)
+  // rimuove un singolo prodotto dal contenuto del pacchetto (a differenza
+  // di "elimina", che rimuove l'intero pacchetto)
   async function rimuovi(rigaId) {
     const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -14513,9 +14513,6 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 
   const risultatiKit = ricercaKit.trim()
     ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaKit.trim().toLowerCase())).slice(0, 8)
-    : [];
-  const risultatiAcc = ricercaAcc.trim()
-    ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaAcc.trim().toLowerCase())).slice(0, 8)
     : [];
   const pillBtn = { ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" };
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
@@ -14526,7 +14523,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
       onDrop={() => onDrop && onDrop(kit.id)}
       style={{ ...cardStyle, marginBottom: 10, padding: 14, opacity: trascinando ? 0.4 : 1, border: `1px solid ${trascinando ? GOLD : CREAM_BORDER}` }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (mostraRicercaKit || mostraRicercaAcc || prodottiKit.length > 0 || accessori.length > 0) ? 10 : 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (mostraRicercaKit || prodottiKit.length > 0) ? 10 : 0 }}>
         <span
           draggable
           onDragStart={() => onDragStart && onDragStart(kit.id)}
@@ -14540,7 +14537,6 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120 }}
         />
         <button onClick={() => setMostraRicercaKit((v) => !v)} style={pillBtn}>+ Prodotto</button>
-        <button onClick={() => setMostraRicercaAcc((v) => !v)} style={pillBtn}>+ Accessorio</button>
         <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
 
@@ -14548,7 +14544,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         <div style={{ marginBottom: 10 }}>
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
           {risultatiKit.map((p) => (
-            <div key={p.id} onClick={() => aggiungiProdotto(p.id, "kit")} style={rigaRisultato}>
+            <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={rigaRisultato}>
               {p.nome} <span style={{ color: MUTED, fontSize: 12 }}>· giacenza {p.giacenza ?? 0}</span>
             </div>
           ))}
@@ -14564,24 +14560,108 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           </div>
         );
       })}
+    </div>
+  );
+}
+// "nuvola" degli accessori didattica di un corso (o dei pacchetti
+// speciali senza corso, per corso=null): non appartengono a un pacchetto
+// specifico ma a tutto il corso — vengono mostrati e scaricati dal
+// magazzino insieme a QUALUNQUE kit/pacchetto scelto per l'edizione,
+// tramite "corso_id" su corsi_kit_prodotti (kit_id resta nullo)
+function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto }) {
+  const [ricerca, setRicerca] = useState("");
+  // la scelta "crea nuova lista / carica da un corso" si mostra solo al
+  // primo apertura a lista vuota (il componente si smonta e rimonta ogni
+  // volta che torna vuoto+chiuso, quindi lo stato iniziale basta)
+  const [modalitaScelta, setModalitaScelta] = useState(righe.length === 0);
+  const [corsoOrigineId, setCorsoOrigineId] = useState("");
+  const [copiando, setCopiando] = useState(false);
+  const idsUsati = new Set(righe.map((r) => r.prodotto_id));
+  const risultati = ricerca.trim()
+    ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricerca.trim().toLowerCase())).slice(0, 8)
+    : [];
+  const corsiConLista = useMemo(() => {
+    const idsCorsiConAccessori = new Set(
+      tuttiCorsiKitProdotti.filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id).map((r) => r.corso_id)
+    );
+    return corsi.filter((c) => idsCorsiConAccessori.has(c.id) && c.id !== (corso?.id || null));
+  }, [tuttiCorsiKitProdotti, corsi, corso]);
+  async function aggiungi(prodottoId) {
+    const { error } = await supabase.from("corsi_kit_prodotti").insert({ corso_id: corso?.id || null, kit_id: null, prodotto_id: prodottoId, tipo: "accessorio", quantita: 1 });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setRicerca("");
+    ricarica();
+  }
+  async function rimuovi(rigaId) {
+    const { error } = await supabase.from("corsi_kit_prodotti").delete().eq("id", rigaId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function caricaDaCorso() {
+    if (!corsoOrigineId) return;
+    const origine = tuttiCorsiKitProdotti.filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === corsoOrigineId);
+    if (origine.length === 0) return;
+    setCopiando(true);
+    const { error } = await supabase.from("corsi_kit_prodotti").insert(
+      origine.map((r) => ({ corso_id: corso?.id || null, kit_id: null, prodotto_id: r.prodotto_id, tipo: "accessorio", quantita: 1 }))
+    );
+    setCopiando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setModalitaScelta(false);
+    ricarica();
+  }
+  if (!aperto && righe.length === 0) return null;
+  const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
+  return (
+    <div style={{ ...cardStyle, marginTop: 4, padding: 14 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>Accessori didattica</div>
 
-      {mostraRicercaAcc && (
-        <div style={{ marginTop: prodottiKit.length > 0 ? 8 : 0, marginBottom: 10 }}>
-          <CampoRicerca value={ricercaAcc} onChange={(e) => setRicercaAcc(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
-          {risultatiAcc.map((p) => (
-            <div key={p.id} onClick={() => aggiungiProdotto(p.id, "accessorio")} style={rigaRisultato}>{p.nome}</div>
-          ))}
+      {aperto && righe.length === 0 && modalitaScelta ? (
+        <div>
+          <button
+            onClick={() => setModalitaScelta(false)}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 14px", cursor: "pointer", width: "100%", marginBottom: corsiConLista.length > 0 ? 10 : 0 }}
+          >
+            + Crea nuova lista
+          </button>
+          {corsiConLista.length > 0 && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <select value={corsoOrigineId} onChange={(e) => setCorsoOrigineId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                <option value="">— carica lista da un corso —</option>
+                {corsiConLista.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+              <button
+                onClick={caricaDaCorso} disabled={!corsoOrigineId || copiando}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: (!corsoOrigineId || copiando) ? "default" : "pointer", flexShrink: 0 }}
+              >
+                {copiando ? "Carico…" : "Carica"}
+              </button>
+            </div>
+          )}
         </div>
+      ) : (
+        <>
+          {aperto && (
+            <div style={{ marginBottom: righe.length > 0 ? 10 : 0 }}>
+              <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca accessorio nel magazzino…" />
+              {risultati.map((p) => (
+                <div key={p.id} onClick={() => aggiungi(p.id)} style={rigaRisultato}>{p.nome}</div>
+              ))}
+            </div>
+          )}
+          {righe.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun accessorio ancora.</div>
+          ) : righe.map((r) => {
+            const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
+            return (
+              <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
+                <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"}</span>
+                <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+              </div>
+            );
+          })}
+        </>
       )}
-      {accessori.map((r) => {
-        const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
-        return (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
-            <span style={{ flex: 1, ...fontBody, fontSize: 13, color: MUTED, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p?.nome || "—"} <span style={{ fontSize: 11 }}>(accessorio)</span></span>
-            <button onClick={() => rimuovi(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-          </div>
-        );
-      })}
     </div>
   );
 }
@@ -14589,12 +14669,14 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 // pacchetti speciali senza corso) con i suoi pacchetti sotto e il tasto
 // per crearne uno nuovo — sempre visibile, senza bisogno di "creare" un
 // contenitore prima di poter vedere l'elenco dei corsi
-function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiShop, ricarica }) {
+function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica }) {
   const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [mostraAccessori, setMostraAccessori] = useState(false);
   const trascinamentoRef = useRef(null);
   const [trascinatoId, setTrascinatoId] = useState(null);
+  const accessoriCorso = corsiKitProdotti.filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null));
 
   async function creaPacchetto() {
     if (!nomeNuovo.trim()) return;
@@ -14632,12 +14714,20 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiSho
     <div style={{ marginBottom: 26 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{corso ? corso.nome : "Pacchetti speciali (senza corso)"}</div>
-        <button
-          onClick={() => setMostraNuovo((v) => !v)}
-          style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
-        >
-          + Nuovo pacchetto
-        </button>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={() => setMostraAccessori((v) => !v)}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+          >
+            Accessori didattica
+          </button>
+          <button
+            onClick={() => setMostraNuovo((v) => !v)}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+          >
+            + Nuovo pacchetto
+          </button>
+        </div>
       </div>
       {mostraNuovo && (
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
@@ -14658,6 +14748,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, prodottiSho
           onDragStart={iniziaTrascinamento} onDragOver={() => {}} onDrop={rilascia} trascinando={trascinatoId === k.id}
         />
       ))}
+      <SchedaAccessoriCorso corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica} aperto={mostraAccessori} />
     </div>
   );
 }
@@ -14688,13 +14779,13 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiS
           <SezioneCorsoPacchetti
             key={c.id} corso={c}
             pacchetti={ordinaPacchetti(kitDefinizioni.filter((k) => k.corso_id === c.id))}
-            corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop} ricarica={ricarica}
+            corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
           />
         ))}
 
         <SezioneCorsoPacchetti
           corso={null} pacchetti={pacchettiSpeciali}
-          corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop} ricarica={ricarica}
+          corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
         />
       </div>
     </div>
