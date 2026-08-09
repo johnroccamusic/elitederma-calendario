@@ -18203,6 +18203,7 @@ export default function App() {
             <TileHome title="Gestione modelle" attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
             <TileHome title="Statistiche" attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
             <TileHome title="Setting" attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
+            <TileHome title="Progetti in corso" attivo={false} />
           </div>
         </div>
       )}
