@@ -3727,7 +3727,7 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
           backgroundPosition: "0 40px",
           border: `1px solid ${CREAM_BORDER}`, borderRadius: 9,
           boxShadow: "0 10px 18px -12px rgba(14,27,51,0.4)",
-          minHeight: 190, overflow: "hidden", paddingLeft: 16,
+          minHeight: 330, overflow: "hidden", paddingLeft: 16,
         }}
       >
         {/* rilegatura a spirale: striscia di anelli lungo il bordo sinistro */}
@@ -3787,7 +3787,7 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
             onChange={(e) => setTestoNota(e.target.value)}
             onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
             placeholder="Appunti della settimana…"
-            style={{ ...fontBody, fontSize: 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: 140, lineHeight: "22px", padding: 0 }}
+            style={{ ...fontBody, fontSize: 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: 270, lineHeight: "22px", padding: 0 }}
           />
         </CartaAgendaQuaderno>
       )}
