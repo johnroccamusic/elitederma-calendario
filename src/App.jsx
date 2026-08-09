@@ -10780,33 +10780,39 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       </div>
 
       {(() => {
-        // "lista" e "modelle" condividono la stessa barra completa,
-        // sempre visibile: entrare in "Assegna modelle" non deve far
-        // sparire il contesto/i tasti del corso. Solo il form di
-        // iscrizione (e "modelle" raggiunta da Gestione modelle, che ha
-        // un suo "Torna" dedicato) restano col tasto singolo di prima
-        if (vista === "form" || (vista === "modelle" && origineGestioneModelle)) {
-          const pulsante = vista === "modelle"
-            ? { chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }
-            : { chiave: "torna", etichetta: "Torna alla lista", Icona: IconaFrecciaSinistra, onClick: annullaForm };
+        // "lista", "modelle" e il form di iscrizione condividono la
+        // stessa barra completa, sempre visibile: entrare in "Assegna
+        // modelle" o "Iscrivi" non deve far sparire il contesto/i tasti
+        // del corso. Solo "modelle" raggiunta da Gestione modelle (che
+        // ha un suo "Torna" dedicato) resta col tasto singolo di prima
+        if (vista === "modelle" && origineGestioneModelle) {
           return (
             <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
               <div style={{ background: "#fff", borderRadius: 22, padding: "8px 10px", display: "flex", alignItems: "center", gap: 4, boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
-                <BottonePulsanteScheda p={pulsante} />
+                <BottonePulsanteScheda p={{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }} />
               </div>
             </div>
           );
         }
 
+        // Stampa diplomi/segnaposto e Riepilogo amministrativo restano
+        // visibili solo a chi ha già sbloccato l'accesso amministratore:
+        // prima erano raggiungibili solo passando da "Contabilità
+        // classe" (che chiedeva la password), ora che la barra è sempre
+        // la stessa vanno filtrati qui invece che nascosti "a valle".
+        // "Contabilità classe" stessa resta sempre visibile: è lei il
+        // tasto che chiede la password la prima volta
         const secondari = [
-          { chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: () => { setMostraGestione(false); setCostiAperto(false); setVista("lista"); } },
-          { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
-          { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
+          { chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: () => { if (vista === "form") { annullaForm(); return; } setMostraGestione(false); setCostiAperto(false); setVista("lista"); } },
+          ...(adminSbloccato ? [
+            { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
+            { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
+          ] : []),
         ];
         const primari = [
-          { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
+          { chiave: "iscrivi", etichetta: liberi <= 0 && vista !== "form" ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: () => { if (vista !== "form") apriIscrizione(); }, disabled: liberi <= 0 && vista !== "form", primario: true, attivo: vista === "form" },
           { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true, attivo: vista === "lista" && mostraGestione },
-          { chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: vista === "lista" && costiAperto },
+          ...(adminSbloccato ? [{ chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: vista === "lista" && costiAperto }] : []),
           { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" },
         ];
 
