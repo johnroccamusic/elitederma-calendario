@@ -9986,8 +9986,20 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       window.alert("Codice non corretto.");
     }
   }
-  function apriGestioneClasse() { sbloccaEAttiva(mostraGestione, setMostraGestione, "Codice amministratore per aprire la contabilità classe:", () => setCostiAperto(false)); }
-  function apriRiepilogoAmministrativo() { sbloccaEAttiva(costiAperto, setCostiAperto, "Codice amministratore per aprire il riepilogo amministrativo:", () => setMostraGestione(false)); }
+  // se si clicca da un'altra vista (es. da dentro "Assegna modelle", ora
+  // sempre raggiungibile dalla stessa barra), il pannello va sempre
+  // aperto — mai chiuso a comando, dato che non era già in vista — e la
+  // vista torna "lista" perché il pannello si vede solo lì
+  function apriGestioneClasse() {
+    const giaInLista = vista === "lista";
+    if (!giaInLista) setVista("lista");
+    sbloccaEAttiva(giaInLista ? mostraGestione : false, setMostraGestione, "Codice amministratore per aprire la contabilità classe:", () => setCostiAperto(false));
+  }
+  function apriRiepilogoAmministrativo() {
+    const giaInLista = vista === "lista";
+    if (!giaInLista) setVista("lista");
+    sbloccaEAttiva(giaInLista ? costiAperto : false, setCostiAperto, "Codice amministratore per aprire il riepilogo amministrativo:", () => setMostraGestione(false));
+  }
 
   // "rgb" di pdf-lib arriva solo al primo utilizzo (import dinamico: vedi
   // getPdfLib in cima al file) — stampaDiplomi/stampaSegnaposti la
@@ -10768,13 +10780,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       </div>
 
       {(() => {
-        // in "lista" tutti i tasti restano sempre visibili insieme (non
-        // più a scomparsa a seconda della modalità): Contabilità classe
-        // riguarda solo le faccende degli allievi (elenco dettagliato,
-        // link/eccezioni), Riepilogo amministrativo è ora un pannello a
-        // sé — indipendente, non più annidato dentro Contabilità classe
-        if (vista !== "lista") {
-          const pulsante = vista === "modelle" && origineGestioneModelle
+        // "lista" e "modelle" condividono la stessa barra completa,
+        // sempre visibile: entrare in "Assegna modelle" non deve far
+        // sparire il contesto/i tasti del corso. Solo il form di
+        // iscrizione (e "modelle" raggiunta da Gestione modelle, che ha
+        // un suo "Torna" dedicato) restano col tasto singolo di prima
+        if (vista === "form" || (vista === "modelle" && origineGestioneModelle)) {
+          const pulsante = vista === "modelle"
             ? { chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }
             : { chiave: "torna", etichetta: "Torna alla lista", Icona: IconaFrecciaSinistra, onClick: annullaForm };
           return (
@@ -10787,15 +10799,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         }
 
         const secondari = [
-          { chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: () => { setMostraGestione(false); setCostiAperto(false); } },
+          { chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: () => { setMostraGestione(false); setCostiAperto(false); setVista("lista"); } },
           { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
           { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
         ];
         const primari = [
           { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
-          { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true, attivo: mostraGestione },
-          { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true },
-          { chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: costiAperto },
+          { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true, attivo: vista === "lista" && mostraGestione },
+          { chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: vista === "lista" && costiAperto },
+          { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" },
         ];
 
         return (
