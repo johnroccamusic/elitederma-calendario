@@ -1,16 +1,40 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-// build "legacy" invece di quella principale: consigliata dalla stessa
-// pdf.js per i browser che supportano peggio i worker "module" (in
-// particolare Safari/iOS), dove la build principale può innescare un bug
-// interno della libreria durante l'estrazione del testo (es. un fallback
-// a "fake worker" che prende un percorso di codice meno testato)
-import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
-import pdfjsWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerUrl;
+// pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
+// importate in cima al file, quel peso va scaricato e interpretato PRIMA
+// che compaia anche solo la schermata di login (Gate), rallentandola
+// parecchio sui dispositivi/connessioni più lenti. Servono solo per
+// leggere/generare PDF (moduli iscrizione, diplomi, segnaposti) — con
+// l'import dinamico, Vite le mette in chunk separati scaricati solo al
+// primo utilizzo effettivo di quelle funzioni, non all'avvio dell'app.
+let _pdfjsLibPromise = null;
+function getPdfjsLib() {
+  if (!_pdfjsLibPromise) {
+    // build "legacy" invece di quella principale: consigliata dalla stessa
+    // pdf.js per i browser che supportano peggio i worker "module" (in
+    // particolare Safari/iOS), dove la build principale può innescare un
+    // bug interno della libreria durante l'estrazione del testo (es. un
+    // fallback a "fake worker" che prende un percorso di codice meno testato)
+    _pdfjsLibPromise = Promise.all([
+      import("pdfjs-dist/legacy/build/pdf.mjs"),
+      import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"),
+    ]).then(([pdfjsLib, workerUrlMod]) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrlMod.default;
+      return pdfjsLib;
+    });
+  }
+  return _pdfjsLibPromise;
+}
+let _pdfLibPromise = null;
+function getPdfLib() {
+  if (!_pdfLibPromise) {
+    _pdfLibPromise = Promise.all([import("pdf-lib"), import("@pdf-lib/fontkit")]).then(([pdfLib, fontkitMod]) => ({
+      PDFDocument: pdfLib.PDFDocument, StandardFonts: pdfLib.StandardFonts, rgb: pdfLib.rgb, fontkit: fontkitMod.default,
+    }));
+  }
+  return _pdfLibPromise;
+}
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -993,6 +1017,7 @@ const ETICHETTE_MODULO_PDF = {
 // e ne estrae i campi noti confrontando etichetta/valore riga per riga.
 // Restituisce null se non trova nessuna etichetta attesa in nessuna pagina provata.
 async function estraiDatiModuloPdf(file) {
+  const pdfjsLib = await getPdfjsLib();
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
   const paginePossibili = [6, 5, 7].filter((n) => n <= pdf.numPages);
@@ -6486,6 +6511,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
           setDimensioniCanvas(null);
           return;
         }
+        const pdfjsLib = await getPdfjsLib();
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: SCALA_ANTEPRIMA_DIPLOMA });
@@ -6566,6 +6592,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
           setDimensioniCanvasSegna(null);
           return;
         }
+        const pdfjsLib = await getPdfjsLib();
         const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
         const page = await pdf.getPage(1);
         const viewport = page.getViewport({ scale: SCALA_ANTEPRIMA_DIPLOMA });
@@ -9927,6 +9954,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     }
   }
 
+  // "rgb" di pdf-lib arriva solo al primo utilizzo (import dinamico: vedi
+  // getPdfLib in cima al file) — stampaDiplomi/stampaSegnaposti la
+  // caricano e la mettono qui prima di chiamare disegnaTestoDiploma
+  let rgbFn = null;
   // disegna un testo su una pagina pdf-lib, convertendo la posizione da
   // percentuale (0-100, origine in alto a sinistra, come nell'editor
   // visivo di "Font Diplomi") a punti pdf (origine in basso a sinistra),
@@ -9942,7 +9973,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     // avvicina al centro reale senza bisogno di misure di ascent/descent
     const y = height - (posY / 100) * height - fontSize * 0.35;
     const { r, g, b } = hexInRgb01(colore);
-    page.drawText(testo, { x, y, size: fontSize, font, color: rgb(r, g, b) });
+    page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
   }
 
   async function stampaDiplomi() {
@@ -9956,6 +9987,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     }
     setGenerandoDiplomi(true);
     try {
+      const { PDFDocument, StandardFonts, fontkit, rgb } = await getPdfLib();
+      rgbFn = rgb;
       // stesso motivo del merge in stampaSegnaposti: un campo mancante
       // (colonna nuova non ancora migrata su questo database) non deve
       // ripiegare su un valore che disattiva il limite in silenzio
@@ -10099,6 +10132,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     }
     setGenerandoSegnaposti(true);
     try {
+      const { PDFDocument, StandardFonts, fontkit, rgb } = await getPdfLib();
+      rgbFn = rgb;
       const templateBytes = await scaricaBytesStorage("diploma-templates", cfg.riferimento_path);
       const templateDoc = await PDFDocument.load(templateBytes);
 
@@ -10878,6 +10913,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Costi della classe</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
+                <Field label="Quota venditore">
+                  <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteVenditoreClasse}</div>
+                </Field>
                 {CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => {
                   // se una spesa per questa classe+sottocategoria esiste già,
                   // il click deve riaprire QUELLA per modificarla — non
@@ -10929,9 +10967,6 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 <div>
                   <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale costi</div>
                   <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCostiClasse}</div>
-                  {quoteVenditoreClasse > 0 && (
-                    <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>di cui € {quoteVenditoreClasse} quota venditore</div>
-                  )}
                 </div>
                 <div>
                   <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Risultato classe</div>
