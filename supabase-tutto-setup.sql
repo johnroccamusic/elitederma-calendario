@@ -1612,4 +1612,10 @@ alter table public.inventario_sede enable row level security;
 drop policy if exists "inventario_sede_all" on public.inventario_sede;
 create policy "inventario_sede_all" on public.inventario_sede for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 45) "Tipo di offerta": campo libero accanto a "Pacchetto/Kit" nella
+-- scheda di iscrizione.
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists tipo_offerta text;
+
 notify pgrst, 'reload schema';

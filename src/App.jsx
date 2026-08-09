@@ -9457,6 +9457,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // da "Assegna modelle" in Contabilità classe e qui restano invariati
   const [tipiModelle, setTipiModelle] = useState([]);
   const [pacchettoKit, setPacchettoKit] = useState("");
+  const [tipoOfferta, setTipoOfferta] = useState("");
   const [tagliaDivisa, setTagliaDivisa] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
@@ -9909,7 +9910,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPrecorsoExtra([]);
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
-    setPacchettoKit(""); setTagliaDivisa("");
+    setPacchettoKit(""); setTipoOfferta(""); setTagliaDivisa("");
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -9974,6 +9975,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
     setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "" })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
+    setTipoOfferta(i.tipo_offerta || "");
     setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
     setQuotaSpeciale(i.quota_speciale != null ? String(i.quota_speciale) : "");
@@ -10084,6 +10086,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
         tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "" })) : [],
         pacchetto_kit: pacchettoKit.trim() || null,
+        tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
         quota_speciale: quotaSpeciale === "" ? null : parseNum(quotaSpeciale),
@@ -10766,13 +10769,22 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               </div>
             )}
           </div>
-          <Field label="Pacchetto/Kit">
-            <CampoPacchettoKit
-              key={modificandoId || "nuovo"}
-              value={pacchettoKit} onChange={setPacchettoKit}
-              opzioni={kitDefinizioni.filter((k) => k.corso_id === corso?.id)}
-            />
-          </Field>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Pacchetto/Kit">
+                <CampoPacchettoKit
+                  key={modificandoId || "nuovo"}
+                  value={pacchettoKit} onChange={setPacchettoKit}
+                  opzioni={kitDefinizioni.filter((k) => k.corso_id === corso?.id)}
+                />
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Tipo di offerta">
+                <input value={tipoOfferta} onChange={(e) => setTipoOfferta(e.target.value)} style={inputStyle} />
+              </Field>
+            </div>
+          </div>
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
