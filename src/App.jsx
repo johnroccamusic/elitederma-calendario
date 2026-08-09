@@ -3210,10 +3210,13 @@ function PaginaDashboardVenditori({
 // caricati da "Assegnazione Master" (stesso file, stesso bucket
 // "allegati-iscritti" — qui è solo in lettura, il caricamento resta un
 // compito di chi gestisce l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc }) {
+function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
   const biglietti = corsoData.viaggio_file || [];
   return (
-    <div style={{ ...cardStyle, marginBottom: 10 }}>
+    <div
+      onClick={apribile ? () => onApriInventario(corsoData.id) : undefined}
+      style={{ ...cardStyle, marginBottom: 10, cursor: apribile ? "pointer" : "default", border: apribile ? `1px solid ${GOLD}` : cardStyle.border }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
         <div>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
@@ -3236,6 +3239,11 @@ function CardDataMaster({ corsoData, corso, loc }) {
           </div>
         </div>
       )}
+      {apribile && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
+          Tocca per dichiarare l'inventario di {toTitleCase(loc?.nome || "questa sede")} →
+        </div>
+      )}
     </div>
   );
 }
@@ -3245,24 +3253,45 @@ function CardDataMaster({ corsoData, corso, loc }) {
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLoggataId, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, masterLoggataId, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const oggiStr = dataOggiStr();
+  // resta in lista anche fino a 2 giorni dopo la fine (stessa finestra
+  // dell'inventario di sede), così la card resta cliccabile per
+  // dichiararlo appena tornati dalla sede, non solo mentre il corso è in corso
   const prossimeDate = useMemo(
-    () => corsiDate.filter((cd) => cd.master_id === masterSelId && cd.data_fine >= oggiStr).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
+    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= addGiorni(cd.data_fine, 2)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [corsiDate, masterSelId, oggiStr]
   );
-  // "corso corrente": quello in corso o finito al massimo ieri — la
-  // finestra resta attiva fino al giorno DOPO la fine, per lasciare il
-  // tempo di dichiarare l'inventario anche appena tornati dalla sede
+  // "corso corrente": quello in corso o finito da al massimo 2 giorni —
+  // la finestra resta attiva fino a 2 giorni DOPO la fine, per lasciare
+  // il tempo di dichiarare l'inventario anche una volta tornati dalla sede
+  function inFinestraInventario(cd) {
+    return oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 2);
+  }
   const corsoCorrente = useMemo(
-    () => corsiDate.find((cd) => cd.master_id === masterSelId && oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 1)) || null,
+    () => corsiDate.find((cd) => cd.master_id === masterSelId && inFinestraInventario(cd)) || null,
     [corsiDate, masterSelId, oggiStr]
   );
+  // incasso generato dai corsi di questa master: somma del totale
+  // pattuito degli iscritti alle sue edizioni, sia nel mese corrente
+  // (l'edizione si sovrappone al mese) sia da sempre
+  const incassi = useMemo(() => {
+    const oggi = new Date();
+    const meseInizio = fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 1));
+    const meseFine = fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0));
+    const dateDiQuestaMaster = corsiDate.filter((cd) => cd.master_id === masterSelId);
+    const dateMeseCorrente = dateDiQuestaMaster.filter((cd) => cd.data_inizio <= meseFine && cd.data_fine >= meseInizio);
+    function somma(listaDate) {
+      const ids = new Set(listaDate.map((cd) => cd.id));
+      return (iscritti || []).filter((i) => ids.has(i.corso_data_id)).reduce((s, i) => s + (i.totale_pattuito || 0), 0);
+    }
+    return { mese: somma(dateMeseCorrente), totale: somma(dateDiQuestaMaster) };
+  }, [corsiDate, iscritti, masterSelId]);
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -3276,7 +3305,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
             <button
               onClick={() => corsoCorrente && onApriInventarioSede(corsoCorrente.id)}
               disabled={!corsoCorrente}
-              title={corsoCorrente ? "" : "Attivo solo durante il corso e il giorno dopo la fine"}
+              title={corsoCorrente ? "" : "Attivo solo durante il corso e fino a 2 giorni dopo la fine"}
               style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: corsoCorrente ? NAVY : "#C9C4B8", background: "#fff", border: `1px solid ${corsoCorrente ? CREAM_BORDER : "#EDEAE0"}`, borderRadius: 16, padding: "9px 14px", cursor: corsoCorrente ? "pointer" : "default", flexShrink: 0 }}
             >
               Inventario corso corrente
@@ -3287,6 +3316,19 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
           {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : "Dashboard master"}
         </div>
         {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area master</div>}
+
+        {masterSel && (
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Incasso mese corrente</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassi.mese)}</div>
+            </div>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Incasso totale</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassi.totale)}</div>
+            </div>
+          </div>
+        )}
 
         {!masterLoggataId && (
           <select
@@ -3307,7 +3349,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
             {prossimeDate.length === 0 ? (
               <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessun corso in programma al momento.</div>
             ) : prossimeDate.map((cd) => (
-              <CardDataMaster key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]} />
+              <CardDataMaster
+                key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
+                apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
+              />
             ))}
           </>
         )}
@@ -3380,7 +3425,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Inventario corso corrente</div>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Inventario {toTitleCase(loc?.nome || "—")}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
           {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} — quanto è già presente in questa sede, per non rispedire quello che c'è già.
@@ -17713,7 +17758,7 @@ export default function App() {
 
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
-          master={master} corsi={corsi} location={location} corsiDate={corsiDate}
+          master={master} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
           onApriInventarioSede={apriInventarioSede}
           onBack={() => setView("home")}
