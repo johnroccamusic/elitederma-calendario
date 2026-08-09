@@ -3490,9 +3490,13 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   const rientroAperti = statoEdizione?.rientro_prodotti_aperti || {};
 
   async function salvaRientro(campo, nuovoOggetto) {
-    const { error } = statoEdizione
-      ? await supabase.from("logistica_kit_edizioni").update({ [campo]: nuovoOggetto }).eq("id", statoEdizione.id)
-      : await supabase.from("logistica_kit_edizioni").insert({ corso_data_id: corsoData.id, [campo]: nuovoOggetto });
+    // upsert invece di "trova o inserisci": se due salvataggi partono
+    // vicini prima che statoEdizione si aggiorni, entrambi vedrebbero
+    // "nessuna riga" e proverebbero un insert, violando il vincolo unique
+    // su corso_data_id (visto nei log come "duplicate key value...")
+    const { error } = await supabase
+      .from("logistica_kit_edizioni")
+      .upsert({ corso_data_id: corsoData.id, [campo]: nuovoOggetto }, { onConflict: "corso_data_id" });
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
@@ -14922,10 +14926,14 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     };
   }
   async function salvaCampiEdizione(corsoDataId, campi) {
-    const esistente = logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId);
-    const { error } = esistente
-      ? await supabase.from("logistica_kit_edizioni").update(campi).eq("id", esistente.id)
-      : await supabase.from("logistica_kit_edizioni").insert({ corso_data_id: corsoDataId, ...campi });
+    // upsert invece di "trova o inserisci": se due salvataggi partono
+    // vicini prima che logisticaKitEdizioni si aggiorni, entrambi
+    // vedrebbero "nessuna riga" e proverebbero un insert, violando il
+    // vincolo unique su corso_data_id (visto nei log come "duplicate key
+    // value violates unique constraint logistica_kit_edizioni_corso_data_id_key")
+    const { error } = await supabase
+      .from("logistica_kit_edizioni")
+      .upsert({ corso_data_id: corsoDataId, ...campi }, { onConflict: "corso_data_id" });
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
