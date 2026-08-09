@@ -1305,7 +1305,7 @@ function Gate({ onOk }) {
     setVerificando(true);
     const [{ data: utenti }, { data: masterRighe }] = await Promise.all([
       supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema"),
-      supabase.from("master").select("id, nome, password"),
+      supabase.from("master").select("id, nome, password, permessi"),
     ]);
     setVerificando(false);
     const righe = utenti || [];
@@ -1334,7 +1334,7 @@ function Gate({ onOk }) {
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
     else if (sAdmin.password && code === sAdmin.password) { ruolo = "amministratore"; utente = sAdmin; }
-    else if (masterTrovata) { ruolo = "user"; utente = { id: masterTrovata.id, nome: masterTrovata.nome, permessi: ["dashboardmaster"], chiave_sistema: null, masterId: masterTrovata.id }; }
+    else if (masterTrovata) { ruolo = "user"; utente = { id: masterTrovata.id, nome: masterTrovata.nome, permessi: ["dashboardmaster", ...(masterTrovata.permessi || [])], chiave_sistema: null, masterId: masterTrovata.id }; }
     else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
 
@@ -3296,6 +3296,170 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
   );
 }
 
+// tasto "+ Nuova agenda" (solo Programmatore): crea subito una riga col
+// nome scelto — appare all'istante come nuova colonna-checkbox in
+// Gestione utenti/Password Master (chiave permesso "agenda_<id>")
+function BottoneNuovaAgenda({ ricarica }) {
+  const [salvando, setSalvando] = useState(false);
+  async function crea() {
+    const nome = window.prompt("Nome della nuova agenda:");
+    if (!nome || !nome.trim()) return;
+    setSalvando(true);
+    const { error } = await supabase.from("agende").insert({ nome: nome.trim() });
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  return (
+    <button
+      onClick={crea} disabled={salvando}
+      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "10px 16px", cursor: salvando ? "default" : "pointer", flexShrink: 0 }}
+    >
+      {salvando ? "Creo…" : "+ Nuova agenda"}
+    </button>
+  );
+}
+// una voce dell'agenda: data, titolo, nota libera — eliminabile
+function RigaVoceAgenda({ voce, ricarica }) {
+  async function elimina() {
+    if (!window.confirm("Eliminare questo appuntamento?")) return;
+    const { error } = await supabase.from("agenda_voci").delete().eq("id", voce.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  return (
+    <div style={{ ...cardStyle, marginBottom: 10, padding: 14, display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <div style={{ background: BG, borderRadius: 10, padding: "6px 11px", textAlign: "center", flexShrink: 0, minWidth: 44 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{voce.data ? fmtData(voce.data) : "—"}</div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{voce.titolo}</div>
+        {voce.nota && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, whiteSpace: "pre-wrap" }}>{voce.nota}</div>}
+      </div>
+      <button onClick={elimina} title="Elimina" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#C0392B", flexShrink: 0, padding: 4 }}>✕</button>
+    </div>
+  );
+}
+// form "+ Nuovo appuntamento" a scomparsa: data, titolo, nota libera
+function FormNuovaVoceAgenda({ agendaId, ricarica }) {
+  const [aperto, setAperto] = useState(false);
+  const [data, setData] = useState(dataOggiStr());
+  const [titolo, setTitolo] = useState("");
+  const [nota, setNota] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  async function salva() {
+    if (!titolo.trim()) { window.alert("Il titolo non può essere vuoto."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaId, data: data || null, titolo: titolo.trim(), nota: nota.trim() || null });
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setTitolo(""); setNota(""); setAperto(false);
+    ricarica();
+  }
+  if (!aperto) {
+    return (
+      <button
+        onClick={() => setAperto(true)}
+        style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "10px 16px", cursor: "pointer", marginBottom: 16 }}
+      >
+        + Nuovo appuntamento
+      </button>
+    );
+  }
+  return (
+    <div style={{ ...cardStyle, marginBottom: 16, padding: 14 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+        <input type="date" value={data} onChange={(e) => setData(e.target.value)} style={{ ...inputStyle, width: 150 }} />
+        <input value={titolo} onChange={(e) => setTitolo(e.target.value)} placeholder="Titolo" style={{ ...inputStyle, flex: 1, minWidth: 160 }} />
+      </div>
+      <textarea value={nota} onChange={(e) => setNota(e.target.value)} placeholder="Nota (facoltativa)" style={{ ...inputStyle, width: "100%", minHeight: 60, marginBottom: 10, resize: "vertical" }} />
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={salva} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 14px", cursor: salvando ? "default" : "pointer" }}>
+          {salvando ? "Salvo…" : "Salva"}
+        </button>
+        <button onClick={() => setAperto(false)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 14px", cursor: "pointer" }}>
+          Annulla
+        </button>
+      </div>
+    </div>
+  );
+}
+// pagina "Agenda": chi ha una sola agenda tra i propri permessi (utente
+// nominale o master) la trova già aperta, senza scegliere nulla (stesso
+// spirito di Dashboard master). Chi ne ha più di una vede prima un elenco
+// di tasti fra cui scegliere quale aprire. Solo il Programmatore può
+// crearne/eliminarle (e vede sempre tutte); chiunque acceda a un'agenda
+// può aggiungere/togliere le sue voci
+function PaginaAgenda({ agende, agendaVoci, ruoloUtente, utenteLoggato, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const isProgrammatore = ruoloUtente === "programmatore";
+  const isStaff = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
+  const mieId = (utenteLoggato?.permessi || []).filter((p) => p.startsWith("agenda_")).map((p) => p.slice(7));
+  const agendeVisibili = isStaff ? agende : agende.filter((a) => mieId.includes(a.id));
+  const [agendaApertaId, setAgendaApertaId] = useState(agendeVisibili.length === 1 ? agendeVisibili[0].id : null);
+  const agendaAperta = agende.find((a) => a.id === agendaApertaId) || null;
+
+  async function eliminaAgenda(a) {
+    if (!window.confirm(`Eliminare l'agenda "${a.nome}"? Elimina anche tutti i suoi appuntamenti.`)) return;
+    const { error } = await supabase.from("agende").delete().eq("id", a.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    if (agendaApertaId === a.id) setAgendaApertaId(null);
+    ricarica();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+          <button
+            onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
+            title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}
+          ><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : "Agenda"}</div>
+        </div>
+
+        {!agendaAperta ? (
+          <>
+            {isProgrammatore && <div style={{ marginBottom: 18 }}><BottoneNuovaAgenda ricarica={ricarica} /></div>}
+            {agendeVisibili.length === 0 ? (
+              <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna agenda assegnata.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {agendeVisibili.map((a) => (
+                  <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button
+                      onClick={() => setAgendaApertaId(a.id)}
+                      style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "16px 18px", cursor: "pointer", flex: 1, textAlign: "left" }}
+                    >
+                      {a.nome}
+                    </button>
+                    {isProgrammatore && (
+                      <button onClick={() => eliminaAgenda(a)} title="Elimina agenda" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#C0392B", padding: 8, flexShrink: 0 }}>✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <FormNuovaVoceAgenda agendaId={agendaAperta.id} ricarica={ricarica} />
+            {agendaVoci.filter((v) => v.agenda_id === agendaAperta.id).length === 0 ? (
+              <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun appuntamento in questa agenda.</div>
+            ) : (
+              agendaVoci
+                .filter((v) => v.agenda_id === agendaAperta.id)
+                .slice()
+                .sort((a, b) => (a.data || "").localeCompare(b.data || ""))
+                .map((v) => <RigaVoceAgenda key={v.id} voce={v} ricarica={ricarica} />)
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // colore in continuo per il punteggio Performance, centrato su 100 (in
 // linea con la media team): rosso sotto 85, transizione verso il navy
 // intorno a 100, verde sopra 120 — niente fasce fisse alta/media/bassa
@@ -4229,11 +4393,15 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
 // utenti_app, senza bisogno di un Salva a parte, così il risultato in
 // home è immediato. Le 3 righe di sistema non ancora salvate (id nullo,
 // mostrate coi valori di sempre) vengono create al primo salvataggio
-function RigaTabellaUtente({ utente, ricarica }) {
+function RigaTabellaUtente({ utente, agende, ricarica }) {
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
   const [salvando, setSalvando] = useState(false);
   const [fatto, setFatto] = useState(false);
+  // spuntato/tolto lo spunto aggiorna subito questo stato locale (non si
+  // aspetta il giro di rete + ricarica di tutti i dati dell'app prima di
+  // vedere la casella cambiare, altrimenti c'è una latenza percepibile)
+  const [permessiLocali, setPermessiLocali] = useState(utente.permessi || []);
   const sistema = !!utente.chiave_sistema;
 
   async function persist(campi) {
@@ -4253,10 +4421,11 @@ function RigaTabellaUtente({ utente, ricarica }) {
     ricarica();
   }
   async function toggleTasto(chiave, checked) {
-    const attuali = utente.permessi || [];
+    const attuali = permessiLocali;
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
+    setPermessiLocali(nuovi);
     const { error } = await persist({ permessi: nuovi });
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
     ricarica();
   }
   async function elimina() {
@@ -4278,7 +4447,12 @@ function RigaTabellaUtente({ utente, ricarica }) {
       </td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
-          <input type="checkbox" checked={(utente.permessi || []).includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+          <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+        </td>
+      ))}
+      {agende.map((a) => (
+        <td key={a.id} style={{ ...tdStyle, textAlign: "center" }}>
+          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
         </td>
       ))}
       <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
@@ -4334,7 +4508,7 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
 // e una colonna per ogni tasto della home (TASTI_HOME): un tasto non
 // spuntato per una riga resta disattivato e non cliccabile in home per
 // chi entra con quella password, senza dover chiedere nessuna password
-function TabellaGestioneUtenti({ utentiApp, ricarica }) {
+function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
   const righeSistema = RIGHE_SISTEMA_DEFAULT.map((def) => {
     const esistente = utentiApp.find((u) => u.chiave_sistema === def.chiave);
     return esistente || { id: null, chiave_sistema: def.chiave, nome: def.nome, password: def.passwordDefault, permessi: def.permessiDefault };
@@ -4359,11 +4533,12 @@ function TabellaGestioneUtenti({ utentiApp, ricarica }) {
               <th style={thStyle}>Nome utente</th>
               <th style={thStyle}>Password</th>
               {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
+              {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
               <th style={thStyle}></th>
             </tr>
           </thead>
           <tbody>
-            {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} ricarica={ricarica} />)}
+            {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} agende={agende} ricarica={ricarica} />)}
           </tbody>
         </table>
       </div>
@@ -4374,41 +4549,61 @@ function TabellaGestioneUtenti({ utentiApp, ricarica }) {
 // pannello dietro la rotellina in home (codice CODICE_ROTELLINA): gestione
 // utenti e permessi, più la password di questa stessa rotellina
 // una riga di "Password Master": nome (di sola lettura, si aggiorna da
-// solo in base a Setting > Definisci Master) + password modificabile,
-// scritta direttamente sulla riga "master" già esistente
-function RigaPasswordMaster({ masterRec, ricarica }) {
+// solo in base a Setting > Definisci Master) + password (si salva da sola
+// appena si esce dalla casella, niente tasto Salva) + una casella per
+// ogni agenda creata (stesso schema di assegnazione di Gestione utenti):
+// una master può anche lei avere una o più agende abbinate
+function RigaTabellaMaster({ masterRec, agende, ricarica }) {
   const [password, setPassword] = useState(masterRec.password || "");
-  const [salvando, setSalvando] = useState(false);
-  const [fatto, setFatto] = useState(false);
-  async function salva() {
-    setSalvando(true); setFatto(false);
-    const { error } = await supabase.from("master").update({ password: password.trim() || null }).eq("id", masterRec.id);
-    setSalvando(false);
+  const [permessiLocali, setPermessiLocali] = useState(masterRec.permessi || []);
+  async function persist(campi) {
+    return supabase.from("master").update(campi).eq("id", masterRec.id);
+  }
+  async function salvaPassword() {
+    if ((masterRec.password || "") === password.trim()) return;
+    const { error } = await persist({ password: password.trim() || null });
     if (error) { window.alert("Errore: " + error.message); return; }
-    setFatto(true);
-    setTimeout(() => setFatto(false), 2000);
     ricarica();
   }
+  async function toggleAgenda(agendaId, checked) {
+    const chiave = `agenda_${agendaId}`;
+    const attuali = permessiLocali;
+    const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
+    setPermessiLocali(nuovi);
+    const { error } = await persist({ permessi: nuovi });
+    if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
+    ricarica();
+  }
+  const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
   return (
-    <div style={{ ...cardStyle, marginBottom: 10, padding: 14, display: "flex", alignItems: "center", gap: 10 }}>
-      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{masterRec.nome}</div>
-      <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Nessuna password" style={{ ...inputStyle, width: 160 }} />
-      <button
-        onClick={salva} disabled={salvando}
-        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 12px", cursor: salvando ? "default" : "pointer", flexShrink: 0 }}
-      >
-        {salvando ? "Salvo…" : fatto ? "Salvato ✓" : "Salva"}
-      </button>
-    </div>
+    <tr>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{masterRec.nome}</td>
+      <td style={tdStyle}>
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onBlur={salvaPassword}
+          placeholder="Nessuna password"
+          style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }}
+        />
+      </td>
+      {agende.map((a) => (
+        <td key={a.id} style={{ ...tdStyle, textAlign: "center" }}>
+          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleAgenda(a.id, e.target.checked)} />
+        </td>
+      ))}
+    </tr>
   );
 }
 // sezione "Password Master": una riga per ogni master già definita in
 // Setting > Definisci Master, sempre allineata a quella lista (nessuna
 // creazione/eliminazione qui: si aggiungono/tolgono master da Setting).
 // Chi entra con la password di una master trova già la sua Dashboard
-// master aperta sulla propria scheda, senza scegliere nulla
-function TabellaPasswordMaster({ master, ricarica }) {
+// master aperta sulla propria scheda, senza scegliere nulla; se ha anche
+// un'agenda abbinata, la trova tra le agende del tasto "Agenda"
+function TabellaPasswordMaster({ master, agende, ricarica }) {
   const masterOrdinate = master.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password Master</div>
@@ -4417,12 +4612,27 @@ function TabellaPasswordMaster({ master, ricarica }) {
       </div>
       {masterOrdinate.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
-      ) : masterOrdinate.map((m) => <RigaPasswordMaster key={m.id} masterRec={m} ricarica={ricarica} />)}
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + agende.length * 140 }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Nome master</th>
+                <th style={thStyle}>Password</th>
+                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} ricarica={ricarica} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
-function PaginaPasswordMenu({ passwordMenu, utentiApp, master, ricarica, onBack }) {
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -4440,12 +4650,10 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, ricarica, onBack 
         </div>
 
         <div style={{ marginBottom: 28 }}>
-          <TabellaGestioneUtenti utentiApp={utentiApp} ricarica={ricarica} />
+          <TabellaGestioneUtenti utentiApp={utentiApp} agende={agende} ricarica={ricarica} />
         </div>
 
-        <div style={{ maxWidth: 400 }}>
-          <TabellaPasswordMaster master={master} ricarica={ricarica} />
-        </div>
+        <TabellaPasswordMaster master={master} agende={agende} ricarica={ricarica} />
 
         <div style={{ maxWidth: 400 }}>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di questa rotellina</div>
@@ -13889,11 +14097,28 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick }) {
     </button>
   );
 }
+// riepilogo "2 KIT PRO / 1 KIT BASE / 3 KIT TOTALI": quanti iscritti di
+// questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
+// riusato sia nella riga del corso sia in cima a "Preparazione kit"
+function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
+  const conteggio = {};
+  iscrittiEdizione.forEach((i) => { if (i.pacchetto_kit) conteggio[i.pacchetto_kit] = (conteggio[i.pacchetto_kit] || 0) + 1; });
+  const voci = Object.entries(conteggio).sort((a, b) => b[1] - a[1]);
+  if (voci.length === 0) return null;
+  const totale = voci.reduce((s, [, n]) => s + n, 0);
+  return (
+    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textAlign: "right", lineHeight: 1.5, whiteSpace: "nowrap", ...style }}>
+      {voci.map(([nome, n]) => <div key={nome}>{n} KIT {nome.toUpperCase()}</div>)}
+      <div>{totale} KIT TOTALI</div>
+    </div>
+  );
+}
 // una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
 // attuale in etichetta e le 5 pillole cliccabili per cambiarla
-function RigaCorsoLogistica({ corsoData, corso, loc, numeroPartecipanti, faseCorrente, selezionato, onSeleziona, onCambiaFase }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const etichettaFase = FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichetta || "";
+  const numeroPartecipanti = iscrittiEdizione.length;
   return (
     <div
       onClick={onSeleziona}
@@ -13907,7 +14132,10 @@ function RigaCorsoLogistica({ corsoData, corso, loc, numeroPartecipanti, faseCor
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
-            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>Ora: {etichettaFase}</div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>Ora: {etichettaFase}</div>
+              <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} style={{ marginTop: 4 }} />
+            </div>
           </div>
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{toTitleCase(loc?.nome || "—")} · {numeroPartecipanti} partecipant{numeroPartecipanti === 1 ? "e" : "i"}</div>
         </div>
@@ -13923,7 +14151,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, numeroPartecipanti, faseCor
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da "Contenuto kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, onSalvaCampi, onSincronizzaMagazzino }) {
+function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino }) {
   const checklist = statoEdizione.checklist || {};
   const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
   const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
@@ -13967,8 +14195,13 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
 
   return (
     <div>
-      <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Preparazione kit</div>
-      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>{corso?.nome || "—"} · {fmtData(corsoData.data_inizio)}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+        <div>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Preparazione kit</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{corso?.nome || "—"} · {fmtData(corsoData.data_inizio)}</div>
+        </div>
+        <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
+      </div>
 
       {mancanti > 0 && (
         <div style={{ background: "#FBEAE4", border: "1px solid #C0392B", borderRadius: 10, padding: 12, marginBottom: 18, ...fontBody, fontSize: 13, fontWeight: 600, color: "#C0392B" }}>
@@ -14194,7 +14427,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 corsoData={cd}
                 corso={corsoById[cd.corso_id]}
                 loc={locById[cd.location_id]}
-                numeroPartecipanti={iscritti.filter((i) => i.corso_data_id === cd.id).length}
+                iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === cd.id)}
                 faseCorrente={statoDi(cd.id).fase}
                 selezionato={edizioneSel?.id === cd.id}
                 onSeleziona={() => setEdizioneSelId(cd.id)}
@@ -14214,6 +14447,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
                 prodottiShop={prodottiShop}
+                iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
                 onSincronizzaMagazzino={() => sincronizzaMagazzino(edizioneSel)}
               />
@@ -16340,6 +16574,12 @@ export default function App() {
   // checklist, quantità accessori inviati, se già scaricato dal magazzino
   const [corsiKitProdotti, setCorsiKitProdotti] = useState([]);
   const [kitDefinizioni, setKitDefinizioni] = useState([]);
+  // "Agenda": create dal Programmatore, ciascuna con un nome che compare
+  // anche come colonna-checkbox in Gestione utenti (chiave permesso
+  // "agenda_<id>") — un utente con un'unica agenda tra i permessi la
+  // trova già aperta cliccando il tasto home, senza scegliere nulla
+  const [agende, setAgende] = useState([]);
+  const [agendaVoci, setAgendaVoci] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -16373,7 +16613,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -16417,6 +16657,8 @@ export default function App() {
       supabase.from("corsi_kit_prodotti").select("*"),
       supabase.from("logistica_kit_edizioni").select("*"),
       supabase.from("kit_definizioni").select("*").order("nome"),
+      supabase.from("agende").select("*").order("nome"),
+      supabase.from("agenda_voci").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -16454,6 +16696,8 @@ export default function App() {
     setCorsiKitProdotti(ckp.data || []);
     setLogisticaKitEdizioni(lke.data || []);
     setKitDefinizioni(kd.data || []);
+    setAgende(ag.data || []);
+    setAgendaVoci(av.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -16736,6 +16980,19 @@ export default function App() {
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
+  // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
+  // permesso unico "agenda" da spuntare, ma una casella per ciascuna
+  // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
+  // utenti nominali sia per le master) — il tasto è attivo per chi ne ha
+  // almeno una tra i permessi, oltre che sempre per Programmatore/Amministratore
+  function haAccessoAgenda() {
+    if (ruoloUtente === "programmatore" || ruoloUtente === "amministratore") return true;
+    return (utenteLoggato?.permessi || []).some((p) => p.startsWith("agenda_"));
+  }
+  function apriAgenda() {
+    if (!haAccessoAgenda()) return;
+    setView("agenda");
+  }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
@@ -16844,6 +17101,7 @@ export default function App() {
             <TileHome title="Gestione corsi" attivo={tastoAbilitato("gestionedate")} onClick={apriGestioneDate} />
             <TileHome title="Dashboard venditori" attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
             <TileHome title="Dashboard master" attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
+            <TileHome title="Agenda" attivo={haAccessoAgenda()} onClick={apriAgenda} />
             <TileHome title="ERP / Magazzino" attivo={tastoAbilitato("erp")} onClick={apriErp} />
             <TileHome title="Logistica prodotti" attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
             <TileHome title="Assegna logo" attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
@@ -16999,6 +17257,13 @@ export default function App() {
         />
       )}
 
+      {view === "agenda" && (
+        <PaginaAgenda
+          agende={agende} agendaVoci={agendaVoci} ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
+          ricarica={fetchDati} onBack={() => setView("home")}
+        />
+      )}
+
       {view === "gestionemodelle" && (
         <PaginaGestioneModelle
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
@@ -17030,7 +17295,7 @@ export default function App() {
       )}
 
       {view === "passwordmenu" && (
-        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} master={master} ricarica={fetchDati} onBack={() => setView("home")} />
+        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} master={master} agende={agende} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (

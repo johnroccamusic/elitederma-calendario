@@ -1560,4 +1560,33 @@ create policy "logistica_kit_edizioni_all" on public.logistica_kit_edizioni for 
 -- ---------------------------------------------------------
 alter table public.master add column if not exists password text;
 
+-- ---------------------------------------------------------
+-- 43) Agenda (tasto home "Agenda"): agende create dal Programmatore,
+-- assegnabili sia agli utenti nominali sia alle master (permesso
+-- "agenda_<id>"). Chi ne ha una sola tra i permessi la trova già aperta,
+-- senza scegliere nulla; chi ne ha più di una sceglie tra le proprie.
+-- ---------------------------------------------------------
+create table if not exists public.agende (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  ts timestamptz not null default now()
+);
+alter table public.agende enable row level security;
+drop policy if exists "agende_all" on public.agende;
+create policy "agende_all" on public.agende for all to anon using (true) with check (true);
+
+create table if not exists public.agenda_voci (
+  id uuid primary key default gen_random_uuid(),
+  agenda_id uuid not null references public.agende(id) on delete cascade,
+  data date,
+  titolo text not null,
+  nota text,
+  ts timestamptz not null default now()
+);
+alter table public.agenda_voci enable row level security;
+drop policy if exists "agenda_voci_all" on public.agenda_voci;
+create policy "agenda_voci_all" on public.agenda_voci for all to anon using (true) with check (true);
+
+alter table public.master add column if not exists permessi jsonb not null default '[]';
+
 notify pgrst, 'reload schema';
