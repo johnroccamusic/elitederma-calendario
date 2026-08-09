@@ -4565,8 +4565,7 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  async function toggleAgenda(agendaId, checked) {
-    const chiave = `agenda_${agendaId}`;
+  async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
     setPermessiLocali(nuovi);
@@ -4587,9 +4586,16 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
           style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }}
         />
       </td>
+      {/* "Dashboard master" non compare: chi entra con la password di una
+          master la ottiene sempre, automaticamente (Gate.check) */}
+      {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
+        <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
+          <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+        </td>
+      ))}
       {agende.map((a) => (
         <td key={a.id} style={{ ...tdStyle, textAlign: "center" }}>
-          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleAgenda(a.id, e.target.checked)} />
+          <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
         </td>
       ))}
     </tr>
@@ -4614,11 +4620,12 @@ function TabellaPasswordMaster({ master, agende, ricarica }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + agende.length * 140 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + (TASTI_HOME.length - 1 + agende.length) * 140 }}>
             <thead>
               <tr>
                 <th style={thStyle}>Nome master</th>
                 <th style={thStyle}>Password</th>
+                {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
               </tr>
             </thead>
