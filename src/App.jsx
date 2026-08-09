@@ -6003,8 +6003,6 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 22 }}>Gestione corsi</div>
 
-      <div style={{ ...subStyle, marginBottom: -4 }}>Clicca la matita per modificare una data (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
-
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
         ricarica={ricarica} onApriData={onApriData}
