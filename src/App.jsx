@@ -3715,6 +3715,7 @@ const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
 // rosso, righe orizzontali, e una seconda pagina leggermente sfalsata
 // dietro per dare l'effetto di un blocco di fogli impilati
 function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
+  const isMobile = useIsMobile();
   return (
     <div style={{ position: "relative" }}>
       <div style={{ position: "absolute", top: 5, left: 5, right: -5, bottom: -5, background: "#EDE6D6", borderRadius: 9, border: `1px solid ${CREAM_BORDER}` }} />
@@ -3727,20 +3728,20 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
           backgroundPosition: "0 40px",
           border: `1px solid ${CREAM_BORDER}`, borderRadius: 9,
           boxShadow: "0 10px 18px -12px rgba(14,27,51,0.4)",
-          minHeight: 330, overflow: "hidden", paddingLeft: 16,
+          minHeight: isMobile ? 190 : 330, overflow: "hidden", paddingLeft: isMobile ? 11 : 16,
         }}
       >
         {/* rilegatura a spirale: striscia di anelli lungo il bordo sinistro */}
         <div style={{
-          position: "absolute", top: 0, bottom: 0, left: 0, width: 16,
-          backgroundImage: "radial-gradient(circle, #fff 2.5px, #C9C2AE 3px)",
-          backgroundSize: "100% 16px", backgroundPosition: "center 6px", backgroundRepeat: "repeat-y",
+          position: "absolute", top: 0, bottom: 0, left: 0, width: isMobile ? 11 : 16,
+          backgroundImage: "radial-gradient(circle, #fff 2px, #C9C2AE 2.5px)",
+          backgroundSize: "100% 14px", backgroundPosition: "center 6px", backgroundRepeat: "repeat-y",
         }} />
-        <div style={{ position: "absolute", top: 0, bottom: 0, left: 26, width: 1, background: "#E4A79B" }} />
-        <div style={{ ...fontQuaderno, fontSize: 15, fontWeight: 700, color: NAVY, textAlign: "center", padding: "12px 8px 10px", position: "relative", zIndex: 1 }}>
+        <div style={{ position: "absolute", top: 0, bottom: 0, left: isMobile ? 18 : 26, width: 1, background: "#E4A79B" }} />
+        <div style={{ ...fontQuaderno, fontSize: isMobile ? 12 : 15, fontWeight: 700, color: NAVY, textAlign: "center", padding: isMobile ? "8px 4px 6px" : "12px 8px 10px", position: "relative", zIndex: 1 }}>
           {intestazione}
         </div>
-        <div style={{ padding: "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
+        <div style={{ padding: isMobile ? "0 5px 6px 7px" : "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
           {children}
         </div>
       </div>
@@ -3748,9 +3749,10 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
   );
 }
 // una settimana (sempre da lunedì) dell'agenda: griglia fissa a 4
-// colonne — 7 carte-giorno + l'ottava carta delle note, sempre disposte
-// su 2 righe da 4, mai una fila unica che scorre in orizzontale
-function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
+// colonne, anche da cellulare — 7 carte-giorno + l'ottava carta delle
+// note, sempre disposte su 2 righe da 4, mai una fila unica che scorre
+// in orizzontale né un numero di colonne diverso sotto una certa larghezza
+function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, corsiGiorno, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
   const isMobile = useIsMobile();
   function dateStr(d) { return dateStrFor(anno, mese, d); }
   const oggiStr = dataOggiStr();
@@ -3760,19 +3762,29 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
   const settimanaInizio = primoGiornoValido ? dateStr(primoGiornoValido) : null;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 18, marginBottom: 26 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: isMobile ? 6 : 18, marginBottom: isMobile ? 14 : 26 }}>
       {settimana.map((d, di) => {
         if (!d) return <div key={di} />;
         const ds = dateStr(d);
         const vociGiorno = voci.filter((v) => v.data === ds);
+        const corsiDelGiorno = corsiGiorno(ds);
         const isOggi = ds === oggiStr;
         return (
           <CartaAgendaQuaderno key={di} evidenziata={isOggi} onClick={() => onClickGiorno(ds)} intestazione={`${GIORNI_ABBR_LUNGHI[di]} ${d}`}>
+            {corsiDelGiorno.map((c) => (
+              <div
+                key={c.id}
+                title={`${c.corsoNome} · ${c.locNome}`}
+                style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 5, padding: isMobile ? "2px 4px" : "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              >
+                🎓 {c.corsoNome}{!isMobile && ` · ${c.locNome}`}
+              </div>
+            ))}
             {vociGiorno.map((v) => (
               <div
                 key={v.id}
                 onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
-                style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 5, padding: "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 5, padding: isMobile ? "2px 4px" : "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
                 {v.titolo}
               </div>
@@ -3787,7 +3799,7 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
             onChange={(e) => setTestoNota(e.target.value)}
             onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
             placeholder="Appunti della settimana…"
-            style={{ ...fontBody, fontSize: 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: 270, lineHeight: "22px", padding: 0 }}
+            style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: isMobile ? 140 : 270, lineHeight: isMobile ? "16px" : "22px", padding: 0 }}
           />
         </CartaAgendaQuaderno>
       )}
@@ -3797,10 +3809,19 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, onClickGiorno, o
 // un mese dell'agenda: titolo grande che fa da separatore, poi le sue
 // settimane (sempre da lunedì) impilate verticalmente, ciascuna come
 // griglia 4x2 di carte stile taccuino — sostituisce la vecchia griglia
-// a caselle numerate del Calendario corsi
-function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, onClickGiorno, onClickVoce, onSalvaNota }) {
+// a caselle numerate del Calendario corsi. Mostra, oltre agli appuntamenti
+// dell'agenda, anche i corsi già programmati nel Calendario corsi
+// (sola lettura: si gestiscono da "Gestione corsi", non da qui)
+function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, corsi, location, corsiDate, onClickGiorno, onClickVoce, onSalvaNota }) {
   const settimane = generaSettimane(anno, mese);
   const noteByInizio = Object.fromEntries((noteSettimanali || []).map((n) => [n.settimana_inizio, n]));
+  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  function corsiGiorno(ds) {
+    return (corsiDate || [])
+      .filter((cd) => cd.data_inizio <= ds && cd.data_fine >= ds)
+      .map((cd) => ({ id: cd.id, corsoNome: toTitleCase(corsoById[cd.corso_id]?.nome || "?"), locNome: toTitleCase(locById[cd.location_id]?.nome || "?"), colore: corsoById[cd.corso_id]?.colore }));
+  }
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, padding: "6px 0 10px", marginBottom: 20, borderBottom: `2px solid ${GOLD}` }}>
@@ -3811,7 +3832,7 @@ function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, onClickGiorno, o
         const settimanaInizio = primoGiornoValido ? dateStrFor(anno, mese, primoGiornoValido) : null;
         return (
           <SettimanaAgendaQuaderno
-            key={wi} anno={anno} mese={mese} settimana={settimana} voci={voci}
+            key={wi} anno={anno} mese={mese} settimana={settimana} voci={voci} corsiGiorno={corsiGiorno}
             onClickGiorno={onClickGiorno} onClickVoce={onClickVoce}
             nota={settimanaInizio ? noteByInizio[settimanaInizio] : null}
             onSalvaNota={onSalvaNota}
@@ -3827,7 +3848,7 @@ function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, onClickGiorno, o
 // di tasti fra cui scegliere quale aprire. Solo il Programmatore può
 // crearne/eliminarle (e vede sempre tutte); chiunque acceda a un'agenda
 // può aggiungere/togliere le sue voci
-function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, ruoloUtente, utenteLoggato, ricarica, onBack }) {
+function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, location, corsiDate, ruoloUtente, utenteLoggato, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const isProgrammatore = ruoloUtente === "programmatore";
   const isStaff = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
@@ -3893,7 +3914,14 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, ruoloUtente, 
     refPerMese.current[`${anno}-${mese}`]?.scrollIntoView({ block: "start", behavior: "smooth" });
   }
   useEffect(() => {
-    if (agendaAperta) refPerMese.current[`${oggi.getFullYear()}-${oggi.getMonth()}`]?.scrollIntoView({ block: "start" });
+    if (!agendaAperta) return;
+    // due frame di ritardo: assicura che la griglia (alta, con tutti i
+    // mesi già montati) abbia finito il layout prima di scrollare,
+    // altrimenti su dispositivi più lenti lo scroll può atterrare nel
+    // posto sbagliato mentre il contenuto sta ancora assestandosi
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      refPerMese.current[`${oggi.getFullYear()}-${oggi.getMonth()}`]?.scrollIntoView({ block: "start" });
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendaAperta?.id]);
 
@@ -3960,6 +3988,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, ruoloUtente, 
               <MeseGrigliaAgenda
                 anno={anno} mese={mese} voci={vociAgendaAperta}
                 noteSettimanali={(agendaNoteSettimanali || []).filter((n) => n.agenda_id === agendaAperta.id)}
+                corsi={corsi} location={location} corsiDate={corsiDate}
                 onClickGiorno={(ds) => setPopupNuovo(ds)}
                 onClickVoce={(v) => setPopupVoce(v)}
                 onSalvaNota={salvaNotaSettimana}
@@ -18388,7 +18417,9 @@ export default function App() {
 
       {view === "agenda" && (
         <PaginaAgenda
-          agende={agende} agendaVoci={agendaVoci} agendaNoteSettimanali={agendaNoteSettimanali} ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
+          agende={agende} agendaVoci={agendaVoci} agendaNoteSettimanali={agendaNoteSettimanali}
+          corsi={corsi} location={location} corsiDate={corsiDate}
+          ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
