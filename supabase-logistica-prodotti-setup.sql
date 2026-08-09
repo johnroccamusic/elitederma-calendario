@@ -26,9 +26,15 @@ create policy "corsi_kit_prodotti_all" on public.corsi_kit_prodotti for all to a
 -- Stato operativo per singola edizione (corsi_date): fase di
 -- preparazione/spedizione, numero di kit da preparare (per iscritti +
 -- riserva), checklist di preparazione, quantità di ciascun accessorio
--- effettivamente inviata, ed eventuale scarico già effettuato dal
--- magazzino (con il dettaglio di cosa è stato scaricato, per poterlo
--- annullare senza ricalcoli).
+-- effettivamente inviata.
+--
+-- Lo scarico dal magazzino è "reattivo": quantita_scaricata_magazzino
+-- registra quanti kit sono già stati applicati al magazzino l'ultima
+-- volta; se il numero di kit attuale (kit_per_iscritti+kit_di_riserva)
+-- cambia, il pulsante "Modifica quantità di magazzino" si riattiva e,
+-- al click, si applica solo la DIFFERENZA (mai il valore assoluto), sia
+-- in positivo che in negativo — stesso principio per accessori_scaricati
+-- rispetto ad accessori_quantita, prodotto per prodotto.
 create table if not exists public.logistica_kit_edizioni (
   id uuid primary key default gen_random_uuid(),
   corso_data_id uuid not null references public.corsi_date(id) on delete cascade unique,
@@ -37,10 +43,12 @@ create table if not exists public.logistica_kit_edizioni (
   kit_di_riserva integer,
   checklist jsonb not null default '{}',
   accessori_quantita jsonb not null default '{}',
-  magazzino_scaricato boolean not null default false,
-  scarico_dettaglio jsonb not null default '{}',
+  quantita_scaricata_magazzino integer not null default 0,
+  accessori_scaricati jsonb not null default '{}',
   ts timestamptz not null default now()
 );
+alter table public.logistica_kit_edizioni add column if not exists quantita_scaricata_magazzino integer not null default 0;
+alter table public.logistica_kit_edizioni add column if not exists accessori_scaricati jsonb not null default '{}';
 alter table public.logistica_kit_edizioni enable row level security;
 drop policy if exists "logistica_kit_edizioni_all" on public.logistica_kit_edizioni;
 create policy "logistica_kit_edizioni_all" on public.logistica_kit_edizioni for all to anon using (true) with check (true);

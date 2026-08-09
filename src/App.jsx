@@ -13709,7 +13709,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, numeroPartecipanti, faseCor
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da "Contenuto kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate, prodottiShop, onSalvaCampi, onScaricaMagazzino, onAnnullaScarico }) {
+function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate, prodottiShop, onSalvaCampi, onSincronizzaMagazzino }) {
   const checklist = statoEdizione.checklist || {};
   const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
   const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
@@ -13717,6 +13717,20 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
   const accessori = kitTemplate.filter((r) => r.tipo === "accessorio");
   const nomeProdotto = (id) => prodottiShop.find((p) => p.id === id)?.nome || "—";
   const labelStyle = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
+
+  // pulsante "Modifica quantità di magazzino"/"Magazzino aggiornato":
+  // reattivo alla differenza tra la quantità attuale (kit e, prodotto per
+  // prodotto, accessori) e quella già applicata al magazzino l'ultima
+  // volta — mai al valore assoluto, così un doppio click non scarica due
+  // volte lo stesso kit
+  const quantitaKitAttuale = (statoEdizione.kit_per_iscritti || 0) + (statoEdizione.kit_di_riserva || 0);
+  const kitDaSincronizzare = quantitaKitAttuale !== (statoEdizione.quantita_scaricata_magazzino || 0);
+  const accessoriDaSincronizzare = accessori.some((r) => {
+    const target = statoEdizione.accessori_quantita?.[r.prodotto_id] || 0;
+    const scaricato = statoEdizione.accessori_scaricati?.[r.prodotto_id] || 0;
+    return target !== scaricato;
+  });
+  const daSincronizzare = kitDaSincronizzare || accessoriDaSincronizzare;
 
   return (
     <div>
@@ -13786,22 +13800,16 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
       )}
 
       <div style={{ marginTop: 24 }}>
-        {statoEdizione.magazzino_scaricato ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>✓ Scaricato dal magazzino</div>
-            <button onClick={onAnnullaScarico} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer" }}>
-              Annulla scarico
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={onScaricaMagazzino}
-            disabled={prodottiKit.length === 0 && accessori.length === 0}
-            style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: prodottiKit.length === 0 && accessori.length === 0 ? MUTED : NAVY, border: "none", borderRadius: 10, padding: "13px 16px", cursor: prodottiKit.length === 0 && accessori.length === 0 ? "default" : "pointer", width: "100%" }}
-          >
-            Scarica dal magazzino
-          </button>
-        )}
+        <button
+          onClick={onSincronizzaMagazzino}
+          disabled={!daSincronizzare}
+          style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: daSincronizzare ? "#fff" : MUTED, background: daSincronizzare ? NAVY : "#EDEAE0", border: "none", borderRadius: 10, padding: "13px 16px", cursor: daSincronizzare ? "pointer" : "default", width: "100%" }}
+        >
+          {daSincronizzare ? "Modifica quantità di magazzino" : "Magazzino aggiornato"}
+        </button>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, textAlign: "center" }}>
+          Kit registrati a magazzino: {statoEdizione.quantita_scaricata_magazzino || 0} di {quantitaKitAttuale}
+        </div>
       </div>
     </div>
   );
@@ -13823,7 +13831,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
 
   function statoDi(corsoDataId) {
-    return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || { corso_data_id: corsoDataId, fase: "da_preparare", kit_per_iscritti: null, kit_di_riserva: null, checklist: {}, accessori_quantita: {}, magazzino_scaricato: false, scarico_dettaglio: {} };
+    return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || { corso_data_id: corsoDataId, fase: "da_preparare", kit_per_iscritti: null, kit_di_riserva: null, checklist: {}, accessori_quantita: {}, quantita_scaricata_magazzino: 0, accessori_scaricati: {} };
   }
   async function salvaCampiEdizione(corsoDataId, campi) {
     const esistente = logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId);
@@ -13833,37 +13841,41 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  async function scaricaMagazzino(corsoData) {
+  // scarico "reattivo": non riscarica mai il valore assoluto, applica al
+  // magazzino solo la DIFFERENZA fra la quantità attuale (kit e, per
+  // ciascun accessorio, quantità inviata) e quella già applicata
+  // l'ultima volta — così cambiare kit_per_iscritti da 9 a 8 e
+  // risincronizzare rimette a magazzino esattamente 1 kit, mai di più
+  async function sincronizzaMagazzino(corsoData) {
     const stato = statoDi(corsoData.id);
     const kitTemplate = corsiKitProdotti.filter((r) => r.corso_id === corsoData.corso_id);
-    const totaleKit = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
-    const dettaglio = {};
-    kitTemplate.filter((r) => r.tipo === "kit").forEach((r) => {
-      if (totaleKit > 0) dettaglio[r.prodotto_id] = (dettaglio[r.prodotto_id] || 0) + r.quantita * totaleKit;
-    });
+    const quantitaKitAttuale = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
+    const deltaKit = quantitaKitAttuale - (stato.quantita_scaricata_magazzino || 0);
+
+    const deltaPerProdotto = {}; // prodotto_id -> variazione da applicare a giacenza (positivo = restituire, negativo = togliere)
+    if (deltaKit !== 0) {
+      kitTemplate.filter((r) => r.tipo === "kit").forEach((r) => {
+        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * deltaKit;
+      });
+    }
+    const accessoriScaricatiAggiornati = { ...(stato.accessori_scaricati || {}) };
     kitTemplate.filter((r) => r.tipo === "accessorio").forEach((r) => {
-      const q = stato.accessori_quantita?.[r.prodotto_id] || 0;
-      if (q > 0) dettaglio[r.prodotto_id] = (dettaglio[r.prodotto_id] || 0) + q;
+      const target = stato.accessori_quantita?.[r.prodotto_id] || 0;
+      const giaScaricato = stato.accessori_scaricati?.[r.prodotto_id] || 0;
+      const deltaAcc = target - giaScaricato;
+      if (deltaAcc !== 0) {
+        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - deltaAcc;
+        accessoriScaricatiAggiornati[r.prodotto_id] = target;
+      }
     });
-    if (Object.keys(dettaglio).length === 0) { window.alert("Niente da scaricare: imposta \"Kit per iscritti\"/\"Kit di riserva\" o le quantità degli accessori."); return; }
-    if (!window.confirm("Scaricare questi prodotti dal magazzino? Le giacenze si aggiornano subito.")) return;
-    await Promise.all(Object.entries(dettaglio).map(([prodottoId, quantita]) => {
+
+    if (Object.keys(deltaPerProdotto).length === 0) return;
+    await Promise.all(Object.entries(deltaPerProdotto).map(([prodottoId, delta]) => {
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       if (!prodotto) return null;
-      return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) - quantita }).eq("id", prodottoId);
+      return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) + delta }).eq("id", prodottoId);
     }));
-    await salvaCampiEdizione(corsoData.id, { magazzino_scaricato: true, scarico_dettaglio: dettaglio });
-  }
-  async function annullaScarico(corsoData) {
-    const stato = statoDi(corsoData.id);
-    if (!window.confirm("Annullare lo scarico? Le quantità verranno ripristinate nel magazzino.")) return;
-    const dettaglio = stato.scarico_dettaglio || {};
-    await Promise.all(Object.entries(dettaglio).map(([prodottoId, quantita]) => {
-      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      if (!prodotto) return null;
-      return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) + quantita }).eq("id", prodottoId);
-    }));
-    await salvaCampiEdizione(corsoData.id, { magazzino_scaricato: false, scarico_dettaglio: {} });
+    await salvaCampiEdizione(corsoData.id, { quantita_scaricata_magazzino: quantitaKitAttuale, accessori_scaricati: accessoriScaricatiAggiornati });
   }
 
   return (
@@ -13916,8 +13928,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 kitTemplate={corsiKitProdotti.filter((r) => r.corso_id === edizioneSel.corso_id)}
                 prodottiShop={prodottiShop}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
-                onScaricaMagazzino={() => scaricaMagazzino(edizioneSel)}
-                onAnnullaScarico={() => annullaScarico(edizioneSel)}
+                onSincronizzaMagazzino={() => sincronizzaMagazzino(edizioneSel)}
               />
             )}
           </div>

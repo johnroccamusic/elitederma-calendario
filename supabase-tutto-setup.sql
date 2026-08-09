@@ -1499,10 +1499,12 @@ create table if not exists public.logistica_kit_edizioni (
   kit_di_riserva integer,
   checklist jsonb not null default '{}',
   accessori_quantita jsonb not null default '{}',
-  magazzino_scaricato boolean not null default false,
-  scarico_dettaglio jsonb not null default '{}',
+  quantita_scaricata_magazzino integer not null default 0,
+  accessori_scaricati jsonb not null default '{}',
   ts timestamptz not null default now()
 );
+alter table public.logistica_kit_edizioni add column if not exists quantita_scaricata_magazzino integer not null default 0;
+alter table public.logistica_kit_edizioni add column if not exists accessori_scaricati jsonb not null default '{}';
 alter table public.logistica_kit_edizioni enable row level security;
 drop policy if exists "logistica_kit_edizioni_all" on public.logistica_kit_edizioni;
 create policy "logistica_kit_edizioni_all" on public.logistica_kit_edizioni for all to anon using (true) with check (true);
