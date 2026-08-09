@@ -765,7 +765,8 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             )
           )}
           {indice != null && !(isMobile && i === 0) && (
-            <span style={{ ...fontBody, fontSize: fontSizeBadge, color: MUTED, flexShrink: 0, fontWeight: 400 }}>
+            <span style={{ ...fontBody, fontSize: fontSizeBadge, color: indice === giorniTotali ? GOLD : MUTED, flexShrink: 0, fontWeight: indice === giorniTotali ? 700 : 400, display: "inline-flex", alignItems: "center", gap: 2 }}>
+              {indice === giorniTotali && "★"}
               {indice}/{giorniTotali}
             </span>
           )}
