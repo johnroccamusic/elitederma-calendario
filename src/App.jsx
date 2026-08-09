@@ -2585,6 +2585,10 @@ function SezioneDateCorsi({
   // Archivio), può forzare qui tab/modo e nascondere le pillole interne
   // per non duplicarle
   tabForzata, modoForzato, nascondiControlli,
+  // opzionale: nasconde solo il titolo "Corsi in programmazione" (usato da
+  // "Gestione corsi", che ha già il proprio titolo di pagina), lasciando
+  // intatte le tab e i filtri sottostanti
+  nascondiTitolo,
 }) {
   const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
@@ -2622,7 +2626,9 @@ function SezioneDateCorsi({
     <div>
       {!nascondiControlli && (
         <>
-          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12, textAlign: "center", textTransform: "uppercase" }}>Corsi in programmazione</div>
+          {!nascondiTitolo && (
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12, textAlign: "center", textTransform: "uppercase" }}>Corsi in programmazione</div>
+          )}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
             <div style={{ display: "flex", gap: 6 }}>
               <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
@@ -5929,12 +5935,8 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriCerca, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
   const [msg, setMsg] = useState("");
-  const [popupNuovaData, setPopupNuovaData] = useState(null);
-  const [popupEliminaData, setPopupEliminaData] = useState(null);
-  const corsoByIdImp = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const locByIdImp = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
   // restano impostati anche se si esce da "Gestione date" e ci si torna,
@@ -5997,49 +5999,16 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     setMsg("Data aggiornata.");
     ricarica();
   }
-  async function salvaNuovaData({ corso_id, location_id, data_inizio, data_fine }) {
-    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine });
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setPopupNuovaData(null);
-    setMsg("Data aggiunta al calendario.");
-    ricarica();
-  }
-  async function eliminaDataCliccata(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setPopupEliminaData(null);
-    setMsg("Data eliminata.");
-    ricarica();
-  }
-
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Gestione date" onBack={onBack} />
+      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 22 }}>Gestione corsi</div>
 
-      <div style={cardStyle}>
-        <div style={{ ...hStyle, textAlign: "center", textTransform: "uppercase" }}>Aggiungi data</div>
-        <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca un corso già esistente per aprire i suoi iscritti, clicca due volte per eliminarlo.</div>
-        <SelettoreCalendario
-          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          onClickGiorno={setPopupNuovaData}
-          onDoppioClickEvento={setPopupEliminaData}
-          onApriData={onApriData}
-          onApriCerca={onApriCerca}
-        />
-      </div>
-      {popupNuovaData && (
-        <PopupNuovaData corsi={corsi} location={location} dataClic={popupNuovaData} onSalva={salvaNuovaData} onChiudi={() => setPopupNuovaData(null)} />
-      )}
-      {popupEliminaData && (
-        <PopupEliminaData evento={popupEliminaData} corsoById={corsoByIdImp} locById={locByIdImp} onElimina={eliminaDataCliccata} onChiudi={() => setPopupEliminaData(null)} />
-      )}
-
-      <div style={{ ...subStyle, marginTop: 24, marginBottom: -4 }}>Clicca la matita per modificare una data (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
+      <div style={{ ...subStyle, marginBottom: -4 }}>Clicca la matita per modificare una data (anche per spostarla), il cestino per eliminarla (rimuove anche i suoi iscritti).</div>
 
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
         ricarica={ricarica} onApriData={onApriData}
+        nascondiTitolo
         filtroCorsoHome={filtroCorsoDate} setFiltroCorsoHome={setFiltroCorsoDate}
         filtroCittaHome={filtroCittaDate} setFiltroCittaHome={setFiltroCittaDate}
         filtroMasterHome={filtroMasterDate} setFiltroMasterHome={setFiltroMasterDate}
@@ -9073,204 +9042,6 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore
       {popupElimina && (
         <PopupEliminaData evento={popupElimina} corsoById={corsoById} locById={locById} onElimina={eliminaEsistente} onChiudi={() => setPopupElimina(null)} />
       )}
-    </div>
-  );
-}
-
-// ---------- Selettore date dal calendario (per Aggiungi data) ----------
-function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGiorno, onDoppioClickEvento, onApriData, onApriCerca }) {
-  const [mese, setMese] = useState(new Date().getMonth());
-  const [anno, setAnno] = useState(new Date().getFullYear());
-
-  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
-  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const settimane = generaSettimane(anno, mese);
-  function dateStr(d) { return dateStrFor(anno, mese, d); }
-
-  // finestra di 7 mesi (3 prima, quello corrente, 3 dopo) per la fascia di
-  // pillole di navigazione rapida: si ricalcola sul mese attualmente
-  // selezionato, quindi cliccando una pillola ai bordi la finestra scorre
-  const pilloleMesi = Array.from({ length: 7 }, (_, i) => {
-    let m = mese + (i - 3);
-    let y = anno;
-    while (m < 0) { m += 12; y -= 1; }
-    while (m > 11) { m -= 12; y += 1; }
-    return { m, y };
-  });
-
-  // stesso trucco usato in MeseGriglia: un doppio click nativo del browser
-  // scatta comunque prima un click singolo, quindi il primo click viene
-  // ritardato per vedere se ne arriva subito un secondo (= doppio click,
-  // apre il popup elimina) prima di aprire davvero la scheda dell'edizione
-  const cliccoInAttesaRef = React.useRef(null);
-  function gestisciClickBarra(ev) {
-    if (!onApriData) { onDoppioClickEvento(ev); return; }
-    if (cliccoInAttesaRef.current) {
-      clearTimeout(cliccoInAttesaRef.current);
-      cliccoInAttesaRef.current = null;
-      onDoppioClickEvento(ev);
-    } else {
-      cliccoInAttesaRef.current = setTimeout(() => {
-        cliccoInAttesaRef.current = null;
-        onApriData(ev);
-      }, 250);
-    }
-  }
-
-  return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div style={{ ...fontBody, fontSize: 15, color: NAVY, fontWeight: 600, textTransform: "capitalize" }}>{MESI[mese].toLowerCase()} {anno}</div>
-        {onApriCerca && (
-          <button type="button" onClick={onApriCerca} title="Cerca corso" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, display: "flex" }}>
-            <IconaRicercaErp size={18} color={NAVY} />
-          </button>
-        )}
-      </div>
-
-      <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-        {pilloleMesi.map(({ m, y }) => {
-          const attivo = m === mese && y === anno;
-          return (
-            <button
-              key={`${y}-${m}`}
-              type="button"
-              onClick={() => { setMese(m); setAnno(y); }}
-              style={{
-                ...fontBody, fontSize: 13, fontWeight: 500, textTransform: "lowercase",
-                border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 999,
-                padding: "8px 4px", background: attivo ? NAVY : "transparent", color: attivo ? "#fff" : NAVY,
-                cursor: "pointer", flex: "1 1 0", minWidth: 0, textAlign: "center",
-              }}
-            >
-              {MESI_ABBR[m].toLowerCase()}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 0, paddingBottom: 6, marginBottom: 4, borderBottom: `1px solid ${CREAM_BORDER}` }}>
-        {GIORNI.map((g, i) => <div key={i} style={{ ...fontBody, fontSize: 10, color: MUTED, textAlign: "center" }}>{g}</div>)}
-      </div>
-
-      {settimane.map((settimana, wi) => {
-        const giorniValidi = settimana.filter((d) => d !== null);
-        if (giorniValidi.length === 0) return null;
-        const inizioRiga = dateStr(giorniValidi[0]);
-        const fineRiga = dateStr(giorniValidi[giorniValidi.length - 1]);
-        const eventiRiga = corsiDate.filter((ev) => ev.data_inizio <= fineRiga && ev.data_fine >= inizioRiga);
-        const eventiConLane = assegnaLane(eventiRiga);
-        const maxLane = eventiConLane.reduce((m, e) => Math.max(m, e.lane), -1);
-        const barH = 15;
-        const numLane = Math.max(0, maxLane + 1);
-        // vedi MeseGriglia: l'altezza deve contenere anche il gap (3px) tra
-        // ogni coppia di corsie, altrimenti con più corsi sovrapposti la
-        // pila di barre sborda oltre il fondo della casella del giorno
-        const rowHeight = 20 + numLane * barH + Math.max(0, numLane - 1) * 3 + 4;
-
-        return (
-          <div key={wi} style={{ position: "relative" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 0 }}>
-              {settimana.map((d, i) => {
-                // niente più caselle "a riquadro": solo una sottile riga di
-                // divisione tra i giorni (destra) e tra le settimane (sotto)
-                const bordoDestro = i < 6 ? `1px solid ${CREAM_BORDER}` : "none";
-                if (!d) return <div key={i} style={{ height: rowHeight, borderRight: bordoDestro, borderBottom: `1px solid ${CREAM_BORDER}` }} />;
-                return (
-                  <div
-                    key={i}
-                    onClick={() => onClickGiorno(dateStr(d))}
-                    style={{
-                      height: rowHeight,
-                      background: i === 5 ? COLORE_SABATO : i === 6 ? COLORE_DOMENICA : "#fff",
-                      borderRight: bordoDestro,
-                      borderBottom: `1px solid ${CREAM_BORDER}`,
-                      cursor: "pointer",
-                      boxSizing: "border-box",
-                    }}
-                  >
-                    <div style={{ ...fontBody, fontSize: 11, color: NAVY, padding: "2px 5px" }}>{d}</div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={{ position: "absolute", top: 20, left: 0, right: 0, bottom: 0, display: "grid", gridTemplateColumns: "repeat(7,1fr)", gridAutoRows: barH, rowGap: 3, columnGap: 0, pointerEvents: "none" }}>
-              {eventiConLane.map((ev) => {
-                const primoIdxValido = settimana.findIndex((d) => d !== null);
-                const startIdx = settimana.findIndex((d) => d && dateStr(d) === ev.data_inizio);
-                const colStart = startIdx >= 0 ? startIdx : primoIdxValido;
-                const endIdx = settimana.reduce((acc, d, idx) => (d && dateStr(d) <= ev.data_fine ? idx : acc), colStart);
-                const colSpan = endIdx - colStart + 1;
-                const giorniTotali = differenzaGiorni(ev.data_inizio, ev.data_fine) + 1;
-                const indiciGiorno = Array.from({ length: colSpan }, (_, i) => {
-                  const g = settimana[colStart + i];
-                  return g ? differenzaGiorni(ev.data_inizio, dateStr(g)) + 1 : null;
-                });
-                const continuaPrima = startIdx < 0;
-                const continuaDopo = ev.data_fine > fineRiga;
-                const corso = corsoById[ev.corso_id];
-                const loc = locById[ev.location_id];
-                const coloreCorso = corso?.colore || NAVY;
-                const capienza = postiMaxEffettivi(ev, corso, loc);
-                const numeroAllievi = iscritti ? iscritti.filter((i) => i.corso_data_id === ev.id).length : 0;
-                const occupancy = iscritti && capienza > 0
-                  ? Math.min(100, Math.max(0, (numeroAllievi / capienza) * 100))
-                  : null;
-                return (
-                  <div
-                    key={ev.id}
-                    onClick={() => gestisciClickBarra(ev)}
-                    title={`${corso?.nome?.toUpperCase()} · ${loc?.nome?.toUpperCase()}${occupancy != null ? ` · ${numeroAllievi}/${capienza}` : ""}`}
-                    style={{
-                      position: "relative",
-                      pointerEvents: "auto",
-                      gridColumn: `${colStart + 1} / span ${colSpan}`,
-                      gridRow: ev.lane + 1,
-                      alignSelf: "center",
-                      marginLeft: continuaPrima ? 0 : 2,
-                      marginRight: continuaDopo ? 0 : 2,
-                      height: barH - 3,
-                      // niente bordo/contorno: solo il colore tenue di
-                      // sfondo, riempito dal basso col colore pieno via via
-                      // che si iscrivono allievi
-                      background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
-                      borderRadius: 3,
-                      clipPath: clipPathBarra(continuaPrima, continuaDopo, barH - 3),
-                      overflow: "hidden",
-                      color: "#000",
-                      fontSize: 9,
-                      fontWeight: 500,
-                      ...fontBody,
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {occupancy != null && (
-                      <div
-                        style={{
-                          position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
-                          background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
-                        }}
-                      />
-                    )}
-                    <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
-                      {contenutoBarraCalendario({
-                        etichetta: etichettaBarra(corso, loc),
-                        giorniTotali, indiciGiorno, fontSizeBadge: 7, gap: 3, inset: 4,
-                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(barH - 3),
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 8 }}>
-        Clicca un giorno vuoto per creare una nuova edizione. Clicca un corso esistente per aprire i suoi iscritti, doppio click per eliminarlo.
-      </div>
     </div>
   );
 }
@@ -18144,7 +17915,6 @@ export default function App() {
         <GestioneDate
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
-          onApriCerca={() => setView("cerca")}
           filtroCorsoDate={filtroCorsoDate} setFiltroCorsoDate={setFiltroCorsoDate}
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
