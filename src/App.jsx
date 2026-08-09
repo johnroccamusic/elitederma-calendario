@@ -9694,6 +9694,28 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
   );
 }
 
+// un tasto della barra sopra la scheda corso: oro/pieno se "primario"
+// (azione principale), altrimenti un link sottile — stesso stile sia
+// nella barra a due righe di "lista" sia nel tasto singolo delle altre viste
+function BottonePulsanteScheda({ p }) {
+  return (
+    <button
+      onClick={p.onClick}
+      disabled={p.disabled}
+      style={{
+        ...fontDisplay, fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
+        padding: p.primario ? "12px 22px" : "10px 14px",
+        borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
+        background: p.primario ? GOLD : "transparent",
+        color: NAVY, opacity: p.disabled ? 0.5 : 1,
+        textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap",
+      }}
+    >
+      <p.Icona size={17} color={p.primario ? NAVY : GOLD} />
+      {p.etichetta}
+    </button>
+  );
+}
 function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -9940,19 +9962,26 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     ricarica();
   }
 
-  function apriGestioneClasse() {
-    if (mostraGestione) { setMostraGestione(false); return; }
-    if (adminSbloccato) { setMostraGestione(true); return; }
-    const codice = window.prompt("Codice amministratore per aprire la contabilità classe:");
+  // sblocca (con lo stesso codice amministratore, chiesto una sola volta
+  // a sessione) e attiva un pannello protetto — riusata sia per
+  // "Contabilità classe" (solo le faccende degli allievi) sia per
+  // "Riepilogo amministrativo" (incassi/costi/saldo), ora due pannelli
+  // separati e indipendenti invece di uno dentro l'altro
+  function sbloccaEAttiva(attivo, setAttivo, messaggioCodice) {
+    if (attivo) { setAttivo(false); return; }
+    if (adminSbloccato) { setAttivo(true); return; }
+    const codice = window.prompt(messaggioCodice);
     if (codice === null) return;
     if (codiceAmministratoreAttuale && codice === codiceAmministratoreAttuale) {
       sessionStorage.setItem("edc_admin_ok", "1");
       setAdminSbloccato(true);
-      setMostraGestione(true);
+      setAttivo(true);
     } else {
       window.alert("Codice non corretto.");
     }
   }
+  function apriGestioneClasse() { sbloccaEAttiva(mostraGestione, setMostraGestione, "Codice amministratore per aprire la contabilità classe:"); }
+  function apriRiepilogoAmministrativo() { sbloccaEAttiva(costiAperto, setCostiAperto, "Codice amministratore per aprire il riepilogo amministrativo:"); }
 
   // "rgb" di pdf-lib arriva solo al primo utilizzo (import dinamico: vedi
   // getPdfLib in cima al file) — stampaDiplomi/stampaSegnaposti la
@@ -10733,50 +10762,51 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       </div>
 
       {(() => {
-        const pulsanti = vista === "lista"
-          ? (mostraGestione
-              ? [
-                  { chiave: "esci", etichetta: "Esci da contabilità", Icona: IconaFrecciaSinistra, onClick: apriGestioneClasse },
-                  { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
-                  { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
-                  { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true },
-                ]
-              : [
-                  { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse },
-                  { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
-                ])
-          : vista === "modelle" && origineGestioneModelle
-          ? [{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }]
-          : [{ chiave: "torna", etichetta: "Torna alla lista", Icona: IconaFrecciaSinistra, onClick: annullaForm }];
+        // in "lista" tutti i tasti restano sempre visibili insieme (non
+        // più a scomparsa a seconda della modalità): Contabilità classe
+        // riguarda solo le faccende degli allievi (elenco dettagliato,
+        // link/eccezioni), Riepilogo amministrativo è ora un pannello a
+        // sé — indipendente, non più annidato dentro Contabilità classe
+        if (vista !== "lista") {
+          const pulsante = vista === "modelle" && origineGestioneModelle
+            ? { chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }
+            : { chiave: "torna", etichetta: "Torna alla lista", Icona: IconaFrecciaSinistra, onClick: annullaForm };
+          return (
+            <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
+              <div style={{ background: "#fff", borderRadius: 22, padding: "8px 10px", display: "flex", alignItems: "center", gap: 4, boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
+                <BottonePulsanteScheda p={pulsante} />
+              </div>
+            </div>
+          );
+        }
+
+        const secondari = [
+          { chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: () => { setMostraGestione(false); setCostiAperto(false); } },
+          { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
+          { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
+        ];
+        const primari = [
+          { chiave: "iscrivi", etichetta: liberi <= 0 ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: apriIscrizione, disabled: liberi <= 0, primario: true },
+          { chiave: "contabilita", etichetta: mostraGestione ? "Esci da contabilità" : "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true },
+          { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true },
+          { chiave: "riepilogo", etichetta: costiAperto ? "Chiudi riepilogo" : "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true },
+        ];
 
         return (
           <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
-            <div style={{ background: "#fff", borderRadius: 22, padding: "8px 10px", display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
-              {pulsanti.map((p) => (
-                <button
-                  key={p.chiave}
-                  onClick={p.onClick}
-                  disabled={p.disabled}
-                  style={{
-                    ...fontDisplay, fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
-                    padding: p.primario ? "12px 22px" : "10px 14px",
-                    borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
-                    background: p.primario ? GOLD : "transparent",
-                    color: NAVY, opacity: p.disabled ? 0.5 : 1,
-                    marginLeft: p.primario ? "auto" : 0,
-                    textTransform: "uppercase", letterSpacing: 0.4, whiteSpace: "nowrap",
-                  }}
-                >
-                  <p.Icona size={17} color={p.primario ? NAVY : GOLD} />
-                  {p.etichetta}
-                </button>
-              ))}
+            <div style={{ background: "#fff", borderRadius: 22, padding: "10px 10px 8px", boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
+                {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+              </div>
             </div>
           </div>
         );
       })()}
 
-      {vista === "lista" && mostraGestione && (
+      {vista === "lista" && costiAperto && (
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", boxShadow: "0 16px 30px -16px rgba(14,27,51,0.25)" }}>
           <div
             onClick={() => setCostiAperto((v) => !v)}
