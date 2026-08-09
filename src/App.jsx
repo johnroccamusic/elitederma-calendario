@@ -8289,7 +8289,12 @@ const ICONA_CESTINO_PATH = <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1
 // voci per mese con una striscia di sfondo, come nei calendari
 function TabellaDateCorsi({ mesi, renderRiga }) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+    // le colonne (140/230/110px fissi) su schermi stretti non ci stanno:
+    // lo scroll orizzontale va contenuto qui, altrimenti l'overflow si
+    // propaga a tutta la pagina e trascina con sé anche la barra fissa in
+    // alto (Indietro/Avanti/home), sballando l'intera vista
+    <div style={{ overflowX: "auto" }}>
+    <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse" }}>
       <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 230 }} /><col style={{ width: 110 }} /></colgroup>
       <thead>
         <tr style={{ borderBottom: `2px solid ${GOLD}` }}>
@@ -8319,6 +8324,7 @@ function TabellaDateCorsi({ mesi, renderRiga }) {
         })}
       </tbody>
     </table>
+    </div>
   );
 }
 
