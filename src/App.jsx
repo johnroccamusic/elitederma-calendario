@@ -14162,7 +14162,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 }
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
-// da "Contenuto kit"), accessori con quantità inviata, scarico magazzino
+// da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
 function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino }) {
   const checklist = statoEdizione.checklist || {};
   const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
@@ -14323,7 +14323,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, onBack, onApriContenutoKit, ricarica }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -14420,12 +14420,6 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra.</div>
             </div>
           </div>
-          <button
-            onClick={onApriContenutoKit}
-            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "10px 18px", cursor: "pointer", flexShrink: 0 }}
-          >
-            Contenuto kit
-          </button>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
@@ -17295,14 +17289,14 @@ export default function App() {
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
-          ricarica={fetchDati} onBack={() => setView("home")} onApriContenutoKit={() => setView("contenutokit")}
+          ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
 
       {view === "contenutokit" && (
         <PaginaContenutoKit
           corsi={corsi} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
-          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
+          ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
 
