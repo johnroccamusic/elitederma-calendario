@@ -1590,4 +1590,26 @@ create policy "agenda_voci_all" on public.agenda_voci for all to anon using (tru
 
 alter table public.master add column if not exists permessi jsonb not null default '[]';
 
+-- ---------------------------------------------------------
+-- 44) Inventario di sede: cosa è già presente in una location (prodotti
+-- da magazzino o attrezzature), dichiarato dalla master dalla sua
+-- Dashboard ("Inventario corso corrente"), visibile in Logistica
+-- prodotti quando si prepara il contenuto dei kit per quella sede.
+-- ---------------------------------------------------------
+create table if not exists public.inventario_sede (
+  id uuid primary key default gen_random_uuid(),
+  location_id uuid not null references public.location(id) on delete cascade,
+  tipo text not null,
+  riferimento text not null,
+  quantita integer not null default 0,
+  corso_data_id uuid references public.corsi_date(id) on delete set null,
+  master_id uuid references public.master(id) on delete set null,
+  ts timestamptz not null default now()
+);
+alter table public.inventario_sede drop constraint if exists inventario_sede_location_id_tipo_riferimento_key;
+alter table public.inventario_sede add constraint inventario_sede_location_id_tipo_riferimento_key unique (location_id, tipo, riferimento);
+alter table public.inventario_sede enable row level security;
+drop policy if exists "inventario_sede_all" on public.inventario_sede;
+create policy "inventario_sede_all" on public.inventario_sede for all to anon using (true) with check (true);
+
 notify pgrst, 'reload schema';

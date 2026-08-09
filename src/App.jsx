@@ -3244,7 +3244,7 @@ function CardDataMaster({ corsoData, corso, loc }) {
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLoggataId, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLoggataId, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -3255,13 +3255,32 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
     () => corsiDate.filter((cd) => cd.master_id === masterSelId && cd.data_fine >= oggiStr).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [corsiDate, masterSelId, oggiStr]
   );
+  // "corso corrente": quello in corso o finito al massimo ieri — la
+  // finestra resta attiva fino al giorno DOPO la fine, per lasciare il
+  // tempo di dichiarare l'inventario anche appena tornati dalla sede
+  const corsoCorrente = useMemo(
+    () => corsiDate.find((cd) => cd.master_id === masterSelId && oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 1)) || null,
+    [corsiDate, masterSelId, oggiStr]
+  );
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
+          </div>
+          {masterSel && (
+            <button
+              onClick={() => corsoCorrente && onApriInventarioSede(corsoCorrente.id)}
+              disabled={!corsoCorrente}
+              title={corsoCorrente ? "" : "Attivo solo durante il corso e il giorno dopo la fine"}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: corsoCorrente ? NAVY : "#C9C4B8", background: "#fff", border: `1px solid ${corsoCorrente ? CREAM_BORDER : "#EDEAE0"}`, borderRadius: 16, padding: "9px 14px", cursor: corsoCorrente ? "pointer" : "default", flexShrink: 0 }}
+            >
+              Inventario corso corrente
+            </button>
+          )}
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
           {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : "Dashboard master"}
@@ -3291,6 +3310,110 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
             ))}
           </>
         )}
+      </div>
+    </div>
+  );
+}
+// una riga di "Inventario corso corrente": nome del prodotto/attrezzatura
+// + quantità, salvata da sola all'uscita dal campo (nessun tasto Salva)
+function RigaInventarioProdotto({ riga, voce, onSalva }) {
+  const [quantita, setQuantita] = useState(riga?.quantita ?? "");
+  async function salva() {
+    await onSalva(voce.id, quantita === "" ? 0 : Math.max(0, Number(quantita) || 0));
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{voce.nome}</span>
+      <input type="number" min="0" value={quantita} onChange={(e) => setQuantita(e.target.value)} onBlur={salva} placeholder="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }} />
+    </div>
+  );
+}
+// "Inventario corso corrente" (Dashboard master): la master dichiara
+// quanti prodotti da magazzino e quante attrezzature sono già presenti
+// nella sede del corso che sta insegnando ora. Ogni dichiarazione fa
+// upsert su (location_id, tipo, riferimento): l'ultima sostituisce la
+// precedente, e resta visibile in Logistica prodotti come "già in sede"
+// quando si prepara il contenuto dei kit per quella stessa location
+function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, inventarioSede, masterLoggataId, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [ricercaProdotto, setRicercaProdotto] = useState("");
+  const loc = location.find((l) => l.id === corsoData?.location_id) || null;
+  const attrezzature = costiSottocategorie
+    .filter((sc) => sc.categoria_id === "attrezzature_corsi" && sc.attiva && !sc.automatico)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+
+  const inventarioQui = inventarioSede.filter((r) => r.location_id === corsoData?.location_id);
+  const rigaDi = (tipo, riferimento) => inventarioQui.find((r) => r.tipo === tipo && r.riferimento === riferimento) || null;
+  const prodottiDichiarati = inventarioQui.filter((r) => r.tipo === "prodotto").map((r) => prodottiShop.find((p) => p.id === r.riferimento)).filter(Boolean);
+  const idsDichiarati = new Set(prodottiDichiarati.map((p) => p.id));
+  const risultatiRicerca = ricercaProdotto.trim()
+    ? prodottiShop.filter((p) => !idsDichiarati.has(p.id) && p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  async function salvaVoce(tipo, riferimento, quantita) {
+    const { error } = await supabase.from("inventario_sede").upsert(
+      { location_id: corsoData.location_id, tipo, riferimento, quantita, corso_data_id: corsoData.id, master_id: masterLoggataId || null },
+      { onConflict: "location_id,tipo,riferimento" }
+    );
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function aggiungiProdotto(prodottoId) {
+    setRicercaProdotto("");
+    await salvaVoce("prodotto", prodottoId, 0);
+  }
+
+  if (!corsoData) {
+    return (
+      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun corso attivo al momento.</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Inventario corso corrente</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
+          {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} — quanto è già presente in questa sede, per non rispedire quello che c'è già.
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Prodotti</div>
+          <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
+          {risultatiRicerca.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              {risultatiRicerca.map((p) => (
+                <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+              ))}
+            </div>
+          )}
+          {prodottiDichiarati.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun prodotto dichiarato ancora.</div>
+          ) : (
+            <div style={{ marginTop: 10 }}>
+              {prodottiDichiarati.map((p) => (
+                <RigaInventarioProdotto key={p.id} riga={rigaDi("prodotto", p.id)} voce={p} onSalva={(id, q) => salvaVoce("prodotto", id, q)} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ ...cardStyle, padding: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Attrezzature</div>
+          {attrezzature.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna attrezzatura definita.</div>
+          ) : attrezzature.map((sc) => (
+            <RigaInventarioProdotto key={sc.id} riga={rigaDi("attrezzatura", sc.id)} voce={{ id: sc.id, nome: sc.nome }} onSalva={(id, q) => salvaVoce("attrezzatura", id, q)} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -14267,11 +14390,15 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino }) {
+function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino }) {
   const checklist = statoEdizione.checklist || {};
   const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
   const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
   const nomeProdotto = (id) => prodottiShop.find((p) => p.id === id)?.nome || "—";
+  // quanto la master ha dichiarato già presente in questa sede l'ultima
+  // volta che c'è stata (Dashboard master > Inventario corso corrente):
+  // un promemoria per non rispedire quello che è già lì
+  const giaInSede = (prodottoId) => (inventarioSede || []).find((r) => r.location_id === corsoData.location_id && r.tipo === "prodotto" && r.riferimento === prodottoId) || null;
   const labelStyle = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
 
   // kit principale: quello scelto esplicitamente per questa edizione, o
@@ -14381,7 +14508,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
           <div style={labelStyle}>Contenuto {nomeKit(kitPrincipaleId)}</div>
           {contenutoPrincipale.filter((r) => r.tipo === "kit").map((r) => (
             <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-              <span>{nomeProdotto(r.prodotto_id)}</span><span>{r.quantita}x</span>
+              <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
             </div>
           ))}
         </div>
@@ -14392,7 +14519,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
           <div style={labelStyle}>Contenuto {nomeKit(kitSpecialeId)} (speciale)</div>
           {contenutoSpeciale.filter((r) => r.tipo === "kit").map((r) => (
             <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-              <span>{nomeProdotto(r.prodotto_id)}</span><span>{r.quantita}x</span>
+              <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
             </div>
           ))}
         </div>
@@ -14403,7 +14530,9 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
           <div style={labelStyle}>Altri accessori inviati</div>
           {tuttiAccessori.map((r) => (
             <div key={r.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
-              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{nomeProdotto(r.prodotto_id)}</span>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+                {nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}
+              </span>
               <input
                 type="number" min="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }}
                 value={statoEdizione.accessori_quantita?.[r.chiave] ?? ""} placeholder="0"
@@ -14430,7 +14559,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, onBack, ricarica }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -14560,6 +14689,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
                 prodottiShop={prodottiShop}
+                inventarioSede={inventarioSede}
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
                 onSincronizzaMagazzino={() => sincronizzaMagazzino(edizioneSel)}
@@ -16781,6 +16911,12 @@ export default function App() {
   // trova già aperta cliccando il tasto home, senza scegliere nulla
   const [agende, setAgende] = useState([]);
   const [agendaVoci, setAgendaVoci] = useState([]);
+  // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
+  // dichiarato dalla master dalla sua Dashboard ("Inventario corso
+  // corrente"): una riga per (location_id, tipo, riferimento), l'ultima
+  // dichiarazione sovrascrive la precedente (upsert)
+  const [inventarioSede, setInventarioSede] = useState([]);
+  const [inventarioSedeCorsoDataId, setInventarioSedeCorsoDataId] = useState(null);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -16814,7 +16950,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -16860,6 +16996,7 @@ export default function App() {
       supabase.from("kit_definizioni").select("*").order("nome"),
       supabase.from("agende").select("*").order("nome"),
       supabase.from("agenda_voci").select("*"),
+      supabase.from("inventario_sede").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -16899,6 +17036,7 @@ export default function App() {
     setKitDefinizioni(kd.data || []);
     setAgende(ag.data || []);
     setAgendaVoci(av.data || []);
+    setInventarioSede(invs.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -17181,6 +17319,7 @@ export default function App() {
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
+  function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
   // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
@@ -17454,7 +17593,18 @@ export default function App() {
         <PaginaDashboardMaster
           master={master} corsi={corsi} location={location} corsiDate={corsiDate}
           masterLoggataId={utenteLoggato?.masterId || null}
+          onApriInventarioSede={apriInventarioSede}
           onBack={() => setView("home")}
+        />
+      )}
+
+      {view === "inventariosede" && (
+        <PaginaInventarioSede
+          corsoData={corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId) || null}
+          corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
+          location={location} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
+          inventarioSede={inventarioSede} masterLoggataId={utenteLoggato?.masterId || null}
+          ricarica={fetchDati} onBack={() => setView("dashboardmaster")}
         />
       )}
 
@@ -17483,7 +17633,7 @@ export default function App() {
       {view === "logisticaprodotti" && (
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
+          corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} inventarioSede={inventarioSede}
           ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
