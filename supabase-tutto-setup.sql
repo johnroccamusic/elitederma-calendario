@@ -1618,4 +1618,26 @@ create policy "inventario_sede_all" on public.inventario_sede for all to anon us
 -- ---------------------------------------------------------
 alter table public.iscritti add column if not exists tipo_offerta text;
 
+-- ---------------------------------------------------------
+-- 46) Materiali rispediti dal corso: prodotti "interi" (ripristinabili
+-- in magazzino) e "aperti" (mucchio non ripristinabile), dichiarati
+-- dalla master su Inventario di sede e processati in Logistica prodotti.
+-- ---------------------------------------------------------
+alter table public.logistica_kit_edizioni add column if not exists rientro_prodotti_interi jsonb not null default '{}';
+alter table public.logistica_kit_edizioni add column if not exists rientro_prodotti_aperti jsonb not null default '{}';
+alter table public.logistica_kit_edizioni add column if not exists rientro_interi_processato jsonb not null default '{}';
+
+create table if not exists public.prodotti_aperti_magazzino (
+  id uuid primary key default gen_random_uuid(),
+  prodotto_id uuid not null references public.prodotti_shop(id) on delete cascade,
+  corso_data_id uuid not null references public.corsi_date(id) on delete cascade,
+  quantita integer not null default 0,
+  ts timestamptz not null default now()
+);
+alter table public.prodotti_aperti_magazzino drop constraint if exists prodotti_aperti_magazzino_prodotto_id_corso_data_id_key;
+alter table public.prodotti_aperti_magazzino add constraint prodotti_aperti_magazzino_prodotto_id_corso_data_id_key unique (prodotto_id, corso_data_id);
+alter table public.prodotti_aperti_magazzino enable row level security;
+drop policy if exists "prodotti_aperti_magazzino_all" on public.prodotti_aperti_magazzino;
+create policy "prodotti_aperti_magazzino_all" on public.prodotti_aperti_magazzino for all to anon using (true) with check (true);
+
 notify pgrst, 'reload schema';
