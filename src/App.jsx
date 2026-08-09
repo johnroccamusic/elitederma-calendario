@@ -6019,11 +6019,12 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
 
       <div style={cardStyle}>
         <div style={{ ...hStyle, textAlign: "center", textTransform: "uppercase" }}>Aggiungi data</div>
-        <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca due volte un corso già esistente per eliminarlo.</div>
+        <div style={subStyle}>Clicca un giorno vuoto per creare una nuova edizione (corso, città, durata). Clicca un corso già esistente per aprire i suoi iscritti, clicca due volte per eliminarlo.</div>
         <SelettoreCalendario
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           onClickGiorno={setPopupNuovaData}
           onDoppioClickEvento={setPopupEliminaData}
+          onApriData={onApriData}
         />
       </div>
       {popupNuovaData && (
@@ -9076,7 +9077,7 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore
 }
 
 // ---------- Selettore date dal calendario (per Aggiungi data) ----------
-function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGiorno, onDoppioClickEvento }) {
+function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGiorno, onDoppioClickEvento, onApriData }) {
   const [mese, setMese] = useState(new Date().getMonth());
   const [anno, setAnno] = useState(new Date().getFullYear());
 
@@ -9084,6 +9085,25 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
+
+  // stesso trucco usato in MeseGriglia: un doppio click nativo del browser
+  // scatta comunque prima un click singolo, quindi il primo click viene
+  // ritardato per vedere se ne arriva subito un secondo (= doppio click,
+  // apre il popup elimina) prima di aprire davvero la scheda dell'edizione
+  const cliccoInAttesaRef = React.useRef(null);
+  function gestisciClickBarra(ev) {
+    if (!onApriData) { onDoppioClickEvento(ev); return; }
+    if (cliccoInAttesaRef.current) {
+      clearTimeout(cliccoInAttesaRef.current);
+      cliccoInAttesaRef.current = null;
+      onDoppioClickEvento(ev);
+    } else {
+      cliccoInAttesaRef.current = setTimeout(() => {
+        cliccoInAttesaRef.current = null;
+        onApriData(ev);
+      }, 250);
+    }
+  }
 
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
@@ -9160,7 +9180,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
                 return (
                   <div
                     key={ev.id}
-                    onDoubleClick={() => onDoppioClickEvento(ev)}
+                    onClick={() => gestisciClickBarra(ev)}
                     title={`${corso?.nome?.toUpperCase()} · ${loc?.nome?.toUpperCase()}${occupancy != null ? ` · ${numeroAllievi}/${capienza}` : ""}`}
                     style={{
                       position: "relative",
@@ -9210,7 +9230,7 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
         );
       })}
       <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 8 }}>
-        Clicca un giorno vuoto per creare una nuova edizione. Doppio click su un corso esistente per eliminarlo.
+        Clicca un giorno vuoto per creare una nuova edizione. Clicca un corso esistente per aprire i suoi iscritti, doppio click per eliminarlo.
       </div>
     </div>
   );
