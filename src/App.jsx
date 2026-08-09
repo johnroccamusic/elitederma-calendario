@@ -4622,6 +4622,7 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
 // home è immediato. Le 3 righe di sistema non ancora salvate (id nullo,
 // mostrate coi valori di sempre) vengono create al primo salvataggio
 function RigaTabellaUtente({ utente, agende, ricarica }) {
+  const isMobile = useIsMobile();
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
   const [salvando, setSalvando] = useState(false);
@@ -4662,6 +4663,54 @@ function RigaTabellaUtente({ utente, agende, ricarica }) {
     const { error } = await supabase.from("utenti_app").delete().eq("id", utente.id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
+  }
+
+  // da cellulare una riga larga quanto tutte le colonne (TASTI_HOME +
+  // agende) costringerebbe a scorrere lateralmente con il dito: qui sotto
+  // ogni utente diventa una card, con un tasto per riga invece che una
+  // colonna per riga — solo scorrimento verticale, mai orizzontale
+  if (isMobile) {
+    return (
+      <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ ...inputStyle, flex: 1, fontWeight: 700 }} />
+        </div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <input value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          {TASTI_HOME.map((t) => (
+            <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
+              <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+            </label>
+          ))}
+          {agende.map((a) => (
+            <label key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Agenda: {a.nome}</span>
+              <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
+            </label>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={salvaCampi}
+            disabled={salvando}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 12px", cursor: salvando ? "default" : "pointer", flex: 1 }}
+          >
+            {salvando ? "…" : fatto ? "✓" : "Salva"}
+          </button>
+          {!sistema && (
+            <button
+              onClick={elimina}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "9px 12px", cursor: "pointer", flex: 1 }}
+            >
+              Elimina
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
 
   const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
@@ -4737,6 +4786,7 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
 // spuntato per una riga resta disattivato e non cliccabile in home per
 // chi entra con quella password, senza dover chiedere nessuna password
 function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
+  const isMobile = useIsMobile();
   const righeSistema = RIGHE_SISTEMA_DEFAULT.map((def) => {
     const esistente = utentiApp.find((u) => u.chiave_sistema === def.chiave);
     return esistente || { id: null, chiave_sistema: def.chiave, nome: def.nome, password: def.passwordDefault, permessi: def.permessiDefault };
@@ -4747,29 +4797,35 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
         <div>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Gestione utenti</div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Configura gli accessi alla home page per ogni utente.</div>
         </div>
         <BottoneGeneraUtente utentiApp={utentiApp} ricarica={ricarica} />
       </div>
-      <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginTop: 14 }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820 }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Nome utente</th>
-              <th style={thStyle}>Password</th>
-              {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
-              {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
-              <th style={thStyle}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} agende={agende} ricarica={ricarica} />)}
-          </tbody>
-        </table>
-      </div>
+      {isMobile ? (
+        <div style={{ marginTop: 14 }}>
+          {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} agende={agende} ricarica={ricarica} />)}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginTop: 14 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820 }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Nome utente</th>
+                <th style={thStyle}>Password</th>
+                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
+                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
+                <th style={thStyle}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} agende={agende} ricarica={ricarica} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -4782,6 +4838,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
 // ogni agenda creata (stesso schema di assegnazione di Gestione utenti):
 // una master può anche lei avere una o più agende abbinate
 function RigaTabellaMaster({ masterRec, agende, ricarica }) {
+  const isMobile = useIsMobile();
   const [password, setPassword] = useState(masterRec.password || "");
   const [permessiLocali, setPermessiLocali] = useState(masterRec.permessi || []);
   async function persist(campi) {
@@ -4801,6 +4858,35 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
     if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
     ricarica();
   }
+  if (isMobile) {
+    return (
+      <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{masterRec.nome}</div>
+        <input
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onBlur={salvaPassword}
+          placeholder="Nessuna password"
+          style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
+        />
+        {/* "Dashboard master" non compare: chi entra con la password di una
+            master la ottiene sempre, automaticamente (Gate.check) */}
+        {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
+          <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
+            <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+          </label>
+        ))}
+        {agende.map((a) => (
+          <label key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Agenda: {a.nome}</span>
+            <input type="checkbox" checked={permessiLocali.includes(`agenda_${a.id}`)} onChange={(e) => toggleTasto(`agenda_${a.id}`, e.target.checked)} />
+          </label>
+        ))}
+      </div>
+    );
+  }
+
   const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
   return (
     <tr>
@@ -4836,6 +4922,7 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
 // master aperta sulla propria scheda, senza scegliere nulla; se ha anche
 // un'agenda abbinata, la trova tra le agende del tasto "Agenda"
 function TabellaPasswordMaster({ master, agende, ricarica }) {
+  const isMobile = useIsMobile();
   const masterOrdinate = master.slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
   return (
@@ -4846,6 +4933,10 @@ function TabellaPasswordMaster({ master, agende, ricarica }) {
       </div>
       {masterOrdinate.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
+      ) : isMobile ? (
+        <div>
+          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} ricarica={ricarica} />)}
+        </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + (TASTI_HOME.length - 1 + agende.length) * 140 }}>
@@ -10148,7 +10239,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       if (taglia) setTagliaDivisa(taglia);
     }
 
-    if (dati.tipoCorso && !salta(pacchettoKit.trim())) setPacchettoKit(dati.tipoCorso.toUpperCase());
+    if (dati.tipoCorso && !salta(tipoOfferta.trim())) setTipoOfferta(dati.tipoCorso.toUpperCase());
 
     if (dati.tipoPagamentoSaldo && !salta(accordiCommerciali.trim())) setAccordiCommerciali(dati.tipoPagamentoSaldo.toUpperCase());
 
@@ -14964,9 +15055,9 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
 
   return (
     <div style={{ marginBottom: 26 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{corso ? corso.nome : "Pacchetti speciali (senza corso)"}</div>
-        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
           <button
             onClick={() => setMostraAccessori((v) => !v)}
             style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
@@ -17243,8 +17334,16 @@ export default function App() {
     return utentiApp.find((u) => u.chiave_sistema === "__admin")?.password || ADMIN_CODE;
   }
   function apriLoginVenditore() {
-    // il Programmatore entra ovunque senza reinserire nessuna password
-    if (ruoloUtente === "programmatore") { setVenditoreLoggato(null); setView("dashboardvenditori"); return; }
+    // chi ha già una propria password (Programmatore, Amministratore,
+    // master, utente nominale) e ha il tasto abilitato entra subito,
+    // senza il picker/la password aggiuntiva del venditore — quel picker
+    // serve solo per l'accesso generico condiviso (Utente generico), che
+    // da solo non sa dire "quale" venditore sta entrando
+    if (ruoloUtente === "programmatore" || ruoloUtente === "amministratore" || utenteLoggato?.chiave_sistema !== "__user") {
+      setVenditoreLoggato(null);
+      setView("dashboardvenditori");
+      return;
+    }
     setMostraLoginVenditore(true);
   }
   function onEntraVenditore({ modalitaAdmin, venditoreId, nome }) {
