@@ -13709,28 +13709,47 @@ function RigaCorsoLogistica({ corsoData, corso, loc, numeroPartecipanti, faseCor
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da "Contenuto kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate, prodottiShop, onSalvaCampi, onSincronizzaMagazzino }) {
+function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, onSalvaCampi, onSincronizzaMagazzino }) {
   const checklist = statoEdizione.checklist || {};
   const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
   const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
-  const prodottiKit = kitTemplate.filter((r) => r.tipo === "kit");
-  const accessori = kitTemplate.filter((r) => r.tipo === "accessorio");
   const nomeProdotto = (id) => prodottiShop.find((p) => p.id === id)?.nome || "—";
   const labelStyle = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
 
+  // kit principale: quello scelto esplicitamente per questa edizione, o
+  // in mancanza il kit il cui "corso di default" è questo corso — sempre
+  // sostituibile dalla tendina con uno qualunque tra quelli creati
+  const kitDefault = kitDefinizioni.find((k) => k.corso_id === corso?.id) || null;
+  const kitPrincipaleId = statoEdizione.kit_id || kitDefault?.id || "";
+  const kitSpecialeId = statoEdizione.kit_speciale_id || "";
+  const contenutoPrincipale = kitPrincipaleId ? corsiKitProdotti.filter((r) => r.kit_id === kitPrincipaleId) : [];
+  const contenutoSpeciale = kitSpecialeId ? corsiKitProdotti.filter((r) => r.kit_id === kitSpecialeId) : [];
+  const nomeKit = (id) => kitDefinizioni.find((k) => k.id === id)?.nome || "—";
+
+  // cambiare il kit selezionato azzera il suo contatore di scarico: il
+  // vecchio valore si riferiva ai prodotti del kit precedente, non ha
+  // più senso come base di confronto per un kit diverso
+  function cambiaKitPrincipale(nuovoId) { onSalvaCampi({ kit_id: nuovoId || null, quantita_scaricata_magazzino: 0 }); }
+  function cambiaKitSpeciale(nuovoId) { onSalvaCampi({ kit_speciale_id: nuovoId || null, kit_speciale_scaricato: 0 }); }
+
   // pulsante "Modifica quantità di magazzino"/"Magazzino aggiornato":
-  // reattivo alla differenza tra la quantità attuale (kit e, prodotto per
-  // prodotto, accessori) e quella già applicata al magazzino l'ultima
-  // volta — mai al valore assoluto, così un doppio click non scarica due
-  // volte lo stesso kit
+  // reattivo alla differenza tra la quantità attuale (kit principale, kit
+  // speciale e, prodotto per prodotto, accessori di entrambi) e quella
+  // già applicata al magazzino l'ultima volta — mai al valore assoluto,
+  // così un doppio click non scarica due volte lo stesso kit
   const quantitaKitAttuale = (statoEdizione.kit_per_iscritti || 0) + (statoEdizione.kit_di_riserva || 0);
   const kitDaSincronizzare = quantitaKitAttuale !== (statoEdizione.quantita_scaricata_magazzino || 0);
-  const accessoriDaSincronizzare = accessori.some((r) => {
-    const target = statoEdizione.accessori_quantita?.[r.prodotto_id] || 0;
-    const scaricato = statoEdizione.accessori_scaricati?.[r.prodotto_id] || 0;
+  const quantitaSpecialeAttuale = (statoEdizione.kit_speciale_per_iscritti || 0) + (statoEdizione.kit_speciale_di_riserva || 0);
+  const specialeDaSincronizzare = quantitaSpecialeAttuale !== (statoEdizione.kit_speciale_scaricato || 0);
+  const accessoriPrincipale = contenutoPrincipale.filter((r) => r.tipo === "accessorio").map((r) => ({ ...r, chiave: `${kitPrincipaleId}::${r.prodotto_id}` }));
+  const accessoriSpeciale = contenutoSpeciale.filter((r) => r.tipo === "accessorio").map((r) => ({ ...r, chiave: `${kitSpecialeId}::${r.prodotto_id}` }));
+  const tuttiAccessori = [...accessoriPrincipale, ...accessoriSpeciale];
+  const accessoriDaSincronizzare = tuttiAccessori.some((r) => {
+    const target = statoEdizione.accessori_quantita?.[r.chiave] || 0;
+    const scaricato = statoEdizione.accessori_scaricati?.[r.chiave] || 0;
     return target !== scaricato;
   });
-  const daSincronizzare = kitDaSincronizzare || accessoriDaSincronizzare;
+  const daSincronizzare = kitDaSincronizzare || specialeDaSincronizzare || accessoriDaSincronizzare;
 
   return (
     <div>
@@ -13743,23 +13762,42 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
-        <div style={{ flex: 1 }}>
-          <div style={labelStyle}>Kit per iscritti</div>
-          <input
-            type="number" min="0" style={inputStyle}
-            value={statoEdizione.kit_per_iscritti ?? ""} placeholder="0"
-            onChange={(e) => onSalvaCampi({ kit_per_iscritti: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={labelStyle}>Kit di riserva</div>
-          <input
-            type="number" min="0" style={inputStyle}
-            value={statoEdizione.kit_di_riserva ?? ""} placeholder="0"
-            onChange={(e) => onSalvaCampi({ kit_di_riserva: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
-          />
-        </div>
+      <div style={labelStyle}>Kit</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <select value={kitPrincipaleId} onChange={(e) => cambiaKitPrincipale(e.target.value)} style={{ ...inputStyle, flex: 2 }}>
+          <option value="">— nessun kit —</option>
+          {kitDefinizioni.map((k) => <option key={k.id} value={k.id}>{k.nome}</option>)}
+        </select>
+        <input
+          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Per iscritti"
+          value={statoEdizione.kit_per_iscritti ?? ""} placeholder="Per iscritti"
+          onChange={(e) => onSalvaCampi({ kit_per_iscritti: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+        />
+        <input
+          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Di riserva"
+          value={statoEdizione.kit_di_riserva ?? ""} placeholder="Di riserva"
+          onChange={(e) => onSalvaCampi({ kit_di_riserva: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+        />
+      </div>
+
+      <div style={labelStyle}>Kit speciale (facoltativo)</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <select value={kitSpecialeId} onChange={(e) => cambiaKitSpeciale(e.target.value)} style={{ ...inputStyle, flex: 2 }}>
+          <option value="">— nessuno —</option>
+          {kitDefinizioni.map((k) => <option key={k.id} value={k.id}>{k.nome}</option>)}
+        </select>
+        <input
+          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Per iscritti"
+          value={statoEdizione.kit_speciale_per_iscritti ?? ""} placeholder="Per iscritti"
+          disabled={!kitSpecialeId}
+          onChange={(e) => onSalvaCampi({ kit_speciale_per_iscritti: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+        />
+        <input
+          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Di riserva"
+          value={statoEdizione.kit_speciale_di_riserva ?? ""} placeholder="Di riserva"
+          disabled={!kitSpecialeId}
+          onChange={(e) => onSalvaCampi({ kit_speciale_di_riserva: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+        />
       </div>
 
       {CHECKLIST_KIT_ITEMS.map((c) => (
@@ -13772,10 +13810,10 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
         </label>
       ))}
 
-      {prodottiKit.length > 0 && (
+      {contenutoPrincipale.filter((r) => r.tipo === "kit").length > 0 && (
         <div style={{ marginTop: 20 }}>
-          <div style={labelStyle}>Contenuto kit</div>
-          {prodottiKit.map((r) => (
+          <div style={labelStyle}>Contenuto {nomeKit(kitPrincipaleId)}</div>
+          {contenutoPrincipale.filter((r) => r.tipo === "kit").map((r) => (
             <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
               <span>{nomeProdotto(r.prodotto_id)}</span><span>{r.quantita}x</span>
             </div>
@@ -13783,16 +13821,27 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
         </div>
       )}
 
-      {accessori.length > 0 && (
+      {kitSpecialeId && contenutoSpeciale.filter((r) => r.tipo === "kit").length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={labelStyle}>Contenuto {nomeKit(kitSpecialeId)} (speciale)</div>
+          {contenutoSpeciale.filter((r) => r.tipo === "kit").map((r) => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
+              <span>{nomeProdotto(r.prodotto_id)}</span><span>{r.quantita}x</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tuttiAccessori.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <div style={labelStyle}>Altri accessori inviati</div>
-          {accessori.map((r) => (
-            <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
+          {tuttiAccessori.map((r) => (
+            <div key={r.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0" }}>
               <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{nomeProdotto(r.prodotto_id)}</span>
               <input
                 type="number" min="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }}
-                value={statoEdizione.accessori_quantita?.[r.prodotto_id] ?? ""} placeholder="0"
-                onChange={(e) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.prodotto_id]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
+                value={statoEdizione.accessori_quantita?.[r.chiave] ?? ""} placeholder="0"
+                onChange={(e) => onSalvaCampi({ accessori_quantita: { ...(statoEdizione.accessori_quantita || {}), [r.chiave]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
               />
             </div>
           ))}
@@ -13807,9 +13856,6 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
         >
           {daSincronizzare ? "Modifica quantità di magazzino" : "Magazzino aggiornato"}
         </button>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, textAlign: "center" }}>
-          Kit registrati a magazzino: {statoEdizione.quantita_scaricata_magazzino || 0} di {quantitaKitAttuale}
-        </div>
       </div>
     </div>
   );
@@ -13818,7 +13864,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitTemplate,
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, onBack, onApriContenutoKit, ricarica }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, onBack, onApriContenutoKit, ricarica }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -13831,7 +13877,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
 
   function statoDi(corsoDataId) {
-    return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || { corso_data_id: corsoDataId, fase: "da_preparare", kit_per_iscritti: null, kit_di_riserva: null, checklist: {}, accessori_quantita: {}, quantita_scaricata_magazzino: 0, accessori_scaricati: {} };
+    return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || {
+      corso_data_id: corsoDataId, fase: "da_preparare",
+      kit_id: null, kit_per_iscritti: null, kit_di_riserva: null, quantita_scaricata_magazzino: 0,
+      kit_speciale_id: null, kit_speciale_per_iscritti: null, kit_speciale_di_riserva: null, kit_speciale_scaricato: 0,
+      checklist: {}, accessori_quantita: {}, accessori_scaricati: {},
+    };
   }
   async function salvaCampiEdizione(corsoDataId, campi) {
     const esistente = logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId);
@@ -13842,31 +13893,49 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     ricarica();
   }
   // scarico "reattivo": non riscarica mai il valore assoluto, applica al
-  // magazzino solo la DIFFERENZA fra la quantità attuale (kit e, per
-  // ciascun accessorio, quantità inviata) e quella già applicata
-  // l'ultima volta — così cambiare kit_per_iscritti da 9 a 8 e
-  // risincronizzare rimette a magazzino esattamente 1 kit, mai di più
+  // magazzino solo la DIFFERENZA fra la quantità attuale — kit
+  // principale, kit speciale e, per ciascun accessorio di entrambi,
+  // quantità inviata — e quella già applicata l'ultima volta, così
+  // cambiare kit_per_iscritti da 9 a 8 e risincronizzare rimette a
+  // magazzino esattamente 1 kit, mai di più
   async function sincronizzaMagazzino(corsoData) {
     const stato = statoDi(corsoData.id);
-    const kitTemplate = corsiKitProdotti.filter((r) => r.corso_id === corsoData.corso_id);
-    const quantitaKitAttuale = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
-    const deltaKit = quantitaKitAttuale - (stato.quantita_scaricata_magazzino || 0);
+    const kitDefault = kitDefinizioni.find((k) => k.corso_id === corsoData.corso_id) || null;
+    const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
+    const kitSpecialeId = stato.kit_speciale_id || null;
 
     const deltaPerProdotto = {}; // prodotto_id -> variazione da applicare a giacenza (positivo = restituire, negativo = togliere)
-    if (deltaKit !== 0) {
-      kitTemplate.filter((r) => r.tipo === "kit").forEach((r) => {
-        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * deltaKit;
-      });
+
+    if (kitPrincipaleId) {
+      const quantitaKitAttuale = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
+      const deltaKit = quantitaKitAttuale - (stato.quantita_scaricata_magazzino || 0);
+      if (deltaKit !== 0) {
+        corsiKitProdotti.filter((r) => r.kit_id === kitPrincipaleId && r.tipo === "kit").forEach((r) => {
+          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * deltaKit;
+        });
+      }
+    }
+    if (kitSpecialeId) {
+      const quantitaSpecialeAttuale = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
+      const deltaSpeciale = quantitaSpecialeAttuale - (stato.kit_speciale_scaricato || 0);
+      if (deltaSpeciale !== 0) {
+        corsiKitProdotti.filter((r) => r.kit_id === kitSpecialeId && r.tipo === "kit").forEach((r) => {
+          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * deltaSpeciale;
+        });
+      }
     }
     const accessoriScaricatiAggiornati = { ...(stato.accessori_scaricati || {}) };
-    kitTemplate.filter((r) => r.tipo === "accessorio").forEach((r) => {
-      const target = stato.accessori_quantita?.[r.prodotto_id] || 0;
-      const giaScaricato = stato.accessori_scaricati?.[r.prodotto_id] || 0;
-      const deltaAcc = target - giaScaricato;
-      if (deltaAcc !== 0) {
-        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - deltaAcc;
-        accessoriScaricatiAggiornati[r.prodotto_id] = target;
-      }
+    [kitPrincipaleId, kitSpecialeId].filter(Boolean).forEach((kitId) => {
+      corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
+        const chiave = `${kitId}::${r.prodotto_id}`;
+        const target = stato.accessori_quantita?.[chiave] || 0;
+        const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
+        const deltaAcc = target - giaScaricato;
+        if (deltaAcc !== 0) {
+          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - deltaAcc;
+          accessoriScaricatiAggiornati[chiave] = target;
+        }
+      });
     });
 
     if (Object.keys(deltaPerProdotto).length === 0) return;
@@ -13875,7 +13944,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       if (!prodotto) return null;
       return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) + delta }).eq("id", prodottoId);
     }));
-    await salvaCampiEdizione(corsoData.id, { quantita_scaricata_magazzino: quantitaKitAttuale, accessori_scaricati: accessoriScaricatiAggiornati });
+    const campiAggiornati = { accessori_scaricati: accessoriScaricatiAggiornati };
+    if (kitPrincipaleId) campiAggiornati.quantita_scaricata_magazzino = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
+    if (kitSpecialeId) campiAggiornati.kit_speciale_scaricato = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
+    await salvaCampiEdizione(corsoData.id, campiAggiornati);
   }
 
   return (
@@ -13925,7 +13997,8 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 corsoData={edizioneSel}
                 corso={corsoById[edizioneSel.corso_id]}
                 statoEdizione={statoDi(edizioneSel.id)}
-                kitTemplate={corsiKitProdotti.filter((r) => r.corso_id === edizioneSel.corso_id)}
+                kitDefinizioni={kitDefinizioni}
+                corsiKitProdotti={corsiKitProdotti}
                 prodottiShop={prodottiShop}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
                 onSincronizzaMagazzino={() => sincronizzaMagazzino(edizioneSel)}
@@ -13938,10 +14011,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   );
 }
 
-// scheda di un corso in "Contenuto kit": ricerca+aggiungi prodotti al
-// kit (con quantità per kit) e agli "altri accessori" (senza quantità:
-// la scrive chi prepara la spedizione, edizione per edizione)
-function SchedaKitCorso({ corso, righe, prodottiShop, ricarica }) {
+// scheda di un kit in "Contenuto kit": nome modificabile, corso di
+// default, ricerca+aggiungi prodotti al kit (con quantità per kit) e
+// agli "altri accessori" (senza quantità: la scrive chi prepara la
+// spedizione, edizione per edizione)
+function SchedaKitDefinizione({ kit, corsi, righe, prodottiShop, ricarica }) {
+  const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
   const [ricercaAcc, setRicercaAcc] = useState("");
@@ -13950,9 +14025,22 @@ function SchedaKitCorso({ corso, righe, prodottiShop, ricarica }) {
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
   const accessori = righe.filter((r) => r.tipo === "accessorio");
   const idsUsati = new Set(righe.map((r) => r.prodotto_id));
+  const corsoDefault = corsi.find((c) => c.id === kit.corso_id);
 
+  async function salvaNome() {
+    if (!nome.trim() || nome.trim() === kit.nome) { setNome(kit.nome); return; }
+    const { error } = await supabase.from("kit_definizioni").update({ nome: nome.trim() }).eq("id", kit.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function elimina() {
+    if (!window.confirm(`Eliminare il kit "${kit.nome}"? Rimuove anche il suo contenuto (non tocca le edizioni che lo hanno già usato).`)) return;
+    const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
   async function aggiungiProdotto(prodottoId, tipo) {
-    const { error } = await supabase.from("corsi_kit_prodotti").insert({ corso_id: corso.id, prodotto_id: prodottoId, tipo, quantita: 1 });
+    const { error } = await supabase.from("corsi_kit_prodotti").insert({ kit_id: kit.id, prodotto_id: prodottoId, tipo, quantita: 1 });
     if (error) { window.alert("Errore: " + error.message); return; }
     setMostraRicercaKit(false); setMostraRicercaAcc(false); setRicercaKit(""); setRicercaAcc("");
     ricarica();
@@ -13979,7 +14067,18 @@ function SchedaKitCorso({ corso, righe, prodottiShop, ricarica }) {
 
   return (
     <div style={{ ...cardStyle, marginBottom: 14 }}>
-      <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>{corso.nome}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 2 }}>
+        <input
+          value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaNome}
+          style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 0 }}
+        />
+        <button onClick={elimina} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "6px 10px", cursor: "pointer", flexShrink: 0 }}>
+          Elimina kit
+        </button>
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 14 }}>
+        {corsoDefault ? `Kit di default per: ${corsoDefault.nome}` : "Kit speciale (nessun corso di default)"}
+      </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>Contenuto kit</div>
@@ -14034,27 +14133,26 @@ function SchedaKitCorso({ corso, righe, prodottiShop, ricarica }) {
     </div>
   );
 }
-// pagina "Contenuto kit": template kit per corso-tipo, condiviso da
-// tutte le edizioni di quel corso (stesso principio di "corsi_giorni")
-function PaginaContenutoKit({ corsi, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
+// pagina "Contenuto kit": catalogo di kit creati liberamente (non più
+// legati 1:1 al corso) — ognuno ha un nome e, facoltativamente, un corso
+// di default usato per la preselezione in "Preparazione kit"
+function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const [mostraForm, setMostraForm] = useState(false);
-  const [corsoNuovoId, setCorsoNuovoId] = useState("");
-  const [corsoAppenaCreato, setCorsoAppenaCreato] = useState(null);
+  const [nomeNuovo, setNomeNuovo] = useState("");
+  const [corsoDefaultNuovo, setCorsoDefaultNuovo] = useState("");
+  const [salvando, setSalvando] = useState(false);
 
-  const idsConKit = useMemo(() => new Set(corsiKitProdotti.map((r) => r.corso_id)), [corsiKitProdotti]);
-  const corsiVisibili = useMemo(() => {
-    const ids = new Set(idsConKit);
-    if (corsoAppenaCreato) ids.add(corsoAppenaCreato);
-    return corsi.filter((c) => ids.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [corsi, idsConKit, corsoAppenaCreato]);
-  const corsiSenzaKit = corsi.filter((c) => !idsConKit.has(c.id) && c.id !== corsoAppenaCreato);
+  const kitOrdinati = kitDefinizioni.slice().sort((a, b) => a.nome.localeCompare(b.nome));
 
-  function creaNuovoKit() {
-    if (!corsoNuovoId) { window.alert("Scegli un corso."); return; }
-    setCorsoAppenaCreato(corsoNuovoId);
-    setMostraForm(false);
-    setCorsoNuovoId("");
+  async function creaNuovoKit() {
+    if (!nomeNuovo.trim()) { window.alert("Dai un nome al kit (es. \"Micro Base\" o \"Kit Speciale VIP\")."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corsoDefaultNuovo || null });
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setNomeNuovo(""); setCorsoDefaultNuovo(""); setMostraForm(false);
+    ricarica();
   }
 
   return (
@@ -14065,7 +14163,7 @@ function PaginaContenutoKit({ corsi, corsiKitProdotti, prodottiShop, onBack, ric
             <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
             <div>
               <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Contenuto kit</div>
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Vale per tutte le edizioni dello stesso corso.</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Ogni kit è selezionabile per qualunque edizione, anche come kit speciale aggiuntivo.</div>
             </div>
           </div>
           <button
@@ -14078,18 +14176,24 @@ function PaginaContenutoKit({ corsi, corsiKitProdotti, prodottiShop, onBack, ric
 
         {mostraForm && (
           <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
-            <select value={corsoNuovoId} onChange={(e) => setCorsoNuovoId(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 180 }}>
-              <option value="">— scegli il tipo di corso —</option>
-              {corsiSenzaKit.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            <input
+              value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} placeholder="Nome kit (es. Micro Base, Kit Speciale VIP)"
+              style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+            />
+            <select value={corsoDefaultNuovo} onChange={(e) => setCorsoDefaultNuovo(e.target.value)} style={{ ...inputStyle, minWidth: 200 }}>
+              <option value="">Nessun corso di default (kit speciale)</option>
+              {corsi.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
-            <button onClick={creaNuovoKit} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}>Crea</button>
+            <button onClick={creaNuovoKit} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
+              {salvando ? "Creo…" : "Crea"}
+            </button>
           </div>
         )}
 
-        {corsiVisibili.length === 0 ? (
+        {kitOrdinati.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit definito. Crea il primo con "+ Crea nuovo kit".</div>
-        ) : corsiVisibili.map((c) => (
-          <SchedaKitCorso key={c.id} corso={c} righe={corsiKitProdotti.filter((r) => r.corso_id === c.id)} prodottiShop={prodottiShop} ricarica={ricarica} />
+        ) : kitOrdinati.map((k) => (
+          <SchedaKitDefinizione key={k.id} kit={k} corsi={corsi} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica} />
         ))}
       </div>
     </div>
@@ -15974,6 +16078,7 @@ export default function App() {
   // edizione (corsi_date) — fase di spedizione, kit per iscritti/riserva,
   // checklist, quantità accessori inviati, se già scaricato dal magazzino
   const [corsiKitProdotti, setCorsiKitProdotti] = useState([]);
+  const [kitDefinizioni, setKitDefinizioni] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -16007,7 +16112,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -16050,6 +16155,7 @@ export default function App() {
       supabase.from("utenti_app").select("*").order("nome"),
       supabase.from("corsi_kit_prodotti").select("*"),
       supabase.from("logistica_kit_edizioni").select("*"),
+      supabase.from("kit_definizioni").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -16086,6 +16192,7 @@ export default function App() {
     setUtentiApp(ua.data || []);
     setCorsiKitProdotti(ckp.data || []);
     setLogisticaKitEdizioni(lke.data || []);
+    setKitDefinizioni(kd.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -16639,14 +16746,14 @@ export default function App() {
       {view === "logisticaprodotti" && (
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
+          corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
           ricarica={fetchDati} onBack={() => setView("home")} onApriContenutoKit={() => setView("contenutokit")}
         />
       )}
 
       {view === "contenutokit" && (
         <PaginaContenutoKit
-          corsi={corsi} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
+          corsi={corsi} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
         />
       )}
