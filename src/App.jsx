@@ -353,6 +353,14 @@ function IconaFormeRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+function IconaPacchettoRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3Z" />
+      <path d="M4 7.5L12 12l8-4.5M12 12v9" />
+    </svg>
+  );
+}
 // icone della pagina "ERP" (testata + card KPI)
 function IconaRicercaErp({ size = 18, color = "currentColor" }) {
   return (
@@ -8757,7 +8765,7 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
   );
 }
 
-function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -8824,7 +8832,14 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
   const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
   const [eccezioneApertaId, setEccezioneApertaId] = useState(null); // id dell'iscritto per cui si sta scegliendo l'eccezione diploma
   const [msg, setMsg] = useState("");
-  const [adminSbloccato, setAdminSbloccato] = useState(sessionStorage.getItem("edc_admin_ok") === "1");
+  // Programmatore e Amministratore saltano subito la richiesta della
+  // password di "Contabilità classe" (come già succede per tutti i tasti
+  // della home): senza questo controllo, il loro accesso diretto al
+  // login non valorizza mai "edc_admin_ok", che viene scritto solo da chi
+  // sblocca digitando il codice nel vecchio prompt per-voce
+  const [adminSbloccato, setAdminSbloccato] = useState(
+    ruoloUtente === "programmatore" || ruoloUtente === "amministratore" || sessionStorage.getItem("edc_admin_ok") === "1"
+  );
   const [mostraGestione, setMostraGestione] = useState(sottoVistaIniziale?.mostraGestione ?? false);
   const [linkMaster, setLinkMaster] = useState("");
   const [linkModelle, setLinkModelle] = useState("");
@@ -8971,7 +8986,7 @@ function SchedaData({ corsoData, corsi, location, corsiDate, iscritti, master, f
     if (adminSbloccato) { setMostraGestione(true); return; }
     const codice = window.prompt("Codice amministratore per aprire la contabilità classe:");
     if (codice === null) return;
-    if (ADMIN_CODE && codice === ADMIN_CODE) {
+    if (codiceAmministratoreAttuale && codice === codiceAmministratoreAttuale) {
       sessionStorage.setItem("edc_admin_ok", "1");
       setAdminSbloccato(true);
       setMostraGestione(true);
@@ -16797,6 +16812,8 @@ export default function App() {
       {view === "scheda" && corsoDataApertaObj && (
         <SchedaData
           key={schedaKey}
+          ruoloUtente={ruoloUtente}
+          codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
           corsoData={corsoDataApertaObj}
           corsi={corsi}
           location={location}
