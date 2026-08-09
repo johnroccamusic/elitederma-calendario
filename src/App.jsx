@@ -5929,7 +5929,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriCerca, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
   const [msg, setMsg] = useState("");
   const [popupNuovaData, setPopupNuovaData] = useState(null);
   const [popupEliminaData, setPopupEliminaData] = useState(null);
@@ -6025,6 +6025,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
           onClickGiorno={setPopupNuovaData}
           onDoppioClickEvento={setPopupEliminaData}
           onApriData={onApriData}
+          onApriCerca={onApriCerca}
         />
       </div>
       {popupNuovaData && (
@@ -9077,7 +9078,7 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore
 }
 
 // ---------- Selettore date dal calendario (per Aggiungi data) ----------
-function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGiorno, onDoppioClickEvento, onApriData }) {
+function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGiorno, onDoppioClickEvento, onApriData, onApriCerca }) {
   const [mese, setMese] = useState(new Date().getMonth());
   const [anno, setAnno] = useState(new Date().getFullYear());
 
@@ -9085,6 +9086,17 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const settimane = generaSettimane(anno, mese);
   function dateStr(d) { return dateStrFor(anno, mese, d); }
+
+  // finestra di 7 mesi (3 prima, quello corrente, 3 dopo) per la fascia di
+  // pillole di navigazione rapida: si ricalcola sul mese attualmente
+  // selezionato, quindi cliccando una pillola ai bordi la finestra scorre
+  const pilloleMesi = Array.from({ length: 7 }, (_, i) => {
+    let m = mese + (i - 3);
+    let y = anno;
+    while (m < 0) { m += 12; y -= 1; }
+    while (m > 11) { m -= 12; y += 1; }
+    return { m, y };
+  });
 
   // stesso trucco usato in MeseGriglia: un doppio click nativo del browser
   // scatta comunque prima un click singolo, quindi il primo click viene
@@ -9108,9 +9120,33 @@ function SelettoreCalendario({ corsi, location, corsiDate, iscritti, onClickGior
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <button type="button" onClick={() => { const m = mese - 1; if (m < 0) { setMese(11); setAnno(anno - 1); } else setMese(m); }} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY }}>&larr;</button>
-        <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500 }}>{MESI[mese]} {anno}</div>
-        <button type="button" onClick={() => { const m = mese + 1; if (m > 11) { setMese(0); setAnno(anno + 1); } else setMese(m); }} style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY }}>&rarr;</button>
+        <div style={{ ...fontBody, fontSize: 15, color: NAVY, fontWeight: 600, textTransform: "capitalize" }}>{MESI[mese].toLowerCase()} {anno}</div>
+        {onApriCerca && (
+          <button type="button" onClick={onApriCerca} title="Cerca corso" style={{ border: "none", background: "none", cursor: "pointer", padding: 4, display: "flex" }}>
+            <IconaRicercaErp size={18} color={NAVY} />
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 12, paddingBottom: 2 }}>
+        {pilloleMesi.map(({ m, y }) => {
+          const attivo = m === mese && y === anno;
+          return (
+            <button
+              key={`${y}-${m}`}
+              type="button"
+              onClick={() => { setMese(m); setAnno(y); }}
+              style={{
+                ...fontBody, fontSize: 12, fontWeight: 500, textTransform: "lowercase",
+                border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 999,
+                padding: "6px 12px", background: attivo ? NAVY : "transparent", color: attivo ? "#fff" : NAVY,
+                cursor: "pointer", flex: "0 0 auto",
+              }}
+            >
+              {MESI_ABBR[m].toLowerCase()}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 3, marginBottom: 3 }}>
@@ -18105,6 +18141,7 @@ export default function App() {
         <GestioneDate
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
+          onApriCerca={() => setView("cerca")}
           filtroCorsoDate={filtroCorsoDate} setFiltroCorsoDate={setFiltroCorsoDate}
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
