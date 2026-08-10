@@ -3747,8 +3747,11 @@ function paletteSettimanaNota(giorni) {
 // carta delle note): rilegatura a spirale sul bordo sinistro, margine
 // rosso, righe orizzontali, e una seconda pagina leggermente sfalsata
 // dietro per dare l'effetto di un blocco di fogli impilati. Cliccare la
-// data (non il resto della carta) apre la vista dettagliata del giorno
-function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, children }) {
+// data (non il resto della carta) apre la vista dettagliata del giorno.
+// Un "+" leggerissimo nell'angolo in basso a destra (solo sui giorni, non
+// sulla carta Note) apre subito l'inserimento di un nuovo appuntamento,
+// senza dover prima passare dalla vista dettagliata del giorno
+function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, onNuovo, children }) {
   const isMobile = useIsMobile();
   const p = palette || PALETTE_MESE_A;
   return (
@@ -3779,6 +3782,16 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, chil
         <div style={{ padding: isMobile ? "0 5px 6px 7px" : "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
           {children}
         </div>
+        {onNuovo && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onNuovo(); }}
+            title="Nuovo evento"
+            style={{
+              position: "absolute", bottom: 2, right: 4, background: "none", border: "none", cursor: "pointer",
+              color: NAVY, opacity: 0.32, fontSize: isMobile ? 15 : 18, fontWeight: 300, lineHeight: 1, padding: 6, zIndex: 2,
+            }}
+          >+</button>
+        )}
       </div>
     </div>
   );
@@ -3788,7 +3801,7 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, chil
 // carta delle note, sempre disposte su 2 righe da 4. Ogni carta calcola da
 // sé mese/colore/intestazione dalla propria data, quindi una settimana a
 // cavallo di due mesi mostra correttamente carte di entrambi i colori
-function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
+function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onClickVoce, onNuovoEvento, nota, onSalvaNota }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const [testoNota, setTestoNota] = useState(nota?.testo || "");
@@ -3813,7 +3826,7 @@ function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onC
         return (
           <CartaAgendaQuaderno
             key={ds} evidenziata={isOggi} palette={paletteMese(d.getFullYear(), d.getMonth())}
-            onClick={() => onClickGiorno(ds)}
+            onClick={() => onClickGiorno(ds)} onNuovo={() => onNuovoEvento(ds)}
             intestazione={intestazione}
           >
             {corsiDelGiorno.map((c) => (
@@ -3885,67 +3898,55 @@ function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onNuovoEvent
   const vociSenzaOrario = vociGiorno.filter((v) => !v.orario);
   return (
     <Modal title={titolo} onClose={onChiudi} maxWidth={840}>
-      <div style={{ position: "relative" }}>
-        <div style={{ display: "flex", gap: 18, flexDirection: isMobile ? "column" : "row" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {ORE_GRIGLIA_GIORNO.map((ora) => {
-              const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
-              const oraPiena = ora.endsWith(":00");
-              return (
-                // l'etichetta dell'ora sta appoggiata esattamente sulla riga
-                // (a cavallo del bordo, come in un'agenda vera), non sospesa
-                // a metà di uno spazio vuoto; le ore intere hanno una riga
-                // più marcata delle mezzore, per orientarsi scorrendo veloce.
-                // Cliccare la riga apre un nuovo appuntamento già con
-                // quell'orario precompilato
-                <div
-                  key={ora} onClick={() => onNuovoEvento(data, ora)} title={`Nuovo appuntamento alle ${ora}`}
-                  style={{ position: "relative", borderTop: oraPiena ? `1.5px solid #C9C2AE` : `1px solid ${CREAM_BORDER}`, minHeight: 30, cursor: "pointer" }}
-                >
-                  <div style={{ position: "absolute", top: 0, left: 0, transform: "translateY(-50%)", background: "#fff", paddingRight: 6, ...fontBody, fontSize: 11, fontWeight: oraPiena ? 700 : 400, color: MUTED }}>
-                    {ora}
-                  </div>
-                  <div style={{ paddingLeft: 46, paddingTop: 7, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 3 }}>
-                    {eventiSlot.map((v) => (
-                      <div key={v.id} onClick={(e) => { e.stopPropagation(); onClickVoce(v); }} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
-                        {v.titolo}
-                      </div>
-                    ))}
-                  </div>
+      <div style={{ display: "flex", gap: 18, flexDirection: isMobile ? "column" : "row" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {ORE_GRIGLIA_GIORNO.map((ora) => {
+            const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
+            const oraPiena = ora.endsWith(":00");
+            return (
+              // l'etichetta dell'ora sta appoggiata esattamente sulla riga
+              // (a cavallo del bordo, come in un'agenda vera), non sospesa
+              // a metà di uno spazio vuoto; le ore intere hanno una riga
+              // più marcata delle mezzore, per orientarsi scorrendo veloce.
+              // Cliccare la riga apre un nuovo appuntamento già con
+              // quell'orario precompilato
+              <div
+                key={ora} onClick={() => onNuovoEvento(data, ora)} title={`Nuovo appuntamento alle ${ora}`}
+                style={{ position: "relative", borderTop: oraPiena ? `1.5px solid #C9C2AE` : `1px solid ${CREAM_BORDER}`, minHeight: 30, cursor: "pointer" }}
+              >
+                <div style={{ position: "absolute", top: 0, left: 0, transform: "translateY(-50%)", background: "#fff", paddingRight: 6, ...fontBody, fontSize: 11, fontWeight: oraPiena ? 700 : 400, color: MUTED }}>
+                  {ora}
                 </div>
-              );
-            })}
-            {vociSenzaOrario.length > 0 && (
-              <div style={{ marginTop: 14 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Senza orario</div>
-                {vociSenzaOrario.map((v) => (
-                  <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", marginBottom: 4 }}>
-                    {v.titolo}
-                  </div>
-                ))}
+                <div style={{ paddingLeft: 46, paddingTop: 7, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                  {eventiSlot.map((v) => (
+                    <div key={v.id} onClick={(e) => { e.stopPropagation(); onClickVoce(v); }} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
+                      {v.titolo}
+                    </div>
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
-          <div style={{ width: isMobile ? "100%" : 190, flexShrink: 0, display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 8 }}>
-            {corsiDelGiorno.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
-            ) : corsiDelGiorno.map((c) => (
-              <div key={c.id} title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
-                🎓 {c.corsoNome}<br />{c.locNome}{c.giorniTotali > 1 && ` · ${c.indice}/${c.giorniTotali}`}
-              </div>
-            ))}
-          </div>
+            );
+          })}
+          {vociSenzaOrario.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Senza orario</div>
+              {vociSenzaOrario.map((v) => (
+                <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", marginBottom: 4 }}>
+                  {v.titolo}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        <button
-          onClick={() => onNuovoEvento(data, null)}
-          title="Nuovo evento"
-          style={{
-            position: "absolute", bottom: -8, right: -8, width: 46, height: 46, borderRadius: "50%",
-            background: NAVY, color: "#fff", border: "none", cursor: "pointer",
-            fontSize: 26, fontWeight: 900, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 6px 16px rgba(14,27,51,0.4)", zIndex: 2,
-          }}
-        >+</button>
+        <div style={{ width: isMobile ? "100%" : 190, flexShrink: 0, display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 8 }}>
+          {corsiDelGiorno.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
+          ) : corsiDelGiorno.map((c) => (
+            <div key={c.id} title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
+              🎓 {c.corsoNome}<br />{c.locNome}{c.giorniTotali > 1 && ` · ${c.indice}/${c.giorniTotali}`}
+            </div>
+          ))}
+        </div>
       </div>
     </Modal>
   );
@@ -4183,6 +4184,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
                   giorni={giorni} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
                   onClickGiorno={(ds) => setGiornoEspanso(ds)}
                   onClickVoce={(v) => setPopupVoce(v)}
+                  onNuovoEvento={(ds) => setPopupNuovo({ data: ds, orario: null })}
                   nota={noteBySettimana[chiave]}
                   onSalvaNota={salvaNotaSettimana}
                 />
@@ -15794,7 +15796,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 // specifico ma a tutto il corso — vengono mostrati e scaricati dal
 // magazzino insieme a QUALUNQUE kit/pacchetto scelto per l'edizione,
 // tramite "corso_id" su corsi_kit_prodotti (kit_id resta nullo)
-function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto }) {
+function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prodottiShop, ricarica, aperto, onChiudi }) {
   const [ricerca, setRicerca] = useState("");
   const [corsoOrigineId, setCorsoOrigineId] = useState("");
   const [copiando, setCopiando] = useState(false);
@@ -15853,7 +15855,14 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
   return (
     <div style={{ ...cardStyle, marginTop: 4, padding: 14 }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>Accessori didattica</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Accessori didattica</div>
+        {aperto && (
+          <button onClick={onChiudi} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+            Esci ✕
+          </button>
+        )}
+      </div>
 
       {aperto && (
         <div style={{ marginBottom: 10 }}>
@@ -15964,10 +15973,16 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input
             value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} placeholder="Nome pacchetto (es. BASE, PRO, VIP)"
-            style={{ ...inputStyle, flex: 1 }} onKeyDown={(e) => e.key === "Enter" && creaPacchetto()}
+            style={{ ...inputStyle, flex: 1 }} onKeyDown={(e) => e.key === "Enter" && creaPacchetto()} autoFocus
           />
           <button onClick={creaPacchetto} disabled={salvando} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: salvando ? "default" : "pointer" }}>
             {salvando ? "Creo…" : "Crea"}
+          </button>
+          <button
+            onClick={() => { setMostraNuovo(false); setNomeNuovo(""); }}
+            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}
+          >
+            Esci
           </button>
         </div>
       )}
@@ -15979,7 +15994,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
           onDragStart={iniziaTrascinamento} onDragOver={() => {}} onDrop={rilascia} trascinando={trascinatoId === k.id}
         />
       ))}
-      <SchedaAccessoriCorso corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica} aperto={mostraAccessori} />
+      <SchedaAccessoriCorso corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica} aperto={mostraAccessori} onChiudi={() => setMostraAccessori(false)} />
     </div>
   );
 }
