@@ -6050,7 +6050,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
   const [msg, setMsg] = useState("");
 
   // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
@@ -6116,7 +6116,10 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   }
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 22 }}>Gestione corsi</div>
+      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
+      <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
+        <Button variant="ghost" onClick={onApriUltimeIscrizioni}>Ultime iscrizioni</Button>
+      </div>
 
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
@@ -18284,6 +18287,7 @@ export default function App() {
         <GestioneDate
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
+          onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
           filtroCorsoDate={filtroCorsoDate} setFiltroCorsoDate={setFiltroCorsoDate}
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
