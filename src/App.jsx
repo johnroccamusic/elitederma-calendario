@@ -473,6 +473,71 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+// icone dei tasti dell'hub "ERP / Magazzino"
+function IconaTileCostiRicavi({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2.5h9l3 3V21a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1Z" />
+      <path d="M7.8 8h6.4M7.8 11.3h4" />
+      <circle cx="16.3" cy="16.8" r="3.5" fill="#fff" stroke={GOLD} />
+      <path d="M18 15.3a2 2 0 1 0 0 3M15.5 16.3h2.3M15.5 17.5h2.3" stroke={GOLD} strokeWidth="1.2" />
+    </svg>
+  );
+}
+function IconaTileCatalogo({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3.3" y="3.3" width="7.4" height="7.4" rx="1.5" />
+      <rect x="13.3" y="3.3" width="7.4" height="7.4" rx="1.5" />
+      <rect x="3.3" y="13.3" width="7.4" height="7.4" rx="1.5" />
+      <rect x="13.3" y="13.3" width="7.4" height="7.4" rx="1.5" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileGestioneMagazzino({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 11.5L12 4l8.5 7.5" />
+      <path d="M5.2 10v10.5h13.6V10" />
+      <rect x="8.4" y="14.6" width="3.2" height="3.2" rx="0.5" />
+      <rect x="12.5" y="15.7" width="3.2" height="3.2" rx="0.5" stroke={GOLD} />
+      <rect x="12.5" y="11.6" width="3.2" height="3.2" rx="0.5" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileGestioneShop({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.3 3.5h2l1.2 10.7A1.7 1.7 0 0 0 7.2 15.7h6.6a1.7 1.7 0 0 0 1.7-1.5L16.3 7H5" />
+      <circle cx="7.6" cy="18.8" r="1.2" />
+      <circle cx="13.4" cy="18.8" r="1.2" />
+      <circle cx="17.6" cy="13.3" r="3.4" stroke={GOLD} />
+      <path d="M14.2 13.3h6.8M17.6 9.9v6.8" stroke={GOLD} strokeWidth="1" />
+      <path d="M15.8 10.7a4.6 4.6 0 0 0 0 5.2M19.4 10.7a4.6 4.6 0 0 1 0 5.2" stroke={GOLD} strokeWidth="1" />
+    </svg>
+  );
+}
+function IconaTileVenditeShop({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8h12l-1 12.3a1.5 1.5 0 0 1-1.5 1.4H8.5A1.5 1.5 0 0 1 7 20.3L6 8Z" />
+      <path d="M9 8V6.3a3 3 0 0 1 6 0V8" />
+      <path d="M8.3 16.3l3-3 2 2 3.7-3.7" stroke={GOLD} />
+      <path d="M13.8 11.6h3.2v3.2" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileDashboardAnalisi({ size = 44, color = NAVY }) {
+  const torta = spicchioTorta(9.3, 12.3, 2.6, -25, 270);
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.3" y="4" width="19.4" height="13.4" rx="1.7" />
+      <path d="M8.7 20.5h6.6M12 17.4v3.1" />
+      <path d={torta} stroke={GOLD} />
+      <path d="M14.8 14.7v-3.4M17 14.7V8.4" stroke={GOLD} />
+    </svg>
+  );
+}
 // profilo "a fiore" di un ingranaggio: il raggio oscilla in modo
 // sinusoidale attorno alla circonferenza (N volte per giro), invece di
 // denti rettangolari piazzati a mano — così i denti sono arrotondati e
@@ -13171,14 +13236,14 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>ERP / Magazzino</div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Gestisci costi, prodotti, scorte e vendite del magazzino.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
-          <TileHome title="Inserimento costi e ricavi" onClick={onApriInserimentoCostiRicavi} />
-          <TileHome title="Catalogo categorie" onClick={onApriCatalogoCategorieCosti} />
-          <TileHome title="Gestione magazzino" onClick={onApriMagazzino} />
-          <TileHome title="Gestione shop" onClick={onApriGestioneShop} />
-          <TileHome title="Vendite shop" onClick={onApriVenditeShop} />
-          <TileHome title="Dashboard analisi" onClick={onApriDashboardAnalisi} />
+          <TileHome title="Inserimento costi e ricavi" descrizione="Registra e gestisci costi, ricavi e altri movimenti contabili." Icona={IconaTileCostiRicavi} onClick={onApriInserimentoCostiRicavi} />
+          <TileHome title="Catalogo categorie" descrizione="Organizza e gestisci le categorie dei prodotti e dei costi." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
+          <TileHome title="Gestione magazzino" descrizione="Controlla giacenze, movimenti e disponibilità dei prodotti." Icona={IconaTileGestioneMagazzino} onClick={onApriMagazzino} />
+          <TileHome title="Gestione shop" descrizione="Gestisci prodotti, ordini, clienti e impostazioni dello shop." Icona={IconaTileGestioneShop} onClick={onApriGestioneShop} />
+          <TileHome title="Vendite shop" descrizione="Monitora le vendite, ordini e performance dello shop." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
+          <TileHome title="Dashboard analisi" descrizione="Analizza performance, trend e KPI del magazzino." Icona={IconaTileDashboardAnalisi} onClick={onApriDashboardAnalisi} />
         </div>
       </div>
     </div>
