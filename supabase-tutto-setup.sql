@@ -1688,4 +1688,9 @@ alter table public.acconti_da_verificare enable row level security;
 drop policy if exists "acconti_da_verificare_all" on public.acconti_da_verificare;
 create policy "acconti_da_verificare_all" on public.acconti_da_verificare for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 51) Verifica acconti: ricevuta del bonifico allegabile dal venditore.
+-- ---------------------------------------------------------
+alter table public.acconti_da_verificare add column if not exists file_path text;
+
 notify pgrst, 'reload schema';

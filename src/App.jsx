@@ -2333,6 +2333,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 <th style={thStyle}>Allievo</th>
                 <th style={thStyle}>Venditore</th>
                 <th style={thStyle}>Tipo</th>
+                <th style={thStyle}>Metodo</th>
                 <th style={{ ...thStyle, borderRight: "none" }}>Importo</th>
               </tr>
             </thead>
@@ -2343,6 +2344,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 const corso = cd ? corsoById[cd.corso_id] : null;
                 const loc = cd ? locById[cd.location_id] : null;
                 const cliccabile = tab === "attesa" && iscritto && onApriIscritto;
+                const eBonifico = a.metodo === "Bonifico";
                 return (
                   <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
                     <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
@@ -2351,6 +2353,20 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                     <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>{iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}</td>
                     <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
                     <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{ETICHETTA_TIPO_ACCONTO[a.tipo] || a.tipo}</td>
+                    <td style={{ ...celStyle, whiteSpace: "nowrap" }}>
+                      {eBonifico ? (
+                        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 20, padding: "3px 10px", display: "inline-block" }}>
+                          Bonifico da verificare
+                        </span>
+                      ) : (
+                        <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{a.metodo}</span>
+                      )}
+                      {a.file_path && (
+                        <span onClick={(e) => e.stopPropagation()} style={{ marginLeft: 8 }}>
+                          <AllegatoLink percorso={a.file_path} etichetta="ricevuta" />
+                        </span>
+                      )}
+                    </td>
                     <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap", borderRight: "none" }}>{fmtEuroErp(a.importo)}</td>
                   </tr>
                 );
@@ -10277,6 +10293,7 @@ function BloccoAggiuntaPagamentoVenditore({ iscrittoId, venditoreNome, ricarica 
   const [tipoAperto, setTipoAperto] = useState(null); // "acconto" | "precorso" | null
   const [importo, setImporto] = useState("");
   const [metodo, setMetodo] = useState("");
+  const [fileBonifico, setFileBonifico] = useState(null);
   const [inviando, setInviando] = useState(false);
   const [inviato, setInviato] = useState(null); // "acconto" | "precorso" | null
 
@@ -10285,13 +10302,20 @@ function BloccoAggiuntaPagamentoVenditore({ iscrittoId, venditoreNome, ricarica 
     : ["Sito", "Bonifico", "Pos", "Contanti", "Rate"];
 
   function apri(tipo) {
-    setTipoAperto(tipo); setImporto(""); setMetodo(""); setInviato(null);
+    setTipoAperto(tipo); setImporto(""); setMetodo(""); setFileBonifico(null); setInviato(null);
   }
   async function conferma() {
     if (!importo.trim() || !metodo) return;
     setInviando(true);
+    let filePath = null;
+    if (metodo === "Bonifico" && fileBonifico) {
+      const percorso = `acconti/${iscrittoId}-${Date.now()}-${fileBonifico.name}`;
+      const { error: erroreUpload } = await supabase.storage.from("allegati-iscritti").upload(percorso, fileBonifico);
+      if (erroreUpload) { setInviando(false); window.alert("Errore nel caricamento della ricevuta: " + erroreUpload.message); return; }
+      filePath = percorso;
+    }
     const { error } = await supabase.from("acconti_da_verificare").insert({
-      iscritto_id: iscrittoId, tipo: tipoAperto, importo: parseNum(importo), metodo, venditore_nome: venditoreNome,
+      iscritto_id: iscrittoId, tipo: tipoAperto, importo: parseNum(importo), metodo, venditore_nome: venditoreNome, file_path: filePath,
     });
     setInviando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -10316,13 +10340,18 @@ function BloccoAggiuntaPagamentoVenditore({ iscrittoId, venditoreNome, ricarica 
           </div>
           <div style={{ flex: 1 }}>
             <Field label="Metodo">
-              <select style={inputStyle} value={metodo} onChange={(e) => setMetodo(e.target.value)}>
+              <select style={inputStyle} value={metodo} onChange={(e) => { setMetodo(e.target.value); setFileBonifico(null); }}>
                 <option value="">— scegli —</option>
                 {opzioniMetodo.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </Field>
           </div>
         </div>
+        {metodo === "Bonifico" && (
+          <Field label="Ricevuta del bonifico">
+            <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFileBonifico(e.target.files?.[0] || null)} />
+          </Field>
+        )}
         <div style={{ display: "flex", gap: 8 }}>
           <Button onClick={conferma} disabled={inviando || !importo.trim() || !metodo}>{inviando ? "Invio…" : "Conferma"}</Button>
           <Button variant="ghost" onClick={() => setTipoAperto(null)}>Annulla</Button>
