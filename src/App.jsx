@@ -453,6 +453,21 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+// ingranaggio simmetrico (8 denti identici a intervalli di 45°, generati
+// per rotazione invece che disegnati a mano): l'icona a linea riusata
+// dall'ERP, pensata per 20px, ingrandita nel tasto della Home mostrava
+// denti storti e disuguali
+function IconaTileImpostazioni({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="6" />
+      <circle cx="12" cy="12" r="2.1" fill={GOLD} stroke="none" />
+      {[0, 45, 90, 135, 180, 225, 270, 315].map((angolo) => (
+        <rect key={angolo} x="11.15" y="1.5" width="1.7" height="3.1" rx="0.7" transform={`rotate(${angolo} 12 12)`} fill={color} stroke="none" />
+      ))}
+    </svg>
+  );
+}
 // icone della pagina "ERP" (testata + card KPI)
 function IconaRicercaErp({ size = 18, color = "currentColor" }) {
   return (
@@ -18589,7 +18604,7 @@ export default function App() {
             <TileHome title="Assegna logo" descrizione="Personalizza loghi, watermark e materiali ufficiali" Icona={IconaLoghiCard} attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
             <TileHome title="Gestione modelle" descrizione="Organizza modelle, disponibilità e assegnazioni" Icona={IconaTileModelle} attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
             <TileHome title="Statistiche" descrizione="Analisi, report e KPI della tua Academy" Icona={IconaTileStatistiche} attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
-            <TileHome title="Impostazioni" descrizione="Configura preferenze, utenti e permessi" Icona={IconaIngranaggioErp} attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
+            <TileHome title="Impostazioni" descrizione="Configura preferenze, utenti e permessi" Icona={IconaTileImpostazioni} attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
             <TileProgettiInCorso />
           </div>
         </div>
