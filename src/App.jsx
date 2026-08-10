@@ -4155,15 +4155,6 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
         {!agendaAperta ? (
           <>
             {isProgrammatore && <div style={{ marginBottom: 18 }}><BottoneNuovaAgenda ricarica={ricarica} /></div>}
-            {!isStaff && agendeVisibili.length !== 1 && (
-              // diagnostica temporanea: un utente nominale dovrebbe avere
-              // esattamente un'agenda tra i permessi (ne entrerebbe subito
-              // dentro), quindi se qui ne compaiono 0 o 2+ i dati grezzi
-              // aiutano a capire perché senza dover indovinare
-              <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", background: "#FBEAE4", border: "1px solid #E4A79B", borderRadius: 8, padding: 10, marginBottom: 14 }}>
-                Diagnostica: utente "{utenteLoggato?.nome}" (id {utenteLoggato?.id || "—"}) · permessi grezzi: {JSON.stringify(utenteLoggato?.permessi || [])} · agenda_id estratti: {JSON.stringify(mieId)} · agende nel sistema: {JSON.stringify(agende.map((a) => ({ id: a.id, nome: a.nome })))}
-              </div>
-            )}
             {agendeVisibili.length === 0 ? (
               <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna agenda assegnata.</div>
             ) : (
@@ -5204,6 +5195,11 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
   if (isMobile) {
     return (
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+        {sistema && (
+          <div title="Riga di sistema: anche rinominata, resta l'identità Utente generico/Amministratore/Programmatore con i suoi permessi pieni — per un nuovo utente usa piuttosto '+ Genera nuovo utente'" style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 6, padding: "2px 8px", display: "inline-block", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            Sistema
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, flex: 1, fontWeight: 700 }} />
         </div>
@@ -5241,6 +5237,11 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     <tr>
       <td style={tdStyle}>
         <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 13, fontWeight: 700 }} />
+        {sistema && (
+          <div title="Riga di sistema: anche rinominata, resta l'identità Utente generico/Amministratore/Programmatore con i suoi permessi pieni — per un nuovo utente usa piuttosto '+ Genera nuovo utente'" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF0D6", border: "1px solid #E9D9A0", borderRadius: 6, padding: "1px 6px", display: "inline-block", marginTop: 4, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            Sistema
+          </div>
+        )}
       </td>
       <td style={tdStyle}>
         <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
