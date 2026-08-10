@@ -3728,20 +3728,14 @@ const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
 const PALETTE_MESE_A = { sfondo: "#FFFDF7", sfondoOggi: "#FBF3E4", riga: "#E9E3D4", retro: "#EDE6D6" };
 const PALETTE_MESE_B = { sfondo: "#EEF6FB", sfondoOggi: "#FBF3E4", riga: "#D8E8F0", retro: "#DCEAF1" };
 function paletteMese(anno, mese) { return (anno * 12 + mese) % 2 === 0 ? PALETTE_MESE_A : PALETTE_MESE_B; }
-// colore dell'ottava carta (le note) di una settimana: quello del mese a
-// cui appartiene la maggior parte dei suoi 7 giorni, non sempre quello del
-// lunedì — altrimenti una settimana quasi tutta di settembre con solo il
-// lunedì di agosto mostrerebbe le note col colore "sbagliato"
+// colore dell'ottava carta (le note): quello della domenica, l'ultimo
+// giorno della settimana — è la carta a cui sta visivamente accanto nella
+// griglia, quindi deve combaciare con quella, non con un calcolo astratto
+// di "mese prevalente" che in una settimana a cavallo di due mesi può
+// finire scollegato dal colore del giorno appena precedente
 function paletteSettimanaNota(giorni) {
-  const conteggio = {};
-  for (const d of giorni) {
-    const chiave = `${d.getFullYear()}-${d.getMonth()}`;
-    conteggio[chiave] = (conteggio[chiave] || 0) + 1;
-  }
-  let chiaveMigliore = null, max = -1;
-  for (const [chiave, n] of Object.entries(conteggio)) if (n > max) { max = n; chiaveMigliore = chiave; }
-  const [anno, mese] = chiaveMigliore.split("-").map(Number);
-  return paletteMese(anno, mese);
+  const domenica = giorni[giorni.length - 1];
+  return paletteMese(domenica.getFullYear(), domenica.getMonth());
 }
 // una "pagina" del taccuino (un giorno con i suoi appuntamenti, o l'ottava
 // carta delle note): rilegatura a spirale sul bordo sinistro, margine
@@ -3787,8 +3781,10 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, onNu
             onClick={(e) => { e.stopPropagation(); onNuovo(); }}
             title="Nuovo evento"
             style={{
-              position: "absolute", bottom: 2, right: 4, background: "none", border: "none", cursor: "pointer",
-              color: NAVY, opacity: 0.32, fontSize: isMobile ? 15 : 18, fontWeight: 300, lineHeight: 1, padding: 6, zIndex: 2,
+              position: "absolute", bottom: 6, right: 6, width: isMobile ? 26 : 30, height: isMobile ? 26 : 30,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(14,27,51,0.09)", border: "none", borderRadius: "50%", cursor: "pointer",
+              color: NAVY, fontSize: isMobile ? 17 : 19, fontWeight: 700, lineHeight: 1, zIndex: 2,
             }}
           >+</button>
         )}
@@ -4040,23 +4036,25 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const refPerSettimana = useRef({});
-  function vaiASettimanaDi(trova) {
+  function vaiASettimanaDi(trova, comportamento = "smooth") {
     const sett = settimane.find(trova);
-    if (sett) refPerSettimana.current[fmtDataIso(sett[0])]?.scrollIntoView({ block: "start", behavior: "smooth" });
+    if (sett) refPerSettimana.current[fmtDataIso(sett[0])]?.scrollIntoView({ block: "start", behavior: comportamento });
   }
   function vaiAMese(anno, mese) {
     vaiASettimanaDi((giorni) => giorni.some((d) => d.getFullYear() === anno && d.getMonth() === mese));
   }
-  function vaiAOggi() {
-    vaiASettimanaDi((giorni) => giorni.some((d) => fmtDataIso(d) === oggiStr));
+  function vaiAOggi(comportamento) {
+    vaiASettimanaDi((giorni) => giorni.some((d) => fmtDataIso(d) === oggiStr), comportamento);
   }
   useEffect(() => {
     if (!agendaAperta) return;
     // due frame di ritardo: assicura che la griglia (alta, con tutte le
     // settimane già montate) abbia finito il layout prima di scrollare,
     // altrimenti su dispositivi più lenti lo scroll può atterrare nel
-    // posto sbagliato mentre il contenuto sta ancora assestandosi
-    requestAnimationFrame(() => requestAnimationFrame(() => { vaiAOggi(); }));
+    // posto sbagliato mentre il contenuto sta ancora assestandosi.
+    // Niente scroll animato qui: aprendo l'agenda deve comparire subito
+    // sulla settimana di oggi, non scorrere in vista partendo dall'alto
+    requestAnimationFrame(() => requestAnimationFrame(() => { vaiAOggi("auto"); }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendaAperta?.id]);
 
