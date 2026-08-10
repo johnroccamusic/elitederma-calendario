@@ -11490,7 +11490,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
   // riga "etichetta / importo / metodo" della sezione Pagamenti: da
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px 160px" }}>
       {msgErrore && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 2000 }}>
           <div style={{ ...cardStyle, maxWidth: 360, width: "100%", marginBottom: 0, textAlign: "center" }}>
