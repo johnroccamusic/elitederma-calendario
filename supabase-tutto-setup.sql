@@ -1708,4 +1708,15 @@ alter table public.acconti_da_verificare alter column importo drop not null;
 alter table public.acconti_da_verificare alter column metodo drop not null;
 alter table public.acconti_da_verificare add column if not exists origine text not null default 'manuale' check (origine in ('manuale','bonifico_modulo'));
 
+-- ---------------------------------------------------------
+-- 53) Verifica pagamenti: quando nel modulo di iscrizione si sceglie
+-- Bonifico come metodo di una quota, il file è obbligatorio e resta
+-- anche sull'iscritto stesso oltre che in Verifica Pagamenti. Gli
+-- acconti/pre corso aggiuntivi usano una chiave "bonifico_file" dentro
+-- ogni riga jsonb, senza bisogno di colonne aggiuntive.
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists acconto_bonifico_file text;
+alter table public.iscritti add column if not exists precorso_bonifico_file text;
+alter table public.iscritti add column if not exists saldo_bonifico_file text;
+
 notify pgrst, 'reload schema';

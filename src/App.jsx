@@ -1412,7 +1412,7 @@ function SemaforoPagamento({ pagato, onClick }) {
     </button>
   );
 }
-function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi }) {
+function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
@@ -1496,6 +1496,24 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
               )}
             </Field>
           </div>
+        </div>
+      )}
+      {onMetodo && valori.metodo === "Bonifico" && (
+        <div style={{ marginTop: 10 }}>
+          <Field label="File del bonifico (obbligatorio)">
+            {valori.bonificoFilePath && !valori.bonificoFileNuovo ? (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+                Caricato: <AllegatoLink percorso={valori.bonificoFilePath} etichetta="apri il file" />
+              </div>
+            ) : !soloLettura ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
+                {valori.bonificoFileNuovo && <BadgeFileCaricato />}
+              </div>
+            ) : (
+              <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B" }}>Nessun file caricato.</div>
+            )}
+          </Field>
         </div>
       )}
     </div>
@@ -10445,8 +10463,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
   // momento in cui viene salvata nel database, non la data del corso)
   const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
-  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "" };
-  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false };
+  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null };
+  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
   // pagamenti aggiuntivi di acconto oltre al primo (pulsante "+"): stesso
@@ -10998,6 +11016,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       totale: i.acconto_totale != null ? String(i.acconto_totale) : "",
       metodo: i.acconto_metodo || "",
       interessi: i.acconto_interessi != null ? String(i.acconto_interessi) : "",
+      bonificoFilePath: i.acconto_bonifico_file || null,
+      bonificoFileNuovo: null,
     });
     setPagAccontoPagato(i.acconto_pagato === true);
     setAccontoExtra(Array.isArray(i.acconto_extra) ? i.acconto_extra.map((r) => ({
@@ -11006,12 +11026,16 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       metodo: r.metodo || "",
       interessi: r.interessi != null ? String(r.interessi) : "",
       pagato: !!r.pagato,
+      bonificoFilePath: r.bonifico_file || null,
+      bonificoFileNuovo: null,
     })) : []);
     setPagPrecorso({
       imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
       totale: i.precorso_totale != null ? String(i.precorso_totale) : "",
       metodo: i.precorso_metodo || "",
       interessi: i.precorso_interessi != null ? String(i.precorso_interessi) : "",
+      bonificoFilePath: i.precorso_bonifico_file || null,
+      bonificoFileNuovo: null,
     });
     setPagPrecorsoPagato(i.precorso_pagato === true);
     setPrecorsoExtra(Array.isArray(i.precorso_extra) ? i.precorso_extra.map((r) => ({
@@ -11020,11 +11044,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       metodo: r.metodo || "",
       interessi: r.interessi != null ? String(r.interessi) : "",
       pagato: !!r.pagato,
+      bonificoFilePath: r.bonifico_file || null,
+      bonificoFileNuovo: null,
     })) : []);
     setPagSaldo({
       imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
       totale: i.saldo_totale != null ? String(i.saldo_totale) : "",
       metodo: i.saldo_metodo || "",
+      bonificoFilePath: i.saldo_bonifico_file || null,
+      bonificoFileNuovo: null,
     });
     setAccordiCommerciali(i.accordi_commerciali || "");
     setRichiedeFattura(i.richiede_fattura === true);
@@ -11077,6 +11105,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     precorsoExtra.forEach((r, idx) => { if (r.totale !== "" && parseNum(r.totale) !== 0 && !r.metodo) metodiMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
     if (pagSaldo.totale !== "" && parseNum(pagSaldo.totale) !== 0 && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
 
+    // scegliendo Bonifico come metodo di una quota è sempre obbligatorio
+    // allegare il file del bonifico: finisce in automatico nella coda
+    // "Verifica Pagamenti" di Elena, etichettato "Verifica bonifico"
+    const fileBonificoMancanti = [];
+    const serveFileBonifico = (q) => q.metodo === "Bonifico" && !q.bonificoFilePath && !q.bonificoFileNuovo;
+    if (serveFileBonifico(pagAcconto)) fileBonificoMancanti.push("quota acconto");
+    accontoExtra.forEach((r, idx) => { if (serveFileBonifico(r)) fileBonificoMancanti.push(`acconto aggiuntivo ${idx + 1}`); });
+    if (serveFileBonifico(pagPrecorso)) fileBonificoMancanti.push("quota pre corso");
+    precorsoExtra.forEach((r, idx) => { if (serveFileBonifico(r)) fileBonificoMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
+    if (serveFileBonifico(pagSaldo)) fileBonificoMancanti.push("da avere al corso");
+
     const altriMancanti = [];
     if (strict) {
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
@@ -11087,9 +11126,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       if (!tagliaDivisa) altriMancanti.push("taglia divisa");
     }
 
-    if (metodiMancanti.length > 0 || altriMancanti.length > 0) {
+    if (metodiMancanti.length > 0 || fileBonificoMancanti.length > 0 || altriMancanti.length > 0) {
       const parti = [];
       if (metodiMancanti.length > 0) parti.push(`manca metodo di pagamento ${metodiMancanti.join(", oppure ")}`);
+      if (fileBonificoMancanti.length > 0) parti.push(`manca il file del bonifico per ${fileBonificoMancanti.join(", ")}`);
       altriMancanti.forEach((campo) => parti.push(`manca ${campo}`));
       setMsg("Impossibile salvare: " + parti.join(". ") + ".");
       return false;
@@ -11098,10 +11138,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setCaricando(true);
     try {
       const originale = modificandoId ? iscritti.find((x) => x.id === modificandoId) : null;
-      const [pathIscrizione, pathAcconto, pathRecap] = await Promise.all([
+      const [pathIscrizione, pathAcconto, pathRecap, pathBonificoAcconto, pathBonificoPrecorso, pathBonificoSaldo, pathsBonificoAccontoExtra, pathsBonificoPrecorsoExtra] = await Promise.all([
         fileIscrizione ? caricaAllegato(fileIscrizione, "modulo") : Promise.resolve(originale?.file_iscrizione ?? null),
         fileScreenAcconto ? caricaAllegato(fileScreenAcconto, "acconto") : Promise.resolve(originale?.file_screen_acconto ?? null),
         fileScreenRecap ? caricaAllegato(fileScreenRecap, "recap") : Promise.resolve(originale?.file_screen_recap ?? null),
+        pagAcconto.bonificoFileNuovo ? caricaAllegato(pagAcconto.bonificoFileNuovo, "bonifico-acconto") : Promise.resolve(pagAcconto.bonificoFilePath || null),
+        pagPrecorso.bonificoFileNuovo ? caricaAllegato(pagPrecorso.bonificoFileNuovo, "bonifico-precorso") : Promise.resolve(pagPrecorso.bonificoFilePath || null),
+        pagSaldo.bonificoFileNuovo ? caricaAllegato(pagSaldo.bonificoFileNuovo, "bonifico-saldo") : Promise.resolve(pagSaldo.bonificoFilePath || null),
+        Promise.all(accontoExtra.map((r, idx) => (r.bonificoFileNuovo ? caricaAllegato(r.bonificoFileNuovo, `bonifico-accontoextra-${idx}`) : Promise.resolve(r.bonificoFilePath || null)))),
+        Promise.all(precorsoExtra.map((r, idx) => (r.bonificoFileNuovo ? caricaAllegato(r.bonificoFileNuovo, `bonifico-precorsoextra-${idx}`) : Promise.resolve(r.bonificoFilePath || null)))),
       ]);
       const payload = {
         nome: nome.trim(),
@@ -11115,28 +11160,33 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         acconto_metodo: pagAcconto.metodo || null,
         acconto_interessi: pagAcconto.metodo === "Rate" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
         acconto_pagato: pagAccontoPagato,
-        acconto_extra: accontoExtra.map((r) => ({
+        acconto_bonifico_file: pathBonificoAcconto,
+        acconto_extra: accontoExtra.map((r, idx) => ({
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
           metodo: r.metodo || null,
           interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
+          bonifico_file: pathsBonificoAccontoExtra[idx],
         })),
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
         precorso_metodo: pagPrecorso.metodo || null,
         precorso_interessi: pagPrecorso.metodo === "Rate" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
         precorso_pagato: pagPrecorsoPagato,
-        precorso_extra: precorsoExtra.map((r) => ({
+        precorso_bonifico_file: pathBonificoPrecorso,
+        precorso_extra: precorsoExtra.map((r, idx) => ({
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
           metodo: r.metodo || null,
           interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
+          bonifico_file: pathsBonificoPrecorsoExtra[idx],
         })),
         saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
         saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
         saldo_metodo: pagSaldo.metodo || null,
+        saldo_bonifico_file: pathBonificoSaldo,
         accordi_commerciali: accordiCommerciali.trim() || null,
         richiede_fattura: richiedeFattura,
         fattura_ditta: richiedeFattura ? (fatturaDitta.trim() || null) : null,
@@ -11174,7 +11224,31 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         nuovoId = ins.data?.id;
       }
       if (error) { setMsg("Errore: " + error.message); return false; }
+      const idIscritto = modificandoId || nuovoId;
       if (nuovoId) setModificandoId(nuovoId); // da qui in poi i campi successivi si autosalvano sullo stesso iscritto
+
+      // ogni file di bonifico appena caricato (non presente prima) finisce
+      // in automatico nella coda "Verifica Pagamenti", etichettato "Verifica
+      // bonifico": lo stato locale viene aggiornato subito dopo, altrimenti
+      // il prossimo autosalvataggio (onBlur) lo segnalerebbe di nuovo
+      const daSegnalare = [];
+      if (pagAcconto.bonificoFileNuovo) daSegnalare.push({ path: pathBonificoAcconto, nota: "Bonifico — Quota acconto" });
+      if (pagPrecorso.bonificoFileNuovo) daSegnalare.push({ path: pathBonificoPrecorso, nota: "Bonifico — Quota pre corso" });
+      if (pagSaldo.bonificoFileNuovo) daSegnalare.push({ path: pathBonificoSaldo, nota: "Bonifico — Da avere al corso" });
+      accontoExtra.forEach((r, idx) => { if (r.bonificoFileNuovo) daSegnalare.push({ path: pathsBonificoAccontoExtra[idx], nota: `Bonifico — Acconto aggiuntivo ${idx + 1}` }); });
+      precorsoExtra.forEach((r, idx) => { if (r.bonificoFileNuovo) daSegnalare.push({ path: pathsBonificoPrecorsoExtra[idx], nota: `Bonifico — Pre corso aggiuntivo ${idx + 1}` }); });
+      if (daSegnalare.length > 0 && idIscritto) {
+        const { error: erroreCoda } = await supabase.from("acconti_da_verificare").insert(
+          daSegnalare.map((d) => ({ iscritto_id: idIscritto, nota: d.nota, file_path: d.path, venditore_nome: tutor.trim() || null, origine: "bonifico_modulo" }))
+        );
+        if (erroreCoda) setMsg("Iscritto salvato, ma la segnalazione del bonifico a Elena non è riuscita: " + erroreCoda.message);
+      }
+      setPagAcconto((prev) => ({ ...prev, bonificoFilePath: pathBonificoAcconto, bonificoFileNuovo: null }));
+      setPagPrecorso((prev) => ({ ...prev, bonificoFilePath: pathBonificoPrecorso, bonificoFileNuovo: null }));
+      setPagSaldo((prev) => ({ ...prev, bonificoFilePath: pathBonificoSaldo, bonificoFileNuovo: null }));
+      setAccontoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoAccontoExtra[idx], bonificoFileNuovo: null })));
+      setPrecorsoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoPrecorsoExtra[idx], bonificoFileNuovo: null })));
+
       ricarica();
       return true;
     } catch (e) {
@@ -11955,6 +12029,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             }
             pagato={pagAccontoPagato}
             onPagato={setPagAccontoPagato}
+            onBonificoFile={(f) => setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f }))}
           />
           {accontoExtra.map((riga, idx) => (
             <BloccoQuota
@@ -11970,6 +12045,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               pagato={riga.pagato}
               onPagato={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
               onRimuovi={() => setAccontoExtra((prev) => prev.filter((_, i) => i !== idx))}
+              onBonificoFile={(f) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
             />
           ))}
           <button
@@ -11990,6 +12066,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
             pagato={pagPrecorsoPagato}
             onPagato={setPagPrecorsoPagato}
+            onBonificoFile={(f) => setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f }))}
           />
           {precorsoExtra.map((riga, idx) => (
             <BloccoQuota
@@ -12004,6 +12081,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               pagato={riga.pagato}
               onPagato={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
               onRimuovi={() => setPrecorsoExtra((prev) => prev.filter((_, i) => i !== idx))}
+              onBonificoFile={(f) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
             />
           ))}
           <button
@@ -12027,6 +12105,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 return { ...prev, metodo: v, totale };
               })
             }
+            onBonificoFile={(f) => setPagSaldo((prev) => ({ ...prev, bonificoFileNuovo: f }))}
           />
           {(() => {
             // l'iva di una quota è "totale - imponibile", ma quando
