@@ -3659,72 +3659,92 @@ function BottoneNuovaAgenda({ ricarica }) {
 // PopupNuovaData nel Calendario corsi)
 function PopupNuovaVoceAgenda({ dataClic, onSalva, onChiudi }) {
   const [titolo, setTitolo] = useState("");
+  const [orario, setOrario] = useState("");
   const [nota, setNota] = useState("");
   return (
-    <Modal title={`Nuovo appuntamento — ${fmtData(dataClic)}`} onClose={onChiudi}>
-      <Field label="Titolo">
-        <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} autoFocus />
-      </Field>
+    <Modal title={`Nuovo evento — ${fmtData(dataClic)}`} onClose={onChiudi}>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 2 }}>
+          <Field label="Nome">
+            <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} autoFocus />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Orario">
+            <input type="time" style={inputStyle} value={orario} onChange={(e) => setOrario(e.target.value)} />
+          </Field>
+        </div>
+      </div>
       <Field label="Nota (facoltativa)">
         <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={nota} onChange={(e) => setNota(e.target.value)} />
       </Field>
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), nota: nota.trim() || null })}>Salva</Button>
+        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), orario: orario || null, nota: nota.trim() || null })}>Salva</Button>
         <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
       </div>
     </Modal>
   );
 }
-// popup di un appuntamento esistente (click sulla sua etichetta nel
+// popup di un evento esistente (click sulla sua etichetta nel
 // calendario): modificabile o eliminabile
 function PopupVoceAgenda({ voce, onSalva, onElimina, onChiudi }) {
   const [titolo, setTitolo] = useState(voce.titolo);
+  const [orario, setOrario] = useState(voce.orario ? voce.orario.slice(0, 5) : "");
   const [nota, setNota] = useState(voce.nota || "");
   return (
     <Modal title={fmtData(voce.data)} onClose={onChiudi}>
-      <Field label="Titolo">
-        <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} />
-      </Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 2 }}>
+          <Field label="Nome">
+            <input style={inputStyle} value={titolo} onChange={(e) => setTitolo(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Orario">
+            <input type="time" style={inputStyle} value={orario} onChange={(e) => setOrario(e.target.value)} />
+          </Field>
+        </div>
+      </div>
       <Field label="Nota (facoltativa)">
         <textarea style={{ ...inputStyle, minHeight: 70, resize: "vertical" }} value={nota} onChange={(e) => setNota(e.target.value)} />
       </Field>
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), nota: nota.trim() || null })}>Salva</Button>
+        <Button disabled={!titolo.trim()} onClick={() => onSalva({ titolo: titolo.trim(), orario: orario || null, nota: nota.trim() || null })}>Salva</Button>
         <Button variant="danger" onClick={onElimina}>Elimina</Button>
         <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
       </div>
     </Modal>
   );
 }
-// colore stabile (derivato dall'id) per l'etichetta di un appuntamento
-// nel calendario: la stessa voce ha sempre lo stesso colore, anche dopo
-// un refresh, senza bisogno di salvare un colore scelto a mano
-const COLORI_VOCE_AGENDA = ["#DCE8FB", "#FBEAE4", "#E8F3EA", "#F5E6FB", "#FBF3E0"];
-function coloreVoceAgenda(id) {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return COLORI_VOCE_AGENDA[h % COLORI_VOCE_AGENDA.length];
-}
 // una singola "pagina" di taccuino: quella di un giorno (con gli
 // appuntamenti) o quella note della settimana (ottava carta della riga)
 // carattere per le intestazioni delle carte: serif, diverso di proposito
 // dal resto dell'app (Prompt/Roboto) per dare l'aria di un vero taccuino
 const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
+// tavolozza alternata per mese: un mese la carta ha i toni caldi di
+// sempre, il successivo un celeste chiaro "carta da zucchero" — così,
+// senza più un titolo/divisore di mese, resta comunque visibile a colpo
+// d'occhio dove finisce un mese e comincia il prossimo
+const PALETTE_MESE_A = { sfondo: "#FFFDF7", sfondoOggi: "#FBF3E4", riga: "#E9E3D4", retro: "#EDE6D6" };
+const PALETTE_MESE_B = { sfondo: "#EEF6FB", sfondoOggi: "#FBF3E4", riga: "#D8E8F0", retro: "#DCEAF1" };
+function paletteMese(anno, mese) { return (anno * 12 + mese) % 2 === 0 ? PALETTE_MESE_A : PALETTE_MESE_B; }
 // una "pagina" del taccuino (un giorno con i suoi appuntamenti, o l'ottava
 // carta delle note): rilegatura a spirale sul bordo sinistro, margine
 // rosso, righe orizzontali, e una seconda pagina leggermente sfalsata
-// dietro per dare l'effetto di un blocco di fogli impilati
-function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
+// dietro per dare l'effetto di un blocco di fogli impilati. Cliccare la
+// data (non il resto della carta) apre la vista dettagliata del giorno
+function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClickCorpo, onClickData, children }) {
   const isMobile = useIsMobile();
+  const p = palette || PALETTE_MESE_A;
   return (
     <div style={{ position: "relative" }}>
-      <div style={{ position: "absolute", top: 5, left: 5, right: -5, bottom: -5, background: "#EDE6D6", borderRadius: 9, border: `1px solid ${CREAM_BORDER}` }} />
+      <div style={{ position: "absolute", top: 5, left: 5, right: -5, bottom: -5, background: p.retro, borderRadius: 9, border: `1px solid ${CREAM_BORDER}` }} />
       <div
-        onClick={onClick}
+        onClick={onClickCorpo}
         style={{
-          position: "relative", cursor: onClick ? "pointer" : "default",
-          background: evidenziata ? "#FBF3E4" : "#FFFDF7",
-          backgroundImage: "repeating-linear-gradient(to bottom, transparent, transparent 22px, #E9E3D4 23px)",
+          position: "relative", cursor: onClickCorpo ? "pointer" : "default",
+          background: evidenziata ? p.sfondoOggi : p.sfondo,
+          backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent 22px, ${p.riga} 23px)`,
           backgroundPosition: "0 40px",
           border: `1px solid ${CREAM_BORDER}`, borderRadius: 9,
           boxShadow: "0 10px 18px -12px rgba(14,27,51,0.4)",
@@ -3738,7 +3758,11 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
           backgroundSize: "100% 14px", backgroundPosition: "center 6px", backgroundRepeat: "repeat-y",
         }} />
         <div style={{ position: "absolute", top: 0, bottom: 0, left: isMobile ? 18 : 26, width: 1, background: "#E4A79B" }} />
-        <div style={{ ...fontQuaderno, fontSize: isMobile ? 12 : 15, fontWeight: 700, color: NAVY, textAlign: "center", padding: isMobile ? "8px 4px 6px" : "12px 8px 10px", position: "relative", zIndex: 1 }}>
+        <div
+          onClick={onClickData ? (e) => { e.stopPropagation(); onClickData(); } : undefined}
+          title={onClickData ? "Clicca per la vista dettagliata del giorno" : undefined}
+          style={{ ...fontQuaderno, fontSize: isMobile ? 10.5 : 13.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: isMobile ? "8px 4px 6px" : "12px 8px 10px", position: "relative", zIndex: 1, cursor: onClickData ? "pointer" : "default" }}
+        >
           {intestazione}
         </div>
         <div style={{ padding: isMobile ? "0 5px 6px 7px" : "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
@@ -3748,29 +3772,39 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, onClick, children }) {
     </div>
   );
 }
-// una settimana (sempre da lunedì) dell'agenda: griglia fissa a 4
-// colonne, anche da cellulare — 7 carte-giorno + l'ottava carta delle
-// note, sempre disposte su 2 righe da 4, mai una fila unica che scorre
-// in orizzontale né un numero di colonne diverso sotto una certa larghezza
-function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, corsiGiorno, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
+// una settimana (sempre da lunedì, mai spezzata a un confine di mese):
+// griglia fissa a 4 colonne, anche da cellulare — 7 carte-giorno + l'ottava
+// carta delle note, sempre disposte su 2 righe da 4. Ogni carta calcola da
+// sé mese/colore/intestazione dalla propria data, quindi una settimana a
+// cavallo di due mesi mostra correttamente carte di entrambi i colori
+function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onClickData, onClickVoce, nota, onSalvaNota }) {
   const isMobile = useIsMobile();
-  function dateStr(d) { return dateStrFor(anno, mese, d); }
   const oggiStr = dataOggiStr();
   const [testoNota, setTestoNota] = useState(nota?.testo || "");
   useEffect(() => { setTestoNota(nota?.testo || ""); }, [nota?.testo]);
-  const primoGiornoValido = settimana.find((d) => d !== null);
-  const settimanaInizio = primoGiornoValido ? dateStr(primoGiornoValido) : null;
+  const settimanaInizio = fmtDataIso(giorni[0]);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: isMobile ? 6 : 18, marginBottom: isMobile ? 14 : 26 }}>
-      {settimana.map((d, di) => {
-        if (!d) return <div key={di} />;
-        const ds = dateStr(d);
-        const vociGiorno = voci.filter((v) => v.data === ds);
+      {giorni.map((d) => {
+        const ds = fmtDataIso(d);
+        const vociGiorno = voci.filter((v) => v.data === ds).slice().sort((a, b) => {
+          if (!a.orario && !b.orario) return 0;
+          if (!a.orario) return 1;
+          if (!b.orario) return -1;
+          return a.orario.localeCompare(b.orario);
+        });
         const corsiDelGiorno = corsiGiorno(ds);
         const isOggi = ds === oggiStr;
+        const idxLunedi = (d.getDay() + 6) % 7; // lunedì=0, come GIORNI_ABBR_LUNGHI
+        const intestazione = `${GIORNI_ABBR_LUNGHI[idxLunedi]} ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
+        const dueColonne = vociGiorno.length > 5;
         return (
-          <CartaAgendaQuaderno key={di} evidenziata={isOggi} onClick={() => onClickGiorno(ds)} intestazione={`${GIORNI_ABBR_LUNGHI[di]} ${d}`}>
+          <CartaAgendaQuaderno
+            key={ds} evidenziata={isOggi} palette={paletteMese(d.getFullYear(), d.getMonth())}
+            onClickCorpo={() => onClickGiorno(ds)} onClickData={() => onClickData(ds)}
+            intestazione={intestazione}
+          >
             {corsiDelGiorno.map((c) => (
               <div
                 key={c.id}
@@ -3780,66 +3814,102 @@ function SettimanaAgendaQuaderno({ anno, mese, settimana, voci, corsiGiorno, onC
                 🎓 {c.corsoNome}{!isMobile && ` · ${c.locNome}`}
               </div>
             ))}
-            {vociGiorno.map((v) => (
-              <div
-                key={v.id}
-                onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
-                style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, fontWeight: 600, color: NAVY, background: coloreVoceAgenda(v.id), borderRadius: 5, padding: isMobile ? "2px 4px" : "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-              >
-                {v.titolo}
-              </div>
-            ))}
+            {/* eventi personali: testo semplice "orario titolo" sulla riga
+            (niente più pillola colorata, riservata solo ai corsi), su due
+            colonne quando sono tanti — sempre sotto le barre dei corsi */}
+            <div style={{ display: dueColonne ? "grid" : "block", gridTemplateColumns: dueColonne ? "1fr 1fr" : undefined, columnGap: 10 }}>
+              {vociGiorno.map((v) => (
+                <div
+                  key={v.id}
+                  onClick={(e) => { e.stopPropagation(); onClickVoce(v); }}
+                  style={{ ...fontBody, fontSize: isMobile ? 9.5 : 12, fontWeight: 600, color: NAVY, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: isMobile ? "16px" : "22px" }}
+                >
+                  {v.orario ? `${v.orario.slice(0, 5)} ` : ""}{v.titolo}
+                </div>
+              ))}
+            </div>
           </CartaAgendaQuaderno>
         );
       })}
-      {settimanaInizio && (
-        <CartaAgendaQuaderno intestazione="Note">
-          <textarea
-            value={testoNota}
-            onChange={(e) => setTestoNota(e.target.value)}
-            onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
-            placeholder="Appunti della settimana…"
-            style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: isMobile ? 140 : 270, lineHeight: isMobile ? "16px" : "22px", padding: 0 }}
-          />
-        </CartaAgendaQuaderno>
-      )}
+      <CartaAgendaQuaderno intestazione="Note" palette={paletteMese(giorni[0].getFullYear(), giorni[0].getMonth())}>
+        <textarea
+          value={testoNota}
+          onChange={(e) => setTestoNota(e.target.value)}
+          onBlur={() => { if (testoNota !== (nota?.testo || "")) onSalvaNota(settimanaInizio, testoNota); }}
+          placeholder="Appunti della settimana…"
+          style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, color: NAVY, border: "none", background: "transparent", outline: "none", resize: "none", width: "100%", height: isMobile ? 140 : 270, lineHeight: isMobile ? "16px" : "22px", padding: 0 }}
+        />
+      </CartaAgendaQuaderno>
     </div>
   );
 }
-// un mese dell'agenda: titolo grande che fa da separatore, poi le sue
-// settimane (sempre da lunedì) impilate verticalmente, ciascuna come
-// griglia 4x2 di carte stile taccuino — sostituisce la vecchia griglia
-// a caselle numerate del Calendario corsi. Mostra, oltre agli appuntamenti
-// dell'agenda, anche i corsi già programmati nel Calendario corsi
-// (sola lettura: si gestiscono da "Gestione corsi", non da qui)
-function MeseGrigliaAgenda({ anno, mese, voci, noteSettimanali, corsi, location, corsiDate, onClickGiorno, onClickVoce, onSalvaNota }) {
-  const settimane = generaSettimane(anno, mese);
-  const noteByInizio = Object.fromEntries((noteSettimanali || []).map((n) => [n.settimana_inizio, n]));
-  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
-  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
-  function corsiGiorno(ds) {
-    return (corsiDate || [])
-      .filter((cd) => cd.data_inizio <= ds && cd.data_fine >= ds)
-      .map((cd) => ({ id: cd.id, corsoNome: toTitleCase(corsoById[cd.corso_id]?.nome || "?"), locNome: toTitleCase(locById[cd.location_id]?.nome || "?"), colore: corsoById[cd.corso_id]?.colore }));
+// griglia oraria della vista giorno espansa: mezz'ora per riga, dalle 8
+// alle 20 (fascia oraria dei corsi/appuntamenti in accademia)
+const ORE_GRIGLIA_GIORNO = (() => {
+  const arr = [];
+  for (let h = 8; h <= 20; h++) {
+    arr.push(`${String(h).padStart(2, "0")}:00`);
+    if (h < 20) arr.push(`${String(h).padStart(2, "0")}:30`);
   }
+  return arr;
+})();
+function slotMezzoraDi(orario) {
+  const [h, m] = orario.slice(0, 5).split(":").map(Number);
+  return `${String(h).padStart(2, "0")}:${m < 30 ? "00" : "30"}`;
+}
+// vista dettagliata di un singolo giorno (si apre cliccando la data in
+// cima a una carta dell'agenda): a sinistra la griglia oraria con gli
+// appuntamenti personali del giorno, a destra i corsi già programmati
+function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onChiudi }) {
+  const isMobile = useIsMobile();
+  const d = new Date(`${data}T00:00:00`);
+  const idxLunedi = (d.getDay() + 6) % 7;
+  const titolo = `${GIORNI_ABBR_LUNGHI[idxLunedi]} ${d.getDate()} ${MESI[d.getMonth()]} ${d.getFullYear()}`;
+  const corsiDelGiorno = corsiGiorno(data);
+  const vociGiorno = voci.filter((v) => v.data === data);
+  const vociConOrario = vociGiorno.filter((v) => v.orario);
+  const vociSenzaOrario = vociGiorno.filter((v) => !v.orario);
   return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, padding: "6px 0 10px", marginBottom: 20, borderBottom: `2px solid ${GOLD}` }}>
-        {MESI[mese]} {anno}
+    <Modal title={titolo} onClose={onChiudi} maxWidth={840}>
+      <div style={{ display: "flex", gap: 18, flexDirection: isMobile ? "column" : "row" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {ORE_GRIGLIA_GIORNO.map((ora) => {
+            const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
+            return (
+              <div key={ora} style={{ display: "flex", gap: 10, borderTop: `1px solid ${CREAM_BORDER}`, minHeight: 28, padding: "4px 0" }}>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, width: 40, flexShrink: 0 }}>{ora}</div>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+                  {eventiSlot.map((v) => (
+                    <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
+                      {v.titolo}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {vociSenzaOrario.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Senza orario</div>
+              {vociSenzaOrario.map((v) => (
+                <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", marginBottom: 4 }}>
+                  {v.titolo}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ width: isMobile ? "100%" : 190, flexShrink: 0, display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 8 }}>
+          {corsiDelGiorno.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
+          ) : corsiDelGiorno.map((c) => (
+            <div key={c.id} title={`${c.corsoNome} · ${c.locNome}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
+              🎓 {c.corsoNome}<br />{c.locNome}
+            </div>
+          ))}
+        </div>
       </div>
-      {settimane.map((settimana, wi) => {
-        const primoGiornoValido = settimana.find((d) => d !== null);
-        const settimanaInizio = primoGiornoValido ? dateStrFor(anno, mese, primoGiornoValido) : null;
-        return (
-          <SettimanaAgendaQuaderno
-            key={wi} anno={anno} mese={mese} settimana={settimana} voci={voci} corsiGiorno={corsiGiorno}
-            onClickGiorno={onClickGiorno} onClickVoce={onClickVoce}
-            nota={settimanaInizio ? noteByInizio[settimanaInizio] : null}
-            onSalvaNota={onSalvaNota}
-          />
-        );
-      })}
-    </div>
+    </Modal>
   );
 }
 // pagina "Agenda": chi ha una sola agenda tra i propri permessi (utente
@@ -3858,6 +3928,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
   const agendaAperta = agende.find((a) => a.id === agendaApertaId) || null;
   const [popupNuovo, setPopupNuovo] = useState(null); // data "yyyy-mm-dd" cliccata, o null
   const [popupVoce, setPopupVoce] = useState(null); // voce cliccata, o null
+  const [giornoEspanso, setGiornoEspanso] = useState(null); // data "yyyy-mm-dd" della vista dettagliata, o null
 
   async function eliminaAgenda(a) {
     if (!window.confirm(`Eliminare l'agenda "${a.nome}"? Elimina anche tutti i suoi appuntamenti.`)) return;
@@ -3896,10 +3967,13 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
   }
 
   // vista a calendario, identica nello spirito al Calendario corsi: elenco
-  // continuo di mesi (da 6 mesi fa a 12 avanti) su cui scorrere invece di
-  // usare frecce avanti/indietro, più un selettore per saltare a un mese
-  // preciso e un tasto per tornare subito a oggi
+  // continuo di settimane (da 6 mesi fa a 12 avanti) su cui scorrere invece
+  // di usare frecce avanti/indietro. Le settimane sono continue (sempre da
+  // lunedì a domenica, mai spezzate a un confine di mese: una settimana a
+  // cavallo tra due mesi resta una riga sola), più un selettore per saltare
+  // a un mese preciso e un tasto per tornare subito a oggi
   const oggi = new Date();
+  const oggiStr = dataOggiStr();
   const mesi = useMemo(() => {
     const arr = [];
     for (let i = -6; i <= 12; i++) {
@@ -3909,23 +3983,55 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const refPerMese = useRef({});
+  const settimane = useMemo(() => {
+    const inizioRange = new Date(oggi.getFullYear(), oggi.getMonth() - 6, 1);
+    const fineRange = new Date(oggi.getFullYear(), oggi.getMonth() + 13, 0);
+    const primoLunedi = new Date(inizioRange);
+    primoLunedi.setDate(primoLunedi.getDate() - ((primoLunedi.getDay() + 6) % 7));
+    const arr = [];
+    const cursore = new Date(primoLunedi);
+    while (cursore <= fineRange) {
+      const giorni = [];
+      for (let i = 0; i < 7; i++) giorni.push(new Date(cursore.getFullYear(), cursore.getMonth(), cursore.getDate() + i));
+      arr.push(giorni);
+      cursore.setDate(cursore.getDate() + 7);
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const refPerSettimana = useRef({});
+  function vaiASettimanaDi(trova) {
+    const sett = settimane.find(trova);
+    if (sett) refPerSettimana.current[fmtDataIso(sett[0])]?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
   function vaiAMese(anno, mese) {
-    refPerMese.current[`${anno}-${mese}`]?.scrollIntoView({ block: "start", behavior: "smooth" });
+    vaiASettimanaDi((giorni) => giorni.some((d) => d.getFullYear() === anno && d.getMonth() === mese));
+  }
+  function vaiAOggi() {
+    vaiASettimanaDi((giorni) => giorni.some((d) => fmtDataIso(d) === oggiStr));
   }
   useEffect(() => {
     if (!agendaAperta) return;
-    // due frame di ritardo: assicura che la griglia (alta, con tutti i
-    // mesi già montati) abbia finito il layout prima di scrollare,
+    // due frame di ritardo: assicura che la griglia (alta, con tutte le
+    // settimane già montate) abbia finito il layout prima di scrollare,
     // altrimenti su dispositivi più lenti lo scroll può atterrare nel
     // posto sbagliato mentre il contenuto sta ancora assestandosi
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      refPerMese.current[`${oggi.getFullYear()}-${oggi.getMonth()}`]?.scrollIntoView({ block: "start" });
-    }));
+    requestAnimationFrame(() => requestAnimationFrame(() => { vaiAOggi(); }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agendaAperta?.id]);
 
   const vociAgendaAperta = agendaAperta ? agendaVoci.filter((v) => v.agenda_id === agendaAperta.id) : [];
+  const noteBySettimana = useMemo(
+    () => Object.fromEntries((agendaNoteSettimanali || []).filter((n) => n.agenda_id === agendaApertaId).map((n) => [n.settimana_inizio, n])),
+    [agendaNoteSettimanali, agendaApertaId]
+  );
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  function corsiGiorno(ds) {
+    return (corsiDate || [])
+      .filter((cd) => cd.data_inizio <= ds && cd.data_fine >= ds)
+      .map((cd) => ({ id: cd.id, corsoNome: toTitleCase(corsoById[cd.corso_id]?.nome || "?"), locNome: toTitleCase(locById[cd.location_id]?.nome || "?"), colore: corsoById[cd.corso_id]?.colore }));
+  }
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -3948,14 +4054,14 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
                 <option value="">Vai al mese…</option>
                 {mesi.map(({ anno, mese }) => <option key={`${anno}-${mese}`} value={`${anno}-${mese}`}>{MESI[mese]} {anno}</option>)}
               </select>
-              <Button variant="ghost" onClick={() => vaiAMese(oggi.getFullYear(), oggi.getMonth())}>Oggi</Button>
+              <Button variant="ghost" onClick={vaiAOggi}>Oggi</Button>
             </div>
           )}
         </div>
 
         {agendaAperta && (
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-            Scorri verso il basso per vedere le altre settimane e i mesi successivi, la settimana riparte sempre da lunedì. Clicca una carta per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo. L'ottava carta di ogni settimana è per gli appunti liberi.
+            Scorri verso il basso per vedere le altre settimane e i mesi successivi, la settimana riparte sempre da lunedì. Clicca una carta per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo, clicca la data per la vista dettagliata del giorno. L'ottava carta di ogni settimana è per gli appunti liberi.
           </div>
         )}
 
@@ -3983,18 +4089,21 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
             )}
           </>
         ) : (
-          mesi.map(({ anno, mese }) => (
-            <div key={`${anno}-${mese}`} style={{ scrollMarginTop: 54 }} ref={(el) => { refPerMese.current[`${anno}-${mese}`] = el; }}>
-              <MeseGrigliaAgenda
-                anno={anno} mese={mese} voci={vociAgendaAperta}
-                noteSettimanali={(agendaNoteSettimanali || []).filter((n) => n.agenda_id === agendaAperta.id)}
-                corsi={corsi} location={location} corsiDate={corsiDate}
-                onClickGiorno={(ds) => setPopupNuovo(ds)}
-                onClickVoce={(v) => setPopupVoce(v)}
-                onSalvaNota={salvaNotaSettimana}
-              />
-            </div>
-          ))
+          settimane.map((giorni) => {
+            const chiave = fmtDataIso(giorni[0]);
+            return (
+              <div key={chiave} style={{ scrollMarginTop: 54 }} ref={(el) => { refPerSettimana.current[chiave] = el; }}>
+                <SettimanaAgendaQuaderno
+                  giorni={giorni} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
+                  onClickGiorno={(ds) => setPopupNuovo(ds)}
+                  onClickData={(ds) => setGiornoEspanso(ds)}
+                  onClickVoce={(v) => setPopupVoce(v)}
+                  nota={noteBySettimana[chiave]}
+                  onSalvaNota={salvaNotaSettimana}
+                />
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -4003,6 +4112,13 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
       )}
       {popupVoce && (
         <PopupVoceAgenda voce={popupVoce} onSalva={salvaModificaVoce} onElimina={eliminaVoce} onChiudi={() => setPopupVoce(null)} />
+      )}
+      {giornoEspanso && (
+        <VistaGiornoEspanso
+          data={giornoEspanso} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
+          onClickVoce={(v) => { setGiornoEspanso(null); setPopupVoce(v); }}
+          onChiudi={() => setGiornoEspanso(null)}
+        />
       )}
     </div>
   );

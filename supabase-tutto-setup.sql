@@ -1662,4 +1662,10 @@ alter table public.agenda_note_settimanali enable row level security;
 drop policy if exists "agenda_note_settimanali_all" on public.agenda_note_settimanali;
 create policy "agenda_note_settimanali_all" on public.agenda_note_settimanali for all to anon using (true) with check (true);
 
+-- ---------------------------------------------------------
+-- 49) Agenda: orario dell'evento (facoltativo), per ordinare gli eventi
+-- nelle carte e mostrarli nella vista giorno espansa.
+-- ---------------------------------------------------------
+alter table public.agenda_voci add column if not exists orario time;
+
 notify pgrst, 'reload schema';
