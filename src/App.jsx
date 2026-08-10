@@ -10340,7 +10340,7 @@ function BloccoAggiuntaPagamentoVenditore({ iscrittoId, venditoreNome, ricarica 
     </div>
   );
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle, venditoreLoggato, accontiDaVerificare }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle, venditoreLoggato, utenteLoggato, accontiDaVerificare }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -11344,6 +11344,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // singola classe)
   const soloLettura = !!(modificandoId && !adminSbloccato);
   const iscrittoAttuale = modificandoId ? iscritti.find((x) => x.id === modificandoId) : null;
+  // chi è "il venditore" qui dentro: venditoreLoggato è valorizzato solo
+  // per chi passa dalla tendina "Accedi come venditore" (Dashboard
+  // venditori, login con Utente generico); chi invece entra col proprio
+  // utente nominale (Gestione utenti) non passa mai da lì — per lui
+  // l'identità è utenteLoggato.nome. Entrambi devono poter sbloccare i
+  // due "+ Aggiungi" se il loro nome combacia col Tutor dell'iscritto
+  const nomeVenditoreAttuale = venditoreLoggato?.nome || utenteLoggato?.nome;
   // pagamento (acconto/quota pre corso) segnalato da un venditore per
   // questo iscritto e ancora da approvare: se c'è, lo staff (adminSbloccato)
   // vede la card di verifica sopra ai "Dati contabili"
@@ -11719,8 +11726,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               può comunque segnalare un pagamento incassato dopo la vendita:
               resta fuori dal fieldset di sola lettura qui sotto, così è
               l'unica cosa cliccabile senza sbloccare il resto della scheda */}
-          {soloLettura && venditoreLoggato && iscrittoAttuale?.tutor === venditoreLoggato.nome && (
-            <BloccoAggiuntaPagamentoVenditore iscrittoId={iscrittoAttuale.id} venditoreNome={venditoreLoggato.nome} ricarica={ricarica} />
+          {soloLettura && nomeVenditoreAttuale && iscrittoAttuale?.tutor === nomeVenditoreAttuale && (
+            <BloccoAggiuntaPagamentoVenditore iscrittoId={iscrittoAttuale.id} venditoreNome={nomeVenditoreAttuale} ricarica={ricarica} />
           )}
 
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
@@ -19268,6 +19275,7 @@ export default function App() {
           origineGestioneModelle={vieneDaGestioneModelle}
           onTornaGestioneModelle={() => setView("gestionemodelle")}
           venditoreLoggato={venditoreLoggato}
+          utenteLoggato={utenteLoggato}
           accontiDaVerificare={accontiDaVerificare}
         />
       )}
