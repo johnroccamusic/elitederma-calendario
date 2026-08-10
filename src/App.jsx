@@ -2242,47 +2242,89 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+  const [ricerca, setRicerca] = useState("");
+  // colonna: null = ordine di default (dall'iscrizione più recente, in
+  // cima, alla più vecchia, in fondo); altrimenti quale colonna e in che
+  // verso, alternato a ogni click sulla stessa intestazione
+  const [ordinamento, setOrdinamento] = useState({ colonna: null, direzione: "asc" });
 
-  const proprie = iscritti
+  const righe = iscritti
     .filter((i) => i.ts && i.tutor === venditoreNome)
-    .slice()
-    .sort((a, b) => b.ts.localeCompare(a.ts));
+    .map((i) => {
+      const cd = cdById[i.corso_data_id];
+      const corso = cd ? corsoById[cd.corso_id] : null;
+      const loc = cd ? locById[cd.location_id] : null;
+      return {
+        iscritto: i,
+        citta: loc?.nome?.toUpperCase() || "?",
+        corsoNome: corso?.nome?.toUpperCase() || "?",
+        dataIso: cd?.data_inizio || "",
+        dataLabel: cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—",
+        allievo: `${i.nome} ${i.cognome}`,
+      };
+    });
+
+  const termini = ricerca.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const filtrate = termini.length === 0 ? righe : righe.filter((r) => {
+    const testo = [r.citta, r.corsoNome, r.dataLabel, r.allievo].join(" ").toLowerCase();
+    return termini.every((t) => testo.includes(t));
+  });
+
+  const ordinate = filtrate.slice().sort((a, b) => {
+    if (!ordinamento.colonna) return b.iscritto.ts.localeCompare(a.iscritto.ts);
+    let cmp = 0;
+    if (ordinamento.colonna === "citta") cmp = a.citta.localeCompare(b.citta);
+    else if (ordinamento.colonna === "corso") cmp = a.corsoNome.localeCompare(b.corsoNome);
+    else if (ordinamento.colonna === "data") cmp = a.dataIso.localeCompare(b.dataIso);
+    else if (ordinamento.colonna === "allievo") cmp = a.allievo.localeCompare(b.allievo);
+    return ordinamento.direzione === "asc" ? cmp : -cmp;
+  });
+
+  function cambiaOrdinamento(colonna) {
+    setOrdinamento((prev) => (prev.colonna === colonna ? { colonna, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { colonna, direzione: "asc" }));
+  }
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
-
-  if (proprie.length === 0) {
-    return <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna iscrizione ancora.</div>;
+  function stileTh(colonna, ultima) {
+    const attiva = ordinamento.colonna === colonna;
+    return { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: attiva ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, borderRight: ultima ? "none" : bordoV, cursor: "pointer", userSelect: "none" };
+  }
+  function frecciaOrdinamento(colonna) {
+    return ordinamento.colonna === colonna ? (ordinamento.direzione === "asc" ? " ▲" : " ▼") : "";
   }
 
   return (
-    <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-      <table style={{ borderCollapse: "collapse", width: "100%" }}>
-        <thead>
-          <tr>
-            <th style={thStyle}>Città</th>
-            <th style={thStyle}>Corso</th>
-            <th style={thStyle}>Data del corso</th>
-            <th style={{ ...thStyle, borderRight: "none" }}>Allievo</th>
-          </tr>
-        </thead>
-        <tbody>
-          {proprie.map((i) => {
-            const cd = cdById[i.corso_data_id];
-            const corso = cd ? corsoById[cd.corso_id] : null;
-            const loc = cd ? locById[cd.location_id] : null;
-            return (
-              <tr key={i.id} onClick={onApriIscritto ? () => onApriIscritto(i) : undefined} style={{ cursor: onApriIscritto ? "pointer" : undefined }}>
-                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
-                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
-                <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, borderRight: "none" }}>{i.nome} {i.cognome}</td>
+    <div>
+      <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca città, corso, allievo…" style={{ marginBottom: 12 }} />
+      {ordinate.length === 0 ? (
+        <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>
+          {righe.length === 0 ? "Nessuna iscrizione ancora." : "Nessun risultato."}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th onClick={() => cambiaOrdinamento("citta")} style={stileTh("citta")}>Città{frecciaOrdinamento("citta")}</th>
+                <th onClick={() => cambiaOrdinamento("corso")} style={stileTh("corso")}>Corso{frecciaOrdinamento("corso")}</th>
+                <th onClick={() => cambiaOrdinamento("data")} style={stileTh("data")}>Data del corso{frecciaOrdinamento("data")}</th>
+                <th onClick={() => cambiaOrdinamento("allievo")} style={stileTh("allievo", true)}>Allievo{frecciaOrdinamento("allievo")}</th>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {ordinate.map((r) => (
+                <tr key={r.iscritto.id} onClick={onApriIscritto ? () => onApriIscritto(r.iscritto, venditoreNome) : undefined} style={{ cursor: onApriIscritto ? "pointer" : undefined }}>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.citta}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.corsoNome}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.dataLabel}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, borderRight: "none" }}>{r.allievo}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -10369,7 +10411,7 @@ function BloccoAggiuntaPagamentoVenditore({ iscrittoId, venditoreNome, ricarica 
     </div>
   );
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle, venditoreLoggato, utenteLoggato, accontiDaVerificare }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle, venditoreLoggato, utenteLoggato, contestoVenditoreScheda, accontiDaVerificare }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -11373,13 +11415,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // singola classe)
   const soloLettura = !!(modificandoId && !adminSbloccato);
   const iscrittoAttuale = modificandoId ? iscritti.find((x) => x.id === modificandoId) : null;
-  // chi è "il venditore" qui dentro: venditoreLoggato è valorizzato solo
-  // per chi passa dalla tendina "Accedi come venditore" (Dashboard
-  // venditori, login con Utente generico); chi invece entra col proprio
-  // utente nominale (Gestione utenti) non passa mai da lì — per lui
-  // l'identità è utenteLoggato.nome. Entrambi devono poter sbloccare i
-  // due "+ Aggiungi" se il loro nome combacia col Tutor dell'iscritto
-  const nomeVenditoreAttuale = venditoreLoggato?.nome || utenteLoggato?.nome;
+  // chi è "il venditore" qui dentro, in ordine di priorità:
+  // 1) venditoreLoggato — valorizzato solo per chi passa dalla tendina
+  //    "Accedi come venditore" con password (Dashboard venditori, login
+  //    con Utente generico);
+  // 2) contestoVenditoreScheda — chi è "impersonato" scegliendolo dalla
+  //    tendina senza password (in pratica il caso più comune: non esiste
+  //    un vero login per singolo venditore), portato fin qui da "Le tue
+  //    iscrizioni" (che è già filtrata su quella sola persona);
+  // 3) utenteLoggato.nome — chi entra col proprio utente nominale
+  //    (Gestione utenti), che non passa mai dalla Dashboard venditori
+  const nomeVenditoreAttuale = venditoreLoggato?.nome || contestoVenditoreScheda || utenteLoggato?.nome;
   // confronto tollerante a maiuscole/minuscole e spazi superflui: il Tutor
   // di un'iscrizione più vecchia (o inserito a mano) può non combaciare
   // per un pelo col nome esatto del venditore anche se è "la stessa persona"
@@ -18404,6 +18450,12 @@ export default function App() {
   // verso Gestione modelle invece che verso una lista mai mostrata
   const [vieneDaGestioneModelle, setVieneDaGestioneModelle] = useState(false);
   const [venditoreLoggato, setVenditoreLoggato] = useState(null);
+  // chi si sta "impersonando" nella Dashboard venditori scegliendolo dalla
+  // tendina (senza una vera password: in pratica non esiste un login per
+  // singolo venditore) — a differenza di venditoreLoggato non blocca la
+  // dashboard su quella persona, serve solo a sbloccare i "+ Aggiungi" in
+  // SchedaData quando si entra in un suo iscritto da "Le tue iscrizioni"
+  const [contestoVenditoreScheda, setContestoVenditoreScheda] = useState(null);
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
   const [corsi, setCorsi] = useState([]);
   const [location, setLocation] = useState([]);
@@ -18754,6 +18806,7 @@ export default function App() {
     setCorsoDataAperta(cd.id);
     setSottoVistaScheda({ vista: "lista", modificandoId: null, mostraGestione: false });
     setSchedaKey((k) => k + 1);
+    setContestoVenditoreScheda(null);
     setView("scheda");
   }
   // come apriData, ma entra direttamente nella tab "Assegna modelle"
@@ -18924,12 +18977,13 @@ export default function App() {
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
-  function apriIscritto(i) {
+  function apriIscritto(i, contestoVenditore) {
     window.scrollTo(0, 0);
     setVieneDaGestioneModelle(false);
     setCorsoDataAperta(i.corso_data_id);
     setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
     setSchedaKey((k) => k + 1);
+    setContestoVenditoreScheda(contestoVenditore || null);
     setView("scheda");
   }
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
@@ -19315,6 +19369,7 @@ export default function App() {
           onTornaGestioneModelle={() => setView("gestionemodelle")}
           venditoreLoggato={venditoreLoggato}
           utenteLoggato={utenteLoggato}
+          contestoVenditoreScheda={contestoVenditoreScheda}
           accontiDaVerificare={accontiDaVerificare}
         />
       )}
