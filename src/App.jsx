@@ -4155,6 +4155,15 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
         {!agendaAperta ? (
           <>
             {isProgrammatore && <div style={{ marginBottom: 18 }}><BottoneNuovaAgenda ricarica={ricarica} /></div>}
+            {!isStaff && agendeVisibili.length !== 1 && (
+              // diagnostica temporanea: un utente nominale dovrebbe avere
+              // esattamente un'agenda tra i permessi (ne entrerebbe subito
+              // dentro), quindi se qui ne compaiono 0 o 2+ i dati grezzi
+              // aiutano a capire perché senza dover indovinare
+              <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", background: "#FBEAE4", border: "1px solid #E4A79B", borderRadius: 8, padding: 10, marginBottom: 14 }}>
+                Diagnostica: utente "{utenteLoggato?.nome}" (id {utenteLoggato?.id || "—"}) · permessi grezzi: {JSON.stringify(utenteLoggato?.permessi || [])} · agenda_id estratti: {JSON.stringify(mieId)} · agende nel sistema: {JSON.stringify(agende.map((a) => ({ id: a.id, nome: a.nome })))}
+              </div>
+            )}
             {agendeVisibili.length === 0 ? (
               <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna agenda assegnata.</div>
             ) : (
