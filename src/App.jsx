@@ -3657,9 +3657,9 @@ function BottoneNuovaAgenda({ ricarica }) {
 // popup "Nuovo appuntamento": si apre cliccando un giorno vuoto del
 // calendario, con la data già fissata da quel giorno (stesso schema di
 // PopupNuovaData nel Calendario corsi)
-function PopupNuovaVoceAgenda({ dataClic, onSalva, onChiudi }) {
+function PopupNuovaVoceAgenda({ dataClic, orarioIniziale, onSalva, onChiudi }) {
   const [titolo, setTitolo] = useState("");
-  const [orario, setOrario] = useState("");
+  const [orario, setOrario] = useState(orarioIniziale || "");
   const [nota, setNota] = useState("");
   return (
     <Modal title={`Nuovo evento — ${fmtData(dataClic)}`} onClose={onChiudi}>
@@ -3728,21 +3728,36 @@ const fontQuaderno = { fontFamily: "Georgia, 'Times New Roman', serif" };
 const PALETTE_MESE_A = { sfondo: "#FFFDF7", sfondoOggi: "#FBF3E4", riga: "#E9E3D4", retro: "#EDE6D6" };
 const PALETTE_MESE_B = { sfondo: "#EEF6FB", sfondoOggi: "#FBF3E4", riga: "#D8E8F0", retro: "#DCEAF1" };
 function paletteMese(anno, mese) { return (anno * 12 + mese) % 2 === 0 ? PALETTE_MESE_A : PALETTE_MESE_B; }
+// colore dell'ottava carta (le note) di una settimana: quello del mese a
+// cui appartiene la maggior parte dei suoi 7 giorni, non sempre quello del
+// lunedì — altrimenti una settimana quasi tutta di settembre con solo il
+// lunedì di agosto mostrerebbe le note col colore "sbagliato"
+function paletteSettimanaNota(giorni) {
+  const conteggio = {};
+  for (const d of giorni) {
+    const chiave = `${d.getFullYear()}-${d.getMonth()}`;
+    conteggio[chiave] = (conteggio[chiave] || 0) + 1;
+  }
+  let chiaveMigliore = null, max = -1;
+  for (const [chiave, n] of Object.entries(conteggio)) if (n > max) { max = n; chiaveMigliore = chiave; }
+  const [anno, mese] = chiaveMigliore.split("-").map(Number);
+  return paletteMese(anno, mese);
+}
 // una "pagina" del taccuino (un giorno con i suoi appuntamenti, o l'ottava
 // carta delle note): rilegatura a spirale sul bordo sinistro, margine
 // rosso, righe orizzontali, e una seconda pagina leggermente sfalsata
 // dietro per dare l'effetto di un blocco di fogli impilati. Cliccare la
 // data (non il resto della carta) apre la vista dettagliata del giorno
-function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClickCorpo, onClickData, children }) {
+function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClick, children }) {
   const isMobile = useIsMobile();
   const p = palette || PALETTE_MESE_A;
   return (
     <div style={{ position: "relative" }}>
       <div style={{ position: "absolute", top: 5, left: 5, right: -5, bottom: -5, background: p.retro, borderRadius: 9, border: `1px solid ${CREAM_BORDER}` }} />
       <div
-        onClick={onClickCorpo}
+        onClick={onClick}
         style={{
-          position: "relative", cursor: onClickCorpo ? "pointer" : "default",
+          position: "relative", cursor: onClick ? "pointer" : "default",
           background: evidenziata ? p.sfondoOggi : p.sfondo,
           backgroundImage: `repeating-linear-gradient(to bottom, transparent, transparent 22px, ${p.riga} 23px)`,
           backgroundPosition: "0 40px",
@@ -3758,11 +3773,7 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClickCorpo,
           backgroundSize: "100% 14px", backgroundPosition: "center 6px", backgroundRepeat: "repeat-y",
         }} />
         <div style={{ position: "absolute", top: 0, bottom: 0, left: isMobile ? 18 : 26, width: 1, background: "#E4A79B" }} />
-        <div
-          onClick={onClickData ? (e) => { e.stopPropagation(); onClickData(); } : undefined}
-          title={onClickData ? "Clicca per la vista dettagliata del giorno" : undefined}
-          style={{ ...fontQuaderno, fontSize: isMobile ? 10.5 : 13.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: isMobile ? "8px 4px 6px" : "12px 8px 10px", position: "relative", zIndex: 1, cursor: onClickData ? "pointer" : "default" }}
-        >
+        <div style={{ ...fontQuaderno, fontSize: isMobile ? 10.5 : 13.5, fontWeight: 700, color: NAVY, textAlign: "center", padding: isMobile ? "8px 4px 6px" : "12px 8px 10px", position: "relative", zIndex: 1 }}>
           {intestazione}
         </div>
         <div style={{ padding: isMobile ? "0 5px 6px 7px" : "0 10px 10px 12px", position: "relative", zIndex: 1 }}>
@@ -3777,7 +3788,7 @@ function CartaAgendaQuaderno({ intestazione, evidenziata, palette, onClickCorpo,
 // carta delle note, sempre disposte su 2 righe da 4. Ogni carta calcola da
 // sé mese/colore/intestazione dalla propria data, quindi una settimana a
 // cavallo di due mesi mostra correttamente carte di entrambi i colori
-function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onClickData, onClickVoce, nota, onSalvaNota }) {
+function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onClickVoce, nota, onSalvaNota }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const [testoNota, setTestoNota] = useState(nota?.testo || "");
@@ -3802,7 +3813,7 @@ function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onC
         return (
           <CartaAgendaQuaderno
             key={ds} evidenziata={isOggi} palette={paletteMese(d.getFullYear(), d.getMonth())}
-            onClickCorpo={() => onClickGiorno(ds)} onClickData={() => onClickData(ds)}
+            onClick={() => onClickGiorno(ds)}
             intestazione={intestazione}
           >
             {corsiDelGiorno.map((c) => (
@@ -3831,7 +3842,7 @@ function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onC
           </CartaAgendaQuaderno>
         );
       })}
-      <CartaAgendaQuaderno intestazione="Note" palette={paletteMese(giorni[0].getFullYear(), giorni[0].getMonth())}>
+      <CartaAgendaQuaderno intestazione="Note" palette={paletteSettimanaNota(giorni)}>
         <textarea
           value={testoNota}
           onChange={(e) => setTestoNota(e.target.value)}
@@ -3857,10 +3868,13 @@ function slotMezzoraDi(orario) {
   const [h, m] = orario.slice(0, 5).split(":").map(Number);
   return `${String(h).padStart(2, "0")}:${m < 30 ? "00" : "30"}`;
 }
-// vista dettagliata di un singolo giorno (si apre cliccando la data in
-// cima a una carta dell'agenda): a sinistra la griglia oraria con gli
-// appuntamenti personali del giorno, a destra i corsi già programmati
-function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onChiudi }) {
+// vista dettagliata di un singolo giorno (si apre cliccando una carta
+// dell'agenda): a sinistra la griglia oraria con gli appuntamenti
+// personali del giorno, a destra i corsi già programmati. Cliccare un
+// orario della griglia (o il "+" in basso a destra) apre subito
+// l'inserimento di un nuovo appuntamento, con l'orario già precompilato
+// quando si clicca una riga precisa
+function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onNuovoEvento, onChiudi }) {
   const isMobile = useIsMobile();
   const d = new Date(`${data}T00:00:00`);
   const idxLunedi = (d.getDay() + 6) % 7;
@@ -3871,50 +3885,67 @@ function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onChiudi }) 
   const vociSenzaOrario = vociGiorno.filter((v) => !v.orario);
   return (
     <Modal title={titolo} onClose={onChiudi} maxWidth={840}>
-      <div style={{ display: "flex", gap: 18, flexDirection: isMobile ? "column" : "row" }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {ORE_GRIGLIA_GIORNO.map((ora) => {
-            const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
-            const oraPiena = ora.endsWith(":00");
-            return (
-              // l'etichetta dell'ora sta appoggiata esattamente sulla riga
-              // (a cavallo del bordo, come in un'agenda vera), non sospesa
-              // a metà di uno spazio vuoto; le ore intere hanno una riga
-              // più marcata delle mezzore, per orientarsi scorrendo veloce
-              <div key={ora} style={{ position: "relative", borderTop: oraPiena ? `1.5px solid #C9C2AE` : `1px solid ${CREAM_BORDER}`, minHeight: 30 }}>
-                <div style={{ position: "absolute", top: 0, left: 0, transform: "translateY(-50%)", background: "#fff", paddingRight: 6, ...fontBody, fontSize: 11, fontWeight: oraPiena ? 700 : 400, color: MUTED }}>
-                  {ora}
+      <div style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 18, flexDirection: isMobile ? "column" : "row" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {ORE_GRIGLIA_GIORNO.map((ora) => {
+              const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
+              const oraPiena = ora.endsWith(":00");
+              return (
+                // l'etichetta dell'ora sta appoggiata esattamente sulla riga
+                // (a cavallo del bordo, come in un'agenda vera), non sospesa
+                // a metà di uno spazio vuoto; le ore intere hanno una riga
+                // più marcata delle mezzore, per orientarsi scorrendo veloce.
+                // Cliccare la riga apre un nuovo appuntamento già con
+                // quell'orario precompilato
+                <div
+                  key={ora} onClick={() => onNuovoEvento(data, ora)} title={`Nuovo appuntamento alle ${ora}`}
+                  style={{ position: "relative", borderTop: oraPiena ? `1.5px solid #C9C2AE` : `1px solid ${CREAM_BORDER}`, minHeight: 30, cursor: "pointer" }}
+                >
+                  <div style={{ position: "absolute", top: 0, left: 0, transform: "translateY(-50%)", background: "#fff", paddingRight: 6, ...fontBody, fontSize: 11, fontWeight: oraPiena ? 700 : 400, color: MUTED }}>
+                    {ora}
+                  </div>
+                  <div style={{ paddingLeft: 46, paddingTop: 7, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 3 }}>
+                    {eventiSlot.map((v) => (
+                      <div key={v.id} onClick={(e) => { e.stopPropagation(); onClickVoce(v); }} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
+                        {v.titolo}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ paddingLeft: 46, paddingTop: 7, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 3 }}>
-                  {eventiSlot.map((v) => (
-                    <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
-                      {v.titolo}
-                    </div>
-                  ))}
-                </div>
+              );
+            })}
+            {vociSenzaOrario.length > 0 && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Senza orario</div>
+                {vociSenzaOrario.map((v) => (
+                  <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", marginBottom: 4 }}>
+                    {v.titolo}
+                  </div>
+                ))}
               </div>
-            );
-          })}
-          {vociSenzaOrario.length > 0 && (
-            <div style={{ marginTop: 14 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Senza orario</div>
-              {vociSenzaOrario.map((v) => (
-                <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer", marginBottom: 4 }}>
-                  {v.titolo}
-                </div>
-              ))}
-            </div>
-          )}
+            )}
+          </div>
+          <div style={{ width: isMobile ? "100%" : 190, flexShrink: 0, display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 8 }}>
+            {corsiDelGiorno.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
+            ) : corsiDelGiorno.map((c) => (
+              <div key={c.id} title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
+                🎓 {c.corsoNome}<br />{c.locNome}{c.giorniTotali > 1 && ` · ${c.indice}/${c.giorniTotali}`}
+              </div>
+            ))}
+          </div>
         </div>
-        <div style={{ width: isMobile ? "100%" : 190, flexShrink: 0, display: "flex", flexDirection: isMobile ? "row" : "column", flexWrap: "wrap", gap: 8 }}>
-          {corsiDelGiorno.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
-          ) : corsiDelGiorno.map((c) => (
-            <div key={c.id} title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
-              🎓 {c.corsoNome}<br />{c.locNome}{c.giorniTotali > 1 && ` · ${c.indice}/${c.giorniTotali}`}
-            </div>
-          ))}
-        </div>
+        <button
+          onClick={() => onNuovoEvento(data, null)}
+          title="Nuovo evento"
+          style={{
+            position: "absolute", bottom: -8, right: -8, width: 46, height: 46, borderRadius: "50%",
+            background: NAVY, color: "#fff", border: "none", cursor: "pointer",
+            fontSize: 26, fontWeight: 900, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 6px 16px rgba(14,27,51,0.4)", zIndex: 2,
+          }}
+        >+</button>
       </div>
     </Modal>
   );
@@ -3933,9 +3964,10 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
   const agendeVisibili = isStaff ? agende : agende.filter((a) => mieId.includes(a.id));
   const [agendaApertaId, setAgendaApertaId] = useState(agendeVisibili.length === 1 ? agendeVisibili[0].id : null);
   const agendaAperta = agende.find((a) => a.id === agendaApertaId) || null;
-  const [popupNuovo, setPopupNuovo] = useState(null); // data "yyyy-mm-dd" cliccata, o null
+  const [popupNuovo, setPopupNuovo] = useState(null); // { data, orario } della voce da creare, o null
   const [popupVoce, setPopupVoce] = useState(null); // voce cliccata, o null
   const [giornoEspanso, setGiornoEspanso] = useState(null); // data "yyyy-mm-dd" della vista dettagliata, o null
+  const [ricercaNote, setRicercaNote] = useState("");
 
   async function eliminaAgenda(a) {
     if (!window.confirm(`Eliminare l'agenda "${a.nome}"? Elimina anche tutti i suoi appuntamenti.`)) return;
@@ -3945,7 +3977,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
     ricarica();
   }
   async function salvaNuovaVoce(campi) {
-    const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaAperta.id, data: popupNuovo, ...campi });
+    const { error } = await supabase.from("agenda_voci").insert({ agenda_id: agendaAperta.id, data: popupNuovo.data, ...campi });
     if (error) { window.alert("Errore: " + error.message); return; }
     setPopupNuovo(null);
     ricarica();
@@ -4049,6 +4081,16 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
         giorniTotali: differenzaGiorni(cd.data_inizio, cd.data_fine) + 1,
       }));
   }
+  // ricerca testuale nelle note libere della settimana (l'ottava carta):
+  // ogni risultato porta la data in cui è stata creata la nota (il campo
+  // "ts", che l'upsert di salvaNotaSettimana non tocca più dopo la prima
+  // volta, quindi resta la data di creazione anche dopo le modifiche)
+  const risultatiRicercaNote = ricercaNote.trim()
+    ? (agendaNoteSettimanali || [])
+        .filter((n) => n.agenda_id === agendaApertaId && n.testo && n.testo.toLowerCase().includes(ricercaNote.trim().toLowerCase()))
+        .sort((a, b) => b.settimana_inizio.localeCompare(a.settimana_inizio))
+        .slice(0, 8)
+    : [];
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -4077,8 +4119,35 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
         </div>
 
         {agendaAperta && (
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <input
+              type="text"
+              value={ricercaNote}
+              onChange={(e) => setRicercaNote(e.target.value)}
+              placeholder="Cerca una parola nelle note delle settimane…"
+              style={{ ...inputStyle, width: "100%" }}
+            />
+            {risultatiRicercaNote.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 12px 24px -8px rgba(14,27,51,0.28)", zIndex: 50, overflow: "hidden" }}>
+                {risultatiRicercaNote.map((n) => (
+                  <div
+                    key={n.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => { vaiASettimanaDi((giorni) => fmtDataIso(giorni[0]) === n.settimana_inizio); setRicercaNote(""); }}
+                    style={{ padding: "8px 14px", cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}` }}
+                  >
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED }}>{fmtData(n.ts.slice(0, 10))}</div>
+                    <div style={{ ...fontBody, fontSize: 13, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{n.testo}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {agendaAperta && (
           <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-            Scorri verso il basso per vedere le altre settimane e i mesi successivi, la settimana riparte sempre da lunedì. Clicca una carta per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo, clicca la data per la vista dettagliata del giorno. L'ottava carta di ogni settimana è per gli appunti liberi.
+            Scorri verso il basso per vedere le altre settimane e i mesi successivi, la settimana riparte sempre da lunedì. Clicca una carta per aprire la vista dettagliata del giorno: da lì clicca un orario o il tasto + per aggiungere un appuntamento, clicca un appuntamento per modificarlo o eliminarlo. L'ottava carta di ogni settimana è per gli appunti liberi.
           </div>
         )}
 
@@ -4112,8 +4181,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
               <div key={chiave} style={{ scrollMarginTop: 54 }} ref={(el) => { refPerSettimana.current[chiave] = el; }}>
                 <SettimanaAgendaQuaderno
                   giorni={giorni} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
-                  onClickGiorno={(ds) => setPopupNuovo(ds)}
-                  onClickData={(ds) => setGiornoEspanso(ds)}
+                  onClickGiorno={(ds) => setGiornoEspanso(ds)}
                   onClickVoce={(v) => setPopupVoce(v)}
                   nota={noteBySettimana[chiave]}
                   onSalvaNota={salvaNotaSettimana}
@@ -4124,18 +4192,19 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
         )}
       </div>
 
-      {popupNuovo && (
-        <PopupNuovaVoceAgenda dataClic={popupNuovo} onSalva={salvaNuovaVoce} onChiudi={() => setPopupNuovo(null)} />
-      )}
-      {popupVoce && (
-        <PopupVoceAgenda voce={popupVoce} onSalva={salvaModificaVoce} onElimina={eliminaVoce} onChiudi={() => setPopupVoce(null)} />
-      )}
       {giornoEspanso && (
         <VistaGiornoEspanso
           data={giornoEspanso} voci={vociAgendaAperta} corsiGiorno={corsiGiorno}
-          onClickVoce={(v) => { setGiornoEspanso(null); setPopupVoce(v); }}
+          onClickVoce={(v) => setPopupVoce(v)}
+          onNuovoEvento={(ds, orario) => setPopupNuovo({ data: ds, orario })}
           onChiudi={() => setGiornoEspanso(null)}
         />
+      )}
+      {popupNuovo && (
+        <PopupNuovaVoceAgenda dataClic={popupNuovo.data} orarioIniziale={popupNuovo.orario} onSalva={salvaNuovaVoce} onChiudi={() => setPopupNuovo(null)} />
+      )}
+      {popupVoce && (
+        <PopupVoceAgenda voce={popupVoce} onSalva={salvaModificaVoce} onElimina={eliminaVoce} onChiudi={() => setPopupVoce(null)} />
       )}
     </div>
   );
