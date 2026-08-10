@@ -1498,7 +1498,7 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
           </div>
         </div>
       )}
-      {onMetodo && valori.metodo === "Bonifico" && (
+      {onMetodo && valori.metodo === "Bonifico" && pagato && (
         <div style={{ marginTop: 10 }}>
           <Field label="File del bonifico (obbligatorio)">
             {valori.bonificoFilePath && !valori.bonificoFileNuovo ? (
@@ -11105,16 +11105,19 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     precorsoExtra.forEach((r, idx) => { if (r.totale !== "" && parseNum(r.totale) !== 0 && !r.metodo) metodiMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
     if (pagSaldo.totale !== "" && parseNum(pagSaldo.totale) !== 0 && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
 
-    // scegliendo Bonifico come metodo di una quota è sempre obbligatorio
-    // allegare il file del bonifico: finisce in automatico nella coda
-    // "Verifica Pagamenti" di Elena, etichettato "Verifica bonifico"
+    // scegliendo Bonifico come metodo di una quota già segnata "Pagato" è
+    // obbligatorio allegare il file del bonifico: finisce in automatico
+    // nella coda "Verifica Pagamenti" di Elena, etichettato "Verifica
+    // bonifico". Finché la quota è "Da pagare" non è ancora stato
+    // effettivamente ricevuto nulla, quindi non c'è ancora un file da
+    // richiedere ("Da avere al corso" non ha un interruttore pagato/da
+    // pagare, quindi non lo richiede mai)
     const fileBonificoMancanti = [];
-    const serveFileBonifico = (q) => q.metodo === "Bonifico" && !q.bonificoFilePath && !q.bonificoFileNuovo;
-    if (serveFileBonifico(pagAcconto)) fileBonificoMancanti.push("quota acconto");
-    accontoExtra.forEach((r, idx) => { if (serveFileBonifico(r)) fileBonificoMancanti.push(`acconto aggiuntivo ${idx + 1}`); });
-    if (serveFileBonifico(pagPrecorso)) fileBonificoMancanti.push("quota pre corso");
-    precorsoExtra.forEach((r, idx) => { if (serveFileBonifico(r)) fileBonificoMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
-    if (serveFileBonifico(pagSaldo)) fileBonificoMancanti.push("da avere al corso");
+    const serveFileBonifico = (q, pagato) => q.metodo === "Bonifico" && pagato && !q.bonificoFilePath && !q.bonificoFileNuovo;
+    if (serveFileBonifico(pagAcconto, pagAccontoPagato)) fileBonificoMancanti.push("quota acconto");
+    accontoExtra.forEach((r, idx) => { if (serveFileBonifico(r, r.pagato)) fileBonificoMancanti.push(`acconto aggiuntivo ${idx + 1}`); });
+    if (serveFileBonifico(pagPrecorso, pagPrecorsoPagato)) fileBonificoMancanti.push("quota pre corso");
+    precorsoExtra.forEach((r, idx) => { if (serveFileBonifico(r, r.pagato)) fileBonificoMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
 
     const altriMancanti = [];
     if (strict) {
