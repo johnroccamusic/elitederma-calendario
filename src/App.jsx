@@ -453,17 +453,18 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// ingranaggio simmetrico (8 denti identici a intervalli di 45°, generati
-// per rotazione invece che disegnati a mano): l'icona a linea riusata
-// dall'ERP, pensata per 20px, ingrandita nel tasto della Home mostrava
-// denti storti e disuguali
+// ingranaggio simmetrico (8 denti quadrati identici a intervalli di 45°,
+// generati per rotazione invece che disegnati a mano): denti abbastanza
+// stretti da lasciare vedere le tacche tra uno e l'altro (altrimenti,
+// troppo larghi, si fondono in un disco pieno senza più sembrare un
+// ingranaggio), ma a contatto con l'anello, non raggi sottili staccati
 function IconaTileImpostazioni({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2.1" fill={GOLD} stroke="none" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4.3" />
+      <circle cx="12" cy="12" r="1.5" fill={GOLD} stroke="none" />
       {[0, 45, 90, 135, 180, 225, 270, 315].map((angolo) => (
-        <rect key={angolo} x="11.15" y="1.5" width="1.7" height="3.1" rx="0.7" transform={`rotate(${angolo} 12 12)`} fill={color} stroke="none" />
+        <rect key={angolo} x="11" y="4" width="2" height="3.4" rx="0.4" transform={`rotate(${angolo} 12 12)`} fill={color} stroke="none" />
       ))}
     </svg>
   );
