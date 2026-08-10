@@ -5139,18 +5139,19 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
   );
 }
 
-// una riga della tabella "Gestione utenti": nome + password modificabili
-// (Salva esplicito) e un quadratino per ogni tasto della home
-// (TASTI_HOME) — spuntarlo/togliere lo spunto scrive subito su
-// utenti_app, senza bisogno di un Salva a parte, così il risultato in
-// home è immediato. Le 3 righe di sistema non ancora salvate (id nullo,
-// mostrate coi valori di sempre) vengono create al primo salvataggio
-function RigaTabellaUtente({ utente, agende, ricarica }) {
+// una riga della tabella "Gestione utenti": nome + password (si salvano
+// da soli appena si clicca fuori dal campo, come la password Master) e un
+// quadratino per ogni tasto della home (TASTI_HOME) — spuntarlo/togliere
+// lo spunto scrive subito su utenti_app, senza bisogno di nessun Salva.
+// Espone comunque salvaSeNecessario() via ref, per il Salva unico sotto
+// alla tabella (rete di sicurezza per chi preferisce cliccare un tasto
+// piuttosto che uscire dal campo). Le 3 righe di sistema non ancora
+// salvate (id nullo, mostrate coi valori di sempre) vengono create al
+// primo salvataggio
+const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, agende, ricarica }, ref) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
-  const [salvando, setSalvando] = useState(false);
-  const [fatto, setFatto] = useState(false);
   // spuntato/tolto lo spunto aggiorna subito questo stato locale (non si
   // aspetta il giro di rete + ricarica di tutti i dati dell'app prima di
   // vedere la casella cambiare, altrimenti c'è una latenza percepibile)
@@ -5164,15 +5165,13 @@ function RigaTabellaUtente({ utente, agende, ricarica }) {
     });
   }
   async function salvaCampi() {
+    if (nome.trim() === (utente.nome || "").trim() && password.trim() === (utente.password || "").trim()) return;
     if (!nome.trim() || !password.trim()) { window.alert("Nome e password non possono essere vuoti."); return; }
-    setSalvando(true); setFatto(false);
     const { error } = await persist({ nome: nome.trim(), password: password.trim() });
-    setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setFatto(true);
-    setTimeout(() => setFatto(false), 2000);
     ricarica();
   }
+  React.useImperativeHandle(ref, () => ({ salvaSeNecessario: salvaCampi }));
   async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
@@ -5197,10 +5196,10 @@ function RigaTabellaUtente({ utente, agende, ricarica }) {
     return (
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ ...inputStyle, flex: 1, fontWeight: 700 }} />
+          <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, flex: 1, fontWeight: 700 }} />
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <input value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+          <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, flex: 1 }} />
         </div>
         <div style={{ marginBottom: 12 }}>
           {TASTI_HOME.map((t) => (
@@ -5216,23 +5215,14 @@ function RigaTabellaUtente({ utente, agende, ricarica }) {
             </label>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        {!sistema && (
           <button
-            onClick={salvaCampi}
-            disabled={salvando}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 12px", cursor: salvando ? "default" : "pointer", flex: 1 }}
+            onClick={elimina}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "9px 12px", cursor: "pointer", width: "100%" }}
           >
-            {salvando ? "…" : fatto ? "✓" : "Salva"}
+            Elimina
           </button>
-          {!sistema && (
-            <button
-              onClick={elimina}
-              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 8, padding: "9px 12px", cursor: "pointer", flex: 1 }}
-            >
-              Elimina
-            </button>
-          )}
-        </div>
+        )}
       </div>
     );
   }
@@ -5241,10 +5231,10 @@ function RigaTabellaUtente({ utente, agende, ricarica }) {
   return (
     <tr>
       <td style={tdStyle}>
-        <input value={nome} onChange={(e) => setNome(e.target.value)} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 13, fontWeight: 700 }} />
+        <input value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 130, padding: "6px 8px", fontSize: 13, fontWeight: 700 }} />
       </td>
       <td style={tdStyle}>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
+        <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
       </td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
@@ -5257,27 +5247,18 @@ function RigaTabellaUtente({ utente, agende, ricarica }) {
         </td>
       ))}
       <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-        <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+        {!sistema && (
           <button
-            onClick={salvaCampi}
-            disabled={salvando}
-            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, padding: "6px 10px", cursor: salvando ? "default" : "pointer" }}
+            onClick={elimina}
+            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
           >
-            {salvando ? "…" : fatto ? "✓" : "Salva"}
+            Elimina
           </button>
-          {!sistema && (
-            <button
-              onClick={elimina}
-              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #C0392B", borderRadius: 6, padding: "6px 10px", cursor: "pointer" }}
-            >
-              Elimina
-            </button>
-          )}
-        </div>
+        )}
       </td>
     </tr>
   );
-}
+});
 // tasto "Genera nuovo utente": crea subito una riga (nome/password
 // placeholder, nessun tasto spuntato) pronta da rinominare e configurare
 // direttamente nella tabella, senza un modulo separato da compilare prima
@@ -5319,18 +5300,32 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
   const righe = [...righeSistema, ...righeNominali];
   const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
 
+  // nome e password si salvano già da soli quando si esce dal campo; questo
+  // Salva unico (sotto la tabella, non più in fondo a ogni riga di
+  // opzioni) è solo una rete di sicurezza per chi ha lasciato un campo
+  // modificato senza cliccare fuori — chiama tutte le righe insieme
+  const refRighe = useRef({});
+  const [salvandoTutto, setSalvandoTutto] = useState(false);
+  async function salvaTutto() {
+    setSalvandoTutto(true);
+    await Promise.all(Object.values(refRighe.current).map((r) => r?.salvaSeNecessario?.()));
+    setSalvandoTutto(false);
+  }
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
         <div>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Gestione utenti</div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Configura gli accessi alla home page per ogni utente.</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Configura gli accessi alla home page per ogni utente. Nome e password si salvano da soli appena si clicca fuori dal campo; le caselle appena spuntate/tolte anche.</div>
         </div>
         <BottoneGeneraUtente utentiApp={utentiApp} ricarica={ricarica} />
       </div>
       {isMobile ? (
         <div style={{ marginTop: 14 }}>
-          {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} agende={agende} ricarica={ricarica} />)}
+          {righe.map((u) => (
+            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} ricarica={ricarica} />
+          ))}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginTop: 14 }}>
@@ -5345,11 +5340,16 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
               </tr>
             </thead>
             <tbody>
-              {righe.map((u) => <RigaTabellaUtente key={u.chiave_sistema || u.id} utente={u} agende={agende} ricarica={ricarica} />)}
+              {righe.map((u) => (
+                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} ricarica={ricarica} />
+              ))}
             </tbody>
           </table>
         </div>
       )}
+      <div style={{ marginTop: 14 }}>
+        <Button onClick={salvaTutto} disabled={salvandoTutto}>{salvandoTutto ? "Salvo…" : "Salva"}</Button>
+      </div>
     </div>
   );
 }
