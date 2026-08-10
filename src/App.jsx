@@ -402,10 +402,13 @@ function IconaTileCorsi({ size = 44, color = NAVY }) {
 }
 function IconaTileVenditori({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 15v4" />
-      <path d="M12 11v8" />
-      <path d="M18 6v13" stroke={GOLD} />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 20v-6.5" />
+      <circle cx="6" cy="12" r="1.5" fill={color} stroke="none" />
+      <path d="M12 20v-10.5" />
+      <circle cx="12" cy="8" r="1.5" fill={color} stroke="none" />
+      <path d="M18 20V5.5" />
+      <circle cx="18" cy="4" r="1.5" fill={color} stroke="none" />
     </svg>
   );
 }
@@ -437,11 +440,28 @@ function IconaTileModelle({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+// grafico a torta con una "fetta" estratta: il cerchio principale (Pac-Man,
+// manca lo spicchio in alto a destra) più lo stesso spicchio ridisegnato
+// staccato, spostato verso l'alto a destra, come se fosse stato tolto.
+// Costruito per punti (stessa tecnica dell'ingranaggio) invece che con i
+// flag dell'arco SVG: a mano è troppo facile sbagliare quale dei quattro
+// archi possibili viene disegnato
+const GRADI = Math.PI / 180;
+function spicchioTorta(cx, cy, r, gradoIniziale, gradoFinale, punti = 40) {
+  const coords = [];
+  for (let i = 0; i <= punti; i++) {
+    const t = (gradoIniziale + (gradoFinale - gradoIniziale) * (i / punti)) * GRADI;
+    coords.push(`${(cx + r * Math.cos(t)).toFixed(2)},${(cy + r * Math.sin(t)).toFixed(2)}`);
+  }
+  return `M${cx},${cy} L${coords.join(" L")} Z`;
+}
+const PERCORSO_TORTA_CORPO = spicchioTorta(10, 13, 6.5, -25, 270);
+const PERCORSO_TORTA_FETTA = spicchioTorta(14.5, 7.8, 3.2, -90, -25);
 function IconaTileStatistiche({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12a9 9 0 1 1-9-9" />
-      <path d="M12 3v9h9" />
+      <path d={PERCORSO_TORTA_CORPO} />
+      <path d={PERCORSO_TORTA_FETTA} />
     </svg>
   );
 }
@@ -453,19 +473,27 @@ function IconaTileLampadina({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// ingranaggio simmetrico (8 denti quadrati identici a intervalli di 45°,
-// generati per rotazione invece che disegnati a mano): denti abbastanza
-// stretti da lasciare vedere le tacche tra uno e l'altro (altrimenti,
-// troppo larghi, si fondono in un disco pieno senza più sembrare un
-// ingranaggio), ma a contatto con l'anello, non raggi sottili staccati
+// profilo "a fiore" di un ingranaggio: il raggio oscilla in modo
+// sinusoidale attorno alla circonferenza (N volte per giro), invece di
+// denti rettangolari piazzati a mano — così i denti sono arrotondati e
+// fusi con l'anello, non spigoli né raggi staccati. Il buco al centro è
+// ritagliato con fill-rule evenodd, non un secondo cerchio sovrapposto:
+// funziona su qualunque sfondo, non solo su quello bianco
+function percorsoIngranaggio(cx, cy, rMedio, ampiezza, denti, punti = 96) {
+  const coords = [];
+  for (let i = 0; i <= punti; i++) {
+    const t = (i / punti) * Math.PI * 2;
+    const r = rMedio + ampiezza * Math.cos(denti * t);
+    coords.push(`${(cx + r * Math.cos(t)).toFixed(2)},${(cy + r * Math.sin(t)).toFixed(2)}`);
+  }
+  return `M${coords[0]} L${coords.slice(1).join(" L")} Z`;
+}
+const PERCORSO_INGRANAGGIO = percorsoIngranaggio(12, 12, 7.1, 1.25, 8);
 function IconaTileImpostazioni({ size = 44, color = NAVY }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4.3" />
-      <circle cx="12" cy="12" r="1.5" fill={GOLD} stroke="none" />
-      {[0, 45, 90, 135, 180, 225, 270, 315].map((angolo) => (
-        <rect key={angolo} x="11" y="4" width="2" height="3.4" rx="0.4" transform={`rotate(${angolo} 12 12)`} fill={color} stroke="none" />
-      ))}
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d={`${PERCORSO_INGRANAGGIO} M15.4 12a3.4 3.4 0 1 1-6.8 0 3.4 3.4 0 0 1 6.8 0Z`} fill={color} fillRule="evenodd" />
+      <circle cx="12" cy="12" r="1.6" fill={GOLD} />
     </svg>
   );
 }
