@@ -11380,6 +11380,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // l'identità è utenteLoggato.nome. Entrambi devono poter sbloccare i
   // due "+ Aggiungi" se il loro nome combacia col Tutor dell'iscritto
   const nomeVenditoreAttuale = venditoreLoggato?.nome || utenteLoggato?.nome;
+  // confronto tollerante a maiuscole/minuscole e spazi superflui: il Tutor
+  // di un'iscrizione più vecchia (o inserito a mano) può non combaciare
+  // per un pelo col nome esatto del venditore anche se è "la stessa persona"
+  const stessoVenditore = (a, b) => !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+  const eIlProprioTutor = stessoVenditore(iscrittoAttuale?.tutor, nomeVenditoreAttuale);
   // pagamento (acconto/quota pre corso) segnalato da un venditore per
   // questo iscritto e ancora da approvare: se c'è, lo staff (adminSbloccato)
   // vede la card di verifica sopra ai "Dati contabili"
@@ -11755,8 +11760,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               può comunque segnalare un pagamento incassato dopo la vendita:
               resta fuori dal fieldset di sola lettura qui sotto, così è
               l'unica cosa cliccabile senza sbloccare il resto della scheda */}
-          {soloLettura && nomeVenditoreAttuale && iscrittoAttuale?.tutor === nomeVenditoreAttuale && (
+          {soloLettura && nomeVenditoreAttuale && eIlProprioTutor && (
             <BloccoAggiuntaPagamentoVenditore iscrittoId={iscrittoAttuale.id} venditoreNome={nomeVenditoreAttuale} ricarica={ricarica} />
+          )}
+          {soloLettura && nomeVenditoreAttuale && !eIlProprioTutor && (
+            <div style={{ ...fontBody, fontSize: 11, color: "#C0392B", background: "#FBEAE4", border: "1px solid #E4A79B", borderRadius: 8, padding: 10, marginBottom: 10 }}>
+              Diagnostica: sei loggato come "{nomeVenditoreAttuale}", ma il Tutor di questo iscritto è "{iscrittoAttuale?.tutor || "—"}" — non combaciano, quindi i due "+ Aggiungi" restano nascosti.
+            </div>
           )}
 
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
