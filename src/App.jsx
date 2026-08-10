@@ -386,6 +386,73 @@ function IconaPacchettoRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+// icone dei tasti grandi della Home: stesso stile a linea delle altre
+// (stroke=currentColor), con un piccolo accento dorato dove nel mockup
+// compare un dettaglio arancione
+function IconaTileCorsi({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M8 3v4M16 3v4M3 10h18" />
+      <circle cx="8.5" cy="14.5" r="1" fill={GOLD} stroke="none" />
+      <circle cx="12" cy="14.5" r="1" fill={GOLD} stroke="none" />
+      <circle cx="15.5" cy="14.5" r="1" />
+    </svg>
+  );
+}
+function IconaTileVenditori({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 15v4" />
+      <path d="M12 11v8" />
+      <path d="M18 6v13" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileMaster({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8.5" r="5.5" />
+      <path d="M9 13.7L7.2 21l4.8-2.6 4.8 2.6-1.8-7.3" />
+      <path d="M12 5.3l1 2 2.2.3-1.6 1.6.4 2.2-2-1.1-2 1.1.4-2.2-1.6-1.6 2.2-.3z" fill={GOLD} stroke={GOLD} strokeWidth="0.6" />
+    </svg>
+  );
+}
+function IconaTileLogistica({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7h10v9H3z" />
+      <path d="M13 10h4l3 3v3h-7z" />
+      <circle cx="7" cy="18.3" r="1.5" />
+      <circle cx="17" cy="18.3" r="1.5" />
+      <path d="M6 9.3h4" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileModelle({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="7.8" r="3.8" />
+      <path d="M4.5 20.2c0-4 3.4-6.6 7.5-6.6s7.5 2.6 7.5 6.6" />
+    </svg>
+  );
+}
+function IconaTileStatistiche({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 1 1-9-9" />
+      <path d="M12 3v9h9" />
+    </svg>
+  );
+}
+function IconaTileLampadina({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18.3h6M10 21h4" />
+      <path d="M12 3a6 6 0 0 0-3.2 11.1c.6.4 1.2 1.3 1.2 2.1v.3h4v-.3c0-.8.6-1.7 1.2-2.1A6 6 0 0 0 12 3Z" />
+    </svg>
+  );
+}
 // icone della pagina "ERP" (testata + card KPI)
 function IconaRicercaErp({ size = 18, color = "currentColor" }) {
   return (
@@ -878,30 +945,76 @@ function CardHome({ title, sub, onClick, icona }) {
   );
 }
 
-// card grande e quadrata della home (griglia 4x2): solo titolo, nessuna
-// icona/sottotitolo. "attivo=false" la mostra spenta con badge "Non
-// attivo", per aree non ancora costruite
-// su mobile le tile sono più basse (non quadrate) e con testo/padding
-// più compatti: le 8 devono stare tutte a schermo, senza scroll, su un
-// iPhone normale — quadrate come su desktop non ci sarebbero mai state
-function TileHome({ title, attivo = true, onClick }) {
+// card grande della home (griglia 4 colonne): icona, titolo, una riga di
+// descrizione e una freccia in basso — passando Icona/descrizione. Senza
+// (gli hub interni tipo ERP che riusano lo stesso componente) resta la
+// versione minimale di sempre, solo titolo, per non alterarne l'aspetto.
+// "attivo=false" la mostra spenta con badge "Non attivo", per aree non
+// ancora costruite. Su mobile tile più compatte, sempre leggibili senza
+// scroll orizzontale
+function TileHome({ title, descrizione, Icona, attivo = true, onClick }) {
   const isMobile = useIsMobile();
+  const ricca = !!Icona;
+  const coloreTesto = attivo ? NAVY : MUTED;
   return (
     <button
       onClick={attivo ? onClick : undefined}
       disabled={!attivo}
       style={{
-        ...fontBody, textAlign: "left", width: "100%", boxSizing: "border-box", aspectRatio: "1", position: "relative",
-        display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0,
-        background: attivo ? "#FFFFFF" : "#EDEAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 10 : 16,
-        padding: isMobile ? "8px 10px" : 22, cursor: attivo ? "pointer" : "default",
+        ...fontBody, textAlign: ricca ? "center" : "left", width: "100%", height: ricca ? "100%" : undefined, boxSizing: "border-box",
+        aspectRatio: ricca ? undefined : "1", position: "relative",
+        display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "flex-start" : "flex-end", minWidth: 0,
+        background: attivo ? "#FFFFFF" : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 18,
+        padding: ricca ? (isMobile ? "22px 14px 16px" : "34px 26px 26px") : (isMobile ? "8px 10px" : 22),
+        cursor: attivo ? "pointer" : "default",
       }}
     >
       {!attivo && (
-        <span style={{ position: "absolute", top: isMobile ? 6 : 16, right: isMobile ? 8 : 18, ...fontBody, fontSize: isMobile ? 8 : 11, color: MUTED }}>Non attivo</span>
+        <span style={{ position: "absolute", top: isMobile ? 10 : 16, right: isMobile ? 8 : 18, ...fontBody, fontSize: isMobile ? 8 : 10.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "2px 8px" : "3px 10px" }}>Non attivo</span>
       )}
-      <span style={{ ...fontDisplay, fontSize: isMobile ? 13 : 22, fontWeight: 700, lineHeight: 1.15, color: attivo ? NAVY : MUTED }}>{title}</span>
+      {ricca ? (
+        <>
+          <div style={{ color: coloreTesto, marginBottom: isMobile ? 10 : 18 }}><Icona size={isMobile ? 32 : 46} color={coloreTesto} /></div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 14 : 19, fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 5 : 9 }}>{title}</div>
+          {descrizione && <div style={{ ...fontBody, fontSize: isMobile ? 11 : 13, color: MUTED, lineHeight: 1.4 }}>{descrizione}</div>}
+          <div style={{ fontSize: isMobile ? 15 : 18, color: coloreTesto, marginTop: "auto", paddingTop: isMobile ? 10 : 20 }}>&rarr;</div>
+        </>
+      ) : (
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 13 : 22, fontWeight: 700, lineHeight: 1.15, color: coloreTesto }}>{title}</span>
+      )}
     </button>
+  );
+}
+// card speciale "Progetti in corso": stesso stile delle altre ma più
+// larga (due colonne), sempre spenta, con badge in alto a destra e un
+// tasto (non cliccabile) invece della freccia
+function TileProgettiInCorso() {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{
+      gridColumn: "span 2", background: "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 18,
+      padding: isMobile ? "18px 16px" : "30px 32px", display: "flex", flexDirection: "column", justifyContent: "space-between",
+    }}>
+      <div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: isMobile ? 10 : 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12 }}>
+            <IconaTileLampadina size={isMobile ? 22 : 28} />
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 21, fontWeight: 700, color: NAVY }}>Progetti in corso</div>
+          </div>
+          <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "2px 8px" : "3px 10px", flexShrink: 0, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ color: GOLD, fontSize: 8 }}>◆</span>Non attivo
+          </span>
+        </div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, lineHeight: 1.5 }}>
+          Questa sezione sarà presto disponibile. Stiamo preparando qualcosa di importante per te.
+        </div>
+      </div>
+      <div style={{ marginTop: isMobile ? 14 : 20 }}>
+        <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, color: "#fff", background: GOLD, borderRadius: 20, padding: isMobile ? "8px 16px" : "11px 22px", display: "inline-block" }}>
+          Scopri di più
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -18466,18 +18579,18 @@ export default function App() {
           <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestionale Academy</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 8 : 14 }}>
-            <TileHome title="Gestione corsi" attivo={tastoAbilitato("gestionedate")} onClick={apriGestioneDate} />
-            <TileHome title="Dashboard venditori" attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
-            <TileHome title="Dashboard master" attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
-            <TileHome title="Agenda" attivo={haAccessoAgenda()} onClick={apriAgenda} />
-            <TileHome title="ERP / Magazzino" attivo={tastoAbilitato("erp")} onClick={apriErp} />
-            <TileHome title="Logistica prodotti" attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
-            <TileHome title="Assegna logo" attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
-            <TileHome title="Gestione modelle" attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
-            <TileHome title="Statistiche" attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
-            <TileHome title="Setting" attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
-            <TileHome title="Progetti in corso" attivo={false} />
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 10 : 16 }}>
+            <TileHome title="Gestione corsi" descrizione="Crea, modifica e organizza tutti i corsi e le sedi" Icona={IconaTileCorsi} attivo={tastoAbilitato("gestionedate")} onClick={apriGestioneDate} />
+            <TileHome title="Dashboard venditori" descrizione="Monitora vendite, performance e obiettivi del team" Icona={IconaTileVenditori} attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
+            <TileHome title="Dashboard master" descrizione="Gestisci master, specializzazioni e valutazioni" Icona={IconaTileMaster} attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
+            <TileHome title="Agenda" descrizione="Visualizza calendario, impegni e promemoria" Icona={IconaCalendarioCard} attivo={haAccessoAgenda()} onClick={apriAgenda} />
+            <TileHome title="ERP / Magazzino" descrizione="Gestisci prodotti, stock e fornitori" Icona={IconaScatolaErp} attivo={tastoAbilitato("erp")} onClick={apriErp} />
+            <TileHome title="Logistica prodotti" descrizione="Spedizioni, tracciamenti e documenti" Icona={IconaTileLogistica} attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
+            <TileHome title="Assegna logo" descrizione="Personalizza loghi, watermark e materiali ufficiali" Icona={IconaLoghiCard} attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
+            <TileHome title="Gestione modelle" descrizione="Organizza modelle, disponibilità e assegnazioni" Icona={IconaTileModelle} attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
+            <TileHome title="Statistiche" descrizione="Analisi, report e KPI della tua Academy" Icona={IconaTileStatistiche} attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
+            <TileHome title="Impostazioni" descrizione="Configura preferenze, utenti e permessi" Icona={IconaIngranaggioErp} attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
+            <TileProgettiInCorso />
           </div>
         </div>
       )}
