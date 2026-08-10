@@ -3808,10 +3808,10 @@ function SettimanaAgendaQuaderno({ giorni, voci, corsiGiorno, onClickGiorno, onC
             {corsiDelGiorno.map((c) => (
               <div
                 key={c.id}
-                title={`${c.corsoNome} · ${c.locNome}`}
+                title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`}
                 style={{ ...fontBody, fontSize: isMobile ? 10 : 12.5, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 5, padding: isMobile ? "2px 4px" : "3px 8px", marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
               >
-                🎓 {c.corsoNome}{!isMobile && ` · ${c.locNome}`}
+                🎓 {c.corsoNome}{!isMobile && ` · ${c.sigla}`}{c.giorniTotali > 1 && ` ${c.indice}/${c.giorniTotali}`}
               </div>
             ))}
             {/* eventi personali: testo semplice "orario titolo" sulla riga
@@ -3875,10 +3875,17 @@ function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onChiudi }) 
         <div style={{ flex: 1, minWidth: 0 }}>
           {ORE_GRIGLIA_GIORNO.map((ora) => {
             const eventiSlot = vociConOrario.filter((v) => slotMezzoraDi(v.orario) === ora);
+            const oraPiena = ora.endsWith(":00");
             return (
-              <div key={ora} style={{ display: "flex", gap: 10, borderTop: `1px solid ${CREAM_BORDER}`, minHeight: 28, padding: "4px 0" }}>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, width: 40, flexShrink: 0 }}>{ora}</div>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+              // l'etichetta dell'ora sta appoggiata esattamente sulla riga
+              // (a cavallo del bordo, come in un'agenda vera), non sospesa
+              // a metà di uno spazio vuoto; le ore intere hanno una riga
+              // più marcata delle mezzore, per orientarsi scorrendo veloce
+              <div key={ora} style={{ position: "relative", borderTop: oraPiena ? `1.5px solid #C9C2AE` : `1px solid ${CREAM_BORDER}`, minHeight: 30 }}>
+                <div style={{ position: "absolute", top: 0, left: 0, transform: "translateY(-50%)", background: "#fff", paddingRight: 6, ...fontBody, fontSize: 11, fontWeight: oraPiena ? 700 : 400, color: MUTED }}>
+                  {ora}
+                </div>
+                <div style={{ paddingLeft: 46, paddingTop: 7, paddingBottom: 4, display: "flex", flexDirection: "column", gap: 3 }}>
                   {eventiSlot.map((v) => (
                     <div key={v.id} onClick={() => onClickVoce(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, cursor: "pointer" }}>
                       {v.titolo}
@@ -3903,8 +3910,8 @@ function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onChiudi }) 
           {corsiDelGiorno.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun corso</div>
           ) : corsiDelGiorno.map((c) => (
-            <div key={c.id} title={`${c.corsoNome} · ${c.locNome}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
-              🎓 {c.corsoNome}<br />{c.locNome}
+            <div key={c.id} title={`${c.corsoNome} · ${c.locNome}${c.giorniTotali > 1 ? ` · ${c.indice}/${c.giorniTotali}` : ""}`} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.35), borderRadius: 8, padding: "10px 10px", textAlign: "center" }}>
+              🎓 {c.corsoNome}<br />{c.locNome}{c.giorniTotali > 1 && ` · ${c.indice}/${c.giorniTotali}`}
             </div>
           ))}
         </div>
@@ -4027,10 +4034,20 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
   );
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  // stesso numero di frazione "giorno/totale" del Calendario corsi (es.
+  // 1/2, 2/2): un corso di più giorni deve mostrarlo anche qui
   function corsiGiorno(ds) {
     return (corsiDate || [])
       .filter((cd) => cd.data_inizio <= ds && cd.data_fine >= ds)
-      .map((cd) => ({ id: cd.id, corsoNome: toTitleCase(corsoById[cd.corso_id]?.nome || "?"), locNome: toTitleCase(locById[cd.location_id]?.nome || "?"), colore: corsoById[cd.corso_id]?.colore }));
+      .map((cd) => ({
+        id: cd.id,
+        corsoNome: toTitleCase(corsoById[cd.corso_id]?.nome || "?"),
+        locNome: toTitleCase(locById[cd.location_id]?.nome || "?"),
+        sigla: siglaCitta(locById[cd.location_id]?.nome),
+        colore: corsoById[cd.corso_id]?.colore,
+        indice: differenzaGiorni(cd.data_inizio, ds) + 1,
+        giorniTotali: differenzaGiorni(cd.data_inizio, cd.data_fine) + 1,
+      }));
   }
 
   return (
