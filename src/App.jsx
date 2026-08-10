@@ -2238,11 +2238,60 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
 // alimenta il resto della dashboard), in ordine cronologico — stesso
 // stile a tabella/riga cliccabile di UltimeIscrizioni, ma senza bisogno
 // della colonna Tutor (è già filtrato su un solo venditore)
-function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, onApriIscritto }) {
+// finestra "Aggiungi pagamento" (aperta da un tasto su una riga di "Le
+// tue iscrizioni"): il venditore carica il file del pagamento e scrive
+// una nota a mano — nessun campo strutturato, solo questi due più
+// l'invio. Non tocca la scheda dell'iscritto: finisce nella coda
+// acconti_da_verificare, in attesa che lo staff la verifichi e approvi
+// da "Verifica Pagamenti" (Gestione corsi)
+function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato }) {
+  const [nota, setNota] = useState("");
+  const [file, setFile] = useState(null);
+  const [inviando, setInviando] = useState(false);
+  async function invia() {
+    if (!nota.trim() && !file) return;
+    setInviando(true);
+    let filePath = null;
+    if (file) {
+      const percorso = `acconti/${iscritto.id}-${Date.now()}-${file.name}`;
+      const { error: erroreUpload } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
+      if (erroreUpload) { setInviando(false); window.alert("Errore nel caricamento del file: " + erroreUpload.message); return; }
+      filePath = percorso;
+    }
+    const { error } = await supabase.from("acconti_da_verificare").insert({
+      iscritto_id: iscritto.id, nota: nota.trim() || null, file_path: filePath, venditore_nome: venditoreNome, origine: "manuale",
+    });
+    setInviando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+    onInviato(iscritto.id);
+  }
+  return (
+    <Modal title={`Aggiungi pagamento — ${iscritto.nome} ${iscritto.cognome}`} onClose={onChiudi}>
+      <Field label="File di pagamento">
+        <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFile(e.target.files?.[0] || null)} />
+      </Field>
+      <Field label="Nota">
+        <textarea
+          style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+          value={nota} onChange={(e) => setNota(e.target.value)}
+          placeholder="Scrivi qui i dettagli del pagamento…" autoFocus
+        />
+      </Field>
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+        <Button onClick={invia} disabled={inviando || (!nota.trim() && !file)}>{inviando ? "Invio…" : "Invia"}</Button>
+        <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
+      </div>
+    </Modal>
+  );
+}
+function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, onApriIscritto, ricarica }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   const [ricerca, setRicerca] = useState("");
+  const [pagamentoPer, setPagamentoPer] = useState(null); // iscritto per cui è aperta "Aggiungi pagamento", o null
+  const [inviatoPerId, setInviatoPerId] = useState(null); // id dell'iscritto appena inviato, per la spunta sulla riga
   // colonna: null = ordine di default (dall'iscrizione più recente, in
   // cima, alla più vecchia, in fondo); altrimenti quale colonna e in che
   // verso, alternato a ogni click sulla stessa intestazione
@@ -2309,7 +2358,8 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
                 <th onClick={() => cambiaOrdinamento("citta")} style={stileTh("citta")}>Città{frecciaOrdinamento("citta")}</th>
                 <th onClick={() => cambiaOrdinamento("corso")} style={stileTh("corso")}>Corso{frecciaOrdinamento("corso")}</th>
                 <th onClick={() => cambiaOrdinamento("data")} style={stileTh("data")}>Data del corso{frecciaOrdinamento("data")}</th>
-                <th onClick={() => cambiaOrdinamento("allievo")} style={stileTh("allievo", true)}>Allievo{frecciaOrdinamento("allievo")}</th>
+                <th onClick={() => cambiaOrdinamento("allievo")} style={stileTh("allievo")}>Allievo{frecciaOrdinamento("allievo")}</th>
+                <th style={{ ...stileTh(null, true), cursor: "default" }}></th>
               </tr>
             </thead>
             <tbody>
@@ -2318,9 +2368,137 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
                   <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.citta}</td>
                   <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.corsoNome}</td>
                   <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.dataLabel}</td>
-                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, borderRight: "none" }}>{r.allievo}</td>
+                  <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>{r.allievo}</td>
+                  <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
+                    {inviatoPerId === r.iscritto.id ? (
+                      <span style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", fontWeight: 600 }}>Inviato ✓</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPagamentoPer(r.iscritto); }}
+                        style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "6px 12px", cursor: "pointer" }}
+                      >
+                        Aggiungi Pagamento
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {pagamentoPer && (
+        <ModalePagamentoVenditore
+          iscritto={pagamentoPer} venditoreNome={venditoreNome} ricarica={ricarica}
+          onChiudi={() => setPagamentoPer(null)}
+          onInviato={(id) => { setInviatoPerId(id); setPagamentoPer(null); }}
+        />
+      )}
+    </div>
+  );
+}
+const ETICHETTA_ORIGINE_ACCONTO = { manuale: "Verifica acconto/saldo", bonifico_modulo: "Verifica bonifico" };
+// coda "Verifica Pagamenti" (Gestione corsi): raccoglie sia le
+// segnalazioni manuali dei venditori ("Aggiungi Pagamento" su "Le tue
+// iscrizioni", origine "manuale") sia — quando esisterà — quelle create
+// in automatico dal modulo di iscrizione quando si sceglie Bonifico come
+// metodo (origine "bonifico_modulo"). L'approvazione avviene qui stesso,
+// riga per riga: non serve più aprire la scheda dell'iscritto
+function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, ricarica, onBack }) {
+  const [tab, setTab] = useState("attesa"); // attesa | verificati
+  const [approvandoId, setApprovandoId] = useState(null);
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+  const iscrittoById = useMemo(() => Object.fromEntries(iscritti.map((i) => [i.id, i])), [iscritti]);
+
+  const righe = accontiDaVerificare.filter((a) => (tab === "attesa" ? a.stato === "in_attesa" : a.stato === "approvato"));
+
+  async function approva(a) {
+    setApprovandoId(a.id);
+    const { error } = await supabase.from("acconti_da_verificare").update({ stato: "approvato", approvato_il: new Date().toISOString() }).eq("id", a.id);
+    setApprovandoId(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  const bordoV = `1px solid ${CREAM_BORDER}`;
+  const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+          <IconaFrecciaSinistra size={20} />
+        </button>
+        <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textTransform: "uppercase" }}>Verifica Pagamenti</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        <TabPillola attivo={tab === "attesa"} onClick={() => setTab("attesa")}>Da verificare ({accontiDaVerificare.filter((a) => a.stato === "in_attesa").length})</TabPillola>
+        <TabPillola attivo={tab === "verificati"} onClick={() => setTab("verificati")}>Pagamenti verificati</TabPillola>
+      </div>
+
+      {righe.length === 0 ? (
+        <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>
+          {tab === "attesa" ? "Niente da verificare." : "Nessun pagamento verificato ancora."}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Città</th>
+                <th style={thStyle}>Corso</th>
+                <th style={thStyle}>Data del corso</th>
+                <th style={thStyle}>Allievo</th>
+                <th style={thStyle}>Venditore</th>
+                <th style={thStyle}>Nota</th>
+                <th style={thStyle}>File</th>
+                <th style={{ ...thStyle, borderRight: "none" }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {righe.map((a) => {
+                const iscritto = iscrittoById[a.iscritto_id];
+                const cd = iscritto ? cdById[iscritto.corso_data_id] : null;
+                const corso = cd ? corsoById[cd.corso_id] : null;
+                const loc = cd ? locById[cd.location_id] : null;
+                const cliccabile = iscritto && onApriIscritto;
+                const eBonifico = a.origine === "bonifico_modulo";
+                return (
+                  <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}
+                      <div style={{ marginTop: 4 }}>
+                        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "2px 8px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                          {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
+                        </span>
+                      </div>
+                    </td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
+                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, maxWidth: 260 }}>{a.nota || "—"}</td>
+                    <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                      {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
+                    </td>
+                    <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
+                      {tab === "attesa" && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); approva(a); }}
+                          disabled={approvandoId === a.id}
+                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "6px 14px", cursor: approvandoId === a.id ? "default" : "pointer" }}
+                        >
+                          {approvandoId === a.id ? "…" : "Approva"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -3562,7 +3740,7 @@ function PaginaDashboardVenditori({
             {tabDashboardVenditore === "iscrizioni" && (
               <LeTueIscrizioni
                 corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-                venditoreNome={venditoreSel?.nome} onApriIscritto={onApriIscritto}
+                venditoreNome={venditoreSel?.nome} onApriIscritto={onApriIscritto} ricarica={ricarica}
               />
             )}
           </>
@@ -6597,7 +6775,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
   const [msg, setMsg] = useState("");
 
   // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
@@ -6664,8 +6842,21 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: 22 }}>
+      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
         <Button variant="ghost" onClick={onApriUltimeIscrizioni}>Ultime iscrizioni</Button>
+        {numeroAccontiInAttesa > 0 ? (
+          <>
+            <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+            <button
+              onClick={onApriVerificaAcconti}
+              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer", animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
+            >
+              Verifica Pagamenti ({numeroAccontiInAttesa})
+            </button>
+          </>
+        ) : (
+          <Button variant="ghost" onClick={onApriVerificaAcconti}>Niente da verificare</Button>
+        )}
       </div>
 
       <SezioneDateCorsi
@@ -18250,6 +18441,7 @@ export default function App() {
   const [agende, setAgende] = useState([]);
   const [agendaVoci, setAgendaVoci] = useState([]);
   const [agendaNoteSettimanali, setAgendaNoteSettimanali] = useState([]);
+  const [accontiDaVerificare, setAccontiDaVerificare] = useState([]);
   // cosa è già presente in ciascuna sede (prodotti/attrezzature), come
   // dichiarato dalla master dalla sua Dashboard ("Inventario corso
   // corrente"): una riga per (location_id, tipo, riferimento), l'ultima
@@ -18293,7 +18485,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -18342,6 +18534,7 @@ export default function App() {
       supabase.from("inventario_sede").select("*"),
       supabase.from("prodotti_aperti_magazzino").select("*"),
       supabase.from("agenda_note_settimanali").select("*"),
+      supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -18382,6 +18575,7 @@ export default function App() {
     setAgende(ag.data || []);
     setAgendaVoci(av.data || []);
     setAgendaNoteSettimanali(ans.data || []);
+    setAccontiDaVerificare(adv.data || []);
     setInventarioSede(invs.data || []);
     setProdottiApertiMagazzino(pam.data || []);
   }
@@ -18849,10 +19043,21 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
           onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
+          onApriVerificaAcconti={() => setView("verificaacconti")}
+          numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
           filtroCorsoDate={filtroCorsoDate} setFiltroCorsoDate={setFiltroCorsoDate}
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
           cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
+        />
+      )}
+
+      {view === "verificaacconti" && (
+        <PaginaVerificaAcconti
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          accontiDaVerificare={accontiDaVerificare}
+          onApriIscritto={apriIscritto} ricarica={fetchDati}
+          onBack={() => setView("gestionedate")}
         />
       )}
 

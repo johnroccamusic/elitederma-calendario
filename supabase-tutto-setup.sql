@@ -1693,4 +1693,19 @@ create policy "acconti_da_verificare_all" on public.acconti_da_verificare for al
 -- ---------------------------------------------------------
 alter table public.acconti_da_verificare add column if not exists file_path text;
 
+-- ---------------------------------------------------------
+-- 52) Verifica pagamenti: nota a mano invece di importo/metodo
+-- strutturati (il venditore ora segnala solo file + nota). "origine"
+-- distingue le due sorgenti che finiscono in Verifica Pagamenti:
+-- segnalazione manuale del venditore ("manuale", mostrata come "Verifica
+-- acconto/saldo") oppure creata in automatico quando nel modulo di
+-- iscrizione si sceglie Bonifico come metodo di pagamento
+-- ("bonifico_modulo", mostrata come "Verifica bonifico").
+-- ---------------------------------------------------------
+alter table public.acconti_da_verificare add column if not exists nota text;
+alter table public.acconti_da_verificare alter column tipo drop not null;
+alter table public.acconti_da_verificare alter column importo drop not null;
+alter table public.acconti_da_verificare alter column metodo drop not null;
+alter table public.acconti_da_verificare add column if not exists origine text not null default 'manuale' check (origine in ('manuale','bonifico_modulo'));
+
 notify pgrst, 'reload schema';
