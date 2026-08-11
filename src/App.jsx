@@ -19745,34 +19745,6 @@ export default function App() {
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
-  // swipe da sinistra a destra su mobile → un passo indietro nella cronologia,
-  // swipe da destra a sinistra → un passo avanti (stessa cosa dei pulsanti
-  // "Indietro"/"Avanti" in alto, gesto equivalente)
-  useEffect(() => {
-    let startX = 0, startY = 0, tracking = false;
-    function onTouchStart(e) {
-      if (e.touches.length !== 1) return;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      tracking = true;
-    }
-    function onTouchEnd(e) {
-      if (!tracking) return;
-      tracking = false;
-      const dx = e.changedTouches[0].clientX - startX;
-      const dy = e.changedTouches[0].clientY - startY;
-      if (Math.abs(dx) > 80 && Math.abs(dy) < Math.abs(dx) * 0.6) {
-        if (dx > 0) vaiIndietro();
-        else vaiAvanti();
-      }
-    }
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-    return () => {
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchend", onTouchEnd);
-    };
-  }, [pilaIndietro, pilaAvanti]);
 
   if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => { setRuoloUtente(ruolo); setUtenteLoggato(utente); setOk(true); }} /></div>;
 
@@ -19991,6 +19963,28 @@ export default function App() {
           <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 34, width: "auto", flexShrink: 1, minWidth: 0 }} />
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <button
+            onClick={vaiIndietro}
+            disabled={pilaIndietro.length === 0}
+            style={{
+              ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
+              padding: "8px 14px", fontSize: 13, fontWeight: 600,
+              cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+            }}
+          >
+            ← Indietro
+          </button>
+          <button
+            onClick={vaiAvanti}
+            disabled={pilaAvanti.length === 0}
+            style={{
+              ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
+              padding: "8px 14px", fontSize: 13, fontWeight: 600,
+              cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+            }}
+          >
+            Avanti →
+          </button>
           <button
             onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
             aria-label="Home"
