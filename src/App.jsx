@@ -2688,6 +2688,11 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
           La quota da contabilizzare non può superare quanto resta da contabilizzare ({fmtEuroErp(residuoImponibile)}).
         </div>
       )}
+      {!destinazione && (
+        <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6, textAlign: "right" }}>
+          Seleziona a cosa si riferisce questo pagamento (Acconto/Quota pre corso/Saldo) — si azzera a ogni contabilizzazione fatta anche da un'altra scheda associata, va scelto di nuovo.
+        </div>
+      )}
       {giaContabilizzato > 0 && (
         <div style={{ textAlign: "right", marginTop: 8 }}>
           <button
