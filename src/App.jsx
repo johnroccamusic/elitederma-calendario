@@ -15953,7 +15953,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
             <option value="">Tutte le categorie</option>
             {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
-          <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 180 }} />
         </div>
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
@@ -16010,12 +16009,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
-            {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-              <button key={f.v} onClick={() => setFiltroRapido(f.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: filtroRapido === f.v ? NAVY : "transparent", color: filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                {f.l}
-              </button>
-            ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
+            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+              {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
+                <button key={f.v} onClick={() => setFiltroRapido(f.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: filtroRapido === f.v ? NAVY : "transparent", color: filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                  {f.l}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
