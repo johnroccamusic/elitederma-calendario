@@ -3662,6 +3662,11 @@ function SezioneDateCorsi({
   // opzionale: cambia il testo del titolo (default "Corsi in
   // programmazione"). Usato da Dashboard venditori ("Iscrivi Allievo")
   titolo,
+  // opzionale: solo chi mostra le pillole Elenco/Calendario e In
+  // programmazione/Archivio (non tabForzata/modoForzato) lo passa, per far
+  // sì che l'header "Indietro" disfi prima queste sotto-viste locali
+  // invece di uscire subito dalla pagina
+  registraInterceptaIndietro,
 }) {
   const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
@@ -3669,6 +3674,12 @@ function SezioneDateCorsi({
   const vistaDateModo = modoForzato || vistaDateModoInterno;
   const setVistaDateTab = setVistaDateTabInterna;
   const setVistaDateModo = setVistaDateModoInterno;
+  useEffect(() => {
+    if (!registraInterceptaIndietro || nascondiControlli) return;
+    if (vistaDateModo === "calendario") { registraInterceptaIndietro(() => setVistaDateModo("elenco")); return () => registraInterceptaIndietro(null); }
+    if (vistaDateTab === "archivio") { registraInterceptaIndietro(() => setVistaDateTab("programmazione")); return () => registraInterceptaIndietro(null); }
+    registraInterceptaIndietro(null);
+  }, [vistaDateModo, vistaDateTab, nascondiControlli, registraInterceptaIndietro]);
   const [ricercaDate, setRicercaDate] = useState("");
   const oggiStr = dataOggiStr();
 
@@ -3824,6 +3835,7 @@ function PaginaDashboardVenditori({
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
+  registraInterceptaIndietro,
 }) {
   const isMobile = useIsMobile();
   // se un venditore ha fatto login (venditoreBloccato valorizzato), la
@@ -4320,6 +4332,7 @@ function PaginaDashboardVenditori({
                 apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
                 apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
                 selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+                registraInterceptaIndietro={registraInterceptaIndietro}
               />
             )}
             {tabDashboardVenditore === "iscrizioni" && (
@@ -7502,7 +7515,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro }) {
   const [msg, setMsg] = useState("");
 
   // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
@@ -7659,6 +7672,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
             </div>
           </div>
         )}
+        registraInterceptaIndietro={registraInterceptaIndietro}
       />
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
@@ -19925,6 +19939,16 @@ export default function App() {
   const navigazioneStoricoRef = React.useRef(false); // true mentre Indietro/Avanti stanno applicando un cambiamento (per non registrarlo di nuovo)
   const [pilaIndietro, setPilaIndietro] = useState([]);
   const [pilaAvanti, setPilaAvanti] = useState([]);
+  // alcune schermate hanno una loro sotto-vista puramente locale (es. il
+  // toggle Elenco/Calendario di SezioneDateCorsi) che non passa da "view" e
+  // quindi non finisce nella cronologia: senza questo, "Indietro" premuto
+  // mentre si è su "Calendario" salta oltre la pagina e torna alla schermata
+  // precedente vera e propria invece di riportare prima a "Elenco". Il
+  // componente che ha quella sotto-vista registra qui una funzione che
+  // "disfa" un passo locale; se presente, Indietro chiama quella invece di
+  // muovere la cronologia globale
+  const interceptaIndietroRef = React.useRef(null);
+  const registraInterceptaIndietro = React.useCallback((fn) => { interceptaIndietroRef.current = fn; }, []);
 
   useEffect(() => {
     const precedente = statoAttualeRef.current;
@@ -19942,6 +19966,7 @@ export default function App() {
   }, [view, corsoDataAperta, sottoVistaScheda]);
 
   function vaiIndietro() {
+    if (interceptaIndietroRef.current) { interceptaIndietroRef.current(); return; }
     if (pilaIndietro.length === 0) return;
     window.scrollTo(0, 0); // altrimenti la nuova schermata resta alla posizione di scroll di quella precedente
     const precedente = pilaIndietro[pilaIndietro.length - 1];
@@ -20453,6 +20478,7 @@ export default function App() {
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
           cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
+          registraInterceptaIndietro={registraInterceptaIndietro}
         />
       )}
 
@@ -20583,6 +20609,7 @@ export default function App() {
           apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
           apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+          registraInterceptaIndietro={registraInterceptaIndietro}
         />
       )}
 
