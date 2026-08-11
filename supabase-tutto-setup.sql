@@ -1819,4 +1819,17 @@ alter table public.venditori add column if not exists password text not null def
 -- ---------------------------------------------------------
 alter table public.master add column if not exists venditore_id uuid references public.venditori(id) on delete set null;
 
+-- ---------------------------------------------------------
+-- 64) "Gestione magazzino" diventa gestione TOTALE del magazzino fisico,
+-- non più solo dello shop online: ogni prodotto ha ora due giacenze
+-- separate, "in magazzino" (fisica, in sede, mai toccata da WooCommerce)
+-- e "shop online" (giacenza esistente, resta sincronizzata su
+-- WooCommerce come prima). Lo stock totale è la somma delle due.
+-- woo_product_id diventa nullable: un prodotto può esistere SOLO
+-- localmente (materiali di consumo, arredi, altro non in vendita
+-- online, magari senza prezzo) — woo-sync-catalogo non lo tocca mai.
+-- ---------------------------------------------------------
+alter table public.prodotti_shop alter column woo_product_id drop not null;
+alter table public.prodotti_shop add column if not exists giacenza_magazzino integer not null default 0;
+
 notify pgrst, 'reload schema';

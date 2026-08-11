@@ -15289,83 +15289,148 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
   );
 }
 
-// ---------- Magazzino (catalogo prodotti WooCommerce) ----------
-// pannello di modifica di un prodotto: prezzo di vendita e giacenza
-// vengono sincronizzati davvero su WooCommerce (Edge Function
-// woo-aggiorna-prodotto, scrive prima sullo shop e solo se riesce
-// aggiorna il locale); costo di acquisto e scorta minima sono dati
-// che WooCommerce non conosce, salvati direttamente sul database
-// dell'app, sempre, indipendentemente dall'esito della sincronizzazione
-function PannelloModificaProdotto({ prodotto, onClose, onFatto }) {
-  const [prezzoVendita, setPrezzoVendita] = useState(prodotto.prezzo_vendita != null ? String(prodotto.prezzo_vendita) : "");
-  const [giacenza, setGiacenza] = useState(prodotto.giacenza != null ? String(prodotto.giacenza) : "");
-  const [costoAcquisto, setCostoAcquisto] = useState(prodotto.costo_acquisto != null ? String(prodotto.costo_acquisto) : "");
-  const [scortaMinima, setScortaMinima] = useState(prodotto.scorta_minima != null ? String(prodotto.scorta_minima) : "");
+// ---------- Magazzino (fisico + shop WooCommerce) ----------
+// ogni prodotto tiene ora due giacenze separate: "giacenza_magazzino"
+// (fisica, in sede — dato solo dell'app, WooCommerce non lo conosce) e
+// "giacenza" (pubblicata sullo shop online, sincronizzata davvero su
+// WooCommerce). Lo stock totale è la somma delle due. Spostare un pezzo
+// da una all'altra è un solo movimento: si scrive PRIMA su WooCommerce
+// (Edge Function woo-aggiorna-prodotto, valore assoluto) e solo se
+// riesce si applica anche la differenza sul magazzino locale — se la
+// sincronizzazione fallisce non si sposta nulla, niente stock "fantasma"
+async function spostaUnitaStock(prodotto, verso) {
+  const magazzino = prodotto.giacenza_magazzino || 0;
+  const shop = prodotto.giacenza || 0;
+  if (verso === "magazzino" && shop <= 0) return { errore: null };
+  if (verso === "shop" && magazzino <= 0) return { errore: null };
+  const nuovoShop = verso === "magazzino" ? shop - 1 : shop + 1;
+  const nuovoMagazzino = verso === "magazzino" ? magazzino + 1 : magazzino - 1;
+  const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, giacenza: nuovoShop } });
+  if (error || data?.errore) return { errore: data?.errore || error.message };
+  const { error: erroreLocale } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", prodotto.id);
+  if (erroreLocale) return { errore: erroreLocale.message };
+  return { errore: null };
+}
+
+// "Riassortimento": l'unico modo per far crescere lo STOCK TOTALE di un
+// prodotto (arrivo merce fisica) — il quantitativo aggiunto va sempre in
+// magazzino (fisico), da lì lo si sposta poi verso lo shop con i tastini
+// "+" della tabella. Nessuna chiamata a WooCommerce: è un dato solo
+// interno, non cambia nulla sullo shop finché non lo si sposta
+function ModaleRiassortimento({ prodotto, onClose, onFatto }) {
+  const [aggiungi, setAggiungi] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  async function conferma() {
+    const quantita = parseInt(parseNum(aggiungi), 10);
+    if (!quantita || quantita <= 0) { setMsg("Scrivi un numero maggiore di zero."); return; }
+    setSalvando(true);
+    const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + quantita }).eq("id", prodotto.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    onFatto();
+  }
+  return (
+    <Modal title={`Riassortimento — ${prodotto.nome}`} onClose={onClose}>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+        Stock totale attuale: {(prodotto.giacenza || 0) + (prodotto.giacenza_magazzino || 0)} pezzi. La quantità aggiunta entra in magazzino.
+      </div>
+      <Field label="Aggiungi">
+        <input style={inputStyle} inputMode="numeric" value={aggiungi} onChange={(e) => { setAggiungi(e.target.value); setMsg(""); }} onKeyDown={(e) => e.key === "Enter" && conferma()} autoFocus />
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={conferma} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Confermo…" : "Conferma"}</Button>
+    </Modal>
+  );
+}
 
-  async function salvaESincronizza() {
+// "Nuovo prodotto": due percorsi. Con un prezzo, il prodotto va venduto
+// online — si crea davvero su WooCommerce (Edge Function
+// woo-gestisci-prodotto, già usata da Gestione Shop) e solo se riesce si
+// riflette in locale, poi si imposta lo stock iniziale. Senza prezzo
+// (materiali di consumo, arredi, altro non in vendita) resta solo
+// locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
+function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
+  const [nome, setNome] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
+  const [prezzo, setPrezzo] = useState("");
+  const [qtaMagazzino, setQtaMagazzino] = useState("");
+  const [qtaShop, setQtaShop] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const haPrezzo = prezzo.trim() !== "";
+
+  async function crea() {
+    if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
+    const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
     setSalvando(true);
     setMsg("");
 
-    const { error: erroreLocale } = await supabase.from("prodotti_shop").update({
-      costo_acquisto: costoAcquisto === "" ? null : parseNum(costoAcquisto),
-      scorta_minima: scortaMinima === "" ? null : parseInt(parseNum(scortaMinima), 10),
-    }).eq("id", prodotto.id);
-    if (erroreLocale) { setSalvando(false); setMsg("Errore salvataggio: " + erroreLocale.message); return; }
-
-    const nuovoPrezzo = prezzoVendita === "" ? null : parseNum(prezzoVendita);
-    const nuovaGiacenza = giacenza === "" ? null : parseInt(parseNum(giacenza), 10);
-    const prezzoCambiato = nuovoPrezzo != null && nuovoPrezzo !== prodotto.prezzo_vendita;
-    const giacenzaCambiata = nuovaGiacenza != null && nuovaGiacenza !== prodotto.giacenza;
-
-    if (prezzoCambiato || giacenzaCambiata) {
-      const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", {
-        body: {
-          prodottoId: prodotto.id,
-          ...(prezzoCambiato ? { prezzoVendita: nuovoPrezzo } : {}),
-          ...(giacenzaCambiata ? { giacenza: nuovaGiacenza } : {}),
-        },
+    if (haPrezzo) {
+      const prezzoNum = parseNum(prezzo);
+      if (!(prezzoNum > 0)) { setSalvando(false); setMsg("Il prezzo deve essere maggiore di zero."); return; }
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
+        body: { azione: "crea", nome: nome.trim(), prezzo: prezzoNum, stato: "publish", categorieIds: categoriaId ? [categoriaId] : [] },
       });
-      setSalvando(false);
-      if (error || data?.errore) {
-        setMsg("Costo/scorta minima salvati. Prezzo/giacenza NON sincronizzati con WooCommerce: " + (data?.errore || error.message));
-        return;
+      if (error || data?.errore) { setSalvando(false); setMsg("Errore creazione su WooCommerce: " + (data?.errore || error.message)); return; }
+      const prodottoId = data.prodottoId;
+      const shop = qtaShop === "" ? 0 : parseInt(parseNum(qtaShop), 10);
+      if (shop > 0) {
+        const { data: dataStock, error: erroreStock } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId, giacenza: shop } });
+        if (erroreStock || dataStock?.errore) { setSalvando(false); setMsg(`Prodotto creato, ma la quantità shop non è stata impostata: ${dataStock?.errore || erroreStock.message}`); return; }
       }
-    } else {
+      if (magazzino > 0) {
+        const { error: erroreMag } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino }).eq("id", prodottoId);
+        if (erroreMag) { setSalvando(false); setMsg("Prodotto creato, ma la quantità in magazzino non è stata salvata: " + erroreMag.message); return; }
+      }
       setSalvando(false);
+      onFatto();
+      return;
     }
+
+    // nessun prezzo: prodotto solo locale, mai su WooCommerce
+    const { data: riga, error: erroreInsert } = await supabase
+      .from("prodotti_shop")
+      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, attivo: true })
+      .select().single();
+    if (erroreInsert) { setSalvando(false); setMsg("Errore: " + erroreInsert.message); return; }
+    if (categoriaId) {
+      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert({ prodotto_id: riga.id, categoria_id: categoriaId });
+      if (erroreCat) { setSalvando(false); setMsg("Prodotto creato, ma la categoria non è stata salvata: " + erroreCat.message); return; }
+    }
+    setSalvando(false);
     onFatto();
   }
 
   return (
-    <Modal title={`Modifica prodotto — ${prodotto.nome}`} onClose={onClose}>
+    <Modal title="Nuovo prodotto" onClose={onClose}>
+      <Field label="Nome">
+        <input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+      </Field>
+      <Field label="Categoria">
+        <select style={inputStyle} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
+          <option value="">— nessuna —</option>
+          {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+        </select>
+      </Field>
+      <Field label="Prezzo di vendita (lascia vuoto se non è in vendita: materiale di consumo, arredo, altro)">
+        <input style={inputStyle} inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} placeholder="Nessun prezzo" />
+      </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
-          <Field label="Prezzo vendita (sincronizzato su WooCommerce)">
-            <input style={inputStyle} inputMode="decimal" value={prezzoVendita} onChange={(e) => setPrezzoVendita(e.target.value)} autoFocus />
+          <Field label="Quantità in magazzino">
+            <input style={inputStyle} inputMode="numeric" value={qtaMagazzino} onChange={(e) => setQtaMagazzino(e.target.value)} placeholder="0" />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Giacenza (sincronizzata su WooCommerce)">
-            <input style={inputStyle} inputMode="numeric" value={giacenza} onChange={(e) => setGiacenza(e.target.value)} />
-          </Field>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Costo di acquisto (solo interno)">
-            <input style={inputStyle} inputMode="decimal" value={costoAcquisto} onChange={(e) => setCostoAcquisto(e.target.value)} />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Scorta minima — alert (solo interno)">
-            <input style={inputStyle} inputMode="numeric" value={scortaMinima} onChange={(e) => setScortaMinima(e.target.value)} />
+          <Field label="Quantità shop online">
+            <input style={{ ...inputStyle, ...(haPrezzo ? {} : { background: "#EFEFEF", color: MUTED }) }} inputMode="numeric" value={qtaShop} onChange={(e) => setQtaShop(e.target.value)} placeholder="0" disabled={!haPrezzo} />
           </Field>
         </div>
       </div>
       {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={salvaESincronizza} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo e sincronizzo…" : "Salva e sincronizza"}</Button>
+      <Button onClick={crea} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Creo…" : "Crea prodotto"}</Button>
     </Modal>
   );
 }
@@ -15376,7 +15441,9 @@ function PannelloModificaProdotto({ prodotto, onClose, onFatto }) {
 const COLONNE_MAGAZZINO = [
   { label: "Prodotto", campo: "nome", direzioneIniziale: "asc" },
   { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc" },
-  { label: "Giacenza", campo: "giacenza", direzioneIniziale: "desc" },
+  { label: "Stock totale", campo: "stockTotale", direzioneIniziale: "desc" },
+  { label: "In magazzino", campo: null },
+  { label: "Shop online", campo: null },
   { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc" },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc" },
   { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc" },
@@ -15556,6 +15623,107 @@ function GraficoTrendBarre({ voci }) {
   );
 }
 
+// una riga della tabella "Dettaglio prodotti": Prezzo vendita/Costo
+// acquisto/Scorta minima sono campi editabili sul posto (si salvano da
+// soli quando si esce dalla casella, come le tabelle di Password menù);
+// i tastini "+" di Magazzino/Shop spostano un pezzo alla volta,
+// scrivendo PRIMA su WooCommerce e solo se riesce anche in locale
+function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica }) {
+  const [prezzo, setPrezzo] = useState(p.prezzo_vendita != null ? String(p.prezzo_vendita) : "");
+  const [costo, setCosto] = useState(p.costo_acquisto != null ? String(p.costo_acquisto) : "");
+  const [scortaMin, setScortaMin] = useState(p.scorta_minima != null ? String(p.scorta_minima) : "");
+  const [spostando, setSpostando] = useState(false);
+
+  async function salvaPrezzo() {
+    const nuovo = prezzo.trim() === "" ? null : parseNum(prezzo);
+    if (nuovo === p.prezzo_vendita) return;
+    if (!p.woo_product_id) {
+      const { error } = await supabase.from("prodotti_shop").update({ prezzo_vendita: nuovo }).eq("id", p.id);
+      if (error) { window.alert("Errore: " + error.message); setPrezzo(p.prezzo_vendita != null ? String(p.prezzo_vendita) : ""); return; }
+      ricarica();
+      return;
+    }
+    if (nuovo == null || nuovo <= 0) { window.alert("Il prezzo di vendita deve essere maggiore di zero."); setPrezzo(p.prezzo_vendita != null ? String(p.prezzo_vendita) : ""); return; }
+    const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: p.id, prezzoVendita: nuovo } });
+    if (error || data?.errore) { window.alert("Prezzo NON sincronizzato con WooCommerce: " + (data?.errore || error.message)); setPrezzo(p.prezzo_vendita != null ? String(p.prezzo_vendita) : ""); return; }
+    ricarica();
+  }
+  async function salvaCosto() {
+    const nuovo = costo.trim() === "" ? null : parseNum(costo);
+    if (nuovo === p.costo_acquisto) return;
+    const { error } = await supabase.from("prodotti_shop").update({ costo_acquisto: nuovo }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); setCosto(p.costo_acquisto != null ? String(p.costo_acquisto) : ""); return; }
+    ricarica();
+  }
+  async function salvaScortaMin() {
+    const nuovo = scortaMin.trim() === "" ? null : parseInt(parseNum(scortaMin), 10);
+    if (nuovo === p.scorta_minima) return;
+    const { error } = await supabase.from("prodotti_shop").update({ scorta_minima: nuovo }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); setScortaMin(p.scorta_minima != null ? String(p.scorta_minima) : ""); return; }
+    ricarica();
+  }
+  async function sposta(verso) {
+    setSpostando(true);
+    const { errore } = await spostaUnitaStock(p, verso);
+    if (errore) { setSpostando(false); window.alert("Spostamento NON riuscito: " + errore); return; }
+    // resta disabilitato finché non arrivano i dati freschi: altrimenti un
+    // doppio click rapido ricalcolerebbe il prossimo spostamento sui
+    // valori vecchi (ricarica() non ha ancora aggiornato p.giacenza)
+    await ricarica();
+    setSpostando(false);
+  }
+
+  const tdStyle = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` };
+  const cellInputStyle = { ...inputStyle, width: 68, padding: "5px 7px", fontSize: 12.5 };
+  function bottoneSposta(disabilitato, colore, onClick, titolo) {
+    return (
+      <button
+        onClick={onClick} disabled={disabilitato} title={titolo}
+        style={{ width: 22, height: 22, borderRadius: "50%", border: "none", background: disabilitato ? "#E5E1D6" : colore, color: "#fff", fontSize: 14, lineHeight: "22px", padding: 0, cursor: disabilitato ? "default" : "pointer", flexShrink: 0 }}
+      >+</button>
+    );
+  }
+
+  return (
+    <tr>
+      <td onClick={() => onApriRiassortimento(p)} title="Clicca per il riassortimento" style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{p.stockTotale}</td>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
+          {bottoneSposta(spostando || (p.giacenza || 0) <= 0, "#3B6FA0", () => sposta("magazzino"), "Sposta un pezzo dallo Shop al Magazzino")}
+        </div>
+      </td>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+        {p.woo_product_id ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza || 0}</span>
+            {bottoneSposta(spostando || (p.giacenza_magazzino || 0) <= 0, GOLD, () => sposta("shop"), "Sposta un pezzo dal Magazzino allo Shop")}
+          </div>
+        ) : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
+      </td>
+      <td style={tdStyle}>
+        <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
+      </td>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>
+          {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
+        </span>
+      </td>
+      <td style={tdStyle}>
+        <input style={cellInputStyle} inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} onBlur={salvaPrezzo} placeholder="—" />
+      </td>
+      <td style={tdStyle}>
+        <input style={cellInputStyle} inputMode="decimal" value={costo} onChange={(e) => setCosto(e.target.value)} onBlur={salvaCosto} placeholder="—" />
+      </td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.fatturato)}</td>
+    </tr>
+  );
+}
+
 // "Gestione magazzino": versione asciugata (solo filtri + segnalazioni +
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
@@ -15571,11 +15739,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
-  const [prodottoModifica, setProdottoModifica] = useState(null);
+  const [prodottoRiassortimento, setProdottoRiassortimento] = useState(null);
+  const [mostraNuovoProdotto, setMostraNuovoProdotto] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
 
   function ordinaPer(campo) {
+    if (!campo) return;
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
 
@@ -15649,6 +15819,10 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
     const margine = p.costo_acquisto != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - p.costo_acquisto) / p.prezzo_vendita) * 100) : null;
     const categorieIds = categorieIdPerProdottoId[p.id] || [];
+    // stock totale = magazzino fisico + shop online: è questo il numero su
+    // cui ragionano scorta minima/esaurito ora che il magazzino è gestito
+    // nella sua interezza, non solo la quota pubblicata online
+    const stockTotale = (p.giacenza || 0) + (p.giacenza_magazzino || 0);
     return {
       ...p,
       quantitaVenduta: venduto.quantita,
@@ -15657,8 +15831,9 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       giorniFermo: giorniFermo(p.nome),
-      sottoScorta: p.scorta_minima != null && (p.giacenza || 0) < p.scorta_minima,
-      esaurito: (p.giacenza || 0) <= 0,
+      stockTotale,
+      sottoScorta: p.scorta_minima != null && stockTotale < p.scorta_minima,
+      esaurito: stockTotale <= 0,
     };
   });
 
@@ -15666,6 +15841,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const senzaCosto = prodottiConStato.filter((p) => p.costo_acquisto == null);
   const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
+
+  const stockTotaleGenerale = prodottiConStato.reduce((s, p) => s + p.stockTotale, 0);
+  const magazzinoTotale = prodottiConStato.reduce((s, p) => s + (p.giacenza_magazzino || 0), 0);
+  const shopTotale = prodottiConStato.reduce((s, p) => s + (p.giacenza || 0), 0);
+  const valoreStimatoTotale = round2(prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? p.stockTotale * p.costo_acquisto : 0), 0));
+  const unitaConCosto = prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? p.stockTotale : 0), 0);
+  const costoMedio = unitaConCosto > 0 ? round2(valoreStimatoTotale / unitaConCosto) : null;
+  const pctMagazzino = stockTotaleGenerale > 0 ? Math.round((magazzinoTotale / stockTotaleGenerale) * 1000) / 10 : 0;
+  const pctShop = stockTotaleGenerale > 0 ? Math.round((shopTotale / stockTotaleGenerale) * 1000) / 10 : 0;
 
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
@@ -15696,12 +15880,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione magazzino</div>
-          <div style={{ textAlign: "right" }}>
-            <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
-            {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
+            <div style={{ textAlign: "right" }}>
+              <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
+              {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
+            </div>
           </div>
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Catalogo prodotti sincronizzato da WooCommerce. Clicca sul nome di un prodotto per modificarlo.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Magazzino fisico e shop online insieme. Clicca sul nome di un prodotto per il riassortimento.</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -15751,6 +15938,35 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           </div>
         </div>
 
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Stock totale</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{stockTotaleGenerale.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>100% del totale</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>In magazzino</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{magazzinoTotale.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></div>
+            <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", margin: "8px 0 4px" }}>
+              <div style={{ height: "100%", width: `${pctMagazzino}%`, background: "#3B6FA0", borderRadius: 3 }} />
+            </div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{pctMagazzino.toLocaleString("it-IT")}% del totale</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Disponibili Shop</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{shopTotale.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></div>
+            <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", margin: "8px 0 4px" }}>
+              <div style={{ height: "100%", width: `${pctShop}%`, background: GOLD, borderRadius: 3 }} />
+            </div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{pctShop.toLocaleString("it-IT")}% del totale</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore stimato totale</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreStimatoTotale)}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{costoMedio != null ? `Costo medio: ${fmtEuroErp(costoMedio)}` : "Costo medio non disponibile"}</div>
+          </div>
+        </div>
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
           <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
@@ -15763,15 +15979,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1020 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
               <thead>
                 <tr>
                   {COLONNE_MAGAZZINO.map((col) => (
                     <th
-                      key={col.campo}
+                      key={col.label}
                       onClick={() => ordinaPer(col.campo)}
-                      title="Clicca per ordinare"
-                      style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}
+                      title={col.campo ? "Clicca per ordinare" : undefined}
+                      style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", cursor: col.campo ? "pointer" : "default", userSelect: "none" }}
                     >
                       {col.label}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
                     </th>
@@ -15780,37 +15996,38 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               </thead>
               <tbody>
                 {prodottiOrdinati.map((p) => (
-                  <tr key={p.id}>
-                    <td onClick={() => setProdottoModifica(p)} title="Clicca per modificare" style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: p.sottoScorta ? "#C0392B" : NAVY, fontWeight: p.sottoScorta ? 700 : 400, whiteSpace: "nowrap" }}>{p.giacenza ?? "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.scorta_minima ?? "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
-                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>
-                        {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
-                      </span>
-                    </td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.prezzo_vendita != null ? fmtEuroErp(p.prezzo_vendita) : "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.costo_acquisto != null ? fmtEuroErp(p.costo_acquisto) : "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.fatturato)}</td>
-                  </tr>
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriRiassortimento={setProdottoRiassortimento} ricarica={ricarica} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
-                  <tr><td colSpan={10} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
+                  <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
                 )}
               </tbody>
             </table>
           </div>
         </div>
+
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+          <div>Modifica la disponibilità spostando i pezzi tra Magazzino e Shop Online con i tastini “+”. Lo stock totale si aggiorna automaticamente.</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <div><b>Stock totale</b> = Magazzino + Shop Online</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#3B6FA0", display: "inline-block" }} /> Magazzino: disponibilità fisica in sede</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, display: "inline-block" }} /> Shop Online: quantità pubblicata su WooCommerce</div>
+          </div>
+        </div>
       </div>
 
-      {prodottoModifica && (
-        <PannelloModificaProdotto
-          prodotto={prodottoModifica}
-          onClose={() => setProdottoModifica(null)}
-          onFatto={() => { setProdottoModifica(null); ricarica(); }}
+      {prodottoRiassortimento && (
+        <ModaleRiassortimento
+          prodotto={prodottoRiassortimento}
+          onClose={() => setProdottoRiassortimento(null)}
+          onFatto={() => { setProdottoRiassortimento(null); ricarica(); }}
+        />
+      )}
+      {mostraNuovoProdotto && (
+        <ModaleNuovoProdotto
+          categorieProdotti={categorieProdotti}
+          onClose={() => setMostraNuovoProdotto(false)}
+          onFatto={() => { setMostraNuovoProdotto(false); ricarica(); }}
         />
       )}
     </div>
@@ -15891,9 +16108,12 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   const maggiorFatturato = [...prodottiConStato].filter((p) => p.fatturato > 0).sort((a, b) => b.fatturato - a.fatturato)[0] || null;
   const migliorMargine = [...prodottiConStato].filter((p) => p.margine != null).sort((a, b) => b.margine - a.margine)[0] || null;
 
-  const valoreGiacenzaVendita = round2(prodottiConStato.reduce((s, p) => s + (p.prezzo_vendita != null ? (p.giacenza || 0) * p.prezzo_vendita : 0), 0));
-  const valoreGiacenzaCosto = round2(prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? (p.giacenza || 0) * p.costo_acquisto : 0), 0));
-  const totGiacenza = prodottiConStato.reduce((s, p) => s + (p.giacenza || 0), 0);
+  // valore/rotazione guardano lo STOCK TOTALE (magazzino fisico + shop
+  // online), non solo la quota pubblicata online: il magazzino da gestire
+  // è quello fisico nella sua interezza
+  const valoreGiacenzaVendita = round2(prodottiConStato.reduce((s, p) => s + (p.prezzo_vendita != null ? ((p.giacenza || 0) + (p.giacenza_magazzino || 0)) * p.prezzo_vendita : 0), 0));
+  const valoreGiacenzaCosto = round2(prodottiConStato.reduce((s, p) => s + (p.costo_acquisto != null ? ((p.giacenza || 0) + (p.giacenza_magazzino || 0)) * p.costo_acquisto : 0), 0));
+  const totGiacenza = prodottiConStato.reduce((s, p) => s + (p.giacenza || 0) + (p.giacenza_magazzino || 0), 0);
   const totQuantitaVendutaAttivi = prodottiConStato.reduce((s, p) => s + p.quantitaVenduta, 0);
   const rotazione = totGiacenza > 0 ? round2(totQuantitaVendutaAttivi / totGiacenza) : null;
   const rotazioneBadge = rotazione == null ? null : rotazione < 0.5 ? { testo: "Bassa", colore: "#C0392B", sfondo: "#FBE4E1" } : rotazione < 2 ? { testo: "Media", colore: "#B8860B", sfondo: "#FBF1D9" } : { testo: "Alta", colore: "#2E7D32", sfondo: "#E3F3E5" };
@@ -17104,10 +17324,14 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     });
 
     if (Object.keys(deltaPerProdotto).length === 0) return;
+    // scarico/rientro dei kit è un movimento FISICO (esce/rientra dalla
+    // sede): tocca solo giacenza_magazzino, mai giacenza (shop online,
+    // sincronizzata con WooCommerce) — altrimenti preparare un kit
+    // cambierebbe silenziosamente la disponibilità mostrata online
     await Promise.all(Object.entries(deltaPerProdotto).map(([prodottoId, delta]) => {
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       if (!prodotto) return null;
-      return supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) + delta }).eq("id", prodottoId);
+      return supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId);
     }));
     const campiAggiornati = { accessori_scaricati: accessoriScaricatiAggiornati };
     if (kitPrincipaleId) campiAggiornati.quantita_scaricata_magazzino = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
@@ -17133,7 +17357,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       const delta = target - giaFatto;
       if (delta !== 0) {
         const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-        if (prodotto) scritture.push(supabase.from("prodotti_shop").update({ giacenza: (prodotto.giacenza || 0) + delta }).eq("id", prodottoId));
+        if (prodotto) scritture.push(supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId));
         nuovoProcessato[prodottoId] = target;
       }
     });
@@ -17310,7 +17534,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
           {risultatiKit.map((p) => (
             <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={rigaRisultato}>
-              {p.nome} <span style={{ color: MUTED, fontSize: 12 }}>· giacenza {p.giacenza ?? 0}</span>
+              {p.nome} <span style={{ color: MUTED, fontSize: 12 }}>· in magazzino {p.giacenza_magazzino ?? 0}</span>
             </div>
           ))}
         </div>
