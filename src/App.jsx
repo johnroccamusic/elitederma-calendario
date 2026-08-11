@@ -3705,6 +3705,23 @@ function SezioneDateCorsi({
 // la Dashboard resta "sbloccata", con la tendina per scegliere
 // qualunque venditore — così l'amministratore non perde la possibilità
 // di controllare le performance di tutti.
+// supabase-js, quando una Edge Function risponde con uno stato diverso da
+// 2xx, non mette il corpo della risposta (il nostro { errore: "..." })
+// dentro "data": lo lascia solo dentro error.context (la Response grezza),
+// e "data" resta null. Senza questo, in caso di errore si vedrebbe sempre
+// il messaggio generico "Edge Function returned a non-2xx status code"
+// invece del vero motivo (es. "La password deve avere almeno 4 caratteri")
+async function messaggioErroreFunzione(error, data) {
+  if (data?.errore) return data.errore;
+  if (!error) return null;
+  if (error.context && typeof error.context.json === "function") {
+    try {
+      const corpo = await error.context.json();
+      if (corpo?.errore) return corpo.errore;
+    } catch { /* corpo non json, si passa al messaggio generico sotto */ }
+  }
+  return error.message || "Errore sconosciuto";
+}
 function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
   const [venditoreId, setVenditoreId] = useState("");
   const [password, setPassword] = useState("");
@@ -3722,7 +3739,7 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
     }
     const { data, error } = await supabase.functions.invoke("venditori-login", { body: { venditoreId, password } });
     setVerificando(false);
-    if (error || data?.errore) { setErrore(data?.errore || "Password errata."); return; }
+    if (error || data?.errore) { setErrore(await messaggioErroreFunzione(error, data)); return; }
     onEntra({ modalitaAdmin: false, venditoreId, nome: data.nome });
   }
 
@@ -6542,7 +6559,7 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
   async function salvaPassword() {
     if (!password.trim()) return;
     const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId: venditore.id, password: password.trim() } });
-    if (error || data?.errore) { setMsgPassword("Errore: " + (data?.errore || error.message)); return; }
+    if (error || data?.errore) { setMsgPassword("Errore: " + (await messaggioErroreFunzione(error, data))); return; }
     setMsgPassword("");
     setPassword("");
   }
@@ -7403,7 +7420,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
             mostraPassword passwordDiDefault="0000"
             onImpostaPassword={async (venditoreId, password) => {
               const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId, password } });
-              if (error || data?.errore) setMsg("Errore password: " + (data?.errore || error.message));
+              if (error || data?.errore) setMsg("Errore password: " + (await messaggioErroreFunzione(error, data)));
             }}
             mostraTelefono
           />
