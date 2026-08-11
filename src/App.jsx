@@ -12602,9 +12602,22 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             const nessunaIva = tutteLeQuote.every((q) => ivaEffettiva(q) === 0);
             const totaleSenzaIva = tutteLeQuote.reduce((somma, q) => somma + impEffettivo(q), 0);
             const totaleConIva = tutteLeQuote.reduce((somma, q) => somma + parseNum(q.totale), 0);
+            // quanto è stato effettivamente incassato fino ad oggi: solo le
+            // quote segnate "Pagato" (acconto/pre corso, comprese le righe
+            // aggiunte con "+"). "Da avere al corso" non ha un interruttore
+            // pagato/da pagare — è per definizione denaro non ancora
+            // incassato — quindi non entra in questo conteggio
+            const quotePagate = [
+              { q: pagAcconto, pagato: pagAccontoPagato },
+              ...accontoExtra.map((r) => ({ q: r, pagato: r.pagato })),
+              { q: pagPrecorso, pagato: pagPrecorsoPagato },
+              ...precorsoExtra.map((r) => ({ q: r, pagato: r.pagato })),
+            ];
+            const sommaAccontiPagati = quotePagate.filter((x) => x.pagato).reduce((somma, x) => somma + impEffettivo(x.q), 0);
+            const restanoDaPagare = totalePattuito === "" ? null : round2(parseNum(totalePattuito) - sommaAccontiPagati);
             return (
               <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG_CHIARO }}>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale pagato</div>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Pagherà in totale</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <div style={{ flex: "1 1 100px" }}>
                     <Field label="Totale senza Iva">
@@ -12637,6 +12650,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     </Field>
                   </div>
                 </div>
+                {restanoDaPagare != null && (
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginTop: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    Restano da pagare: {restanoDaPagare.toFixed(2)} €
+                  </div>
+                )}
               </div>
             );
           })()}
