@@ -1758,4 +1758,11 @@ alter table public.iscritti add column if not exists precorso_bonifico_segnalato
 alter table public.acconti_da_verificare add column if not exists imponibile numeric;
 alter table public.acconti_da_verificare add column if not exists data_pagamento date;
 
+-- ---------------------------------------------------------
+-- 57) "Aggiungi Pagamento" ha anche le caselle di spunta "Acconto"/"Quota
+-- pre corso"/"Saldo" (se ne può spuntare più di una) per indicare a cosa
+-- si riferisce il pagamento segnalato.
+-- ---------------------------------------------------------
+alter table public.acconti_da_verificare add column if not exists voci_pagamento text[];
+
 notify pgrst, 'reload schema';

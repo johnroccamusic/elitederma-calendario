@@ -2365,12 +2365,23 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
 // l'invio. Non tocca la scheda dell'iscritto: finisce nella coda
 // acconti_da_verificare, in attesa che lo staff la verifichi e approvi
 // da "Verifica Pagamenti" (Gestione corsi)
+const VOCI_PAGAMENTO_VENDITORE = [
+  { chiave: "acconto", etichetta: "Acconto" },
+  { chiave: "precorso", etichetta: "Quota pre corso" },
+  { chiave: "saldo", etichetta: "Saldo" },
+];
 function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato }) {
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
+  const [vociPagamento, setVociPagamento] = useState([]);
   const [valori, setValori] = useState({ imponibile: "", totale: "", metodo: "", interessi: "" });
   const [nota, setNota] = useState("");
   const [file, setFile] = useState(null);
   const [inviando, setInviando] = useState(false);
+
+  function toggleVoce(chiave) {
+    setVociPagamento((prev) => (prev.includes(chiave) ? prev.filter((v) => v !== chiave) : [...prev, chiave]));
+  }
+
   async function invia() {
     if (!nota.trim() && !file && valori.totale === "") return;
     setInviando(true);
@@ -2384,6 +2395,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
     const { error } = await supabase.from("acconti_da_verificare").insert({
       iscritto_id: iscritto.id,
       data_pagamento: dataPagamento || null,
+      voci_pagamento: vociPagamento.length > 0 ? vociPagamento : null,
       imponibile: valori.imponibile === "" ? null : parseNum(valori.imponibile),
       importo: valori.totale === "" ? null : parseNum(valori.totale),
       metodo: valori.metodo || null,
@@ -2398,14 +2410,24 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
     onInviato(iscritto.id);
   }
   return (
-    <Modal title={`Aggiungi pagamento — ${iscritto.nome} ${iscritto.cognome}`} onClose={onChiudi}>
+    <Modal title={`Aggiungi pagamento — ${iscritto.nome} ${iscritto.cognome}`} onClose={onChiudi} paddingTop={100}>
+      <div style={{ height: 18 }} />
       <Field label="Data pagamento">
         <input type="date" style={inputStyle} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
       </Field>
+      <div style={{ display: "flex", gap: 24, margin: "14px 2px 20px" }}>
+        {VOCI_PAGAMENTO_VENDITORE.map((v) => (
+          <label key={v.chiave} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}>
+            <input type="checkbox" checked={vociPagamento.includes(v.chiave)} onChange={() => toggleVoce(v.chiave)} style={{ width: 16, height: 16 }} />
+            {v.etichetta}
+          </label>
+        ))}
+      </div>
+      <div style={{ height: 8 }} />
       <BloccoQuota
         titolo="Importo pagamento"
         valori={valori}
-        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
+        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti"]}
         onImponibile={(v) => setValori((prev) => conImponibileAggiornato(prev, v, true))}
         onTotale={(v) => setValori((prev) => conTotaleAggiornato(prev, v, true))}
         onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
@@ -8879,7 +8901,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   );
 }
 
-function Modal({ title, onClose, children, maxWidth = 560 }) {
+function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
   const overlayRef = React.useRef(null);
 
   useEffect(() => {
@@ -8919,7 +8941,7 @@ function Modal({ title, onClose, children, maxWidth = 560 }) {
   return (
     <div
       ref={overlayRef}
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: "40px 20px", overflowY: "auto", zIndex: 1000 }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: `${paddingTop}px 20px`, overflowY: "auto", zIndex: 1000 }}
       onClick={onClose}
     >
       <div
