@@ -11609,9 +11609,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       metodo: valori.metodo,
       interessi: valori.metodo === "Rate" ? valori.interessi : "",
       pagato,
-      bonificoFilePath: null,
+      // il file caricato dal venditore come prova del pagamento segnalato
+      // (integrazione.file_path) passa alla nuova riga: senza, la scheda
+      // richiederebbe di nuovo il file del bonifico anche se il pagamento
+      // è già quello verificato qui — "segnalato" a true per lo stesso
+      // motivo, per non generare una nuova segnalazione duplicata a Elena
+      bonificoFilePath: integrazione.file_path || null,
       bonificoFileNuovo: null,
-      bonificoSegnalato: false,
+      bonificoSegnalato: !!integrazione.file_path,
     };
     const nuovoAccontoExtra = destinazione === "acconto" ? [...accontoExtra, nuovaRiga] : accontoExtra;
     const nuovoPrecorsoExtra = destinazione !== "acconto" ? [...precorsoExtra, nuovaRiga] : precorsoExtra;
