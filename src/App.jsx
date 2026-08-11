@@ -528,6 +528,16 @@ function IconaTileLogistica({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+function IconaTilePos({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3.5" width="16" height="11" rx="1.5" />
+      <path d="M8 17.5h8" stroke={GOLD} />
+      <path d="M9 20.5h6" />
+      <path d="M7.5 7h9M7.5 10h5" />
+    </svg>
+  );
+}
 function IconaTileModelle({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -10870,6 +10880,7 @@ const TASTI_HOME = [
   { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
   { chiave: "dashboardmaster", etichetta: "Dashboard master" },
   { chiave: "erp", etichetta: "ERP / Magazzino" },
+  { chiave: "pos", etichetta: "POS Vendita diretta" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
   { chiave: "generazioneloghi", etichetta: "Assegna logo" },
   { chiave: "gestionemodelle", etichetta: "Gestione modelle" },
@@ -15163,7 +15174,7 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Vendite shop</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Ordini importati automaticamente dallo shop WooCommerce.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Ordini dallo shop WooCommerce e vendite al banco dal POS.</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -15203,7 +15214,7 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {["Ordine", "Data", "Cliente", "Stato", "Imponibile", "IVA", "Totale"].map((th) => (
+                  {["Ordine", "Origine", "Data", "Cliente", "Stato", "Imponibile", "IVA", "Totale"].map((th) => (
                     <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
                   ))}
                 </tr>
@@ -15217,8 +15228,11 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
                     return (
                       <tr key={v.id}>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>#{v.numero_ordine || v.woo_order_id}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.origine === "pos" ? "#3B6FA0" : MUTED, background: v.origine === "pos" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>{v.origine === "pos" ? "POS" : "WooCommerce"}</span>
+                        </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (v.origine === "pos" ? "Vendita al banco" : "—")}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
                         </td>
@@ -15229,7 +15243,7 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
                     );
                   })}
                 {venditeFiltrate.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita nel periodo selezionato.</td></tr>
+                  <tr><td colSpan={8} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita nel periodo selezionato.</td></tr>
                 )}
               </tbody>
             </table>
@@ -16030,6 +16044,350 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           onFatto={() => { setMostraNuovoProdotto(false); ricarica(); }}
         />
       )}
+    </div>
+  );
+}
+
+// ---------- POS Vendita diretta ----------
+// vendita al banco: scarica lo stock da giacenza_magazzino (fisico, come
+// la Logistica prodotti — non tocca mai WooCommerce) e registra la
+// vendita in "vendite_shop" (stessa tabella degli ordini WooCommerce,
+// origine="pos"), così compare da sola nei totali di "Vendite shop" e
+// "Analisi Magazzino" insieme alle vendite online, senza duplicare la
+// logica di aggregazione già esistente
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const [categoriaSel, setCategoriaSel] = useState("");
+  const [pagina, setPagina] = useState(1);
+  const [righePerPagina, setRighePerPagina] = useState(12);
+  const [carrello, setCarrello] = useState([]); // { prodottoId, nome, prezzo, quantita, sku, disponibili }
+  const [scontoTipo, setScontoTipo] = useState("percentuale"); // percentuale | importo
+  const [scontoValore, setScontoValore] = useState("");
+  const [metodoPagamento, setMetodoPagamento] = useState("pos");
+  const [note, setNote] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [mostraStorico, setMostraStorico] = useState(false);
+
+  const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
+  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const categorieIdPerProdottoId = {};
+  (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
+  const immagineUrlPerProdotto = {};
+  [...(prodottiImmagini || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).forEach((im) => { if (!immagineUrlPerProdotto[im.prodotto_id]) immagineUrlPerProdotto[im.prodotto_id] = im.url; });
+
+  // solo prodotti con un prezzo possono essere venduti al banco: quelli
+  // senza (materiali di consumo, arredi…) restano fuori dal POS
+  const prodottiVendibili = (prodottiShop || []).filter((p) => p.attivo !== false && p.prezzo_vendita != null);
+
+  let prodottiVisti = prodottiVendibili;
+  if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => (categorieIdPerProdottoId[p.id] || []).includes(categoriaSel));
+  if (ricerca.trim()) {
+    const q = ricerca.trim().toLowerCase();
+    prodottiVisti = prodottiVisti.filter((p) => p.nome.toLowerCase().includes(q) || (p.sku || "").toLowerCase().includes(q) || (categorieIdPerProdottoId[p.id] || []).some((cid) => (categorieNomeById[cid] || "").toLowerCase().includes(q)));
+  }
+  prodottiVisti = [...prodottiVisti].sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const totalePagine = Math.max(1, Math.ceil(prodottiVisti.length / righePerPagina));
+  const paginaEffettiva = Math.min(pagina, totalePagine);
+  const prodottiPagina = prodottiVisti.slice((paginaEffettiva - 1) * righePerPagina, paginaEffettiva * righePerPagina);
+
+  function vaiAPagina(n) { setPagina(Math.min(Math.max(1, n), totalePagine)); }
+  function cambiaFiltro(fn) { fn(); setPagina(1); }
+
+  function disponibiliDi(prodottoId) {
+    const p = (prodottiShop || []).find((pp) => pp.id === prodottoId);
+    return p ? (p.giacenza_magazzino || 0) : 0;
+  }
+
+  function aggiungiAlCarrello(p) {
+    const disponibili = p.giacenza_magazzino || 0;
+    if (disponibili <= 0) return;
+    setCarrello((prev) => {
+      const esistente = prev.find((r) => r.prodottoId === p.id);
+      if (esistente) {
+        if (esistente.quantita >= disponibili) return prev;
+        return prev.map((r) => (r.prodottoId === p.id ? { ...r, quantita: r.quantita + 1 } : r));
+      }
+      return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: p.prezzo_vendita, sku: p.sku || "", quantita: 1 }];
+    });
+  }
+  function incrementaRiga(prodottoId) {
+    const disponibili = disponibiliDi(prodottoId);
+    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId && r.quantita < disponibili ? { ...r, quantita: r.quantita + 1 } : r)));
+  }
+  function decrementaRiga(prodottoId) {
+    setCarrello((prev) => prev.map((r) => (r.prodottoId === prodottoId ? { ...r, quantita: Math.max(1, r.quantita - 1) } : r)));
+  }
+  function rimuoviRiga(prodottoId) {
+    setCarrello((prev) => prev.filter((r) => r.prodottoId !== prodottoId));
+  }
+  function svuotaCarrello() { setCarrello([]); }
+  function nuovaVendita() {
+    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
+  }
+
+  const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
+  const scontoNum = scontoValore === "" ? 0 : parseNum(scontoValore);
+  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum));
+  const totaleNetto = round2(subtotale - scontoApplicato);
+  const imponibile = round2(totaleNetto / 1.22);
+  const iva = round2(totaleNetto - imponibile);
+
+  async function confermaVendita() {
+    if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
+    for (const r of carrello) {
+      if (r.quantita > disponibiliDi(r.prodottoId)) { setMsg(`"${r.nome}" non ha più abbastanza disponibilità in magazzino.`); return; }
+    }
+    setSalvando(true);
+    setMsg("");
+
+    const scritture = carrello.map((r) => {
+      const disponibili = disponibiliDi(r.prodottoId);
+      return supabase.from("prodotti_shop").update({ giacenza_magazzino: disponibili - r.quantita }).eq("id", r.prodottoId);
+    });
+    const risultatiScritture = await Promise.all(scritture);
+    const erroreScrittura = risultatiScritture.find((r) => r.error);
+    if (erroreScrittura) { setSalvando(false); setMsg("Errore nello scarico del magazzino: " + erroreScrittura.error.message); return; }
+
+    // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
+    // righe, così il fatturato per prodotto in Magazzino/Analisi resta
+    // coerente col totale davvero incassato
+    const fattoreSconto = subtotale > 0 ? totaleNetto / subtotale : 1;
+    const prodottiRiga = carrello.map((r) => ({ nome: r.nome, quantita: r.quantita, totale_riga: round2(r.prezzo * r.quantita * fattoreSconto) }));
+
+    const { error: erroreVendita } = await supabase.from("vendite_shop").insert({
+      woo_order_id: null,
+      numero_ordine: `POS-${Date.now()}`,
+      data_ordine: new Date().toISOString(),
+      stato: "completed",
+      totale: totaleNetto,
+      totale_imponibile: imponibile,
+      totale_iva: iva,
+      prodotti: prodottiRiga,
+      origine: "pos",
+      metodo_pagamento: metodoPagamento,
+      note: note.trim() || null,
+    });
+    setSalvando(false);
+    if (erroreVendita) { setMsg("Magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message); return; }
+    nuovaVendita();
+    setMsg("Vendita registrata.");
+    ricarica();
+  }
+
+  const venditePos = (venditeShop || []).filter((v) => v.origine === "pos").sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
+
+  const tileImg = { width: "100%", height: 90, borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 };
+
+  if (mostraStorico) {
+    return (
+      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <button onClick={() => setMostraStorico(false)} title="Torna al POS" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Storico vendite POS</div>
+          </div>
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 14 }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+                <thead>
+                  <tr>
+                    {["Vendita", "Data", "Prodotti", "Metodo", "Totale"].map((th) => (
+                      <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {venditePos.map((v) => (
+                    <tr key={v.id}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.numero_ordine}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                    </tr>
+                  ))}
+                  {venditePos.length === 0 && (
+                    <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco registrata.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1400, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>POS Vendita diretta</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Button variant="ghost" onClick={() => setMostraStorico(true)}>Storico vendite</Button>
+            <Button onClick={nuovaVendita}>+ Nuova vendita</Button>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.5fr 1fr", gap: 18, alignItems: "flex-start" }}>
+          <div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+              <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1, minWidth: 220 }} />
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+              <TabPillola attivo={!categoriaSel} onClick={() => cambiaFiltro(() => setCategoriaSel(""))}>Tutti</TabPillola>
+              {categorieOrdinate.map((c) => (
+                <TabPillola key={c.id} attivo={categoriaSel === c.id} onClick={() => cambiaFiltro(() => setCategoriaSel(c.id))}>{c.nome}</TabPillola>
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: 12 }}>
+              {prodottiPagina.map((p) => {
+                const disponibili = p.giacenza_magazzino || 0;
+                const esaurito = disponibili <= 0;
+                const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
+                return (
+                  <div key={p.id} onClick={() => !esaurito && aggiungiAlCarrello(p)} style={{ ...cardStyle, marginBottom: 0, padding: 14, cursor: esaurito ? "default" : "pointer", opacity: esaurito ? 0.55 : 1 }}>
+                    <div style={tileImg}>
+                      {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={30} color={MUTED} />}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, lineHeight: 1.25, marginBottom: 2 }}>{p.nome}</div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>{nomiCategorie || "—"}{p.sku ? ` · Cod. ${p.sku}` : ""}</div>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(p.prezzo_vendita)}</div>
+                        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>IVA incl.</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Disponibili</div>
+                        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: esaurito ? "#C0392B" : NAVY }}>{esaurito ? "Esaurito" : `${disponibili} pz`}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {prodottiPagina.length === 0 && (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "30px 0", gridColumn: "1 / -1", textAlign: "center" }}>Nessun prodotto vendibile corrisponde ai filtri.</div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Mostra</span>
+                <select style={{ ...inputStyle, width: "auto", padding: "6px 8px", fontSize: 12.5 }} value={righePerPagina} onChange={(e) => { setRighePerPagina(Number(e.target.value)); setPagina(1); }}>
+                  {[12, 24, 48].map((n) => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>prodotti per pagina</span>
+              </div>
+              {totalePagine > 1 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <button onClick={() => vaiAPagina(paginaEffettiva - 1)} disabled={paginaEffettiva <= 1} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: paginaEffettiva <= 1 ? "default" : "pointer", opacity: paginaEffettiva <= 1 ? 0.4 : 1 }}>‹</button>
+                  {Array.from({ length: totalePagine }, (_, i) => i + 1)
+                    .filter((n) => n === 1 || n === totalePagine || Math.abs(n - paginaEffettiva) <= 1)
+                    .reduce((acc, n) => { if (acc.length && n - acc[acc.length - 1] > 1) acc.push("…"); acc.push(n); return acc; }, [])
+                    .map((n, i) => n === "…" ? (
+                      <span key={`e${i}`} style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "0 4px" }}>…</span>
+                    ) : (
+                      <button key={n} onClick={() => vaiAPagina(n)} style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: n === paginaEffettiva ? NAVY : "#fff", color: n === paginaEffettiva ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 600 }}>{n}</button>
+                    ))}
+                  <button onClick={() => vaiAPagina(paginaEffettiva + 1)} disabled={paginaEffettiva >= totalePagine} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: paginaEffettiva >= totalePagine ? "default" : "pointer", opacity: paginaEffettiva >= totalePagine ? 0.4 : 1 }}>›</button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, marginBottom: 0, position: isMobile ? "static" : "sticky", top: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 12, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
+              {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
+            </div>
+
+            {carrello.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "20px 0", textAlign: "center" }}>Clicca un prodotto per aggiungerlo al carrello.</div>
+            ) : (
+              <div style={{ marginBottom: 16 }}>
+                {carrello.map((r) => (
+                  <div key={r.prodottoId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
+                      <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{fmtEuroErp(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 18, textAlign: "center" }}>{r.quantita}</span>
+                      <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= disponibiliDi(r.prodottoId)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= disponibiliDi(r.prodottoId) ? "default" : "pointer", opacity: r.quantita >= disponibiliDi(r.prodottoId) ? 0.4 : 1 }}>+</button>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, width: 62, textAlign: "right" }}>{fmtEuroErp(round2(r.prezzo * r.quantita))}</div>
+                    <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 2 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Sconto vendita">
+                  <select style={inputStyle} value={scontoTipo} onChange={(e) => setScontoTipo(e.target.value)}>
+                    <option value="percentuale">Percentuale</option>
+                    <option value="importo">Importo fisso</option>
+                  </select>
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label={scontoTipo === "percentuale" ? "%" : "€"}>
+                  <input style={inputStyle} inputMode="decimal" value={scontoValore} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
+                </Field>
+              </div>
+            </div>
+            {scontoApplicato > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>
+                <span>Sconto applicato</span><span>− {fmtEuroErp(scontoApplicato)}</span>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 4 }}>
+              <span>Subtotale (IVA incl.)</span><span>{fmtEuroErp(subtotale)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 4 }}>
+              <span>Imponibile</span><span>{fmtEuroErp(imponibile)}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+              <span>IVA 22%</span><span>{fmtEuroErp(iva)}</span>
+            </div>
+            <div style={{ background: BG, borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale da incassare</span>
+              <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleNetto)}</span>
+            </div>
+
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Modalità di pagamento</div>
+            <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+              {[{ v: "pos", l: "POS / Carta" }, { v: "contanti", l: "Contanti" }].map((m) => (
+                <button key={m.v} onClick={() => setMetodoPagamento(m.v)} style={{ flex: 1, padding: "12px 10px", borderRadius: 10, border: metodoPagamento === m.v ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+                  {m.l}
+                </button>
+              ))}
+            </div>
+            <Field label="Note (opzionale)">
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Aggiungi note sulla vendita…" />
+            </Field>
+
+            {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita registrata." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
+            <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0} style={{ width: "100%", marginBottom: 10 }}>
+              {salvando ? "Registro…" : `Conferma vendita e incassa ${fmtEuroErp(totaleNetto)}`}
+            </Button>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -20421,6 +20779,7 @@ export default function App() {
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
+  function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
@@ -20655,6 +21014,7 @@ export default function App() {
             <TileHome title="Dashboard master" descrizione="Gestisci master, specializzazioni e valutazioni" Icona={IconaTileMaster} attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
             <TileHome title="Agenda" descrizione="Visualizza calendario, impegni e promemoria" Icona={IconaCalendarioCard} attivo={haAccessoAgenda()} onClick={apriAgenda} />
             <TileHome title="ERP / Magazzino" descrizione="Gestisci prodotti, stock e fornitori" Icona={IconaScatolaErp} attivo={tastoAbilitato("erp")} onClick={apriErp} />
+            <TileHome title="POS Vendita diretta" descrizione="Vendita al banco con scarico automatico dal magazzino" Icona={IconaTilePos} attivo={tastoAbilitato("pos")} onClick={apriPos} />
             <TileHome title="Logistica prodotti" descrizione="Spedizioni, tracciamenti e documenti" Icona={IconaTileLogistica} attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
             <TileHome title="Assegna logo" descrizione="Personalizza loghi, watermark e materiali ufficiali" Icona={IconaLoghiCard} attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
             <TileHome title="Gestione modelle" descrizione="Organizza modelle, disponibilità e assegnazioni" Icona={IconaTileModelle} attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
@@ -20771,6 +21131,13 @@ export default function App() {
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("erp")}
+        />
+      )}
+
+      {view === "pos" && (
+        <PaginaPOS
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
+          prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
 

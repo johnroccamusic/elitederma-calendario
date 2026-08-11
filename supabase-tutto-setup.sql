@@ -1833,3 +1833,19 @@ alter table public.prodotti_shop alter column woo_product_id drop not null;
 alter table public.prodotti_shop add column if not exists giacenza_magazzino integer not null default 0;
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- 65) POS Vendita diretta: le vendite al banco finiscono nella stessa
+-- tabella "vendite_shop" già usata dagli ordini WooCommerce, così
+-- compaiono automaticamente nei totali di "Vendite shop" e "Analisi
+-- Magazzino" insieme alle vendite online. woo_order_id diventa
+-- nullable (una vendita POS non ha un ordine WooCommerce); "origine"
+-- distingue le due provenienze; metodo_pagamento e note sono propri
+-- della vendita al banco.
+-- ---------------------------------------------------------
+alter table public.vendite_shop alter column woo_order_id drop not null;
+alter table public.vendite_shop add column if not exists origine text not null default 'woocommerce';
+alter table public.vendite_shop add column if not exists metodo_pagamento text;
+alter table public.vendite_shop add column if not exists note text;
+
+notify pgrst, 'reload schema';
