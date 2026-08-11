@@ -1792,4 +1792,12 @@ alter table public.acconti_da_verificare add column if not exists importo_residu
 alter table public.iscritti add column if not exists acconto_bonifico_skip boolean not null default false;
 alter table public.iscritti add column if not exists precorso_bonifico_skip boolean not null default false;
 
+-- ---------------------------------------------------------
+-- 61) Ogni venditore può avere accesso limitato alle 3 sezioni della
+-- propria Dashboard venditori (Performance di vendita/Iscrivi Allievo/Le
+-- tue iscrizioni), assegnato in "Password menù" come già succede per gli
+-- utenti (TASTI_HOME) e le master.
+-- ---------------------------------------------------------
+alter table public.venditori add column if not exists permessi jsonb not null default '[]';
+
 notify pgrst, 'reload schema';

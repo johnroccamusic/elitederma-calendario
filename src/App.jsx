@@ -3764,7 +3764,14 @@ function PaginaDashboardVenditori({
   const [customDa, setCustomDa] = useState("");
   const [customA, setCustomA] = useState("");
   const [espansoChiusurePerCorso, setEspansoChiusurePerCorso] = useState(false);
-  const [tabDashboardVenditore, setTabDashboardVenditore] = useState("performance"); // performance | corsi
+  // chi entra come venditore (non come admin che sta solo consultando)
+  // parte sulla prima sezione che gli è consentita, non necessariamente
+  // "Performance di vendita"
+  const [tabDashboardVenditore, setTabDashboardVenditore] = useState(() => {
+    if (!venditoreBloccato) return "performance";
+    const permessi = venditori.find((v) => v.id === venditoreBloccato.id)?.permessi || [];
+    return PERMESSI_TAB_VENDITORE.find((t) => permessi.includes(t.chiave))?.chiave || "performance";
+  }); // performance | corsi | iscrizioni
   const [meseClassifica, setMeseClassifica] = useState(() => { const o = new Date(); return { anno: o.getFullYear(), mese: o.getMonth() }; });
   const [classificaCorsiCompleta, setClassificaCorsiCompleta] = useState(false);
   const [classificaTicketCompleta, setClassificaTicketCompleta] = useState(false);
@@ -3772,6 +3779,10 @@ function PaginaDashboardVenditori({
   const venditoreSel = venditoreBloccato
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
     : (venditori.find((v) => v.id === venditoreSelId) || null);
+  // null = nessuna restrizione (un admin sta solo consultando la
+  // dashboard di qualcuno, non è il venditore stesso che è entrato)
+  const permessiVenditore = venditoreBloccato ? (venditoreSel?.permessi || []) : null;
+  const tabAbilitata = (chiave) => !permessiVenditore || permessiVenditore.includes(chiave);
   const oggiStr = dataOggiStr();
   const numeroDateProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
 
@@ -3985,8 +3996,9 @@ function PaginaDashboardVenditori({
           <>
             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
               <button
-                onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                onClick={() => tabAbilitata("performance") && setTabDashboardVenditore("performance")}
+                disabled={!tabAbilitata("performance")}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: tabAbilitata("performance") ? "pointer" : "default", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16, opacity: tabAbilitata("performance") ? 1 : 0.4 }}
               >
                 <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaFrecciaTrend size={24} color={GOLD} />
@@ -3997,8 +4009,9 @@ function PaginaDashboardVenditori({
                 </div>
               </button>
               <button
-                onClick={() => setTabDashboardVenditore("corsi")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                onClick={() => tabAbilitata("corsi") && setTabDashboardVenditore("corsi")}
+                disabled={!tabAbilitata("corsi")}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: tabAbilitata("corsi") ? "pointer" : "default", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16, opacity: tabAbilitata("corsi") ? 1 : 0.4 }}
               >
                 <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaPersonaAggiungi size={24} color={GOLD} />
@@ -4012,8 +4025,9 @@ function PaginaDashboardVenditori({
                 </div>
               </button>
               <button
-                onClick={() => setTabDashboardVenditore("iscrizioni")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                onClick={() => tabAbilitata("iscrizioni") && setTabDashboardVenditore("iscrizioni")}
+                disabled={!tabAbilitata("iscrizioni")}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: tabAbilitata("iscrizioni") ? "pointer" : "default", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16, opacity: tabAbilitata("iscrizioni") ? 1 : 0.4 }}
               >
                 <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaLaureaErp size={24} color={GOLD} />
@@ -4025,7 +4039,7 @@ function PaginaDashboardVenditori({
               </button>
             </div>
 
-            {tabDashboardVenditore === "performance" && (
+            {tabDashboardVenditore === "performance" && tabAbilitata("performance") && (
             <>
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Periodo di analisi</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
@@ -4237,7 +4251,7 @@ function PaginaDashboardVenditori({
             </>
             )}
 
-            {tabDashboardVenditore === "corsi" && (
+            {tabDashboardVenditore === "corsi" && tabAbilitata("corsi") && (
               <SezioneDateCorsi
                 titolo="Iscrivi Allievo"
                 corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
@@ -4252,11 +4266,16 @@ function PaginaDashboardVenditori({
                 selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
               />
             )}
-            {tabDashboardVenditore === "iscrizioni" && (
+            {tabDashboardVenditore === "iscrizioni" && tabAbilitata("iscrizioni") && (
               <LeTueIscrizioni
                 corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
                 venditoreNome={venditoreSel?.nome} onApriIscritto={onApriIscritto} ricarica={ricarica}
               />
+            )}
+            {permessiVenditore && permessiVenditore.length === 0 && (
+              <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>
+                Non hai ancora accesso a nessuna sezione. Chiedi a chi gestisce l'app di assegnartene una in "Password menù".
+              </div>
             )}
           </>
         )}
@@ -6518,7 +6537,95 @@ function TabellaPasswordMaster({ master, agende, ricarica }) {
   );
 }
 
-function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, ricarica, onBack }) {
+// le 3 sezioni della Dashboard venditori (stesse chiavi di
+// tabDashboardVenditore in PaginaDashboardVenditori): a cosa può accedere
+// ogni venditore quando entra con la propria password, invece di trovarsi
+// tutto sbloccato di default
+const PERMESSI_TAB_VENDITORE = [
+  { chiave: "performance", etichetta: "Performance di vendita" },
+  { chiave: "corsi", etichetta: "Iscrivi Allievo" },
+  { chiave: "iscrizioni", etichetta: "Le tue iscrizioni" },
+];
+// una riga di "Password venditori": solo le 3 caselle di accesso (nome,
+// password e telefono restano gestiti in Impostazioni > Definisci
+// venditori, unica fonte per crearli/rinominarli/eliminarli)
+function RigaTabellaVenditore({ venditore, ricarica }) {
+  const isMobile = useIsMobile();
+  const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
+  async function toggleTasto(chiave, checked) {
+    const attuali = permessiLocali;
+    const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
+    setPermessiLocali(nuovi);
+    const { error } = await supabase.from("venditori").update({ permessi: nuovi }).eq("id", venditore.id);
+    if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
+    ricarica();
+  }
+  if (isMobile) {
+    return (
+      <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{venditore.nome.toUpperCase()}</div>
+        {PERMESSI_TAB_VENDITORE.map((t) => (
+          <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
+            <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+          </label>
+        ))}
+      </div>
+    );
+  }
+  const tdStyle = { padding: "10px 10px", borderBottom: `1px solid ${CREAM_BORDER}` };
+  return (
+    <tr>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{venditore.nome.toUpperCase()}</td>
+      {PERMESSI_TAB_VENDITORE.map((t) => (
+        <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
+          <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
+        </td>
+      ))}
+    </tr>
+  );
+}
+// sezione "Password venditori": una riga per ogni venditore già definito
+// in Impostazioni > Definisci venditori, sempre allineata a quella lista
+// (nessuna creazione/eliminazione/password qui). Chi entra con la
+// password del proprio venditore trova già la sua Dashboard venditori
+// aperta, con solo le sezioni qui spuntate cliccabili
+function TabellaPasswordVenditori({ venditori, ricarica }) {
+  const isMobile = useIsMobile();
+  const venditoriOrdinati = venditori.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password venditori</div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
+        Ogni venditore entra dalla home (Dashboard venditori) con il proprio nome e la propria password, e trova subito la sua Dashboard venditori, senza scegliere nulla — qui scegli solo a quali delle 3 sezioni può accedere. Nome, password e telefono si gestiscono in Impostazioni &gt; Definisci venditori.
+      </div>
+      {venditoriOrdinati.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun venditore definito in Impostazioni.</div>
+      ) : isMobile ? (
+        <div>
+          {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} ricarica={ricarica} />)}
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + PERMESSI_TAB_VENDITORE.length * 160 }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Nome venditore</th>
+                {PERMESSI_TAB_VENDITORE.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {venditoriOrdinati.map((v) => <RigaTabellaVenditore key={v.id} venditore={v} ricarica={ricarica} />)}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
   async function salvaPassword(vista, password) {
@@ -6540,6 +6647,8 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, ricarica,
         </div>
 
         <TabellaPasswordMaster master={master} agende={agende} ricarica={ricarica} />
+
+        <TabellaPasswordVenditori venditori={venditori} ricarica={ricarica} />
 
         <div style={{ maxWidth: 400 }}>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password di questa rotellina</div>
@@ -19606,7 +19715,7 @@ export default function App() {
       // venditori la interroga da sola) — se in un futuro dovesse mai
       // mancare/dare errore, non deve poter svuotare l'elenco venditori
       // usato ovunque per login e selezione "Tutor"
-      supabase.from("venditori").select("id, nome, ts").order("nome"),
+      supabase.from("venditori").select("id, nome, ts, permessi").order("nome"),
       supabase.from("password_menu").select("*"),
       supabase.from("utenti_app").select("*").order("nome"),
       supabase.from("corsi_kit_prodotti").select("*"),
@@ -20417,7 +20526,7 @@ export default function App() {
       )}
 
       {view === "passwordmenu" && (
-        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} master={master} agende={agende} ricarica={fetchDati} onBack={() => setView("home")} />
+        <PaginaPasswordMenu passwordMenu={passwordMenu} utentiApp={utentiApp} master={master} agende={agende} venditori={venditori} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statistiche" && (
