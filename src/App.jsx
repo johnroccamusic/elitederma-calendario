@@ -2576,15 +2576,16 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
   const [contabilizzando, setContabilizzando] = useState(false);
   const residuoIniziale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
   // dopo una contabilizzazione parziale il residuo scende (da qualunque
-  // corso sia stata fatta): quando cambia, il metodo va scelto di nuovo per
-  // il prossimo giro, ma l'imponibile/totale mostrati in alto restano
-  // sempre quelli originali della segnalazione
+  // corso sia stata fatta): quando cambia si azzerano solo destinazione e
+  // quota, non il metodo — quello lo ha già dichiarato il venditore
+  // segnalando il pagamento (Sito/Bonifico/Pos/...), non è mai una scelta
+  // dell'amministratore, resta fisso per tutta la vita di questa
+  // segnalazione, così come l'imponibile/totale mostrati in alto
   const residuoRef = useRef(residuoIniziale);
   useEffect(() => {
     const nuovoResiduo = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
     if (nuovoResiduo !== residuoRef.current) {
       residuoRef.current = nuovoResiduo;
-      setValori((prev) => ({ ...prev, metodo: "", interessi: "" }));
       setDestinazione("");
       setQuotaDaContabilizzare("");
     }
@@ -2638,11 +2639,15 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
       <BloccoQuota
         titolo=""
         valori={valori}
-        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva"]}
         imponibileBloccato
         totaleBloccato
-        onMetodo={(v) => setValori((prev) => ({ ...prev, metodo: v }))}
       />
+      {valori.metodo && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: -4, marginBottom: 10 }}>
+          <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Pagamento segnalato come</span>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "2px 10px" }}>{valori.metodo}</span>
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
           {VOCI_PAGAMENTO_VENDITORE.map((v) => (
