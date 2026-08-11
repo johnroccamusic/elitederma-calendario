@@ -1719,8 +1719,23 @@ function Gate({ onOk }) {
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
     else if (sAdmin.password && code === sAdmin.password) { ruolo = "amministratore"; utente = sAdmin; }
-    else if (masterTrovata) { ruolo = "user"; utente = { id: masterTrovata.id, nome: masterTrovata.nome, permessi: ["dashboardmaster", ...(masterTrovata.permessi || [])], chiave_sistema: null, masterId: masterTrovata.id }; }
-    else if (venditoreTrovato) { ruolo = "user"; utente = { id: venditoreTrovato.id, nome: venditoreTrovato.nome, permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori"])], chiave_sistema: null, venditoreId: venditoreTrovato.id }; }
+    else if (masterTrovata) {
+      // se la stessa password è anche quella di un venditore (stessa
+      // persona, doppio ruolo), porta con sé pure venditoreId e i suoi
+      // permessi: da qui in poi "Dashboard venditori" la riconosce e la
+      // blocca sui propri dati invece di aprire il picker
+      ruolo = "user";
+      utente = {
+        id: masterTrovata.id, nome: masterTrovata.nome,
+        permessi: [...new Set(["dashboardmaster", ...(masterTrovata.permessi || []), ...(venditoreTrovato ? [...(venditoreTrovato.permessi || []), "dashboardvenditori"] : [])])],
+        chiave_sistema: null, masterId: masterTrovata.id,
+        // il nome del venditore va tenuto distinto da quello della master:
+        // le vendite/iscritti hanno "tutor" valorizzato col nome venditore
+        // (es. "ANDREA"), non con quello anagrafico master ("ANDREA PAURA")
+        ...(venditoreTrovato ? { venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome } : {}),
+      };
+    }
+    else if (venditoreTrovato) { ruolo = "user"; utente = { id: venditoreTrovato.id, nome: venditoreTrovato.nome, permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori"])], chiave_sistema: null, venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome }; }
     else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
 
@@ -19949,7 +19964,10 @@ export default function App() {
     setRuoloUtente(ruolo);
     setUtenteLoggato(utente);
     setOk(true);
-    if (utente?.venditoreId) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.nome }); setView("dashboardvenditori"); }
+    // atterra dritto sulla Dashboard venditori solo per chi entra SOLO come
+    // venditore: chi è anche master (venditoreId + masterId insieme) resta
+    // su Home per poter scegliere quale delle due dashboard aprire
+    if (utente?.venditoreId && !utente?.masterId) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.venditoreNome || utente.nome }); setView("dashboardvenditori"); }
   }} /></div>;
 
   if (loading) {
@@ -20002,7 +20020,7 @@ export default function App() {
     // dashboard, mai al picker "scegli venditore" — anche dopo essere
     // passato da "Home"
     if (utenteLoggato?.venditoreId) {
-      setVenditoreLoggato({ id: utenteLoggato.venditoreId, nome: utenteLoggato.nome });
+      setVenditoreLoggato({ id: utenteLoggato.venditoreId, nome: utenteLoggato.venditoreNome || utenteLoggato.nome });
       setView("dashboardvenditori");
       return;
     }
