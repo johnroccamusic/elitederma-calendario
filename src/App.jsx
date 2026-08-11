@@ -9660,13 +9660,34 @@ const ICONA_CESTINO_PATH = <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1
 
 // tabella "Corso e docente / Data / Capienza / Azioni" per una scheda
 // (una città, o l'unica tabella in modalità Cronologico): raggruppa le
-// voci per mese con una striscia di sfondo, come nei calendari
+// voci per mese con una striscia di sfondo, come nei calendari.
+// Su mobile le colonne fisse (140/230/110px) non ci stanno mai in
+// larghezza intera: invece di affidarsi allo scroll orizzontale (poco
+// scopribile e comunque rotto su Safari iOS insieme a "zoom", vedi
+// useZoomScheda), sotto una certa soglia si passa a righe impilate in
+// verticale che si adattano da sole a qualunque schermo
 function TabellaDateCorsi({ mesi, renderRiga }) {
+  const isMobile = useIsMobile();
+  const gruppi = Object.keys(mesi).sort().map((chiaveMese) => {
+    const gruppoMese = mesi[chiaveMese];
+    return { chiaveMese, gruppoMese, voci: gruppoMese.voci.slice().sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)) };
+  });
+  if (isMobile) {
+    return (
+      <div>
+        {gruppi.map(({ chiaveMese, gruppoMese, voci }) => (
+          <div key={chiaveMese}>
+            <div style={{ padding: "10px 12px", background: BG, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
+              <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
+            </div>
+            {voci.map((cd, i) => renderRiga(cd, i === 0, true))}
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
-    // le colonne (140/230/110px fissi) su schermi stretti non ci stanno:
-    // lo scroll orizzontale va contenuto qui, altrimenti l'overflow si
-    // propaga a tutta la pagina e trascina con sé anche la barra fissa in
-    // alto (Indietro/Avanti/home), sballando l'intera vista
     <div style={{ overflowX: "auto" }}>
     <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse" }}>
       <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 230 }} /><col style={{ width: 110 }} /></colgroup>
@@ -9679,23 +9700,19 @@ function TabellaDateCorsi({ mesi, renderRiga }) {
         </tr>
       </thead>
       <tbody>
-        {Object.keys(mesi).sort().map((chiaveMese) => {
-          const gruppoMese = mesi[chiaveMese];
-          const voci = gruppoMese.voci.slice().sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
-          return (
-            <React.Fragment key={chiaveMese}>
-              <tr>
-                <td colSpan={4} style={{ padding: "10px 12px", background: BG }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
-                    <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
-                  </div>
-                </td>
-              </tr>
-              {voci.map((cd, i) => renderRiga(cd, i === 0))}
-            </React.Fragment>
-          );
-        })}
+        {gruppi.map(({ chiaveMese, gruppoMese, voci }) => (
+          <React.Fragment key={chiaveMese}>
+            <tr>
+              <td colSpan={4} style={{ padding: "10px 12px", background: BG }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
+                  <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
+                </div>
+              </td>
+            </tr>
+            {voci.map((cd, i) => renderRiga(cd, i === 0, false))}
+          </React.Fragment>
+        ))}
       </tbody>
     </table>
     </div>
@@ -9762,7 +9779,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
   // (mostraCitta false, la città è già nell'intestazione della card) sia
   // in modalità "Cronologico" (mostraCitta true: qui non c'è una card
   // per città, quindi il nome città va scritto nella riga stessa)
-  function rigaCorso(cd, mostraCitta, primaDelGruppo) {
+  function rigaCorso(cd, mostraCitta, primaDelGruppo, isMobile) {
     const corso = corsoById[cd.corso_id];
     const max = postiMaxEffettivi(cd, corso, locById[cd.location_id]);
     const occupati = iscritti ? iscritti.filter((i2) => i2.corso_data_id === cd.id).length : 0;
@@ -9774,6 +9791,49 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
         {cd.master_id && `Master: ${toTitleCase(masterById[cd.master_id]?.nome || "?")}`}
       </div>
     );
+    const azioni = (
+      <>
+        {onEdit && (
+          <button onClick={(e) => { e.stopPropagation(); onEdit(cd); }} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+          </button>
+        )}
+        {onDelete && (
+          <button onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+          </button>
+        )}
+        {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
+      </>
+    );
+    if (isMobile) {
+      // niente colonne a larghezza fissa: la riga si impila in verticale
+      // (titolo+azioni, poi data+capienza affiancate) e si adatta da sola
+      // a qualunque larghezza di schermo, senza scroll orizzontale
+      return (
+        <div key={cd.id}>
+          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "14px 4px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                <span style={{ width: 4, height: 34, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
+                  {rigaCittaMaster}
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>{azioni}</div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10 }}>
+              <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
+                {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
+              </div>
+              {iscritti && <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />}
+            </div>
+          </div>
+          {idInModifica === cd.id && renderModifica && <div style={{ padding: "0 0 12px" }}>{renderModifica(cd)}</div>}
+        </div>
+      );
+    }
     return (
       <React.Fragment key={cd.id}>
         <tr onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}` }}>
@@ -9793,19 +9853,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
             {iscritti && <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />}
           </td>
           <td style={{ padding: "16px 0 16px 10px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>
-              {onEdit && (
-                <button onClick={(e) => { e.stopPropagation(); onEdit(cd); }} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
-                </button>
-              )}
-              {onDelete && (
-                <button onClick={(e) => { e.stopPropagation(); onDelete(cd.id); }} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
-                </button>
-              )}
-              {onApriData && <span style={{ fontSize: 18, color: MUTED }}>&rsaquo;</span>}
-            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6 }}>{azioni}</div>
           </td>
         </tr>
         {idInModifica === cd.id && renderModifica && (
@@ -9827,13 +9875,13 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       if (!mesi[chiaveMese]) mesi[chiaveMese] = { etichetta: `${MESI[parseInt(mese, 10) - 1]} ${anno}`, voci: [] };
       mesi[chiaveMese].voci.push(cd);
     });
-    return <CardCronologico mesi={mesi} renderRiga={(cd, primaDelGruppo) => rigaCorso(cd, true, primaDelGruppo)} />;
+    return <CardCronologico mesi={mesi} renderRiga={(cd, primaDelGruppo, isMobile) => rigaCorso(cd, true, primaDelGruppo, isMobile)} />;
   }
 
   return (
     <div>
       {cittaOrdinate.map((c) => (
-        <CardCittaData key={c.nome} c={c} renderRiga={(cd, primaDelGruppo) => rigaCorso(cd, false, primaDelGruppo)} />
+        <CardCittaData key={c.nome} c={c} renderRiga={(cd, primaDelGruppo, isMobile) => rigaCorso(cd, false, primaDelGruppo, isMobile)} />
       ))}
     </div>
   );
