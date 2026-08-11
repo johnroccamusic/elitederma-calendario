@@ -2743,7 +2743,8 @@ function trovaIscrittoStessaPersona(iscritti, personaRif, corsoDataId) {
 // in automatico dal modulo di iscrizione quando si sceglie Bonifico come
 // metodo (origine "bonifico_modulo"). L'approvazione avviene qui stesso,
 // riga per riga: non serve più aprire la scheda dell'iscritto
-function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, ricarica, onBack }) {
+function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, onApriSchedeAffiancate, ricarica, onBack }) {
+  const isMobile = useIsMobile();
   const [tab, setTab] = useState("attesa"); // attesa | verificati
   const [approvandoId, setApprovandoId] = useState(null);
   const [modificaAcconto, setModificaAcconto] = useState(null); // riga acconti_da_verificare in modifica, o null
@@ -2813,9 +2814,9 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                   <th style={{ ...thStyle, width: "6%" }}>Data pag.</th>
                   <th style={{ ...thStyle, width: "6%" }}>Importo</th>
                   <th style={{ ...thStyle, width: "6%" }}>Metodo</th>
-                  <th style={{ ...thStyle, width: "12%" }}>Nota</th>
+                  <th style={{ ...thStyle, width: "8%" }}>Nota</th>
                   <th style={{ ...thStyle, width: "4%" }}>File</th>
-                  <th style={{ ...thStyle, width: "15%", borderRight: "none" }}></th>
+                  <th style={{ ...thStyle, width: "19%", borderRight: "none" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -2883,13 +2884,22 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                       </td>
                       <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
                         {tab === "attesa" && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
                             <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
                             </button>
                             <button onClick={() => eliminaAcconto(a)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
                             </button>
+                            {!isMobile && onApriSchedeAffiancate && coinvolti.length > 1 && (
+                              <button
+                                onClick={() => onApriSchedeAffiancate(coinvolti.map((co) => co.iscritto).filter(Boolean))}
+                                title="Apri tutte le schede associate, affiancate"
+                                style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: "#F1ECDF", border: "none", borderRadius: 20, padding: "5px 10px", cursor: "pointer" }}
+                              >
+                                Associa
+                              </button>
+                            )}
                             <button
                               onClick={() => approva(a)}
                               disabled={approvandoId === a.id}
@@ -19046,6 +19056,57 @@ function PannelloColoreRuolo({ ruolo, valoreIniziale, coloriRecenti, puoAnnullar
   );
 }
 
+// "Apri tutte le schede associate" (solo desktop): affianca in colonne
+// scorrevoli la scheda "Iscrivi allievo" di ogni corso coinvolto in uno
+// stesso pagamento "Integrazione", per contabilizzare con una visione
+// d'insieme. Ogni colonna è una <SchedaData> reale e indipendente (stesso
+// componente usato ovunque), aperta già sulla scheda giusta: le sue
+// callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
+// qui, perché in questa vista non esiste una cronologia condivisa tra le
+// colonne — "← Indietro" in alto chiude l'intera vista e basta
+function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
+  const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "24px 0 60px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, padding: "0 20px" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+          <IconaFrecciaSinistra size={20} />
+        </button>
+        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY }}>Schede associate</div>
+      </div>
+      <div style={{ display: "flex", gap: 20, overflowX: "auto", alignItems: "flex-start", padding: "0 20px 20px" }}>
+        {iscrittiArr.map((iscritto) => {
+          const cd = cdById[iscritto.corso_data_id];
+          if (!cd) return null;
+          return (
+            <div key={iscritto.id} style={{ flex: "0 0 500px", width: 500 }}>
+              <SchedaData
+                ruoloUtente={ruoloUtente}
+                codiceAmministratoreAttuale={codiceAmministratoreAttuale}
+                corsoData={cd}
+                corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+                master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
+                segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+                spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
+                venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
+                accontiDaVerificare={accontiDaVerificare}
+                ricarica={ricarica}
+                onBack={() => {}}
+                sottoVistaIniziale={{ vista: "form", modificandoId: iscritto.id, mostraGestione: false }}
+                onCambiaSottoVista={() => {}}
+                onApriNuovaSpesaPerClasse={() => {}}
+                onApriModificaSpesaPerClasse={() => {}}
+                origineGestioneModelle={false}
+                onTornaGestioneModelle={() => {}}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
@@ -19200,6 +19261,7 @@ export default function App() {
   }
 
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
+  const [schedeAffiancateIscritti, setSchedeAffiancateIscritti] = useState([]);
   const [corsi, setCorsi] = useState([]);
   const [location, setLocation] = useState([]);
   const [corsiDate, setCorsiDate] = useState([]);
@@ -19747,6 +19809,15 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
+  // "Apri tutte le schede associate" (solo desktop): affianca in colonne le
+  // schede di più iscritti — stessa persona, corsi diversi — legati allo
+  // stesso pagamento "Integrazione", per contabilizzare con una visione
+  // d'insieme invece di aprirle una alla volta
+  function apriSchedeAffiancate(iscrittiArr) {
+    window.scrollTo(0, 0);
+    setSchedeAffiancateIscritti(iscrittiArr);
+    setView("schedeaffiancate");
+  }
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
 
   return (
@@ -19981,8 +20052,24 @@ export default function App() {
         <PaginaVerificaAcconti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           accontiDaVerificare={accontiDaVerificare}
-          onApriIscritto={apriIscritto} ricarica={fetchDati}
+          onApriIscritto={apriIscritto} onApriSchedeAffiancate={apriSchedeAffiancate} ricarica={fetchDati}
           onBack={() => setView("gestionedate")}
+        />
+      )}
+
+      {view === "schedeaffiancate" && (
+        <VistaSchedeAffiancate
+          iscrittiArr={schedeAffiancateIscritti}
+          ruoloUtente={ruoloUtente}
+          codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
+          segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
+          venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
+          accontiDaVerificare={accontiDaVerificare}
+          ricarica={fetchDati}
+          onBack={() => setView("verificaacconti")}
         />
       )}
 
