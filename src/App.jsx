@@ -2594,7 +2594,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
   }
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
-  const celStyle = { padding: "5px 7px", borderBottom: bordoV, borderRight: bordoV };
+  const celStyle = { padding: "5px 7px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG };
 
   return (
@@ -2622,7 +2622,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
           .map((origine) => ({ origine, righe: righe.filter((a) => (a.origine || "manuale") === origine) }))
           .filter((g) => g.righe.length > 0);
-        const gruppoStyle = { ...fontDisplay, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, verticalAlign: "top" };
+        const gruppoStyle = { ...fontDisplay, fontSize: 11, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.3 };
         return (
           <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
             <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
@@ -2668,7 +2668,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.nota || ""}>{a.nota || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
                       <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                         {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>}
                       </td>
