@@ -43,13 +43,109 @@ const supabase = createClient(
 
 const ACCESS_CODE = import.meta.env.VITE_ACCESS_CODE || "";
 
-const NAVY = "#0E1B33";
-const CREAM_BORDER = "#E8E3D6";
-const BG = "#EFE9DC";
-const BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
-const MUTED = "#8B8FA3";
+// colori condivisi del tema: "let" (non "const") perché la modalità "Stile"
+// li riassegna in blocco quando l'utente ricolora un ruolo — vedi
+// RUOLI_TEMA/coloreRuolo/impostaColoreRuolo più sotto. Ogni funzione
+// definita in questo file legge il valore corrente al momento del render
+// (binding di modulo, non uno snapshot), quindi basta riassegnare qui e
+// forzare un remount perché tutta l'app rifletta il nuovo colore.
+let NAVY = "#0E1B33";
+let CREAM_BORDER = "#E8E3D6";
+let BG = "#EFE9DC";
+let BG_CHIARO = "#EFE9DC"; // stesso colore anche nei riquadri interni alle schede
+let MUTED = "#8B8FA3";
 const GRAFITE = "#54585F";
-const GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilità classe)
+let GOLD = "#C9A26D"; // accento per icone/badge (es. intestazione Contabilità classe)
+
+// registro dei colori condivisi modificabili dalla modalità "Stile": chiave
+// tecnica, etichetta mostrata all'utente, e le due funzioni per leggere/
+// scrivere quel ruolo (BG e BG_CHIARO condividono sempre lo stesso valore,
+// essendo oggi identici in tutta l'app)
+const RUOLI_TEMA = [
+  { chiave: "navy", etichetta: "Blu scuro (titoli, intestazioni)" },
+  { chiave: "gold", etichetta: "Oro (accenti, bottoni, badge)" },
+  { chiave: "bg", etichetta: "Crema (sfondo pagina)" },
+  { chiave: "creamBorder", etichetta: "Bordo crema (contorni dei riquadri)" },
+  { chiave: "muted", etichetta: "Grigio (testi secondari)" },
+];
+function coloreRuolo(chiave) {
+  switch (chiave) {
+    case "navy": return NAVY;
+    case "gold": return GOLD;
+    case "bg": return BG;
+    case "creamBorder": return CREAM_BORDER;
+    case "muted": return MUTED;
+    default: return null;
+  }
+}
+function impostaColoreRuolo(chiave, valore) {
+  switch (chiave) {
+    case "navy": NAVY = valore; break;
+    case "gold": GOLD = valore; break;
+    case "bg": BG = valore; BG_CHIARO = valore; break;
+    case "creamBorder": CREAM_BORDER = valore; break;
+    case "muted": MUTED = valore; break;
+  }
+}
+// normalizza qualunque colore CSS calcolato ("rgb(14, 27, 51)",
+// "rgba(0,0,0,0)", "#0E1B33"…) in un hex "#rrggbb" a 6 cifre minuscolo, o
+// null se non è un colore leggibile (es. "transparent"/canale alfa a 0)
+function coloreAHex(colore) {
+  if (!colore) return null;
+  if (colore.startsWith("#")) {
+    const h = colore.length === 4
+      ? "#" + [...colore.slice(1)].map((c) => c + c).join("")
+      : colore;
+    return h.length === 7 ? h.toLowerCase() : null;
+  }
+  const m = colore.match(/rgba?\(([^)]+)\)/);
+  if (!m) return null;
+  const parti = m[1].split(",").map((s) => parseFloat(s.trim()));
+  const [r, g, b, alpha = 1] = parti;
+  if (alpha === 0 || Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return null;
+  const due = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${due(r)}${due(g)}${due(b)}`.toLowerCase();
+}
+function hexARgb(hex) {
+  const h = hex.replace("#", "");
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+function rgbAHex(r, g, b) {
+  const due = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${due(r)}${due(g)}${due(b)}`;
+}
+function hexAHsv(hex) {
+  const { r, g, b } = hexARgb(hex);
+  const rn = r / 255, gn = g / 255, bn = b / 255;
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === rn) h = 60 * (((gn - bn) / d) % 6);
+    else if (max === gn) h = 60 * ((bn - rn) / d + 2);
+    else h = 60 * ((rn - gn) / d + 4);
+  }
+  if (h < 0) h += 360;
+  const s = max === 0 ? 0 : d / max;
+  const v = max;
+  return { h, s, v };
+}
+function hsvAHex(h, s, v) {
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+  let rp = 0, gp = 0, bp = 0;
+  if (h < 60) { rp = c; gp = x; } else if (h < 120) { rp = x; gp = c; }
+  else if (h < 180) { gp = c; bp = x; } else if (h < 240) { gp = x; bp = c; }
+  else if (h < 300) { rp = x; bp = c; } else { rp = c; bp = x; }
+  return rgbAHex((rp + m) * 255, (gp + m) * 255, (bp + m) * 255);
+}
+// dato un colore letto dal DOM (es. "rgb(14, 27, 51)" o un hex), risale al
+// ruolo del tema che lo sta usando in questo momento — null se quel colore
+// non fa parte della tavolozza condivisa (colore scritto a mano una tantum)
+function ruoloDaColore(colore) {
+  const hex = coloreAHex(colore);
+  if (!hex) return null;
+  const trovato = RUOLI_TEMA.find((r) => coloreRuolo(r.chiave)?.toLowerCase() === hex.toLowerCase());
+  return trovato ? trovato.chiave : null;
+}
 
 const fontDisplay = { fontFamily: "'Prompt',sans-serif", fontWeight: 500 };
 const fontBody = { fontFamily: "'Roboto',sans-serif" };
@@ -1505,9 +1601,9 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
           </div>
         </div>
       )}
-      {onMetodo && valori.metodo === "Bonifico" && pagato && (
+      {onMetodo && valori.metodo === "Bonifico" && onPagato && (
         <div style={{ marginTop: 10 }}>
-          <Field label="File del bonifico (obbligatorio)">
+          <Field label={pagato ? "File del bonifico (obbligatorio)" : "File del bonifico (facoltativo finché non segni \"Pagato\")"}>
             {valori.bonificoFilePath && !valori.bonificoFileNuovo ? (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
                 Caricato: <AllegatoLink percorso={valori.bonificoFilePath} etichetta="apri il file" />
@@ -2424,6 +2520,11 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
   );
 }
 const ETICHETTA_ORIGINE_ACCONTO = { manuale: "Verifica acconto/saldo", bonifico_modulo: "Verifica bonifico" };
+// titolo del gruppo in "Verifica Pagamenti": "Integrazione" per i pagamenti
+// segnalati a mano da "Aggiungi Pagamento" su un allievo già iscritto,
+// "Bonifico iscrizione" per quelli creati in automatico dal modulo di
+// iscrizione (quando si iscrive un allievo la prima volta)
+const TITOLO_GRUPPO_ORIGINE = { manuale: "Integrazione", bonifico_modulo: "Bonifico iscrizione" };
 // coda "Verifica Pagamenti" (Gestione corsi): raccoglie sia le
 // segnalazioni manuali dei venditori ("Aggiungi Pagamento" su "Le tue
 // iscrizioni", origine "manuale") sia — quando esisterà — quelle create
@@ -2470,63 +2571,74 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           {tab === "attesa" ? "Niente da verificare." : "Nessun pagamento verificato ancora."}
         </div>
       ) : (
-        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%" }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Città</th>
-                <th style={thStyle}>Corso</th>
-                <th style={thStyle}>Data del corso</th>
-                <th style={thStyle}>Allievo</th>
-                <th style={thStyle}>Venditore</th>
-                <th style={thStyle}>Nota</th>
-                <th style={thStyle}>File</th>
-                <th style={{ ...thStyle, borderRight: "none" }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {righe.map((a) => {
-                const iscritto = iscrittoById[a.iscritto_id];
-                const cd = iscritto ? cdById[iscritto.corso_data_id] : null;
-                const corso = cd ? corsoById[cd.corso_id] : null;
-                const loc = cd ? locById[cd.location_id] : null;
-                const cliccabile = iscritto && onApriIscritto;
-                const eBonifico = a.origine === "bonifico_modulo";
-                return (
-                  <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>
-                      {iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}
-                      <div style={{ marginTop: 4 }}>
-                        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "2px 8px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.3 }}>
-                          {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
-                    <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, maxWidth: 260 }}>{a.nota || "—"}</td>
-                    <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                      {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
-                    </td>
-                    <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
-                      {tab === "attesa" && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); approva(a); }}
-                          disabled={approvandoId === a.id}
-                          style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "6px 14px", cursor: approvandoId === a.id ? "default" : "pointer" }}
-                        >
-                          {approvandoId === a.id ? "…" : "Approva"}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        Object.keys(TITOLO_GRUPPO_ORIGINE).map((origine) => {
+          const righeGruppo = righe.filter((a) => (a.origine || "manuale") === origine);
+          if (righeGruppo.length === 0) return null;
+          return (
+            <div key={origine} style={{ display: "flex", gap: 18, alignItems: "flex-start", marginBottom: 22 }}>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, width: 140, flexShrink: 0, paddingTop: 14 }}>
+                {TITOLO_GRUPPO_ORIGINE[origine]}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+                <table style={{ borderCollapse: "collapse", width: "100%" }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Città</th>
+                      <th style={thStyle}>Corso</th>
+                      <th style={thStyle}>Data del corso</th>
+                      <th style={thStyle}>Allievo</th>
+                      <th style={thStyle}>Venditore</th>
+                      <th style={thStyle}>Nota</th>
+                      <th style={thStyle}>File</th>
+                      <th style={{ ...thStyle, borderRight: "none" }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {righeGruppo.map((a) => {
+                      const iscritto = iscrittoById[a.iscritto_id];
+                      const cd = iscritto ? cdById[iscritto.corso_data_id] : null;
+                      const corso = cd ? corsoById[cd.corso_id] : null;
+                      const loc = cd ? locById[cd.location_id] : null;
+                      const cliccabile = iscritto && onApriIscritto;
+                      const eBonifico = a.origine === "bonifico_modulo";
+                      return (
+                        <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
+                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
+                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
+                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>
+                            {iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "2px 8px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.3 }}>
+                                {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
+                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, maxWidth: 260 }}>{a.nota || "—"}</td>
+                          <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                            {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
+                          </td>
+                          <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
+                            {tab === "attesa" && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); approva(a); }}
+                                disabled={approvandoId === a.id}
+                                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "6px 14px", cursor: approvandoId === a.id ? "default" : "pointer" }}
+                              >
+                                {approvandoId === a.id ? "…" : "Approva"}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })
       )}
     </div>
   );
@@ -10482,8 +10594,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
   // momento in cui viene salvata nel database, non la data del corso)
   const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
-  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null };
-  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null };
+  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false };
+  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
   // pagamenti aggiuntivi di acconto oltre al primo (pulsante "+"): stesso
@@ -11037,6 +11149,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       interessi: i.acconto_interessi != null ? String(i.acconto_interessi) : "",
       bonificoFilePath: i.acconto_bonifico_file || null,
       bonificoFileNuovo: null,
+      bonificoSegnalato: i.acconto_bonifico_segnalato === true,
     });
     setPagAccontoPagato(i.acconto_pagato === true);
     setAccontoExtra(Array.isArray(i.acconto_extra) ? i.acconto_extra.map((r) => ({
@@ -11047,6 +11160,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       pagato: !!r.pagato,
       bonificoFilePath: r.bonifico_file || null,
       bonificoFileNuovo: null,
+      bonificoSegnalato: r.bonifico_segnalato === true,
     })) : []);
     setPagPrecorso({
       imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
@@ -11055,6 +11169,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       interessi: i.precorso_interessi != null ? String(i.precorso_interessi) : "",
       bonificoFilePath: i.precorso_bonifico_file || null,
       bonificoFileNuovo: null,
+      bonificoSegnalato: i.precorso_bonifico_segnalato === true,
     });
     setPagPrecorsoPagato(i.precorso_pagato === true);
     setPrecorsoExtra(Array.isArray(i.precorso_extra) ? i.precorso_extra.map((r) => ({
@@ -11065,6 +11180,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       pagato: !!r.pagato,
       bonificoFilePath: r.bonifico_file || null,
       bonificoFileNuovo: null,
+      bonificoSegnalato: r.bonifico_segnalato === true,
     })) : []);
     setPagSaldo({
       imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
@@ -11170,6 +11286,16 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         Promise.all(accontoExtra.map((r, idx) => (r.bonificoFileNuovo ? caricaAllegato(r.bonificoFileNuovo, `bonifico-accontoextra-${idx}`) : Promise.resolve(r.bonificoFilePath || null)))),
         Promise.all(precorsoExtra.map((r, idx) => (r.bonificoFileNuovo ? caricaAllegato(r.bonificoFileNuovo, `bonifico-precorsoextra-${idx}`) : Promise.resolve(r.bonificoFilePath || null)))),
       ]);
+
+      // "segnalato" diventa vero (e resta vero per sempre) la prima volta
+      // che la quota è sia "Pagato" sia ha un file allegato: è in quel
+      // momento — non prima, anche se il file era già stato caricato
+      // mentre era ancora "Da pagare" — che scatta la segnalazione a Elena
+      const segnalatoAcconto = (pagAccontoPagato && !!pathBonificoAcconto) || pagAcconto.bonificoSegnalato;
+      const segnalatoPrecorso = (pagPrecorsoPagato && !!pathBonificoPrecorso) || pagPrecorso.bonificoSegnalato;
+      const segnalatiAccontoExtra = accontoExtra.map((r, idx) => (r.pagato && !!pathsBonificoAccontoExtra[idx]) || r.bonificoSegnalato);
+      const segnalatiPrecorsoExtra = precorsoExtra.map((r, idx) => (r.pagato && !!pathsBonificoPrecorsoExtra[idx]) || r.bonificoSegnalato);
+
       const payload = {
         nome: nome.trim(),
         cognome: cognome.trim(),
@@ -11183,6 +11309,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         acconto_interessi: pagAcconto.metodo === "Rate" && pagAcconto.interessi !== "" ? parseNum(pagAcconto.interessi) : null,
         acconto_pagato: pagAccontoPagato,
         acconto_bonifico_file: pathBonificoAcconto,
+        acconto_bonifico_segnalato: segnalatoAcconto,
         acconto_extra: accontoExtra.map((r, idx) => ({
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
@@ -11190,6 +11317,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
           bonifico_file: pathsBonificoAccontoExtra[idx],
+          bonifico_segnalato: segnalatiAccontoExtra[idx],
         })),
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
@@ -11197,6 +11325,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         precorso_interessi: pagPrecorso.metodo === "Rate" && pagPrecorso.interessi !== "" ? parseNum(pagPrecorso.interessi) : null,
         precorso_pagato: pagPrecorsoPagato,
         precorso_bonifico_file: pathBonificoPrecorso,
+        precorso_bonifico_segnalato: segnalatoPrecorso,
         precorso_extra: precorsoExtra.map((r, idx) => ({
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
@@ -11204,6 +11333,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
           bonifico_file: pathsBonificoPrecorsoExtra[idx],
+          bonifico_segnalato: segnalatiPrecorsoExtra[idx],
         })),
         saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
         saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
@@ -11249,27 +11379,28 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       const idIscritto = modificandoId || nuovoId;
       if (nuovoId) setModificandoId(nuovoId); // da qui in poi i campi successivi si autosalvano sullo stesso iscritto
 
-      // ogni file di bonifico appena caricato (non presente prima) finisce
-      // in automatico nella coda "Verifica Pagamenti", etichettato "Verifica
-      // bonifico": lo stato locale viene aggiornato subito dopo, altrimenti
-      // il prossimo autosalvataggio (onBlur) lo segnalerebbe di nuovo
+      // finisce in automatico nella coda "Verifica Pagamenti" (etichettato
+      // "Verifica bonifico") solo la quota che diventa "segnalata" proprio
+      // in questo salvataggio — cioè che PRIMA di questo salvataggio non lo
+      // era ancora, cosa che succede solo quando è già "Pagato" e ha un
+      // file: se il file era stato caricato mentre era ancora "Da pagare",
+      // non scatta niente finché non si passa a "Pagato"
       const daSegnalare = [];
-      if (pagAcconto.bonificoFileNuovo) daSegnalare.push({ path: pathBonificoAcconto, nota: "Bonifico — Quota acconto" });
-      if (pagPrecorso.bonificoFileNuovo) daSegnalare.push({ path: pathBonificoPrecorso, nota: "Bonifico — Quota pre corso" });
-      if (pagSaldo.bonificoFileNuovo) daSegnalare.push({ path: pathBonificoSaldo, nota: "Bonifico — Da avere al corso" });
-      accontoExtra.forEach((r, idx) => { if (r.bonificoFileNuovo) daSegnalare.push({ path: pathsBonificoAccontoExtra[idx], nota: `Bonifico — Acconto aggiuntivo ${idx + 1}` }); });
-      precorsoExtra.forEach((r, idx) => { if (r.bonificoFileNuovo) daSegnalare.push({ path: pathsBonificoPrecorsoExtra[idx], nota: `Bonifico — Pre corso aggiuntivo ${idx + 1}` }); });
+      if (segnalatoAcconto && !pagAcconto.bonificoSegnalato) daSegnalare.push({ path: pathBonificoAcconto, nota: "Bonifico — Quota acconto" });
+      if (segnalatoPrecorso && !pagPrecorso.bonificoSegnalato) daSegnalare.push({ path: pathBonificoPrecorso, nota: "Bonifico — Quota pre corso" });
+      accontoExtra.forEach((r, idx) => { if (segnalatiAccontoExtra[idx] && !r.bonificoSegnalato) daSegnalare.push({ path: pathsBonificoAccontoExtra[idx], nota: `Bonifico — Acconto aggiuntivo ${idx + 1}` }); });
+      precorsoExtra.forEach((r, idx) => { if (segnalatiPrecorsoExtra[idx] && !r.bonificoSegnalato) daSegnalare.push({ path: pathsBonificoPrecorsoExtra[idx], nota: `Bonifico — Pre corso aggiuntivo ${idx + 1}` }); });
       if (daSegnalare.length > 0 && idIscritto) {
         const { error: erroreCoda } = await supabase.from("acconti_da_verificare").insert(
           daSegnalare.map((d) => ({ iscritto_id: idIscritto, nota: d.nota, file_path: d.path, venditore_nome: tutor.trim() || null, origine: "bonifico_modulo" }))
         );
         if (erroreCoda) setMsg("Iscritto salvato, ma la segnalazione del bonifico a Elena non è riuscita: " + erroreCoda.message);
       }
-      setPagAcconto((prev) => ({ ...prev, bonificoFilePath: pathBonificoAcconto, bonificoFileNuovo: null }));
-      setPagPrecorso((prev) => ({ ...prev, bonificoFilePath: pathBonificoPrecorso, bonificoFileNuovo: null }));
+      setPagAcconto((prev) => ({ ...prev, bonificoFilePath: pathBonificoAcconto, bonificoFileNuovo: null, bonificoSegnalato: segnalatoAcconto }));
+      setPagPrecorso((prev) => ({ ...prev, bonificoFilePath: pathBonificoPrecorso, bonificoFileNuovo: null, bonificoSegnalato: segnalatoPrecorso }));
       setPagSaldo((prev) => ({ ...prev, bonificoFilePath: pathBonificoSaldo, bonificoFileNuovo: null }));
-      setAccontoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoAccontoExtra[idx], bonificoFileNuovo: null })));
-      setPrecorsoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoPrecorsoExtra[idx], bonificoFileNuovo: null })));
+      setAccontoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoAccontoExtra[idx], bonificoFileNuovo: null, bonificoSegnalato: segnalatiAccontoExtra[idx] })));
+      setPrecorsoExtra((prev) => prev.map((r, idx) => ({ ...r, bonificoFilePath: pathsBonificoPrecorsoExtra[idx], bonificoFileNuovo: null, bonificoSegnalato: segnalatiPrecorsoExtra[idx] })));
 
       ricarica();
       return true;
@@ -18440,6 +18571,142 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
   );
 }
 
+// ---------- Modalità "Stile": ruota cromatica ----------
+const CHIAVE_COLORI_RECENTI_STILE = "stile_colori_recenti_v1";
+function leggiColoriRecentiStile() {
+  try {
+    const salvato = JSON.parse(localStorage.getItem(CHIAVE_COLORI_RECENTI_STILE) || "[]");
+    return Array.isArray(salvato) ? salvato.slice(0, 8) : [];
+  } catch {
+    return [];
+  }
+}
+function salvaColoreRecenteStile(hex) {
+  const attuali = leggiColoriRecentiStile().filter((c) => c.toLowerCase() !== hex.toLowerCase());
+  const nuovi = [hex, ...attuali].slice(0, 8);
+  localStorage.setItem(CHIAVE_COLORI_RECENTI_STILE, JSON.stringify(nuovi));
+  return nuovi;
+}
+
+// ruota cromatica classica (tonalità = angolo, saturazione = distanza dal
+// centro) più una barra di luminosità: senza luminosità regolabile non si
+// potrebbero mai riottenere colori scuri come il blu della barra/dei
+// titoli, che ha un valore basso, non solo poca saturazione
+function RuotaCromatica({ valore, onCambia }) {
+  const raggio = 84;
+  const diametro = raggio * 2;
+  const refRuota = useRef(null);
+  const [hsv, setHsv] = useState(() => hexAHsv(valore));
+
+  useEffect(() => { setHsv(hexAHsv(valore)); }, [valore]);
+
+  function applicaDaHsv(nuovo) {
+    setHsv(nuovo);
+    onCambia(hsvAHex(nuovo.h, nuovo.s, nuovo.v));
+  }
+
+  function gestisciPunto(e) {
+    const rect = refRuota.current.getBoundingClientRect();
+    const cx = rect.left + raggio, cy = rect.top + raggio;
+    const dx = e.clientX - cx, dy = e.clientY - cy;
+    const dist = Math.min(raggio, Math.hypot(dx, dy));
+    let angolo = Math.atan2(dy, dx) * (180 / Math.PI);
+    if (angolo < 0) angolo += 360;
+    applicaDaHsv({ h: angolo, s: raggio === 0 ? 0 : dist / raggio, v: hsv.v });
+  }
+
+  function onPointerDown(e) {
+    e.preventDefault();
+    gestisciPunto(e);
+    const onMove = (ev) => gestisciPunto(ev);
+    const onUp = () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  const angRad = (hsv.h * Math.PI) / 180;
+  const r = hsv.s * raggio;
+  const puntoX = raggio + r * Math.cos(angRad);
+  const puntoY = raggio + r * Math.sin(angRad);
+
+  return (
+    <div>
+      <div
+        ref={refRuota}
+        onPointerDown={onPointerDown}
+        style={{
+          width: diametro, height: diametro, borderRadius: "50%", position: "relative", cursor: "crosshair", margin: "0 auto",
+          background: "radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 72%), conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red)",
+          boxShadow: `inset 0 0 0 1px ${CREAM_BORDER}`,
+          touchAction: "none",
+        }}
+      >
+        <div style={{
+          position: "absolute", left: puntoX - 7, top: puntoY - 7, width: 14, height: 14, borderRadius: "50%",
+          border: "2px solid #fff", boxShadow: "0 0 0 1px rgba(0,0,0,0.35)", background: hsvAHex(hsv.h, hsv.s, hsv.v), pointerEvents: "none",
+        }} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>Luminosità</span>
+        <input
+          type="range" min={0} max={100} value={Math.round(hsv.v * 100)}
+          onChange={(e) => applicaDaHsv({ ...hsv, v: Number(e.target.value) / 100 })}
+          style={{ flex: 1 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// pannello che appare cliccando un elemento in modalità "Stile": ruota
+// cromatica + campo hex + ultimi colori usati + Annulla/Applica a tutti
+function PannelloColoreRuolo({ ruolo, valoreIniziale, coloriRecenti, puoAnnullare, onAnnullaUltima, onChiudi, onApplicaATutti }) {
+  const [hex, setHex] = useState(valoreIniziale);
+  const [inputHex, setInputHex] = useState(valoreIniziale);
+
+  function cambiaColore(nuovoHex) {
+    setHex(nuovoHex);
+    setInputHex(nuovoHex);
+  }
+  function confermaInputHex() {
+    const pulito = (inputHex.startsWith("#") ? inputHex : `#${inputHex}`).toLowerCase();
+    if (/^#[0-9a-f]{6}$/.test(pulito)) cambiaColore(pulito);
+    else setInputHex(hex);
+  }
+
+  return (
+    <Modal title={`Colore — ${ruolo.etichetta}`} onClose={onChiudi}>
+      <RuotaCromatica valore={hex} onCambia={cambiaColore} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+        <div style={{ width: 34, height: 34, borderRadius: 8, background: hex, border: `1px solid ${CREAM_BORDER}`, flexShrink: 0 }} />
+        <input
+          value={inputHex}
+          onChange={(e) => setInputHex(e.target.value)}
+          onBlur={confermaInputHex}
+          onKeyDown={(e) => e.key === "Enter" && confermaInputHex()}
+          style={{ ...inputStyle, fontFamily: "monospace" }}
+          maxLength={7}
+        />
+      </div>
+      {coloriRecenti.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Ultimi colori usati</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {coloriRecenti.map((c, i) => (
+              <button key={i} onClick={() => cambiaColore(c)} title={c} style={{ width: 26, height: 26, borderRadius: 6, background: c, border: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: 0 }} />
+            ))}
+          </div>
+        </div>
+      )}
+      <Button onClick={() => onApplicaATutti(hex)} style={{ width: "100%", marginTop: 20 }}>Applica a tutti gli stessi elementi dell'app</Button>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <Button variant="ghost" onClick={onAnnullaUltima} disabled={!puoAnnullare} style={{ flex: 1 }}>Annulla ultima modifica</Button>
+        <Button variant="ghost" onClick={onChiudi} style={{ flex: 1 }}>Chiudi</Button>
+      </div>
+    </Modal>
+  );
+}
+
 export default function App() {
   // se il link contiene ?master=<id>, mostro solo la vista di sola lettura per la master
   // e salto del tutto login/home/resto dell'app
@@ -18485,6 +18752,114 @@ export default function App() {
   // verso Gestione modelle invece che verso una lista mai mostrata
   const [vieneDaGestioneModelle, setVieneDaGestioneModelle] = useState(false);
   const [venditoreLoggato, setVenditoreLoggato] = useState(null);
+
+  // ---------- modalità "Stile" ----------
+  const [modalitaStile, setModalitaStile] = useState(false);
+  const [temaVersione, setTemaVersione] = useState(0); // bump = remount di tutto l'albero, per far leggere ai componenti i colori appena riassegnati
+  const [temaPubblicato, setTemaPubblicato] = useState(null); // ultimo tema salvato sul database: baseline per capire se ci sono modifiche non pubblicate
+  const [ruoloSelezionato, setRuoloSelezionato] = useState(null); // chiave del ruolo con il pannello colore aperto
+  const [storicoUndoStile, setStoricoUndoStile] = useState([]); // pila di { ruolo, precedente } per "Annulla ultima modifica"
+  const [coloriRecentiStile, setColoriRecentiStile] = useState(() => leggiColoriRecentiStile());
+  const [rettangoloHoverStile, setRettangoloHoverStile] = useState(null);
+  const [msgStile, setMsgStile] = useState("");
+  const [cronologiaTemaAperta, setCronologiaTemaAperta] = useState(false);
+  const [versioniTema, setVersioniTema] = useState([]);
+  const [caricandoCronologiaTema, setCaricandoCronologiaTema] = useState(false);
+  const msgStileTimerRef = useRef(null);
+
+  const modificheTemaNonPubblicate = !!temaPubblicato && RUOLI_TEMA.some((r) => coloreRuolo(r.chiave)?.toLowerCase() !== (temaPubblicato[r.chiave] || "").toLowerCase());
+
+  function segnalaColoreNonInTavolozza() {
+    setMsgStile("Questo colore non fa parte della tavolozza condivisa: non è modificabile da qui.");
+    window.clearTimeout(msgStileTimerRef.current);
+    msgStileTimerRef.current = window.setTimeout(() => setMsgStile(""), 2600);
+  }
+
+  useEffect(() => {
+    if (!modalitaStile || ruoloSelezionato) { setRettangoloHoverStile(null); return; }
+    function onMove(e) {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (!el || el.closest("[data-stile-ui]")) { setRettangoloHoverStile(null); return; }
+      const r = el.getBoundingClientRect();
+      setRettangoloHoverStile({ top: r.top, left: r.left, width: r.width, height: r.height });
+    }
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [modalitaStile, ruoloSelezionato]);
+
+  useEffect(() => {
+    if (!modalitaStile || ruoloSelezionato) return;
+    function onClickCattura(e) {
+      if (e.target.closest("[data-stile-ui]")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // risale dal punto cliccato (spesso un'icona SVG senza colore proprio)
+      // fino al primo antenato che usa davvero un colore della tavolozza
+      let el = e.target;
+      let ruolo = null;
+      while (el && el !== document.body) {
+        const cs = window.getComputedStyle(el);
+        ruolo = ruoloDaColore(cs.backgroundColor) || ruoloDaColore(cs.color) || ruoloDaColore(cs.borderTopColor);
+        if (ruolo) break;
+        el = el.parentElement;
+      }
+      if (!ruolo) { segnalaColoreNonInTavolozza(); return; }
+      setRuoloSelezionato(ruolo);
+    }
+    document.addEventListener("click", onClickCattura, true);
+    return () => document.removeEventListener("click", onClickCattura, true);
+  }, [modalitaStile, ruoloSelezionato]);
+
+  function applicaRuoloATutti(ruolo, hex) {
+    const precedente = coloreRuolo(ruolo);
+    if (precedente?.toLowerCase() === hex.toLowerCase()) return;
+    impostaColoreRuolo(ruolo, hex);
+    setStoricoUndoStile((prev) => [...prev, { ruolo, precedente }]);
+    setColoriRecentiStile(salvaColoreRecenteStile(hex));
+    setTemaVersione((v) => v + 1);
+  }
+
+  function annullaUltimaModificaStile() {
+    setStoricoUndoStile((prev) => {
+      if (prev.length === 0) return prev;
+      const ultima = prev[prev.length - 1];
+      impostaColoreRuolo(ultima.ruolo, ultima.precedente);
+      setTemaVersione((v) => v + 1);
+      return prev.slice(0, -1);
+    });
+  }
+
+  async function pubblicaTema() {
+    const colori = {};
+    RUOLI_TEMA.forEach((r) => { colori[r.chiave] = coloreRuolo(r.chiave); });
+    const { error } = await supabase.from("tema_colori_versioni").insert({ colori });
+    if (error) { window.alert("Errore nella pubblicazione: " + error.message); return; }
+    setTemaPubblicato(colori);
+    setStoricoUndoStile([]);
+    window.alert("Tema pubblicato: da ora questi colori sono quelli che vedono tutti.");
+  }
+
+  async function apriCronologiaTema() {
+    setCronologiaTemaAperta(true);
+    setCaricandoCronologiaTema(true);
+    const { data, error } = await supabase.from("tema_colori_versioni").select("*").order("pubblicato_il", { ascending: false }).limit(30);
+    setCaricandoCronologiaTema(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setVersioniTema(data || []);
+  }
+
+  async function ripristinaVersioneTema(versione) {
+    if (!window.confirm("Ripristinare questa versione dei colori? Diventerà il tema attivo per tutti, pubblicandola di nuovo.")) return;
+    const { error } = await supabase.from("tema_colori_versioni").insert({ colori: versione.colori, etichetta: "Ripristino di una versione precedente" });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    RUOLI_TEMA.forEach((r) => impostaColoreRuolo(r.chiave, versione.colori[r.chiave] || coloreRuolo(r.chiave)));
+    setTemaPubblicato(versione.colori);
+    setStoricoUndoStile([]);
+    setTemaVersione((v) => v + 1);
+    setCronologiaTemaAperta(false);
+    window.alert("Versione ripristinata e pubblicata.");
+  }
+
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
   const [corsi, setCorsi] = useState([]);
   const [location, setLocation] = useState([]);
@@ -18691,10 +19066,30 @@ export default function App() {
     fetchDati();
   }
 
+  // il tema colori è cosmetico: viene caricato in parallelo, senza far
+  // aspettare tutto il resto del caricamento iniziale. Se non è mai stato
+  // pubblicato nulla, i colori restano quelli scritti nel codice e
+  // temaPubblicato = i loro valori attuali, così "modifiche non pubblicate"
+  // parte corretto da zero
+  async function caricaTemaColori() {
+    const { data, error } = await supabase.from("tema_colori_versioni").select("*").order("pubblicato_il", { ascending: false }).limit(1);
+    if (error || !data || data.length === 0) {
+      const attuali = {};
+      RUOLI_TEMA.forEach((r) => { attuali[r.chiave] = coloreRuolo(r.chiave); });
+      setTemaPubblicato(attuali);
+      return;
+    }
+    const colori = data[0].colori || {};
+    RUOLI_TEMA.forEach((r) => { if (colori[r.chiave]) impostaColoreRuolo(r.chiave, colori[r.chiave]); });
+    setTemaPubblicato(colori);
+    setTemaVersione((v) => v + 1);
+  }
+
   async function caricaIniziale() {
     setLoading(true);
     await fetchDati();
     setLoading(false);
+    caricaTemaColori();
   }
 
   useEffect(() => { if (ok) caricaIniziale(); }, [ok]);
@@ -19016,7 +19411,7 @@ export default function App() {
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
 
   return (
-    <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+    <div key={temaVersione} style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
       <div
         style={{
           position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)", maxWidth: 640,
@@ -19078,12 +19473,102 @@ export default function App() {
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
+          <button
+            data-stile-ui
+            onClick={() => setModalitaStile((v) => !v)}
+            aria-label="Stile"
+            title="Stile: clicca un elemento dell'app per cambiargli colore"
+            style={{
+              background: modalitaStile ? GOLD : "#F1ECDF", color: modalitaStile ? "#fff" : NAVY, border: "none", borderRadius: "50%",
+              width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2a4 4 0 0 0 4-4c0-5-4.5-9-9-9Z" />
+              <circle cx="7.5" cy="11.5" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="10.5" cy="7.5" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="15" cy="8" r="1.2" fill="currentColor" stroke="none" />
+              <circle cx="16.5" cy="12.5" r="1.2" fill="currentColor" stroke="none" />
+            </svg>
+          </button>
         </div>
       </div>
       {/* riserva lo spazio occupato dalla barra fissa qui sopra, altrimenti
           (essendo "position:fixed") coprirebbe l'inizio del contenuto di
           ogni schermata invece di limitarsi ad affiancarlo */}
       <div style={{ height: 76 }} />
+
+      {rettangoloHoverStile && (
+        <div data-stile-ui style={{
+          position: "fixed", zIndex: 4000, pointerEvents: "none",
+          top: rettangoloHoverStile.top, left: rettangoloHoverStile.left, width: rettangoloHoverStile.width, height: rettangoloHoverStile.height,
+          outline: `2px dashed ${GOLD}`, outlineOffset: -2, borderRadius: 4, background: "rgba(201,162,109,0.10)",
+        }} />
+      )}
+
+      {modalitaStile && (
+        <div data-stile-ui style={{
+          position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)", zIndex: 4001,
+          background: NAVY, color: "#fff", borderRadius: 30, padding: "10px 10px 10px 20px",
+          display: "flex", alignItems: "center", gap: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.28)", ...fontBody, fontSize: 13,
+        }}>
+          <span style={{ fontWeight: 600 }}>Stile attivo — clicca un elemento per ricolorarlo</span>
+          {modificheTemaNonPubblicate && <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: GOLD, borderRadius: 20, padding: "3px 10px" }}>Non pubblicato</span>}
+          <button onClick={apriCronologiaTema} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: "#fff", background: "rgba(255,255,255,0.14)", border: "none", borderRadius: 20, padding: "8px 14px", cursor: "pointer" }}>Cronologia</button>
+          <button onClick={pubblicaTema} disabled={!modificheTemaNonPubblicate} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: modificheTemaNonPubblicate ? NAVY : "rgba(255,255,255,0.4)", background: modificheTemaNonPubblicate ? GOLD : "rgba(255,255,255,0.14)", border: "none", borderRadius: 20, padding: "8px 14px", cursor: modificheTemaNonPubblicate ? "pointer" : "default" }}>Pubblica</button>
+          <button onClick={() => setModalitaStile(false)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: "#fff", background: "none", border: "none", cursor: "pointer", padding: "8px 4px" }}>Esci</button>
+        </div>
+      )}
+
+      {msgStile && (
+        <div data-stile-ui style={{
+          position: "fixed", bottom: 84, left: "50%", transform: "translateX(-50%)", zIndex: 4001,
+          background: "#C0392B", color: "#fff", borderRadius: 12, padding: "10px 16px", ...fontBody, fontSize: 12.5, maxWidth: 340, textAlign: "center",
+          boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+        }}>
+          {msgStile}
+        </div>
+      )}
+
+      {ruoloSelezionato && (
+        <div data-stile-ui>
+          <PannelloColoreRuolo
+            ruolo={RUOLI_TEMA.find((r) => r.chiave === ruoloSelezionato)}
+            valoreIniziale={coloreRuolo(ruoloSelezionato)}
+            coloriRecenti={coloriRecentiStile}
+            puoAnnullare={storicoUndoStile.length > 0}
+            onAnnullaUltima={annullaUltimaModificaStile}
+            onChiudi={() => setRuoloSelezionato(null)}
+            onApplicaATutti={(hex) => applicaRuoloATutti(ruoloSelezionato, hex)}
+          />
+        </div>
+      )}
+
+      {cronologiaTemaAperta && (
+        <div data-stile-ui>
+          <Modal title="Cronologia colori" onClose={() => setCronologiaTemaAperta(false)}>
+            {caricandoCronologiaTema ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Carico…</div>
+            ) : versioniTema.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: 20 }}>Nessuna versione ancora pubblicata.</div>
+            ) : (
+              versioniTema.map((v, idx) => (
+                <div key={v.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 0", borderTop: idx === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{idx === 0 ? "Attuale" : new Date(v.pubblicato_il).toLocaleString("it-IT")}</div>
+                    <div style={{ display: "flex", gap: 4, marginTop: 6 }}>
+                      {RUOLI_TEMA.map((r) => (
+                        <div key={r.chiave} title={r.etichetta} style={{ width: 18, height: 18, borderRadius: 5, background: v.colori[r.chiave] || "#fff", border: `1px solid ${CREAM_BORDER}` }} />
+                      ))}
+                    </div>
+                  </div>
+                  {idx !== 0 && <Button variant="ghost" onClick={() => ripristinaVersioneTema(v)}>Ripristina</Button>}
+                </div>
+              ))
+            )}
+          </Modal>
+        </div>
+      )}
       {view === "home" && (
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "12px 16px 16px" : "28px 28px 60px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: isMobile ? 8 : 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: isMobile ? 12 : 28 }}>

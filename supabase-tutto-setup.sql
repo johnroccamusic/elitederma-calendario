@@ -1719,4 +1719,34 @@ alter table public.iscritti add column if not exists acconto_bonifico_file text;
 alter table public.iscritti add column if not exists precorso_bonifico_file text;
 alter table public.iscritti add column if not exists saldo_bonifico_file text;
 
+-- ---------------------------------------------------------
+-- 54) Modalità "Stile": tavolozza dei colori condivisi dell'app,
+-- modificabile con la ruota cromatica dalla barra in alto. Tabella
+-- "append-only": ogni pubblicazione inserisce una nuova riga invece di
+-- sovrascrivere quella corrente, così restano visibili anche le versioni
+-- passate (per poterle ripristinare). Il tema attivo è sempre la riga
+-- più recente per pubblicato_il.
+-- ---------------------------------------------------------
+create table if not exists public.tema_colori_versioni (
+  id uuid primary key default gen_random_uuid(),
+  colori jsonb not null,
+  etichetta text,
+  pubblicato_il timestamptz not null default now()
+);
+alter table public.tema_colori_versioni enable row level security;
+drop policy if exists "tema_colori_versioni_all" on public.tema_colori_versioni;
+create policy "tema_colori_versioni_all" on public.tema_colori_versioni for all to anon using (true) with check (true);
+
+-- ---------------------------------------------------------
+-- 55) Verifica pagamenti: il file del bonifico nel modulo di iscrizione ora
+-- si può caricare anche mentre la quota è ancora "Da pagare" (facoltativo).
+-- La segnalazione a Elena scatta solo quando la quota diventa "Pagato" e ha
+-- già un file allegato, non nel momento in cui si carica il file.
+-- "bonifico_segnalato" ricorda se è già scattata, per non segnalarla due
+-- volte. Gli acconti/pre corso aggiuntivi usano una chiave
+-- "bonifico_segnalato" dentro ogni riga jsonb.
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists acconto_bonifico_segnalato boolean not null default false;
+alter table public.iscritti add column if not exists precorso_bonifico_segnalato boolean not null default false;
+
 notify pgrst, 'reload schema';
