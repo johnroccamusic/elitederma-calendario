@@ -2977,8 +2977,8 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                         ))}
                       </td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
                       <td style={{ ...celStyle, whiteSpace: "nowrap" }}>
