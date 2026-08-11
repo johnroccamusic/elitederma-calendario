@@ -16263,33 +16263,33 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const contenutoCarrelloCorpo = (
     <>
       {carrello.length === 0 ? (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "20px 0", textAlign: "center" }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: isMobile ? "10px 0" : "20px 0", textAlign: "center" }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
       ) : (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: isMobile ? 8 : 16 }}>
           {carrello.map((r) => (
-            <div key={r.prodottoId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div key={r.prodottoId} style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 10, padding: isMobile ? "6px 0" : "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
               {isMobile && (
-                <div style={{ width: 40, height: 40, borderRadius: 7, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {immagineUrlPerProdotto[r.prodottoId] ? <img src={immagineUrlPerProdotto[r.prodottoId]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={16} color={MUTED} />}
+                <div style={{ width: 32, height: 32, borderRadius: 6, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {immagineUrlPerProdotto[r.prodottoId] ? <img src={immagineUrlPerProdotto[r.prodottoId]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={13} color={MUTED} />}
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{fmtEuroErp(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: MUTED }}>{fmtEuroErp(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 18, textAlign: "center" }}>{r.quantita}</span>
-                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= disponibiliDi(r.prodottoId)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= disponibiliDi(r.prodottoId) ? "default" : "pointer", opacity: r.quantita >= disponibiliDi(r.prodottoId) ? 0.4 : 1 }}>+</button>
+              <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
+                <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
+                <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, minWidth: 16, textAlign: "center" }}>{r.quantita}</span>
+                <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= disponibiliDi(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= disponibiliDi(r.prodottoId) ? "default" : "pointer", opacity: r.quantita >= disponibiliDi(r.prodottoId) ? 0.4 : 1 }}>+</button>
               </div>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, width: 62, textAlign: "right" }}>{fmtEuroErp(round2(r.prezzo * r.quantita))}</div>
-              <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 2 }}>✕</button>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp(round2(r.prezzo * r.quantita))}</div>
+              <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: isMobile ? 13 : 15, padding: 2 }}>✕</button>
             </div>
           ))}
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: isMobile ? 8 : 14 }}>
         <div style={{ flex: 1 }}>
           <Field label="Sconto vendita">
             <select style={inputStyle} value={scontoTipo} onChange={(e) => setScontoTipo(e.target.value)}>
@@ -16305,39 +16305,46 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       </div>
       {scontoApplicato > 0 && (
-        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
           <span>Sconto applicato</span><span>− {fmtEuroErp(scontoApplicato)}</span>
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 2 : 4 }}>
         <span>Subtotale (IVA incl.)</span><span>{fmtEuroErp(subtotale)}</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 2 : 4 }}>
         <span>Imponibile</span><span>{fmtEuroErp(imponibile)}</span>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>
         <span>IVA 22%</span><span>{fmtEuroErp(iva)}</span>
       </div>
-      <div style={{ background: BG, borderRadius: 10, padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale da incassare</span>
-        <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleNetto)}</span>
+      <div style={{ background: BG, borderRadius: 10, padding: isMobile ? "8px 12px" : "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 10 : 16 }}>
+        <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale da incassare</span>
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleNetto)}</span>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Modalità di pagamento</div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 6 : 8 }}>Modalità di pagamento</div>
+      <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 8 : 14 }}>
         {[{ v: "pos", l: "POS / Carta" }, { v: "contanti", l: "Contanti" }].map((m) => (
-          <button key={m.v} onClick={() => setMetodoPagamento(m.v)} style={{ flex: 1, padding: "12px 10px", borderRadius: 10, border: metodoPagamento === m.v ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+          <button key={m.v} onClick={() => setMetodoPagamento(m.v)} style={{ flex: 1, padding: isMobile ? "8px 8px" : "12px 10px", borderRadius: 10, border: metodoPagamento === m.v ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY }}>
             {m.l}
           </button>
         ))}
       </div>
-      <Field label="Note (opzionale)">
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Aggiungi note sulla vendita…" />
-      </Field>
+      {!isMobile && (
+        <Field label="Note (opzionale)">
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Aggiungi note sulla vendita…" />
+        </Field>
+      )}
+      {isMobile && (
+        <div style={{ marginBottom: 4 }}>
+          <input value={note} onChange={(e) => setNote(e.target.value)} style={{ ...inputStyle, padding: "8px 10px", fontSize: 12.5 }} placeholder="Note (opzionale)" />
+        </div>
+      )}
 
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita registrata." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0} style={{ width: "100%", marginBottom: 10 }}>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita registrata." ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
+      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
         {salvando ? "Registro…" : `Conferma vendita e incassa ${fmtEuroErp(totaleNetto)}`}
       </Button>
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
@@ -16503,14 +16510,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
         {carrelloEspanso && (
           <div onClick={() => setCarrelloEspanso(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.4)", zIndex: 50 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "88vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "46vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)" }}>
               <div onClick={() => setCarrelloEspanso(false)} style={{ padding: "10px 0 2px", display: "flex", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                 <div style={{ width: 40, height: 4, borderRadius: 2, background: CREAM_BORDER }} />
               </div>
-              <div style={{ padding: "10px 18px 22px", overflowY: "auto" }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 12, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
-                  {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
+              <div style={{ padding: "4px 16px 14px", overflowY: "auto" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
+                  {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
                 </div>
                 {contenutoCarrelloCorpo}
               </div>
