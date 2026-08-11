@@ -19992,28 +19992,6 @@ export default function App() {
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
           <button
-            onClick={vaiIndietro}
-            disabled={pilaIndietro.length === 0}
-            style={{
-              ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
-              padding: "8px 14px", fontSize: 13, fontWeight: 600,
-              cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
-            }}
-          >
-            ← Indietro
-          </button>
-          <button
-            onClick={vaiAvanti}
-            disabled={pilaAvanti.length === 0}
-            style={{
-              ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
-              padding: "8px 14px", fontSize: 13, fontWeight: 600,
-              cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
-            }}
-          >
-            Avanti →
-          </button>
-          <button
             onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
             aria-label="Home"
             title="Home"
