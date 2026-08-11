@@ -6527,6 +6527,7 @@ function TabellaPasswordMaster({ master, agende, ricarica }) {
 function RigaTabellaVenditore({ venditore, agende, ricarica }) {
   const isMobile = useIsMobile();
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
+  const [password, setPassword] = useState("");
   const [msgPassword, setMsgPassword] = useState("");
   async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
@@ -6536,17 +6537,32 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
     if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
     ricarica();
   }
-  async function impostaPassword(password) {
-    const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId: venditore.id, password } });
-    if (error || data?.errore) setMsgPassword("Errore: " + (data?.errore || error.message));
-    else setMsgPassword("");
+  // stesso schema "scrivi ed esci dal campo" della password Master: nessun
+  // tasto a parte, si salva da sola appena si clicca fuori dalla casella
+  async function salvaPassword() {
+    if (!password.trim()) return;
+    const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId: venditore.id, password: password.trim() } });
+    if (error || data?.errore) { setMsgPassword("Errore: " + (data?.errore || error.message)); return; }
+    setMsgPassword("");
+    setPassword("");
   }
+  const campoPassword = (
+    <>
+      <input
+        style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13 }}
+        placeholder="Nuova password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        onBlur={salvaPassword}
+      />
+      {msgPassword && <div style={{ ...fontBody, fontSize: 11, color: "#C0392B" }}>{msgPassword}</div>}
+    </>
+  );
   if (isMobile) {
     return (
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
         <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 8 }}>{venditore.nome.toUpperCase()}</div>
-        <RigaPasswordVenditore valoreDiDefault="" onImposta={impostaPassword} />
-        {msgPassword && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 8 }}>{msgPassword}</div>}
+        <div style={{ marginBottom: 12 }}>{campoPassword}</div>
         {TASTI_HOME.map((t) => (
           <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
             <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{t.etichetta}</span>
@@ -6567,8 +6583,7 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
     <tr>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{venditore.nome.toUpperCase()}</td>
       <td style={tdStyle}>
-        <RigaPasswordVenditore valoreDiDefault="" onImposta={impostaPassword} />
-        {msgPassword && <div style={{ ...fontBody, fontSize: 11, color: "#C0392B" }}>{msgPassword}</div>}
+        {campoPassword}
       </td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
