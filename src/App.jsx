@@ -2462,6 +2462,60 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
     </Modal>
   );
 }
+// card rossa "Integrazione da approvare" dentro la scheda di un iscritto:
+// stessa card Imponibile/IVA/Totale/metodo di una quota, ma senza mai
+// scrivere direttamente sull'iscritto — è "onContabilizza" (in SchedaData,
+// dove vive lo stato di acconto_extra/precorso_extra) a decidere dove far
+// finire la riga quando l'amministratore preme "Contabilizza"
+function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
+  const [valori, setValori] = useState({
+    imponibile: integrazione.imponibile != null ? String(integrazione.imponibile) : "",
+    totale: integrazione.importo != null ? String(integrazione.importo) : "",
+    metodo: integrazione.metodo || "",
+    interessi: "",
+  });
+  const [pagato, setPagato] = useState(false);
+  const [destinazione, setDestinazione] = useState(() => {
+    const voci = integrazione.voci_pagamento || [];
+    return voci.length === 1 && VOCI_PAGAMENTO_VENDITORE.some((v) => v.chiave === voci[0]) ? voci[0] : "";
+  });
+  const [contabilizzando, setContabilizzando] = useState(false);
+
+  async function contabilizza() {
+    if (!destinazione || valori.totale === "") return;
+    setContabilizzando(true);
+    await onContabilizza({ integrazione, valori, pagato, destinazione });
+    setContabilizzando(false);
+  }
+
+  return (
+    <div style={{ border: "1.5px solid #C0392B", borderRadius: 10, padding: 14, marginBottom: 10 }}>
+      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B", marginBottom: 10 }}>Integrazione da approvare</div>
+      <BloccoQuota
+        titolo=""
+        valori={valori}
+        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"]}
+        onImponibile={(v) => setValori((prev) => conImponibileAggiornato(prev, v, true))}
+        onTotale={(v) => setValori((prev) => conTotaleAggiornato(prev, v, true))}
+        onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
+        onInteressi={(v) => setValori((prev) => ({ ...prev, interessi: v }))}
+        pagato={pagato}
+        onPagato={setPagato}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
+        {VOCI_PAGAMENTO_VENDITORE.map((v) => (
+          <label key={v.chiave} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}>
+            <input type="checkbox" checked={destinazione === v.chiave} onChange={() => setDestinazione((prev) => (prev === v.chiave ? "" : v.chiave))} style={{ width: 16, height: 16 }} />
+            {v.etichetta}
+          </label>
+        ))}
+        <Button onClick={contabilizza} disabled={!destinazione || valori.totale === "" || contabilizzando} style={{ marginLeft: "auto" }}>
+          {contabilizzando ? "…" : "Contabilizza"}
+        </Button>
+      </div>
+    </div>
+  );
+}
 function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, onApriIscritto, ricarica }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -10647,7 +10701,7 @@ function BottonePulsanteScheda({ p }) {
     </button>
   );
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -11308,6 +11362,46 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setModificandoId(null);
     setMsg("");
     setVista("lista");
+  }
+
+  // "Contabilizza" sulla card rossa "Integrazione da approvare": aggiunge
+  // la riga verificata dall'amministratore come un acconto (o pre corso)
+  // aggiuntivo — scrive direttamente su "iscritti" invece di passare da
+  // persistiIscritto per evitare lo stale-closure di aggiungere una riga e
+  // salvare nello stesso istante — e marca la segnalazione come approvata,
+  // chiudendo il giro cominciato con "Aggiungi Pagamento"
+  async function contabilizzaIntegrazione({ integrazione, valori, pagato, destinazione }) {
+    const nuovaRiga = {
+      imponibile: valori.imponibile,
+      totale: valori.totale,
+      metodo: valori.metodo,
+      interessi: valori.metodo === "Rate" ? valori.interessi : "",
+      pagato,
+      bonificoFilePath: null,
+      bonificoFileNuovo: null,
+      bonificoSegnalato: false,
+    };
+    const nuovoAccontoExtra = destinazione === "acconto" ? [...accontoExtra, nuovaRiga] : accontoExtra;
+    const nuovoPrecorsoExtra = destinazione !== "acconto" ? [...precorsoExtra, nuovaRiga] : precorsoExtra;
+    const mappaRiga = (r) => ({
+      imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
+      totale: r.totale === "" ? null : parseNum(r.totale),
+      metodo: r.metodo || null,
+      interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
+      pagato: !!r.pagato,
+      bonifico_file: r.bonificoFilePath || null,
+      bonifico_segnalato: !!r.bonificoSegnalato,
+    });
+    const { error: erroreIscritto } = await supabase.from("iscritti").update({
+      acconto_extra: nuovoAccontoExtra.map(mappaRiga),
+      precorso_extra: nuovoPrecorsoExtra.map(mappaRiga),
+    }).eq("id", modificandoId);
+    if (erroreIscritto) { window.alert("Errore: " + erroreIscritto.message); return; }
+    const { error: erroreApprova } = await supabase.from("acconti_da_verificare").update({ stato: "approvato", approvato_il: new Date().toISOString() }).eq("id", integrazione.id);
+    if (erroreApprova) window.alert("Contabilizzato, ma l'approvazione della segnalazione non è riuscita: " + erroreApprova.message);
+    setAccontoExtra(nuovoAccontoExtra);
+    setPrecorsoExtra(nuovoPrecorsoExtra);
+    ricarica();
   }
 
   // salva i dati correnti del form sul database. Restituisce true se riuscito.
@@ -12184,6 +12278,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </fieldset>
         </div>
 
+        {adminSbloccato && modificandoId && (accontiDaVerificare || [])
+          .filter((a) => a.iscritto_id === modificandoId && a.stato === "in_attesa" && (a.origine || "manuale") === "manuale")
+          .map((integrazione) => (
+            <BloccoIntegrazioneDaApprovare key={integrazione.id} integrazione={integrazione} onContabilizza={contabilizzaIntegrazione} />
+          ))}
 
         <div style={cardStyle}>
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
@@ -19959,6 +20058,7 @@ export default function App() {
           corsiTipiModella={corsiTipiModella}
           venditori={venditori}
           prodottiShop={prodottiShop}
+          accontiDaVerificare={accontiDaVerificare}
           ricarica={fetchDati}
           onBack={() => setView("home")}
           sottoVistaIniziale={sottoVistaScheda}
