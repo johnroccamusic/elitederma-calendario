@@ -1683,7 +1683,7 @@ function Gate({ onOk }) {
     setVerificando(true);
     const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
       supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema"),
-      supabase.from("master").select("id, nome, password, permessi"),
+      supabase.from("master").select("id, nome, password, permessi, venditore_id"),
       supabase.from("venditori").select("id, nome, password, permessi"),
     ]);
     setVerificando(false);
@@ -1715,27 +1715,41 @@ function Gate({ onOk }) {
     // subito sulla Dashboard venditori (gestito nel chiamante tramite
     // venditoreId)
     const venditoreTrovato = (venditoriRighe || []).find((v) => !!v.password && code && v.password === code);
+    // collegamento esplicito (Password menù > Password Master > "Venditore
+    // collegato"), non più affidato alla coincidenza delle due password:
+    // funziona in entrambe le direzioni, qualunque delle due password usi
+    const venditoreDellaMaster = masterTrovata?.venditore_id ? (venditoriRighe || []).find((v) => v.id === masterTrovata.venditore_id) : null;
+    const masterDelVenditore = venditoreTrovato ? (masterRighe || []).find((m) => m.venditore_id === venditoreTrovato.id) : null;
 
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
     else if (sAdmin.password && code === sAdmin.password) { ruolo = "amministratore"; utente = sAdmin; }
     else if (masterTrovata) {
-      // se la stessa password è anche quella di un venditore (stessa
-      // persona, doppio ruolo), porta con sé pure venditoreId e i suoi
-      // permessi: da qui in poi "Dashboard venditori" la riconosce e la
-      // blocca sui propri dati invece di aprire il picker
+      // se questa master ha un venditore collegato, porta con sé pure
+      // venditoreId e i suoi permessi: da qui in poi "Dashboard venditori"
+      // la riconosce e la blocca sui propri dati invece di aprire il picker
       ruolo = "user";
       utente = {
         id: masterTrovata.id, nome: masterTrovata.nome,
-        permessi: [...new Set(["dashboardmaster", ...(masterTrovata.permessi || []), ...(venditoreTrovato ? [...(venditoreTrovato.permessi || []), "dashboardvenditori"] : [])])],
+        permessi: [...new Set(["dashboardmaster", ...(masterTrovata.permessi || []), ...(venditoreDellaMaster ? [...(venditoreDellaMaster.permessi || []), "dashboardvenditori"] : [])])],
         chiave_sistema: null, masterId: masterTrovata.id,
         // il nome del venditore va tenuto distinto da quello della master:
         // le vendite/iscritti hanno "tutor" valorizzato col nome venditore
         // (es. "ANDREA"), non con quello anagrafico master ("ANDREA PAURA")
-        ...(venditoreTrovato ? { venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome } : {}),
+        ...(venditoreDellaMaster ? { venditoreId: venditoreDellaMaster.id, venditoreNome: venditoreDellaMaster.nome } : {}),
       };
     }
-    else if (venditoreTrovato) { ruolo = "user"; utente = { id: venditoreTrovato.id, nome: venditoreTrovato.nome, permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori"])], chiave_sistema: null, venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome }; }
+    else if (venditoreTrovato) {
+      // simmetrico: se questo venditore è collegato a una master, entrando
+      // con la propria password ottiene anche "Dashboard master"
+      ruolo = "user";
+      utente = {
+        id: venditoreTrovato.id, nome: venditoreTrovato.nome,
+        permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori", ...(masterDelVenditore ? ["dashboardmaster", ...(masterDelVenditore.permessi || [])] : [])])],
+        chiave_sistema: null, venditoreId: venditoreTrovato.id, venditoreNome: venditoreTrovato.nome,
+        ...(masterDelVenditore ? { masterId: masterDelVenditore.id } : {}),
+      };
+    }
     else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
 
@@ -6453,7 +6467,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
 // appena si esce dalla casella, niente tasto Salva) + una casella per
 // ogni agenda creata (stesso schema di assegnazione di Gestione utenti):
 // una master può anche lei avere una o più agende abbinate
-function RigaTabellaMaster({ masterRec, agende, ricarica }) {
+function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const [password, setPassword] = useState(masterRec.password || "");
   const [permessiLocali, setPermessiLocali] = useState(masterRec.permessi || []);
@@ -6474,6 +6488,21 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
     if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
     ricarica();
   }
+  async function salvaVenditoreCollegato(venditoreId) {
+    const { error } = await persist({ venditore_id: venditoreId || null });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  const selVenditoreCollegato = (
+    <select
+      value={masterRec.venditore_id || ""}
+      onChange={(e) => salvaVenditoreCollegato(e.target.value)}
+      style={{ ...inputStyle, padding: "6px 8px", fontSize: 13 }}
+    >
+      <option value="">— nessuno —</option>
+      {venditori.map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+    </select>
+  );
   if (isMobile) {
     return (
       <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
@@ -6485,6 +6514,10 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
           placeholder="Nessuna password"
           style={{ ...inputStyle, width: "100%", marginBottom: 12 }}
         />
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
+          {selVenditoreCollegato}
+        </div>
         {/* "Dashboard master" non compare: chi entra con la password di una
             master la ottiene sempre, automaticamente (Gate.check) */}
         {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
@@ -6516,6 +6549,7 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
           style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }}
         />
       </td>
+      <td style={tdStyle}>{selVenditoreCollegato}</td>
       {/* "Dashboard master" non compare: chi entra con la password di una
           master la ottiene sempre, automaticamente (Gate.check) */}
       {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => (
@@ -6537,7 +6571,7 @@ function RigaTabellaMaster({ masterRec, agende, ricarica }) {
 // Chi entra con la password di una master trova già la sua Dashboard
 // master aperta sulla propria scheda, senza scegliere nulla; se ha anche
 // un'agenda abbinata, la trova tra le agende del tasto "Agenda"
-function TabellaPasswordMaster({ master, agende, ricarica }) {
+function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const masterOrdinate = master.slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
@@ -6545,27 +6579,28 @@ function TabellaPasswordMaster({ master, agende, ricarica }) {
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password Master</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
-        Ogni master entra con la propria password e trova subito la sua Dashboard master, senza scegliere nulla. L'elenco si aggiorna da solo insieme a Setting &gt; Definisci Master.
+        Ogni master entra con la propria password e trova subito la sua Dashboard master, senza scegliere nulla. L'elenco si aggiorna da solo insieme a Setting &gt; Definisci Master. Se la stessa persona è anche un venditore, collegalo qui: entrando con una qualsiasi delle due password otterrà entrambe le dashboard, ciascuna bloccata sui propri dati.
       </div>
       {masterOrdinate.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master definita in Setting.</div>
       ) : isMobile ? (
         <div>
-          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} ricarica={ricarica} />)}
+          {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} venditori={venditori} ricarica={ricarica} />)}
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + (TASTI_HOME.length - 1 + agende.length) * 140 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 500 + (TASTI_HOME.length - 1 + agende.length) * 140 }}>
             <thead>
               <tr>
                 <th style={thStyle}>Nome master</th>
                 <th style={thStyle}>Password</th>
+                <th style={thStyle}>Venditore collegato</th>
                 {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
               </tr>
             </thead>
             <tbody>
-              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} ricarica={ricarica} />)}
+              {masterOrdinate.map((m) => <RigaTabellaMaster key={m.id} masterRec={m} agende={agende} venditori={venditori} ricarica={ricarica} />)}
             </tbody>
           </table>
         </div>
@@ -6714,7 +6749,7 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
           <TabellaGestioneUtenti utentiApp={utentiApp} agende={agende} ricarica={ricarica} />
         </div>
 
-        <TabellaPasswordMaster master={master} agende={agende} ricarica={ricarica} />
+        <TabellaPasswordMaster master={master} agende={agende} venditori={venditori} ricarica={ricarica} />
 
         <TabellaPasswordVenditori venditori={venditori} agende={agende} ricarica={ricarica} />
 
