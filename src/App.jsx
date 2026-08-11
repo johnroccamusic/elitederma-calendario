@@ -2550,7 +2550,6 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
     metodo: integrazione.metodo || "",
     interessi: "",
   });
-  const [pagato, setPagato] = useState(false);
   const [destinazione, setDestinazione] = useState(() => {
     const voci = integrazione.voci_pagamento || [];
     return voci.length === 1 && VOCI_PAGAMENTO_VENDITORE.some((v) => v.chiave === voci[0]) ? voci[0] : "";
@@ -2565,7 +2564,6 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
     if (nuovoResiduo !== residuoRef.current) {
       residuoRef.current = nuovoResiduo;
       setValori({ imponibile: "", totale: "", metodo: "", interessi: "" });
-      setPagato(false);
       setDestinazione("");
     }
   }, [integrazione.importo_residuo, integrazione.importo]);
@@ -2573,7 +2571,10 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
   async function contabilizza() {
     if (!destinazione || valori.totale === "" || parseNum(valori.totale) <= 0) return;
     setContabilizzando(true);
-    await onContabilizza({ integrazione, valori, pagato, destinazione });
+    // se lo staff sta contabilizzando qui è perché ha già verificato che
+    // la somma è stata ricevuta: non serve una spunta "Da pagare/Pagato",
+    // è sempre pagato
+    await onContabilizza({ integrazione, valori, pagato: true, destinazione });
     setContabilizzando(false);
   }
 
@@ -2586,13 +2587,11 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
       <BloccoQuota
         titolo=""
         valori={valori}
-        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"]}
+        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva"]}
         onImponibile={(v) => setValori((prev) => conImponibileAggiornato(prev, v, true))}
         onTotale={(v) => setValori((prev) => conTotaleAggiornato(prev, v, true))}
         onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
         onInteressi={(v) => setValori((prev) => ({ ...prev, interessi: v }))}
-        pagato={pagato}
-        onPagato={setPagato}
       />
       <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
         {VOCI_PAGAMENTO_VENDITORE.map((v) => (
@@ -19069,34 +19068,36 @@ function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreA
         </button>
         <div style={{ ...fontDisplay, fontSize: 22, color: NAVY }}>Schede associate</div>
       </div>
-      <div style={{ display: "flex", gap: 20, overflowX: "auto", alignItems: "flex-start", padding: "0 20px 20px" }}>
-        {iscrittiArr.map((iscritto) => {
-          const cd = cdById[iscritto.corso_data_id];
-          if (!cd) return null;
-          return (
-            <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
-              <SchedaData
-                ruoloUtente={ruoloUtente}
-                codiceAmministratoreAttuale={codiceAmministratoreAttuale}
-                corsoData={cd}
-                corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-                master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
-                segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
-                spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
-                venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
-                accontiDaVerificare={accontiDaVerificare}
-                ricarica={ricarica}
-                onBack={() => {}}
-                sottoVistaIniziale={{ vista: "form", modificandoId: iscritto.id, mostraGestione: false }}
-                onCambiaSottoVista={() => {}}
-                onApriNuovaSpesaPerClasse={() => {}}
-                onApriModificaSpesaPerClasse={() => {}}
-                origineGestioneModelle={false}
-                onTornaGestioneModelle={() => {}}
-              />
-            </div>
-          );
-        })}
+      <div style={{ overflowX: "auto", padding: "0 20px 20px" }}>
+        <div style={{ display: "inline-flex", gap: 20, alignItems: "flex-start", justifyContent: "center", minWidth: "100%" }}>
+          {iscrittiArr.map((iscritto) => {
+            const cd = cdById[iscritto.corso_data_id];
+            if (!cd) return null;
+            return (
+              <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
+                <SchedaData
+                  ruoloUtente={ruoloUtente}
+                  codiceAmministratoreAttuale={codiceAmministratoreAttuale}
+                  corsoData={cd}
+                  corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+                  master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
+                  segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+                  spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
+                  venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
+                  accontiDaVerificare={accontiDaVerificare}
+                  ricarica={ricarica}
+                  onBack={() => {}}
+                  sottoVistaIniziale={{ vista: "form", modificandoId: iscritto.id, mostraGestione: false }}
+                  onCambiaSottoVista={() => {}}
+                  onApriNuovaSpesaPerClasse={() => {}}
+                  onApriModificaSpesaPerClasse={() => {}}
+                  origineGestioneModelle={false}
+                  onTornaGestioneModelle={() => {}}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
