@@ -6143,10 +6143,10 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
 }
 
 // pagina "Gestione modelle": Dashboard (fabbisogno/scadenze/assegnazioni)
-// più le stesse 3 modalità di "Date corsi" già usate in Dashboard
+// più le stesse modalità di "Date corsi" già usate in Dashboard
 // venditori/Gestione corsi — qui pilotate da tab in alto invece che dalle
 // pillole interne di SezioneDateCorsi, per restare fedeli al mockup
-// (Dashboard | Elenco richieste | Calendario | Archivio). Cliccando una
+// (Dashboard | Calendario corsi | Archivio corsi). Cliccando una
 // data si entra direttamente nella scheda "Assegna modelle" di
 // quell'edizione (onApriData qui è apriDataModelle, non apriData)
 function PaginaGestioneModelle({
@@ -6157,7 +6157,7 @@ function PaginaGestioneModelle({
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
 }) {
   const isMobile = useIsMobile();
-  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | calendario | archivio
+  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -6172,9 +6172,8 @@ function PaginaGestioneModelle({
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             <TabPillola attivo={tabGM === "dashboard"} onClick={() => setTabGM("dashboard")}>Dashboard</TabPillola>
-            <TabPillola attivo={tabGM === "richieste"} onClick={() => setTabGM("richieste")}>Elenco richieste</TabPillola>
-            <TabPillola attivo={tabGM === "calendario"} onClick={() => setTabGM("calendario")}>Calendario</TabPillola>
-            <TabPillola attivo={tabGM === "archivio"} onClick={() => setTabGM("archivio")}>Archivio</TabPillola>
+            <TabPillola attivo={tabGM === "richieste"} onClick={() => setTabGM("richieste")}>Calendario corsi</TabPillola>
+            <TabPillola attivo={tabGM === "archivio"} onClick={() => setTabGM("archivio")}>Archivio corsi</TabPillola>
           </div>
         </div>
         <div style={{ marginBottom: 20 }} />
@@ -6198,7 +6197,7 @@ function PaginaGestioneModelle({
             selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
             nascondiControlli
             tabForzata={tabGM === "archivio" ? "archivio" : "programmazione"}
-            modoForzato={tabGM === "calendario" ? "calendario" : "elenco"}
+            modoForzato="elenco"
           />
         )}
       </div>
