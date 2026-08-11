@@ -2727,7 +2727,6 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
     </div>
   );
 }
-const ETICHETTA_ORIGINE_ACCONTO = { manuale: "Verifica acconto/saldo", bonifico_modulo: "Verifica bonifico" };
 // titolo del gruppo in "Verifica Pagamenti": "Integrazione" per i pagamenti
 // segnalati a mano da "Aggiungi Pagamento" su un allievo già iscritto,
 // "Bonifico iscrizione" per quelli creati in automatico dal modulo di
@@ -2775,8 +2774,8 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
   }
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
-  const celStyle = { padding: "5px 7px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG };
+  const celStyle = { padding: "5px 6px", borderBottom: bordoV, borderRight: bordoV, verticalAlign: "middle" };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 8.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.1, textAlign: "left", background: BG };
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "40px 20px" }}>
@@ -2803,7 +2802,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
           .map((origine) => ({ origine, righe: righe.filter((a) => (a.origine || "manuale") === origine) }))
           .filter((g) => g.righe.length > 0);
-        const gruppoStyle = { ...fontDisplay, fontSize: 11, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.3 };
+        const gruppoStyle = { ...fontDisplay, fontSize: 10, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.2 };
         return (
           <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
             <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
@@ -2838,8 +2837,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                     const loc = cd ? locById[cd.location_id] : null;
                     return { iscritto, cd, corso, loc };
                   });
-                  const eBonifico = a.origine === "bonifico_modulo";
-                  const celStackStyle = { ...celStyle, ...fontBody, fontSize: 11, color: NAVY };
+                  const celStackStyle = { ...celStyle, ...fontBody, fontSize: 10, color: NAVY };
                   return (
                     <tr key={a.id}>
                       {idx === 0 && <td rowSpan={g.righe.length} style={{ ...celStyle, ...gruppoStyle }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</td>}
@@ -2868,23 +2866,16 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                         {coinvolti.map((co, i) => (
                           <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined }}>
                             {co.iscritto ? `${co.iscritto.nome} ${co.iscritto.cognome}` : "—"}
-                            {i === 0 && (
-                              <div style={{ marginTop: 3 }}>
-                                <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "1px 6px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.2 }}>
-                                  {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
-                                </span>
-                              </div>
-                            )}
                           </div>
                         ))}
                       </td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 10, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
                       <td style={{ ...celStyle, whiteSpace: "nowrap" }}>
-                        {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>}
+                        {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 10, color: MUTED }}>—</span>}
                       </td>
                       <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
                         {tab === "attesa" && (
