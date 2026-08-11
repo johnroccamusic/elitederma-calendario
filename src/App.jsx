@@ -2550,17 +2550,21 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
 // scrivere direttamente sull'iscritto — è "onContabilizza" (in SchedaData,
 // dove vive lo stato di acconto_extra/precorso_extra) a decidere dove far
 // finire la riga quando l'amministratore preme "Contabilizza"
-// dato il residuo ancora da contabilizzare (in totale, con iva), ricostruisce
-// la riga { imponibile, totale } coerente da mostrare nella prima riga della
-// card: stessa aliquota già usata da questa card per ogni imponibile digitato
-// a mano (onImponibile applica sempre il 22%, vedi sotto)
-function rigaDaResiduo(residuo, metodo) {
-  const totale = residuo != null ? residuo : 0;
-  return { imponibile: String(round2(totale / 1.22)), totale: String(totale), metodo: metodo || "", interessi: "" };
+// la prima riga (Imponibile/IVA/Totale/metodo) mostra sempre l'importo
+// ORIGINALE della segnalazione, mai il residuo: non scende mai con le
+// contabilizzazioni parziali, resta un riferimento fisso. Solo "metodo" si
+// azzera a ogni contabilizzazione (va scelto di nuovo, può cambiare da un
+// giro all'altro)
+function rigaOriginale(integrazione, metodo) {
+  return {
+    imponibile: integrazione.imponibile != null ? String(integrazione.imponibile) : "",
+    totale: integrazione.importo != null ? String(integrazione.importo) : "",
+    metodo: metodo || "",
+    interessi: "",
+  };
 }
 function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
-  const residuoIniziale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
-  const [valori, setValori] = useState(() => rigaDaResiduo(residuoIniziale, integrazione.metodo));
+  const [valori, setValori] = useState(() => rigaOriginale(integrazione, integrazione.metodo));
   const [destinazione, setDestinazione] = useState(() => {
     const voci = integrazione.voci_pagamento || [];
     return voci.length === 1 && VOCI_PAGAMENTO_VENDITORE.some((v) => v.chiave === voci[0]) ? voci[0] : "";
@@ -2570,32 +2574,39 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
   // stessa segnalazione può essere spalmata su più corsi associati
   const [quotaDaContabilizzare, setQuotaDaContabilizzare] = useState("");
   const [contabilizzando, setContabilizzando] = useState(false);
+  const residuoIniziale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
   // dopo una contabilizzazione parziale il residuo scende (da qualunque
-  // corso sia stata fatta): quando cambia, la prima riga si aggiorna con il
-  // nuovo importo ancora da contabilizzare, pronta per l'eventuale prossimo giro
+  // corso sia stata fatta): quando cambia, il metodo va scelto di nuovo per
+  // il prossimo giro, ma l'imponibile/totale mostrati in alto restano
+  // sempre quelli originali della segnalazione
   const residuoRef = useRef(residuoIniziale);
   useEffect(() => {
     const nuovoResiduo = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
     if (nuovoResiduo !== residuoRef.current) {
       residuoRef.current = nuovoResiduo;
-      setValori(rigaDaResiduo(nuovoResiduo, integrazione.metodo));
+      setValori((prev) => ({ ...prev, metodo: "", interessi: "" }));
       setDestinazione("");
       setQuotaDaContabilizzare("");
     }
-  }, [integrazione.importo_residuo, integrazione.importo, integrazione.metodo]);
+  }, [integrazione.importo_residuo, integrazione.importo]);
 
-  const imponibileMax = parseNum(valori.imponibile);
+  const imponibileIniziale = parseNum(valori.imponibile);
+  const residuoAttuale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
+  const residuoImponibile = round2(parseNum(residuoAttuale) / 1.22);
+  const giaContabilizzato = round2(imponibileIniziale - residuoImponibile);
+
   const quotaNum = quotaDaContabilizzare === "" ? 0 : parseNum(quotaDaContabilizzare);
-  const quotaNonValida = quotaDaContabilizzare !== "" && (quotaNum <= 0 || quotaNum > imponibileMax);
-  const restanoDaCont = round2(imponibileMax - quotaNum);
+  const quotaNonValida = quotaDaContabilizzare !== "" && (quotaNum <= 0 || quotaNum > residuoImponibile);
+  const restanoDaCont = round2(residuoImponibile - quotaNum);
 
   async function contabilizza() {
     if (!destinazione || quotaNonValida) return;
-    const usaParziale = quotaDaContabilizzare !== "";
-    const valoriEffettivi = usaParziale
-      ? { ...valori, imponibile: quotaDaContabilizzare, totale: String(round2(quotaNum * 1.22)) }
-      : valori;
-    if (valoriEffettivi.totale === "" || parseNum(valoriEffettivi.totale) <= 0) return;
+    // se non si scrive nessuna quota parziale, "Contabilizza" svuota tutto
+    // il residuo rimasto — mai l'imponibile originale, che potrebbe essere
+    // già stato in parte contabilizzato altrove
+    const imponibileDaUsare = quotaDaContabilizzare !== "" ? quotaNum : residuoImponibile;
+    if (imponibileDaUsare <= 0) return;
+    const valoriEffettivi = { ...valori, imponibile: String(imponibileDaUsare), totale: String(round2(imponibileDaUsare * 1.22)) };
     setContabilizzando(true);
     // se lo staff sta contabilizzando qui è perché ha già verificato che
     // la somma è stata ricevuta: non serve una spunta "Da pagare/Pagato",
@@ -2616,10 +2627,9 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
         titolo=""
         valori={valori}
         opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva"]}
-        onImponibile={(v) => setValori((prev) => conImponibileAggiornato(prev, v, true))}
-        onTotale={(v) => setValori((prev) => conTotaleAggiornato(prev, v, true))}
-        onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
-        onInteressi={(v) => setValori((prev) => ({ ...prev, interessi: v }))}
+        imponibileBloccato
+        totaleBloccato
+        onMetodo={(v) => setValori((prev) => ({ ...prev, metodo: v }))}
       />
       <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
@@ -2630,8 +2640,18 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
             </label>
           ))}
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: 10 }}>
-          <div style={{ width: 110 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ width: 100 }}>
+            <Field label="Totale iniziale">
+              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={imponibileIniziale.toFixed(2)} disabled />
+            </Field>
+          </div>
+          <div style={{ width: 100 }}>
+            <Field label="Totale già cont.">
+              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={giaContabilizzato.toFixed(2)} disabled />
+            </Field>
+          </div>
+          <div style={{ width: 100 }}>
             <Field label="Quota da cont.">
               <input
                 style={{ ...inputStyle, border: quotaNonValida ? "1px solid #C0392B" : inputStyle.border }}
@@ -2641,9 +2661,9 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
               />
             </Field>
           </div>
-          <div style={{ width: 110 }}>
+          <div style={{ width: 100 }}>
             <Field label="Restano da cont.">
-              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={imponibileMax > 0 ? restanoDaCont.toFixed(2) : ""} disabled />
+              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={residuoImponibile > 0 ? restanoDaCont.toFixed(2) : ""} disabled />
             </Field>
           </div>
           <Button onClick={contabilizza} disabled={!destinazione || quotaNonValida || contabilizzando}>
@@ -2653,7 +2673,7 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
       </div>
       {quotaNonValida && (
         <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6, textAlign: "right" }}>
-          La quota da contabilizzare non può superare l'imponibile ({fmtEuroErp(imponibileMax)}).
+          La quota da contabilizzare non può superare quanto resta da contabilizzare ({fmtEuroErp(residuoImponibile)}).
         </div>
       )}
     </div>
