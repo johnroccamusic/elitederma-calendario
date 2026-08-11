@@ -3705,42 +3705,24 @@ function SezioneDateCorsi({
 // la Dashboard resta "sbloccata", con la tendina per scegliere
 // qualunque venditore — così l'amministratore non perde la possibilità
 // di controllare le performance di tutti.
-// supabase-js, quando una Edge Function risponde con uno stato diverso da
-// 2xx, non mette il corpo della risposta (il nostro { errore: "..." })
-// dentro "data": lo lascia solo dentro error.context (la Response grezza),
-// e "data" resta null. Senza questo, in caso di errore si vedrebbe sempre
-// il messaggio generico "Edge Function returned a non-2xx status code"
-// invece del vero motivo (es. "La password deve avere almeno 4 caratteri")
-async function messaggioErroreFunzione(error, data) {
-  if (data?.errore) return data.errore;
-  if (!error) return null;
-  if (error.context && typeof error.context.json === "function") {
-    try {
-      const corpo = await error.context.json();
-      if (corpo?.errore) return corpo.errore;
-    } catch { /* corpo non json, si passa al messaggio generico sotto */ }
-  }
-  return error.message || "Errore sconosciuto";
-}
 function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
   const [venditoreId, setVenditoreId] = useState("");
   const [password, setPassword] = useState("");
   const [errore, setErrore] = useState("");
-  const [verificando, setVerificando] = useState(false);
 
-  async function entra() {
+  function entra() {
     if (!venditoreId) { setErrore("Scegli il tuo nome."); return; }
     if (!password) { setErrore("Scrivi la password."); return; }
-    setErrore(""); setVerificando(true);
     if (codiceAdmin && password === codiceAdmin) {
-      setVerificando(false);
       onEntra({ modalitaAdmin: true });
       return;
     }
-    const { data, error } = await supabase.functions.invoke("venditori-login", { body: { venditoreId, password } });
-    setVerificando(false);
-    if (error || data?.errore) { setErrore(await messaggioErroreFunzione(error, data)); return; }
-    onEntra({ modalitaAdmin: false, venditoreId, nome: data.nome });
+    // stesso confronto in chiaro già usato per utenti e master: la
+    // password del venditore vive nella riga stessa (venditori.password),
+    // niente più verifica lato server
+    const venditore = venditori.find((v) => v.id === venditoreId);
+    if (!venditore || password !== (venditore.password || "0000")) { setErrore("Password errata."); return; }
+    onEntra({ modalitaAdmin: false, venditoreId, nome: venditore.nome });
   }
 
   return (
@@ -3760,7 +3742,7 @@ function ModaleLoginVenditore({ venditori, onClose, onEntra, codiceAdmin }) {
         />
       </Field>
       {errore && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{errore}</div>}
-      <Button onClick={entra} disabled={verificando} style={{ width: "100%" }}>{verificando ? "Verifico…" : "Entra"}</Button>
+      <Button onClick={entra} style={{ width: "100%" }}>Entra</Button>
     </Modal>
   );
 }
@@ -6544,8 +6526,7 @@ function TabellaPasswordMaster({ master, agende, ricarica }) {
 function RigaTabellaVenditore({ venditore, agende, ricarica }) {
   const isMobile = useIsMobile();
   const [permessiLocali, setPermessiLocali] = useState(venditore.permessi || []);
-  const [password, setPassword] = useState("");
-  const [msgPassword, setMsgPassword] = useState("");
+  const [password, setPassword] = useState(venditore.password || "");
   async function toggleTasto(chiave, checked) {
     const attuali = permessiLocali;
     const nuovi = checked ? [...new Set([...attuali, chiave])] : attuali.filter((c) => c !== chiave);
@@ -6554,26 +6535,22 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
     if (error) { window.alert("Errore: " + error.message); setPermessiLocali(attuali); return; }
     ricarica();
   }
-  // stesso schema "scrivi ed esci dal campo" della password Master: nessun
-  // tasto a parte, si salva da sola appena si clicca fuori dalla casella
+  // stesso schema "scrivi ed esci dal campo" della password Master: in
+  // chiaro, resta visibile nel campo, si salva da sola appena si clicca
+  // fuori dalla casella
   async function salvaPassword() {
-    if (!password.trim()) return;
-    const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId: venditore.id, password: password.trim() } });
-    if (error || data?.errore) { setMsgPassword("Errore: " + (await messaggioErroreFunzione(error, data))); return; }
-    setMsgPassword("");
-    setPassword("");
+    if ((venditore.password || "") === password.trim()) return;
+    const { error } = await supabase.from("venditori").update({ password: password.trim() || "0000" }).eq("id", venditore.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
   }
   const campoPassword = (
-    <>
-      <input
-        style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13 }}
-        placeholder="Nuova password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        onBlur={salvaPassword}
-      />
-      {msgPassword && <div style={{ ...fontBody, fontSize: 11, color: "#C0392B" }}>{msgPassword}</div>}
-    </>
+    <input
+      style={{ ...inputStyle, maxWidth: isMobile ? undefined : 140, padding: "6px 10px", fontSize: 13 }}
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      onBlur={salvaPassword}
+    />
   );
   if (isMobile) {
     return (
@@ -6630,7 +6607,7 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password venditori</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
-        Configura gli accessi alla home page per ogni venditore, come per gli utenti. Chi entra dal tasto "Dashboard venditori" in home con il proprio nome e la propria password trova subito la sua Dashboard venditori, e in home solo i tasti qui spuntati sono cliccabili. Nome e telefono si gestiscono in Impostazioni &gt; Definisci venditori; la password si imposta qui (non si legge mai quella già impostata, solo scriverne una nuova).
+        Configura gli accessi alla home page per ogni venditore, come per gli utenti. Chi entra dal tasto "Dashboard venditori" in home con il proprio nome e la propria password trova subito la sua Dashboard venditori, e in home solo i tasti qui spuntati sono cliccabili. Nome e telefono si gestiscono in Impostazioni &gt; Definisci venditori; la password si scrive e si salva qui, come per le master.
       </div>
       {venditoriOrdinati.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun venditore definito in Impostazioni.</div>
@@ -7412,15 +7389,16 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
 
       {showVenditoriModal && (
         <Modal title="Gestione venditori" onClose={() => setShowVenditoriModal(false)}>
-          <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (in vista di un futuro login alla propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento — e un numero di cellulare, che useremo per l'integrazione dei messaggi con WhatsApp.</div>
+          <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (per entrare dalla home nella propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento — e un numero di cellulare, che useremo per l'integrazione dei messaggi con WhatsApp.</div>
           <GestioneListaSemplice
             nomeSingolare="Venditore" nomeArticolo="un" tabella="venditori"
             elementi={venditori.map((v) => ({ ...v, telefono: telefoniVenditori[v.id] || "" }))} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
             mostraPassword passwordDiDefault="0000"
             onImpostaPassword={async (venditoreId, password) => {
-              const { data, error } = await supabase.functions.invoke("venditori-imposta-password", { body: { venditoreId, password } });
-              if (error || data?.errore) setMsg("Errore password: " + (await messaggioErroreFunzione(error, data)));
+              const { error } = await supabase.from("venditori").update({ password }).eq("id", venditoreId);
+              if (error) setMsg("Errore password: " + error.message);
+              else ricarica();
             }}
             mostraTelefono
           />
@@ -9428,16 +9406,13 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
 // riga "Password" di un venditore: mai precompilata con quella attuale
 // (non viene mai letta/mostrata, solo scritta) — solo un campo per
 // impostarne una nuova, con "0000" già scritto come suggerimento pratico
+// in chiaro, come la password Master: resta visibile nel campo, si salva
+// da sola appena si clicca fuori dalla casella, nessun tasto a parte
 function RigaPasswordVenditore({ valoreDiDefault, onImposta }) {
   const [password, setPassword] = useState(valoreDiDefault);
-  const [salvando, setSalvando] = useState(false);
-  const [fatto, setFatto] = useState(false);
   async function salva() {
-    if (!password || password.length < 4) return;
-    setSalvando(true); setFatto(false);
-    await onImposta(password);
-    setSalvando(false); setFatto(true);
-    setTimeout(() => setFatto(false), 2000);
+    if (password.trim() === (valoreDiDefault || "").trim()) return;
+    await onImposta(password.trim() || "0000");
   }
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -9446,14 +9421,8 @@ function RigaPasswordVenditore({ valoreDiDefault, onImposta }) {
         placeholder="Password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        onBlur={salva}
       />
-      <button
-        onClick={salva}
-        disabled={salvando || !password || password.length < 4}
-        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 10px", cursor: salvando ? "default" : "pointer" }}
-      >
-        {salvando ? "Imposto…" : fatto ? "Impostata ✓" : "Imposta password"}
-      </button>
     </div>
   );
 }
@@ -9565,7 +9534,7 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
             </div>
           )}
           {mostraPassword && (
-            <RigaPasswordVenditore valoreDiDefault={passwordDiDefault || "0000"} onImposta={(pwd) => onImpostaPassword(el.id, pwd)} />
+            <RigaPasswordVenditore key={el.password} valoreDiDefault={el.password || passwordDiDefault || "0000"} onImposta={(pwd) => onImpostaPassword(el.id, pwd)} />
           )}
           {mostraTelefono && (
             <RigaTelefonoVenditore valoreDiDefault={el.telefono || ""} onSalva={(tel) => salvaTelefono(el.id, tel)} />
@@ -19742,14 +19711,11 @@ export default function App() {
       supabase.from("corsi_giorni").select("*").order("numero_giorno"),
       supabase.from("tipi_modella").select("*").order("nome"),
       supabase.from("corsi_tipi_modella").select("*"),
-      // niente password_hash/password_salt qui: quelle due colonne le
-      // scrive solo l'Edge Function venditori-imposta-password, l'app non
-      // le legge mai — così non finiscono nel browser di chi la usa
       // niente "telefono" qui: è una colonna a sé (Setting > Gestione
       // venditori la interroga da sola) — se in un futuro dovesse mai
       // mancare/dare errore, non deve poter svuotare l'elenco venditori
       // usato ovunque per login e selezione "Tutor"
-      supabase.from("venditori").select("id, nome, ts, permessi").order("nome"),
+      supabase.from("venditori").select("id, nome, ts, permessi, password").order("nome"),
       supabase.from("password_menu").select("*"),
       supabase.from("utenti_app").select("*").order("nome"),
       supabase.from("corsi_kit_prodotti").select("*"),
