@@ -2563,7 +2563,7 @@ function rigaOriginale(integrazione, metodo) {
     interessi: "",
   };
 }
-function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
+function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica }) {
   const [valori, setValori] = useState(() => rigaOriginale(integrazione, integrazione.metodo));
   const [destinazione, setDestinazione] = useState(() => {
     const voci = integrazione.voci_pagamento || [];
@@ -2598,6 +2598,23 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
   const quotaNum = quotaDaContabilizzare === "" ? 0 : parseNum(quotaDaContabilizzare);
   const quotaNonValida = quotaDaContabilizzare !== "" && (quotaNum <= 0 || quotaNum > residuoImponibile);
   const restanoDaCont = round2(residuoImponibile - quotaNum);
+
+  // "Restano da cont." è anche correggibile a mano: serve per le righe
+  // contabilizzate prima che esistesse il collegamento automatico con
+  // questa segnalazione (eliminandole oggi il credito non torna da solo,
+  // perché non hanno il riferimento per sapere da dove ripristinarlo)
+  const [correzioneResiduo, setCorrezioneResiduo] = useState(null); // stringa mentre si sta scrivendo, null quando il campo non è in modifica
+  async function salvaCorrezioneResiduo() {
+    if (correzioneResiduo === null) return;
+    const testo = correzioneResiduo;
+    setCorrezioneResiduo(null);
+    if (testo.trim() === "" || parseNum(testo) === residuoImponibile) return;
+    const nuovoImponibile = Math.max(0, Math.min(imponibileIniziale, parseNum(testo)));
+    const nuovoResiduo = round2(nuovoImponibile * 1.22);
+    const { error } = await supabase.from("acconti_da_verificare").update({ importo_residuo: nuovoResiduo }).eq("id", integrazione.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   async function contabilizza() {
     if (!destinazione || quotaNonValida) return;
@@ -2663,7 +2680,19 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
           </div>
           <div style={{ width: 100 }}>
             <Field label="Restano da cont.">
-              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={residuoImponibile > 0 ? restanoDaCont.toFixed(2) : ""} disabled />
+              {quotaDaContabilizzare === "" ? (
+                <input
+                  style={inputStyle}
+                  inputMode="decimal"
+                  title="Correggibile a mano: serve se una riga già contabilizzata è stata eliminata senza che il credito tornasse da solo (righe più vecchie di questa funzione)"
+                  value={correzioneResiduo !== null ? correzioneResiduo : residuoImponibile.toFixed(2)}
+                  onFocus={() => setCorrezioneResiduo(residuoImponibile.toFixed(2))}
+                  onChange={(e) => setCorrezioneResiduo(e.target.value)}
+                  onBlur={salvaCorrezioneResiduo}
+                />
+              ) : (
+                <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={restanoDaCont.toFixed(2)} disabled />
+              )}
             </Field>
           </div>
           <Button onClick={contabilizza} disabled={!destinazione || quotaNonValida || contabilizzando}>
@@ -12733,7 +12762,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             return !!originale && !!questoIscritto && originale.nome === questoIscritto.nome && originale.cognome === questoIscritto.cognome;
           })
           .map((integrazione) => (
-            <BloccoIntegrazioneDaApprovare key={integrazione.id} integrazione={integrazione} onContabilizza={contabilizzaIntegrazione} />
+            <BloccoIntegrazioneDaApprovare key={integrazione.id} integrazione={integrazione} onContabilizza={contabilizzaIntegrazione} ricarica={ricarica} />
           ))}
 
         <div style={cardStyle}>
