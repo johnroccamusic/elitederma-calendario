@@ -1681,9 +1681,10 @@ function Gate({ onOk }) {
   // personalizzate si ricade sui valori di sempre (RIGHE_SISTEMA_DEFAULT)
   async function check() {
     setVerificando(true);
-    const [{ data: utenti }, { data: masterRighe }] = await Promise.all([
+    const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
       supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema"),
       supabase.from("master").select("id, nome, password, permessi"),
+      supabase.from("venditori").select("id, nome, password, permessi"),
     ]);
     setVerificando(false);
     const righe = utenti || [];
@@ -1708,11 +1709,18 @@ function Gate({ onOk }) {
     // nome da una tendina: la password stessa identifica la master, e
     // l'unico tasto che vedono è "Dashboard master", già sulla propria scheda
     const masterTrovata = (masterRighe || []).find((m) => !!m.password && code && m.password === code);
+    // stesso meccanismo delle master: il venditore entra qui direttamente
+    // con la propria password (Password menù > Password venditori), senza
+    // passare dalla tendina "Utente generico" + selezione nome — atterra
+    // subito sulla Dashboard venditori (gestito nel chiamante tramite
+    // venditoreId)
+    const venditoreTrovato = (venditoriRighe || []).find((v) => !!v.password && code && v.password === code);
 
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
     else if (sAdmin.password && code === sAdmin.password) { ruolo = "amministratore"; utente = sAdmin; }
     else if (masterTrovata) { ruolo = "user"; utente = { id: masterTrovata.id, nome: masterTrovata.nome, permessi: ["dashboardmaster", ...(masterTrovata.permessi || [])], chiave_sistema: null, masterId: masterTrovata.id }; }
+    else if (venditoreTrovato) { ruolo = "user"; utente = { id: venditoreTrovato.id, nome: venditoreTrovato.nome, permessi: [...new Set([...(venditoreTrovato.permessi || []), "dashboardvenditori"])], chiave_sistema: null, venditoreId: venditoreTrovato.id }; }
     else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
 
@@ -19937,7 +19945,12 @@ export default function App() {
   }, []);
 
 
-  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => { setRuoloUtente(ruolo); setUtenteLoggato(utente); setOk(true); }} /></div>;
+  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => {
+    setRuoloUtente(ruolo);
+    setUtenteLoggato(utente);
+    setOk(true);
+    if (utente?.venditoreId) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.nome }); setView("dashboardvenditori"); }
+  }} /></div>;
 
   if (loading) {
     return (
