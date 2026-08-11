@@ -2583,7 +2583,12 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
 
   return (
     <div style={{ border: "1.5px solid #C0392B", borderRadius: 10, padding: 14, marginBottom: 10 }}>
-      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B", marginBottom: 10 }}>Integrazione da approvare</div>
+      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#C0392B", marginBottom: integrazione.file_path ? 4 : 10 }}>Integrazione da approvare</div>
+      {integrazione.file_path && (
+        <div style={{ marginBottom: 10 }}>
+          <AllegatoLink percorso={integrazione.file_path} etichetta="vedi file allegato" />
+        </div>
+      )}
       <BloccoQuota
         titolo=""
         valori={valori}
