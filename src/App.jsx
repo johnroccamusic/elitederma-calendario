@@ -10961,7 +10961,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // momento in cui viene salvata nel database, non la data del corso)
   const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
   const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false };
-  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false };
+  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false, integrazioneId: null };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
   // pagamenti aggiuntivi di acconto oltre al primo (pulsante "+"): stesso
@@ -11529,6 +11529,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFileNuovo: null,
       bonificoSegnalato: r.bonifico_segnalato === true,
       bonificoSkip: r.bonifico_skip === true,
+      integrazioneId: r.integrazione_id || null,
     })) : []);
     setPagPrecorso({
       imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
@@ -11551,6 +11552,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFileNuovo: null,
       bonificoSegnalato: r.bonifico_segnalato === true,
       bonificoSkip: r.bonifico_skip === true,
+      integrazioneId: r.integrazione_id || null,
     })) : []);
     setPagSaldo({
       imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
@@ -11617,6 +11619,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFilePath: integrazione.file_path || null,
       bonificoFileNuovo: null,
       bonificoSegnalato: !!integrazione.file_path,
+      // ricorda da quale segnalazione arriva questa riga: se viene
+      // eliminata più tardi, la somma torna disponibile da contabilizzare
+      // nella card "Integrazione da approvare" invece di sparire nel nulla
+      integrazioneId: integrazione.id,
     };
     const nuovoAccontoExtra = destinazione === "acconto" ? [...accontoExtra, nuovaRiga] : accontoExtra;
     const nuovoPrecorsoExtra = destinazione !== "acconto" ? [...precorsoExtra, nuovaRiga] : precorsoExtra;
@@ -11628,6 +11634,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       pagato: !!r.pagato,
       bonifico_file: r.bonificoFilePath || null,
       bonifico_segnalato: !!r.bonificoSegnalato,
+      integrazione_id: r.integrazioneId || null,
     });
     const { error: erroreIscritto } = await supabase.from("iscritti").update({
       acconto_extra: nuovoAccontoExtra.map(mappaRiga),
@@ -11641,6 +11648,29 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setAccontoExtra(nuovoAccontoExtra);
     setPrecorsoExtra(nuovoPrecorsoExtra);
     ricarica();
+  }
+
+  // rimuove una riga di acconto/pre corso aggiuntivo, con conferma perché è
+  // un'azione distruttiva. Se la riga arrivava da un'"Integrazione da
+  // approvare" (contabilizzata qui sopra), la sua somma torna disponibile
+  // da contabilizzare in quella card invece di sparire nel nulla
+  async function rimuoviRigaExtra(tipo, idx) {
+    const lista = tipo === "acconto" ? accontoExtra : precorsoExtra;
+    const riga = lista[idx];
+    if (!window.confirm(`Eliminare questo ${tipo === "acconto" ? "acconto" : "pre corso"} aggiuntivo?`)) return;
+    const setLista = tipo === "acconto" ? setAccontoExtra : setPrecorsoExtra;
+    setLista((prev) => prev.filter((_, i) => i !== idx));
+    if (riga.integrazioneId) {
+      const integrazione = (accontiDaVerificare || []).find((a) => a.id === riga.integrazioneId);
+      if (integrazione) {
+        const residuoAttuale = integrazione.importo_residuo != null ? integrazione.importo_residuo : (integrazione.importo || 0);
+        const importoOriginale = integrazione.importo || 0;
+        const nuovoResiduo = Math.min(importoOriginale, round2(residuoAttuale + parseNum(riga.totale)));
+        const { error } = await supabase.from("acconti_da_verificare").update({ importo_residuo: nuovoResiduo }).eq("id", riga.integrazioneId);
+        if (error) window.alert("Riga eliminata, ma il ripristino della somma nell'integrazione non è riuscito: " + error.message);
+        ricarica();
+      }
+    }
   }
 
   // salva i dati correnti del form sul database. Restituisce true se riuscito.
@@ -11741,6 +11771,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           bonifico_file: pathsBonificoAccontoExtra[idx],
           bonifico_segnalato: segnalatiAccontoExtra[idx],
           bonifico_skip: !!r.bonificoSkip,
+          integrazione_id: r.integrazioneId || null,
         })),
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
@@ -11759,6 +11790,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           bonifico_file: pathsBonificoPrecorsoExtra[idx],
           bonifico_skip: !!r.bonificoSkip,
           bonifico_segnalato: segnalatiPrecorsoExtra[idx],
+          integrazione_id: r.integrazioneId || null,
         })),
         saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
         saldo_totale: pagSaldo.totale === "" ? null : parseNum(pagSaldo.totale),
@@ -12639,7 +12671,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               onInteressi={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, interessi: v } : r)))}
               pagato={riga.pagato}
               onPagato={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
-              onRimuovi={() => setAccontoExtra((prev) => prev.filter((_, i) => i !== idx))}
+              onRimuovi={() => rimuoviRigaExtra("acconto", idx)}
               onBonificoFile={(f) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
               mostraSaltaFile={adminSbloccato}
               onBonificoSkip={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
@@ -12679,7 +12711,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               onInteressi={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, interessi: v } : r)))}
               pagato={riga.pagato}
               onPagato={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
-              onRimuovi={() => setPrecorsoExtra((prev) => prev.filter((_, i) => i !== idx))}
+              onRimuovi={() => rimuoviRigaExtra("precorso", idx)}
               onBonificoFile={(f) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
               mostraSaltaFile={adminSbloccato}
               onBonificoSkip={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
