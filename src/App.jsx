@@ -638,6 +638,13 @@ function IconaChevronGiuErp({ size = 14, color = "currentColor" }) {
 }
 // icone della barra azioni con intestazione scura (Contabilità classe /
 // schede di inserimento allievo)
+function IconaFrecciaTrend({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 17L17 5" /><path d="M8 5h9v9" />
+    </svg>
+  );
+}
 function IconaFrecciaSinistra({ size = 18, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -3501,30 +3508,42 @@ function PaginaDashboardVenditori({
             <div style={{ display: "flex", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
               <button
                 onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "18px 22px" }}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
               >
-                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>
-                <div style={{ width: 28, height: 3, borderRadius: 2, marginTop: 8, background: tabDashboardVenditore === "performance" ? GOLD : "transparent" }} />
+                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaFrecciaTrend size={24} color={GOLD} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>
+                </div>
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("corsi")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "18px 22px" }}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
-                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
+                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaPersonaAggiungi size={24} color={GOLD} />
                 </div>
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>
-                <div style={{ width: 28, height: 3, borderRadius: 2, marginTop: 8, background: tabDashboardVenditore === "corsi" ? GOLD : "transparent" }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
+                    <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>
+                </div>
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("iscrizioni")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "18px 22px" }}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
               >
-                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>
-                <div style={{ width: 28, height: 3, borderRadius: 2, marginTop: 8, background: tabDashboardVenditore === "iscrizioni" ? GOLD : "transparent" }} />
+                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaLaureaErp size={24} color={GOLD} />
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>
+                </div>
               </button>
             </div>
 
