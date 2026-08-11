@@ -2370,7 +2370,7 @@ const VOCI_PAGAMENTO_VENDITORE = [
   { chiave: "precorso", etichetta: "Quota pre corso" },
   { chiave: "saldo", etichetta: "Saldo" },
 ];
-function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato, accontoEsistente }) {
+function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato, accontoEsistente, corsi, corsiDate, location }) {
   const [dataPagamento, setDataPagamento] = useState(accontoEsistente?.data_pagamento || dataOggiStr());
   const [vociPagamento, setVociPagamento] = useState(accontoEsistente?.voci_pagamento || []);
   const [valori, setValori] = useState({
@@ -2383,6 +2383,42 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
   const [file, setFile] = useState(null);
   const [inviando, setInviando] = useState(false);
   const inModifica = !!accontoEsistente;
+
+  // "Associa altri corsi": la prima riga (il corso a cui l'iscritto
+  // appartiene già) è sempre fissa/derivata, non fa parte dello stato — qui
+  // si tiene solo l'elenco di corso_data_id aggiunti in più (es. lo stesso
+  // pagamento copre anche un altro corso frequentato dalla stessa persona)
+  const [corsiExtra, setCorsiExtra] = useState(accontoEsistente?.corsi_extra_ids || []);
+  const [ricercaCorsoAperta, setRicercaCorsoAperta] = useState(false);
+  const [testoRicercaCorso, setTestoRicercaCorso] = useState("");
+
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  function etichettaCorsoData(cdId) {
+    const cd = (corsiDate || []).find((x) => x.id === cdId);
+    if (!cd) return "?";
+    const corso = corsoById[cd.corso_id];
+    const loc = locById[cd.location_id];
+    return `${corso?.nome?.toUpperCase() || "?"} — ${loc?.nome?.toUpperCase() || "?"} — ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}`;
+  }
+  const risultatiRicercaCorso = useMemo(() => {
+    if (!ricercaCorsoAperta) return [];
+    const q = testoRicercaCorso.trim().toLowerCase();
+    return (corsiDate || [])
+      .filter((cd) => cd.id !== iscritto.corso_data_id && !corsiExtra.includes(cd.id))
+      .map((cd) => ({ cd, etichetta: etichettaCorsoData(cd.id) }))
+      .filter(({ etichetta }) => !q || etichetta.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [ricercaCorsoAperta, testoRicercaCorso, corsiDate, corsiExtra, iscritto.corso_data_id]);
+
+  function aggiungiCorsoExtra(cdId) {
+    setCorsiExtra((prev) => [...prev, cdId]);
+    setRicercaCorsoAperta(false);
+    setTestoRicercaCorso("");
+  }
+  function rimuoviCorsoExtra(cdId) {
+    setCorsiExtra((prev) => prev.filter((id) => id !== cdId));
+  }
 
   function toggleVoce(chiave) {
     setVociPagamento((prev) => (prev.includes(chiave) ? prev.filter((v) => v !== chiave) : [...prev, chiave]));
@@ -2406,6 +2442,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
       metodo: valori.metodo || null,
       nota: nota.trim() || null,
       file_path: filePath,
+      corsi_extra_ids: corsiExtra.length > 0 ? corsiExtra : null,
     };
     const { error } = inModifica
       ? await supabase.from("acconti_da_verificare").update(payload).eq("id", accontoEsistente.id)
@@ -2455,6 +2492,40 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
           placeholder="Scrivi qui i dettagli del pagamento…"
         />
       </Field>
+      <Field label="Associa altri corsi">
+        <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 600, color: NAVY, padding: "4px 2px" }}>
+            {etichettaCorsoData(iscritto.corso_data_id)}
+          </div>
+          {corsiExtra.map((cdId) => (
+            <div key={cdId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "4px 2px" }}>
+              <span style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>{etichettaCorsoData(cdId)}</span>
+              <button type="button" onClick={() => rimuoviCorsoExtra(cdId)} title="Rimuovi" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 2, display: "flex" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18" /><path d="M6 6l12 12" /></svg>
+              </button>
+            </div>
+          ))}
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13.5, color: NAVY, padding: "6px 2px 2px" }}>
+            <input type="checkbox" checked={ricercaCorsoAperta} onChange={(e) => { setRicercaCorsoAperta(e.target.checked); setTestoRicercaCorso(""); }} style={{ width: 16, height: 16 }} />
+            Associa altro corso
+          </label>
+          {ricercaCorsoAperta && (
+            <div style={{ marginTop: 6 }}>
+              <CampoRicerca value={testoRicercaCorso} onChange={(e) => setTestoRicercaCorso(e.target.value)} placeholder="Cerca città, corso, data…" />
+              <div style={{ maxHeight: 160, overflowY: "auto", marginTop: 6, border: risultatiRicercaCorso.length > 0 ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8 }}>
+                {risultatiRicercaCorso.map(({ cd, etichetta }) => (
+                  <button
+                    key={cd.id} type="button" onClick={() => aggiungiCorsoExtra(cd.id)}
+                    style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "8px 10px", ...fontBody, fontSize: 13, color: NAVY }}
+                  >
+                    {etichetta}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </Field>
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
         <Button onClick={invia} disabled={inviando || (!inModifica && !nota.trim() && !file && valori.totale === "")}>{inviando ? "Salvo…" : inModifica ? "Salva" : "Invia"}</Button>
         <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
@@ -2468,9 +2539,10 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
 // dove vive lo stato di acconto_extra/precorso_extra) a decidere dove far
 // finire la riga quando l'amministratore preme "Contabilizza"
 function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
+  const residuoIniziale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
   const [valori, setValori] = useState({
     imponibile: integrazione.imponibile != null ? String(integrazione.imponibile) : "",
-    totale: integrazione.importo != null ? String(integrazione.importo) : "",
+    totale: residuoIniziale != null ? String(residuoIniziale) : "",
     metodo: integrazione.metodo || "",
     interessi: "",
   });
@@ -2480,13 +2552,29 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
     return voci.length === 1 && VOCI_PAGAMENTO_VENDITORE.some((v) => v.chiave === voci[0]) ? voci[0] : "";
   });
   const [contabilizzando, setContabilizzando] = useState(false);
+  // dopo una contabilizzazione parziale il residuo scende (da qualunque
+  // corso sia stata fatta): quando cambia, si azzerano i campi per il
+  // prossimo giro invece di lasciare i vecchi valori già usati
+  const residuoRef = useRef(residuoIniziale);
+  useEffect(() => {
+    const nuovoResiduo = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
+    if (nuovoResiduo !== residuoRef.current) {
+      residuoRef.current = nuovoResiduo;
+      setValori({ imponibile: "", totale: "", metodo: "", interessi: "" });
+      setPagato(false);
+      setDestinazione("");
+    }
+  }, [integrazione.importo_residuo, integrazione.importo]);
 
   async function contabilizza() {
-    if (!destinazione || valori.totale === "") return;
+    if (!destinazione || valori.totale === "" || parseNum(valori.totale) <= 0) return;
     setContabilizzando(true);
     await onContabilizza({ integrazione, valori, pagato, destinazione });
     setContabilizzando(false);
   }
+
+  const residuoAttuale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
+  const mostraResiduo = integrazione.importo_residuo != null && residuoAttuale > 0;
 
   return (
     <div style={{ border: "1.5px solid #C0392B", borderRadius: 10, padding: 14, marginBottom: 10 }}>
@@ -2509,10 +2597,15 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
             {v.etichetta}
           </label>
         ))}
-        <Button onClick={contabilizza} disabled={!destinazione || valori.totale === "" || contabilizzando} style={{ marginLeft: "auto" }}>
+        <Button onClick={contabilizza} disabled={!destinazione || valori.totale === "" || parseNum(valori.totale) <= 0 || contabilizzando} style={{ marginLeft: "auto" }}>
           {contabilizzando ? "…" : "Contabilizza"}
         </Button>
       </div>
+      {mostraResiduo && (
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#C0392B", marginTop: 10 }}>
+          Restano da contabilizzare {fmtEuroErp(residuoAttuale)}
+        </div>
+      )}
     </div>
   );
 }
@@ -2622,6 +2715,7 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
       {pagamentoPer && (
         <ModalePagamentoVenditore
           iscritto={pagamentoPer} venditoreNome={venditoreNome} ricarica={ricarica}
+          corsi={corsi} corsiDate={corsiDate} location={location}
           onChiudi={() => setPagamentoPer(null)}
           onInviato={(id) => { setInviatoPerId(id); setPagamentoPer(null); }}
         />
@@ -2635,6 +2729,14 @@ const ETICHETTA_ORIGINE_ACCONTO = { manuale: "Verifica acconto/saldo", bonifico_
 // "Bonifico iscrizione" per quelli creati in automatico dal modulo di
 // iscrizione (quando si iscrive un allievo la prima volta)
 const TITOLO_GRUPPO_ORIGINE = { manuale: "Integrazione", bonifico_modulo: "Bonifico iscrizione" };
+// un pagamento "Integrazione" può essere associato a più corsi (stessa
+// persona, iscrizioni diverse): non esiste un id "persona" univoco
+// nell'app, quindi la stessa persona in un altro corso si ritrova per
+// nome+cognome — approccio semplice ma sufficiente per questo caso d'uso
+function trovaIscrittoStessaPersona(iscritti, personaRif, corsoDataId) {
+  if (!personaRif) return null;
+  return iscritti.find((i) => i.corso_data_id === corsoDataId && i.nome === personaRif.nome && i.cognome === personaRif.cognome) || null;
+}
 // coda "Verifica Pagamenti" (Gestione corsi): raccoglie sia le
 // segnalazioni manuali dei venditori ("Aggiungi Pagamento" su "Le tue
 // iscrizioni", origine "manuale") sia — quando esisterà — quelle create
@@ -2718,37 +2820,70 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
               </thead>
               <tbody>
                 {gruppi.map((g) => g.righe.map((a, idx) => {
-                  const iscritto = iscrittoById[a.iscritto_id];
-                  const cd = iscritto ? cdById[iscritto.corso_data_id] : null;
-                  const corso = cd ? corsoById[cd.corso_id] : null;
-                  const loc = cd ? locById[cd.location_id] : null;
-                  const cliccabile = iscritto && onApriIscritto;
+                  const iscrittoPrincipale = iscrittoById[a.iscritto_id];
+                  // ogni corso associato ("Associa altri corsi") è la
+                  // stessa persona iscritta a un'altra data: si ritrova per
+                  // nome+cognome nell'elenco iscritti di quel corso
+                  const coinvolti = [
+                    { iscritto: iscrittoPrincipale, corsoDataId: iscrittoPrincipale?.corso_data_id },
+                    ...((a.corsi_extra_ids || []).map((cdId) => ({ iscritto: trovaIscrittoStessaPersona(iscritti, iscrittoPrincipale, cdId), corsoDataId: cdId }))),
+                  ].map(({ iscritto, corsoDataId }) => {
+                    const cd = corsoDataId ? cdById[corsoDataId] : null;
+                    const corso = cd ? corsoById[cd.corso_id] : null;
+                    const loc = cd ? locById[cd.location_id] : null;
+                    return { iscritto, cd, corso, loc };
+                  });
                   const eBonifico = a.origine === "bonifico_modulo";
+                  const celStackStyle = { ...celStyle, ...fontBody, fontSize: 11, color: NAVY };
                   return (
-                    <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
+                    <tr key={a.id}>
                       {idx === 0 && <td rowSpan={g.righe.length} style={{ ...celStyle, ...gruppoStyle }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</td>}
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
-                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}
-                        <div style={{ marginTop: 3 }}>
-                          <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "1px 6px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.2 }}>
-                            {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
-                          </span>
-                        </div>
+                      <td style={{ ...celStackStyle, padding: 0 }}>
+                        {coinvolti.map((co, i) => (
+                          <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined }}>
+                            {co.loc?.nome?.toUpperCase() || "?"}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ ...celStackStyle, padding: 0 }}>
+                        {coinvolti.map((co, i) => (
+                          <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined }}>
+                            {co.corso?.nome?.toUpperCase() || "?"}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ ...celStackStyle, padding: 0 }}>
+                        {coinvolti.map((co, i) => (
+                          <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined }}>
+                            {co.cd ? fmtDataCompatta(co.cd.data_inizio, co.cd.data_fine) : "—"}
+                          </div>
+                        ))}
+                      </td>
+                      <td style={{ ...celStackStyle, fontWeight: 600, padding: 0 }}>
+                        {coinvolti.map((co, i) => (
+                          <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ padding: "5px 7px", borderTop: i === 0 ? "none" : bordoV, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: co.iscritto ? "pointer" : undefined }}>
+                            {co.iscritto ? `${co.iscritto.nome} ${co.iscritto.cognome}` : "—"}
+                            {i === 0 && (
+                              <div style={{ marginTop: 3 }}>
+                                <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "1px 6px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.2 }}>
+                                  {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{a.nota || "—"}</td>
-                      <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                      <td style={{ ...celStyle, whiteSpace: "nowrap" }}>
                         {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>}
                       </td>
                       <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
                         {tab === "attesa" && (
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
                               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
                             </button>
@@ -2779,6 +2914,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           venditoreNome={modificaAcconto.venditore_nome}
           accontoEsistente={modificaAcconto}
           ricarica={ricarica}
+          corsi={corsi} corsiDate={corsiDate} location={location}
           onChiudi={() => setModificaAcconto(null)}
         />
       )}
@@ -11368,8 +11504,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // la riga verificata dall'amministratore come un acconto (o pre corso)
   // aggiuntivo — scrive direttamente su "iscritti" invece di passare da
   // persistiIscritto per evitare lo stale-closure di aggiungere una riga e
-  // salvare nello stesso istante — e marca la segnalazione come approvata,
-  // chiudendo il giro cominciato con "Aggiungi Pagamento"
+  // salvare nello stesso istante — e scala l'importo appena contabilizzato
+  // dal residuo ancora da segnare. La card NON sparisce da sola quando il
+  // residuo arriva a zero: resta visibile in tutte le schede a cui la
+  // segnalazione è associata finché non viene approvata esplicitamente dal
+  // pulsante "Approva" in Verifica Pagamenti — anche una contabilizzazione
+  // parziale può quindi essere corretta/integrata prima di quel momento
   async function contabilizzaIntegrazione({ integrazione, valori, pagato, destinazione }) {
     const nuovaRiga = {
       imponibile: valori.imponibile,
@@ -11397,8 +11537,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       precorso_extra: nuovoPrecorsoExtra.map(mappaRiga),
     }).eq("id", modificandoId);
     if (erroreIscritto) { window.alert("Errore: " + erroreIscritto.message); return; }
-    const { error: erroreApprova } = await supabase.from("acconti_da_verificare").update({ stato: "approvato", approvato_il: new Date().toISOString() }).eq("id", integrazione.id);
-    if (erroreApprova) window.alert("Contabilizzato, ma l'approvazione della segnalazione non è riuscita: " + erroreApprova.message);
+    const residuoAttuale = integrazione.importo_residuo != null ? integrazione.importo_residuo : (integrazione.importo || 0);
+    const nuovoResiduo = Math.max(0, round2(residuoAttuale - parseNum(valori.totale)));
+    const { error: erroreResiduo } = await supabase.from("acconti_da_verificare").update({ importo_residuo: nuovoResiduo }).eq("id", integrazione.id);
+    if (erroreResiduo) window.alert("Contabilizzato, ma l'aggiornamento del residuo non è riuscito: " + erroreResiduo.message);
     setAccontoExtra(nuovoAccontoExtra);
     setPrecorsoExtra(nuovoPrecorsoExtra);
     ricarica();
@@ -12279,7 +12421,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         </div>
 
         {adminSbloccato && modificandoId && (accontiDaVerificare || [])
-          .filter((a) => a.iscritto_id === modificandoId && a.stato === "in_attesa" && (a.origine || "manuale") === "manuale")
+          .filter((a) => {
+            if (a.stato !== "in_attesa" || (a.origine || "manuale") !== "manuale") return false;
+            if (a.iscritto_id === modificandoId) return true;
+            // segnalazione associata (con "Associa altri corsi") anche al
+            // corso di questa scheda: compare qui se la stessa persona
+            // (nome+cognome) risulta iscritta pure a questo corso
+            if (!(a.corsi_extra_ids || []).includes(corsoData.id)) return false;
+            const originale = iscritti.find((i) => i.id === a.iscritto_id);
+            const questoIscritto = iscritti.find((i) => i.id === modificandoId);
+            return !!originale && !!questoIscritto && originale.nome === questoIscritto.nome && originale.cognome === questoIscritto.cognome;
+          })
           .map((integrazione) => (
             <BloccoIntegrazioneDaApprovare key={integrazione.id} integrazione={integrazione} onContabilizza={contabilizzaIntegrazione} />
           ))}
