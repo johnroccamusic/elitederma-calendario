@@ -1749,4 +1749,13 @@ create policy "tema_colori_versioni_all" on public.tema_colori_versioni for all 
 alter table public.iscritti add column if not exists acconto_bonifico_segnalato boolean not null default false;
 alter table public.iscritti add column if not exists precorso_bonifico_segnalato boolean not null default false;
 
+-- ---------------------------------------------------------
+-- 56) "Aggiungi Pagamento" (Le tue iscrizioni) chiede anche data pagamento
+-- e un importo strutturato (imponibile/IVA/totale + metodo), oltre a nota
+-- e file: "importo" e "metodo" riusano le colonne già esistenti,
+-- "imponibile" e "data_pagamento" sono nuove.
+-- ---------------------------------------------------------
+alter table public.acconti_da_verificare add column if not exists imponibile numeric;
+alter table public.acconti_da_verificare add column if not exists data_pagamento date;
+
 notify pgrst, 'reload schema';

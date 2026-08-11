@@ -2366,11 +2366,13 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
 // acconti_da_verificare, in attesa che lo staff la verifichi e approvi
 // da "Verifica Pagamenti" (Gestione corsi)
 function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato }) {
+  const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
+  const [valori, setValori] = useState({ imponibile: "", totale: "", metodo: "", interessi: "" });
   const [nota, setNota] = useState("");
   const [file, setFile] = useState(null);
   const [inviando, setInviando] = useState(false);
   async function invia() {
-    if (!nota.trim() && !file) return;
+    if (!nota.trim() && !file && valori.totale === "") return;
     setInviando(true);
     let filePath = null;
     if (file) {
@@ -2380,7 +2382,15 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
       filePath = percorso;
     }
     const { error } = await supabase.from("acconti_da_verificare").insert({
-      iscritto_id: iscritto.id, nota: nota.trim() || null, file_path: filePath, venditore_nome: venditoreNome, origine: "manuale",
+      iscritto_id: iscritto.id,
+      data_pagamento: dataPagamento || null,
+      imponibile: valori.imponibile === "" ? null : parseNum(valori.imponibile),
+      importo: valori.totale === "" ? null : parseNum(valori.totale),
+      metodo: valori.metodo || null,
+      nota: nota.trim() || null,
+      file_path: filePath,
+      venditore_nome: venditoreNome,
+      origine: "manuale",
     });
     setInviando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -2389,6 +2399,18 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
   }
   return (
     <Modal title={`Aggiungi pagamento — ${iscritto.nome} ${iscritto.cognome}`} onClose={onChiudi}>
+      <Field label="Data pagamento">
+        <input type="date" style={inputStyle} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+      </Field>
+      <BloccoQuota
+        titolo="Importo pagamento"
+        valori={valori}
+        opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
+        onImponibile={(v) => setValori((prev) => conImponibileAggiornato(prev, v, true))}
+        onTotale={(v) => setValori((prev) => conTotaleAggiornato(prev, v, true))}
+        onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
+        onInteressi={(v) => setValori((prev) => ({ ...prev, interessi: v }))}
+      />
       <Field label="File di pagamento">
         <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFile(e.target.files?.[0] || null)} />
       </Field>
@@ -2396,11 +2418,11 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
         <textarea
           style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
           value={nota} onChange={(e) => setNota(e.target.value)}
-          placeholder="Scrivi qui i dettagli del pagamento…" autoFocus
+          placeholder="Scrivi qui i dettagli del pagamento…"
         />
       </Field>
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Button onClick={invia} disabled={inviando || (!nota.trim() && !file)}>{inviando ? "Invio…" : "Invia"}</Button>
+        <Button onClick={invia} disabled={inviando || (!nota.trim() && !file && valori.totale === "")}>{inviando ? "Invio…" : "Invia"}</Button>
         <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
       </div>
     </Modal>
@@ -2588,6 +2610,9 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                       <th style={thStyle}>Data del corso</th>
                       <th style={thStyle}>Allievo</th>
                       <th style={thStyle}>Venditore</th>
+                      {origine === "manuale" && <th style={thStyle}>Data pagamento</th>}
+                      {origine === "manuale" && <th style={thStyle}>Importo</th>}
+                      {origine === "manuale" && <th style={thStyle}>Metodo</th>}
                       <th style={thStyle}>Nota</th>
                       <th style={thStyle}>File</th>
                       <th style={{ ...thStyle, borderRight: "none" }}></th>
@@ -2615,6 +2640,9 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                             </div>
                           </td>
                           <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
+                          {origine === "manuale" && <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>}
+                          {origine === "manuale" && <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>}
+                          {origine === "manuale" && <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>}
                           <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, maxWidth: 260 }}>{a.nota || "—"}</td>
                           <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
                             {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
