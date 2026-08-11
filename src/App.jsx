@@ -2370,30 +2370,35 @@ const VOCI_PAGAMENTO_VENDITORE = [
   { chiave: "precorso", etichetta: "Quota pre corso" },
   { chiave: "saldo", etichetta: "Saldo" },
 ];
-function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato }) {
-  const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
-  const [vociPagamento, setVociPagamento] = useState([]);
-  const [valori, setValori] = useState({ imponibile: "", totale: "", metodo: "", interessi: "" });
-  const [nota, setNota] = useState("");
+function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato, accontoEsistente }) {
+  const [dataPagamento, setDataPagamento] = useState(accontoEsistente?.data_pagamento || dataOggiStr());
+  const [vociPagamento, setVociPagamento] = useState(accontoEsistente?.voci_pagamento || []);
+  const [valori, setValori] = useState({
+    imponibile: accontoEsistente?.imponibile != null ? String(accontoEsistente.imponibile) : "",
+    totale: accontoEsistente?.importo != null ? String(accontoEsistente.importo) : "",
+    metodo: accontoEsistente?.metodo || "",
+    interessi: "",
+  });
+  const [nota, setNota] = useState(accontoEsistente?.nota || "");
   const [file, setFile] = useState(null);
   const [inviando, setInviando] = useState(false);
+  const inModifica = !!accontoEsistente;
 
   function toggleVoce(chiave) {
     setVociPagamento((prev) => (prev.includes(chiave) ? prev.filter((v) => v !== chiave) : [...prev, chiave]));
   }
 
   async function invia() {
-    if (!nota.trim() && !file && valori.totale === "") return;
+    if (!nota.trim() && !file && valori.totale === "" && !inModifica) return;
     setInviando(true);
-    let filePath = null;
+    let filePath = accontoEsistente?.file_path || null;
     if (file) {
       const percorso = `acconti/${iscritto.id}-${Date.now()}-${file.name}`;
       const { error: erroreUpload } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
       if (erroreUpload) { setInviando(false); window.alert("Errore nel caricamento del file: " + erroreUpload.message); return; }
       filePath = percorso;
     }
-    const { error } = await supabase.from("acconti_da_verificare").insert({
-      iscritto_id: iscritto.id,
+    const payload = {
       data_pagamento: dataPagamento || null,
       voci_pagamento: vociPagamento.length > 0 ? vociPagamento : null,
       imponibile: valori.imponibile === "" ? null : parseNum(valori.imponibile),
@@ -2401,16 +2406,18 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
       metodo: valori.metodo || null,
       nota: nota.trim() || null,
       file_path: filePath,
-      venditore_nome: venditoreNome,
-      origine: "manuale",
-    });
+    };
+    const { error } = inModifica
+      ? await supabase.from("acconti_da_verificare").update(payload).eq("id", accontoEsistente.id)
+      : await supabase.from("acconti_da_verificare").insert({ ...payload, iscritto_id: iscritto.id, venditore_nome: venditoreNome, origine: "manuale" });
     setInviando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
-    onInviato(iscritto.id);
+    if (onInviato) onInviato(iscritto.id);
+    else onChiudi();
   }
   return (
-    <Modal title={`Aggiungi pagamento — ${iscritto.nome} ${iscritto.cognome}`} onClose={onChiudi} paddingTop={100}>
+    <Modal title={`${inModifica ? "Modifica" : "Aggiungi"} pagamento — ${iscritto.nome} ${iscritto.cognome}`} onClose={onChiudi} paddingTop={100}>
       <div style={{ height: 18 }} />
       <Field label="Data pagamento">
         <input type="date" style={inputStyle} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
@@ -2434,6 +2441,11 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
         onInteressi={(v) => setValori((prev) => ({ ...prev, interessi: v }))}
       />
       <Field label="File di pagamento">
+        {accontoEsistente?.file_path && !file && (
+          <div style={{ marginBottom: 6, ...fontBody, fontSize: 12.5, color: MUTED }}>
+            Attuale: <AllegatoLink percorso={accontoEsistente.file_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo
+          </div>
+        )}
         <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFile(e.target.files?.[0] || null)} />
       </Field>
       <Field label="Nota">
@@ -2444,7 +2456,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
         />
       </Field>
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Button onClick={invia} disabled={inviando || (!nota.trim() && !file && valori.totale === "")}>{inviando ? "Invio…" : "Invia"}</Button>
+        <Button onClick={invia} disabled={inviando || (!inModifica && !nota.trim() && !file && valori.totale === "")}>{inviando ? "Salvo…" : inModifica ? "Salva" : "Invia"}</Button>
         <Button variant="ghost" onClick={onChiudi}>Annulla</Button>
       </div>
     </Modal>
@@ -2578,6 +2590,7 @@ const TITOLO_GRUPPO_ORIGINE = { manuale: "Integrazione", bonifico_modulo: "Bonif
 function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, ricarica, onBack }) {
   const [tab, setTab] = useState("attesa"); // attesa | verificati
   const [approvandoId, setApprovandoId] = useState(null);
+  const [modificaAcconto, setModificaAcconto] = useState(null); // riga acconti_da_verificare in modifica, o null
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -2589,6 +2602,13 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
     setApprovandoId(a.id);
     const { error } = await supabase.from("acconti_da_verificare").update({ stato: "approvato", approvato_il: new Date().toISOString() }).eq("id", a.id);
     setApprovandoId(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  async function eliminaAcconto(a) {
+    if (!window.confirm("Eliminare definitivamente questa segnalazione di pagamento?")) return;
+    const { error } = await supabase.from("acconti_da_verificare").delete().eq("id", a.id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
@@ -2630,16 +2650,16 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 <tr>
                   <th style={{ ...thStyle, width: "9%" }}>Tipologia</th>
                   <th style={{ ...thStyle, width: "7%" }}>Città</th>
-                  <th style={{ ...thStyle, width: "10%" }}>Corso</th>
+                  <th style={{ ...thStyle, width: "9%" }}>Corso</th>
                   <th style={{ ...thStyle, width: "7%" }}>Data corso</th>
-                  <th style={{ ...thStyle, width: "13%" }}>Allievo</th>
-                  <th style={{ ...thStyle, width: "8%" }}>Venditore</th>
-                  <th style={{ ...thStyle, width: "7%" }}>Data pag.</th>
-                  <th style={{ ...thStyle, width: "7%" }}>Importo</th>
-                  <th style={{ ...thStyle, width: "7%" }}>Metodo</th>
-                  <th style={{ ...thStyle, width: "14%" }}>Nota</th>
-                  <th style={{ ...thStyle, width: "5%" }}>File</th>
-                  <th style={{ ...thStyle, width: "9%", borderRight: "none" }}></th>
+                  <th style={{ ...thStyle, width: "12%" }}>Allievo</th>
+                  <th style={{ ...thStyle, width: "7%" }}>Venditore</th>
+                  <th style={{ ...thStyle, width: "6%" }}>Data pag.</th>
+                  <th style={{ ...thStyle, width: "6%" }}>Importo</th>
+                  <th style={{ ...thStyle, width: "6%" }}>Metodo</th>
+                  <th style={{ ...thStyle, width: "12%" }}>Nota</th>
+                  <th style={{ ...thStyle, width: "4%" }}>File</th>
+                  <th style={{ ...thStyle, width: "15%", borderRight: "none" }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -2674,13 +2694,21 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                       </td>
                       <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
                         {tab === "attesa" && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); approva(a); }}
-                            disabled={approvandoId === a.id}
-                            style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "5px 10px", cursor: approvandoId === a.id ? "default" : "pointer" }}
-                          >
-                            {approvandoId === a.id ? "…" : "Approva"}
-                          </button>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }} onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+                            </button>
+                            <button onClick={() => eliminaAcconto(a)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+                            </button>
+                            <button
+                              onClick={() => approva(a)}
+                              disabled={approvandoId === a.id}
+                              style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "5px 10px", cursor: approvandoId === a.id ? "default" : "pointer" }}
+                            >
+                              {approvandoId === a.id ? "…" : "Approva"}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -2691,6 +2719,15 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           </div>
         );
       })()}
+      {modificaAcconto && iscrittoById[modificaAcconto.iscritto_id] && (
+        <ModalePagamentoVenditore
+          iscritto={iscrittoById[modificaAcconto.iscritto_id]}
+          venditoreNome={modificaAcconto.venditore_nome}
+          accontoEsistente={modificaAcconto}
+          ricarica={ricarica}
+          onChiudi={() => setModificaAcconto(null)}
+        />
+      )}
     </div>
   );
 }
