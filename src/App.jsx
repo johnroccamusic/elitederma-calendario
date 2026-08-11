@@ -3983,10 +3983,10 @@ function PaginaDashboardVenditori({
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli un venditore per vedere le sue chiusure e commissioni.</div>
         ) : (
           <>
-            <div style={{ display: "flex", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
+            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
               <button
                 onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
               >
                 <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaFrecciaTrend size={24} color={GOLD} />
@@ -3998,7 +3998,7 @@ function PaginaDashboardVenditori({
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("corsi")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
               >
                 <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <IconaPersonaAggiungi size={24} color={GOLD} />
@@ -9626,6 +9626,12 @@ function IndicatorePosti({ occupati, max, liberi }) {
 // utente — è una preferenza visiva locale, non un dato del gestionale
 const CHIAVE_ZOOM_DATE_CORSI = "edc_zoom_date_corsi";
 function useZoomScheda() {
+  // la proprietà CSS "zoom" si comporta in modo inaffidabile su Safari
+  // iOS insieme allo scroll orizzontale del contenitore sottostante
+  // (overflowX: auto): su mobile la tabella risultava tagliata/incompleta.
+  // Su mobile si resta quindi sempre al 100%, affidandosi solo allo scroll
+  // orizzontale nativo della tabella
+  const isMobile = useIsMobile();
   const [zoom, setZoom] = useState(() => {
     const salvato = parseInt(localStorage.getItem(CHIAVE_ZOOM_DATE_CORSI), 10);
     return Number.isFinite(salvato) ? salvato : 100;
@@ -9637,6 +9643,7 @@ function useZoomScheda() {
       return nuovo;
     });
   }
+  if (isMobile) return [100, null];
   const bottoneStyle = { width: 26, height: 26, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, fontSize: 15, fontWeight: 700, lineHeight: 1, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
   const controlli = (
     <div style={{ position: "absolute", top: 14, right: 14, display: "flex", alignItems: "center", gap: 6, zIndex: 1 }}>
