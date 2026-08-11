@@ -2370,7 +2370,7 @@ const VOCI_PAGAMENTO_VENDITORE = [
   { chiave: "precorso", etichetta: "Quota pre corso" },
   { chiave: "saldo", etichetta: "Saldo" },
 ];
-function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato, accontoEsistente, corsi, corsiDate, location }) {
+function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi, onInviato, accontoEsistente, corsi, corsiDate, location, iscritti }) {
   const [dataPagamento, setDataPagamento] = useState(accontoEsistente?.data_pagamento || dataOggiStr());
   const [vociPagamento, setVociPagamento] = useState(accontoEsistente?.voci_pagamento || []);
   const [valori, setValori] = useState({
@@ -2401,15 +2401,19 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
     const loc = locById[cd.location_id];
     return `${corso?.nome?.toUpperCase() || "?"} — ${loc?.nome?.toUpperCase() || "?"} — ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}`;
   }
+  // la ricerca è per allievo (di solito si cerca "questa stessa persona,
+  // che altro corso ha fatto"), ma trova anche per città/corso/data:
+  // ogni ISCRITTO (non ogni corso) è un risultato possibile, così iscritti
+  // diversi con lo stesso corso restano distinguibili nell'elenco
   const risultatiRicercaCorso = useMemo(() => {
     if (!ricercaCorsoAperta) return [];
     const q = testoRicercaCorso.trim().toLowerCase();
-    return (corsiDate || [])
-      .filter((cd) => cd.id !== iscritto.corso_data_id && !corsiExtra.includes(cd.id))
-      .map((cd) => ({ cd, etichetta: etichettaCorsoData(cd.id) }))
+    return (iscritti || [])
+      .filter((i) => i.id !== iscritto.id && i.corso_data_id !== iscritto.corso_data_id && !corsiExtra.includes(i.corso_data_id))
+      .map((i) => ({ cd: { id: i.corso_data_id }, etichetta: `${i.nome} ${i.cognome} — ${etichettaCorsoData(i.corso_data_id)}` }))
       .filter(({ etichetta }) => !q || etichetta.toLowerCase().includes(q))
       .slice(0, 30);
-  }, [ricercaCorsoAperta, testoRicercaCorso, corsiDate, corsiExtra, iscritto.corso_data_id]);
+  }, [ricercaCorsoAperta, testoRicercaCorso, iscritti, corsiExtra, iscritto.id, iscritto.corso_data_id]);
 
   function aggiungiCorsoExtra(cdId) {
     setCorsiExtra((prev) => [...prev, cdId]);
@@ -2511,7 +2515,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
           </label>
           {ricercaCorsoAperta && (
             <div style={{ marginTop: 6 }}>
-              <CampoRicerca value={testoRicercaCorso} onChange={(e) => setTestoRicercaCorso(e.target.value)} placeholder="Cerca città, corso, data…" />
+              <CampoRicerca value={testoRicercaCorso} onChange={(e) => setTestoRicercaCorso(e.target.value)} placeholder="Cerca allievo, città, corso, data…" />
               <div style={{ maxHeight: 160, overflowY: "auto", marginTop: 6, border: risultatiRicercaCorso.length > 0 ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8 }}>
                 {risultatiRicercaCorso.map(({ cd, etichetta }) => (
                   <button
@@ -2715,7 +2719,7 @@ function LeTueIscrizioni({ corsi, location, corsiDate, iscritti, venditoreNome, 
       {pagamentoPer && (
         <ModalePagamentoVenditore
           iscritto={pagamentoPer} venditoreNome={venditoreNome} ricarica={ricarica}
-          corsi={corsi} corsiDate={corsiDate} location={location}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           onChiudi={() => setPagamentoPer(null)}
           onInviato={(id) => { setInviatoPerId(id); setPagamentoPer(null); }}
         />
@@ -2924,7 +2928,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           venditoreNome={modificaAcconto.venditore_nome}
           accontoEsistente={modificaAcconto}
           ricarica={ricarica}
-          corsi={corsi} corsiDate={corsiDate} location={location}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           onChiudi={() => setModificaAcconto(null)}
         />
       )}
