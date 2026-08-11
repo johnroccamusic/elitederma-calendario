@@ -19074,7 +19074,7 @@ function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreA
           const cd = cdById[iscritto.corso_data_id];
           if (!cd) return null;
           return (
-            <div key={iscritto.id} style={{ flex: "0 0 500px", width: 500 }}>
+            <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
               <SchedaData
                 ruoloUtente={ruoloUtente}
                 codiceAmministratoreAttuale={codiceAmministratoreAttuale}
