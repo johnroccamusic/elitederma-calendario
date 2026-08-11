@@ -1515,7 +1515,7 @@ function SemaforoPagamento({ pagato, onClick }) {
     </button>
   );
 }
-function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile }) {
+function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   return (
     <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
@@ -1603,15 +1603,23 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
       )}
       {onMetodo && valori.metodo === "Bonifico" && onPagato && (
         <div style={{ marginTop: 10 }}>
-          <Field label="File del bonifico (facoltativo)">
+          <Field label={valori.bonificoSkip ? "File del bonifico (da caricare più tardi)" : pagato ? "File del bonifico (obbligatorio)" : "File del bonifico (facoltativo finché non segni \"Pagato\")"}>
             {valori.bonificoFilePath && !valori.bonificoFileNuovo ? (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
                 Caricato: <AllegatoLink percorso={valori.bonificoFilePath} etichetta="apri il file" />
               </div>
             ) : !soloLettura ? (
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
-                {valori.bonificoFileNuovo && <BadgeFileCaricato />}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
+                  {valori.bonificoFileNuovo && <BadgeFileCaricato />}
+                </div>
+                {mostraSaltaFile && onBonificoSkip && (
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                    <input type="checkbox" checked={!!valori.bonificoSkip} onChange={(e) => onBonificoSkip(e.target.checked)} style={{ width: 14, height: 14 }} />
+                    Ora non ho il file
+                  </label>
+                )}
               </div>
             ) : (
               <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B" }}>Nessun file caricato.</div>
@@ -2542,44 +2550,59 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
 // scrivere direttamente sull'iscritto — è "onContabilizza" (in SchedaData,
 // dove vive lo stato di acconto_extra/precorso_extra) a decidere dove far
 // finire la riga quando l'amministratore preme "Contabilizza"
+// dato il residuo ancora da contabilizzare (in totale, con iva), ricostruisce
+// la riga { imponibile, totale } coerente da mostrare nella prima riga della
+// card: stessa aliquota già usata da questa card per ogni imponibile digitato
+// a mano (onImponibile applica sempre il 22%, vedi sotto)
+function rigaDaResiduo(residuo, metodo) {
+  const totale = residuo != null ? residuo : 0;
+  return { imponibile: String(round2(totale / 1.22)), totale: String(totale), metodo: metodo || "", interessi: "" };
+}
 function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
   const residuoIniziale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
-  const [valori, setValori] = useState({
-    imponibile: integrazione.imponibile != null ? String(integrazione.imponibile) : "",
-    totale: residuoIniziale != null ? String(residuoIniziale) : "",
-    metodo: integrazione.metodo || "",
-    interessi: "",
-  });
+  const [valori, setValori] = useState(() => rigaDaResiduo(residuoIniziale, integrazione.metodo));
   const [destinazione, setDestinazione] = useState(() => {
     const voci = integrazione.voci_pagamento || [];
     return voci.length === 1 && VOCI_PAGAMENTO_VENDITORE.some((v) => v.chiave === voci[0]) ? voci[0] : "";
   });
+  // quota (in imponibile) di questa riga che si vuole contabilizzare adesso
+  // in questa scheda: il resto rimane come residuo condiviso, così una
+  // stessa segnalazione può essere spalmata su più corsi associati
+  const [quotaDaContabilizzare, setQuotaDaContabilizzare] = useState("");
   const [contabilizzando, setContabilizzando] = useState(false);
   // dopo una contabilizzazione parziale il residuo scende (da qualunque
-  // corso sia stata fatta): quando cambia, si azzerano i campi per il
-  // prossimo giro invece di lasciare i vecchi valori già usati
+  // corso sia stata fatta): quando cambia, la prima riga si aggiorna con il
+  // nuovo importo ancora da contabilizzare, pronta per l'eventuale prossimo giro
   const residuoRef = useRef(residuoIniziale);
   useEffect(() => {
     const nuovoResiduo = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
     if (nuovoResiduo !== residuoRef.current) {
       residuoRef.current = nuovoResiduo;
-      setValori({ imponibile: "", totale: "", metodo: "", interessi: "" });
+      setValori(rigaDaResiduo(nuovoResiduo, integrazione.metodo));
       setDestinazione("");
+      setQuotaDaContabilizzare("");
     }
-  }, [integrazione.importo_residuo, integrazione.importo]);
+  }, [integrazione.importo_residuo, integrazione.importo, integrazione.metodo]);
+
+  const imponibileMax = parseNum(valori.imponibile);
+  const quotaNum = quotaDaContabilizzare === "" ? 0 : parseNum(quotaDaContabilizzare);
+  const quotaNonValida = quotaDaContabilizzare !== "" && (quotaNum <= 0 || quotaNum > imponibileMax);
+  const restanoDaCont = round2(imponibileMax - quotaNum);
 
   async function contabilizza() {
-    if (!destinazione || valori.totale === "" || parseNum(valori.totale) <= 0) return;
+    if (!destinazione || quotaNonValida) return;
+    const usaParziale = quotaDaContabilizzare !== "";
+    const valoriEffettivi = usaParziale
+      ? { ...valori, imponibile: quotaDaContabilizzare, totale: String(round2(quotaNum * 1.22)) }
+      : valori;
+    if (valoriEffettivi.totale === "" || parseNum(valoriEffettivi.totale) <= 0) return;
     setContabilizzando(true);
     // se lo staff sta contabilizzando qui è perché ha già verificato che
     // la somma è stata ricevuta: non serve una spunta "Da pagare/Pagato",
     // è sempre pagato
-    await onContabilizza({ integrazione, valori, pagato: true, destinazione });
+    await onContabilizza({ integrazione, valori: valoriEffettivi, pagato: true, destinazione });
     setContabilizzando(false);
   }
-
-  const residuoAttuale = integrazione.importo_residuo != null ? integrazione.importo_residuo : integrazione.importo;
-  const mostraResiduo = integrazione.importo_residuo != null && residuoAttuale > 0;
 
   return (
     <div style={{ border: "1.5px solid #C0392B", borderRadius: 10, padding: 14, marginBottom: 10 }}>
@@ -2598,20 +2621,39 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza }) {
         onMetodo={(v) => setValori((prev) => conMetodoAggiornato(prev, v))}
         onInteressi={(v) => setValori((prev) => ({ ...prev, interessi: v }))}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
-        {VOCI_PAGAMENTO_VENDITORE.map((v) => (
-          <label key={v.chiave} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}>
-            <input type="checkbox" checked={destinazione === v.chiave} onChange={() => setDestinazione((prev) => (prev === v.chiave ? "" : v.chiave))} style={{ width: 16, height: 16 }} />
-            {v.etichetta}
-          </label>
-        ))}
-        <Button onClick={contabilizza} disabled={!destinazione || valori.totale === "" || parseNum(valori.totale) <= 0 || contabilizzando} style={{ marginLeft: "auto" }}>
-          {contabilizzando ? "…" : "Contabilizza"}
-        </Button>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+          {VOCI_PAGAMENTO_VENDITORE.map((v) => (
+            <label key={v.chiave} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY }}>
+              <input type="checkbox" checked={destinazione === v.chiave} onChange={() => setDestinazione((prev) => (prev === v.chiave ? "" : v.chiave))} style={{ width: 16, height: 16 }} />
+              {v.etichetta}
+            </label>
+          ))}
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "flex-end", gap: 10 }}>
+          <div style={{ width: 110 }}>
+            <Field label="Quota da cont.">
+              <input
+                style={{ ...inputStyle, border: quotaNonValida ? "1px solid #C0392B" : inputStyle.border }}
+                inputMode="decimal"
+                value={quotaDaContabilizzare}
+                onChange={(e) => setQuotaDaContabilizzare(e.target.value)}
+              />
+            </Field>
+          </div>
+          <div style={{ width: 110 }}>
+            <Field label="Restano da cont.">
+              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={imponibileMax > 0 ? restanoDaCont.toFixed(2) : ""} disabled />
+            </Field>
+          </div>
+          <Button onClick={contabilizza} disabled={!destinazione || quotaNonValida || contabilizzando}>
+            {contabilizzando ? "…" : "Contabilizza"}
+          </Button>
+        </div>
       </div>
-      {mostraResiduo && (
-        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#C0392B", marginTop: 10 }}>
-          Restano da contabilizzare {fmtEuroErp(residuoAttuale)}
+      {quotaNonValida && (
+        <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6, textAlign: "right" }}>
+          La quota da contabilizzare non può superare l'imponibile ({fmtEuroErp(imponibileMax)}).
         </div>
       )}
     </div>
@@ -10881,8 +10923,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // sporcare le statistiche/iscrizioni "di oggi" (si basano su `ts`, il
   // momento in cui viene salvata nel database, non la data del corso)
   const [vecchiaIscrizione, setVecchiaIscrizione] = useState(false);
-  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false };
-  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false };
+  const QUOTA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false };
+  const RIGA_PAGAMENTO_EXTRA_VUOTA = { imponibile: "", totale: "", metodo: "", interessi: "", pagato: false, bonificoFilePath: null, bonificoFileNuovo: null, bonificoSegnalato: false, bonificoSkip: false };
   const [pagAcconto, setPagAcconto] = useState(QUOTA_VUOTA);
   const [pagAccontoPagato, setPagAccontoPagato] = useState(false);
   // pagamenti aggiuntivi di acconto oltre al primo (pulsante "+"): stesso
@@ -11437,6 +11479,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFilePath: i.acconto_bonifico_file || null,
       bonificoFileNuovo: null,
       bonificoSegnalato: i.acconto_bonifico_segnalato === true,
+      bonificoSkip: i.acconto_bonifico_skip === true,
     });
     setPagAccontoPagato(i.acconto_pagato === true);
     setAccontoExtra(Array.isArray(i.acconto_extra) ? i.acconto_extra.map((r) => ({
@@ -11448,6 +11491,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFilePath: r.bonifico_file || null,
       bonificoFileNuovo: null,
       bonificoSegnalato: r.bonifico_segnalato === true,
+      bonificoSkip: r.bonifico_skip === true,
     })) : []);
     setPagPrecorso({
       imponibile: i.precorso_imponibile != null ? String(i.precorso_imponibile) : "",
@@ -11457,6 +11501,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFilePath: i.precorso_bonifico_file || null,
       bonificoFileNuovo: null,
       bonificoSegnalato: i.precorso_bonifico_segnalato === true,
+      bonificoSkip: i.precorso_bonifico_skip === true,
     });
     setPagPrecorsoPagato(i.precorso_pagato === true);
     setPrecorsoExtra(Array.isArray(i.precorso_extra) ? i.precorso_extra.map((r) => ({
@@ -11468,6 +11513,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       bonificoFilePath: r.bonifico_file || null,
       bonificoFileNuovo: null,
       bonificoSegnalato: r.bonifico_segnalato === true,
+      bonificoSkip: r.bonifico_skip === true,
     })) : []);
     setPagSaldo({
       imponibile: i.saldo_imponibile != null ? String(i.saldo_imponibile) : "",
@@ -11573,6 +11619,20 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     precorsoExtra.forEach((r, idx) => { if (r.totale !== "" && parseNum(r.totale) !== 0 && !r.metodo) metodiMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
     if (pagSaldo.totale !== "" && parseNum(pagSaldo.totale) !== 0 && !pagSaldo.metodo) metodiMancanti.push("da avere al corso");
 
+    // scegliendo Bonifico come metodo di una quota già segnata "Pagato" è
+    // obbligatorio allegare il file del bonifico: finisce in automatico
+    // nella coda "Verifica Pagamenti" di Elena, etichettato "Verifica
+    // bonifico". Solo un amministratore (Contabilità classe sbloccata) può
+    // saltare la richiesta spuntando "Ora non ho il file", per caricarlo
+    // più tardi ("Da avere al corso" non ha un interruttore pagato/da
+    // pagare, quindi non lo richiede mai)
+    const fileBonificoMancanti = [];
+    const serveFileBonifico = (q, pagato) => q.metodo === "Bonifico" && pagato && !q.bonificoFilePath && !q.bonificoFileNuovo && !q.bonificoSkip;
+    if (serveFileBonifico(pagAcconto, pagAccontoPagato)) fileBonificoMancanti.push("quota acconto");
+    accontoExtra.forEach((r, idx) => { if (serveFileBonifico(r, r.pagato)) fileBonificoMancanti.push(`acconto aggiuntivo ${idx + 1}`); });
+    if (serveFileBonifico(pagPrecorso, pagPrecorsoPagato)) fileBonificoMancanti.push("quota pre corso");
+    precorsoExtra.forEach((r, idx) => { if (serveFileBonifico(r, r.pagato)) fileBonificoMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
+
     const altriMancanti = [];
     if (strict) {
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
@@ -11583,9 +11643,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       if (!tagliaDivisa) altriMancanti.push("taglia divisa");
     }
 
-    if (metodiMancanti.length > 0 || altriMancanti.length > 0) {
+    if (metodiMancanti.length > 0 || fileBonificoMancanti.length > 0 || altriMancanti.length > 0) {
       const parti = [];
       if (metodiMancanti.length > 0) parti.push(`manca metodo di pagamento ${metodiMancanti.join(", oppure ")}`);
+      if (fileBonificoMancanti.length > 0) parti.push(`manca il file del bonifico per ${fileBonificoMancanti.join(", ")}`);
       altriMancanti.forEach((campo) => parti.push(`manca ${campo}`));
       setMsg("Impossibile salvare: " + parti.join(". ") + ".");
       return false;
@@ -11628,6 +11689,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         acconto_pagato: pagAccontoPagato,
         acconto_bonifico_file: pathBonificoAcconto,
         acconto_bonifico_segnalato: segnalatoAcconto,
+        acconto_bonifico_skip: !!pagAcconto.bonificoSkip,
         acconto_extra: accontoExtra.map((r, idx) => ({
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
@@ -11636,6 +11698,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           pagato: !!r.pagato,
           bonifico_file: pathsBonificoAccontoExtra[idx],
           bonifico_segnalato: segnalatiAccontoExtra[idx],
+          bonifico_skip: !!r.bonificoSkip,
         })),
         precorso_imponibile: pagPrecorso.imponibile === "" ? null : parseNum(pagPrecorso.imponibile),
         precorso_totale: pagPrecorso.totale === "" ? null : parseNum(pagPrecorso.totale),
@@ -11644,6 +11707,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         precorso_pagato: pagPrecorsoPagato,
         precorso_bonifico_file: pathBonificoPrecorso,
         precorso_bonifico_segnalato: segnalatoPrecorso,
+        precorso_bonifico_skip: !!pagPrecorso.bonificoSkip,
         precorso_extra: precorsoExtra.map((r, idx) => ({
           imponibile: r.imponibile === "" ? null : parseNum(r.imponibile),
           totale: r.totale === "" ? null : parseNum(r.totale),
@@ -11651,6 +11715,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           interessi: r.metodo === "Rate" && r.interessi !== "" ? parseNum(r.interessi) : null,
           pagato: !!r.pagato,
           bonifico_file: pathsBonificoPrecorsoExtra[idx],
+          bonifico_skip: !!r.bonificoSkip,
           bonifico_segnalato: segnalatiPrecorsoExtra[idx],
         })),
         saldo_imponibile: pagSaldo.imponibile === "" ? null : parseNum(pagSaldo.imponibile),
@@ -12516,6 +12581,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             pagato={pagAccontoPagato}
             onPagato={setPagAccontoPagato}
             onBonificoFile={(f) => setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f }))}
+            mostraSaltaFile={adminSbloccato}
+            onBonificoSkip={(v) => setPagAcconto((prev) => ({ ...prev, bonificoSkip: v }))}
           />
           {accontoExtra.map((riga, idx) => (
             <BloccoQuota
@@ -12532,6 +12599,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               onPagato={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
               onRimuovi={() => setAccontoExtra((prev) => prev.filter((_, i) => i !== idx))}
               onBonificoFile={(f) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
+              mostraSaltaFile={adminSbloccato}
+              onBonificoSkip={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
             />
           ))}
           <button
@@ -12553,6 +12622,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             pagato={pagPrecorsoPagato}
             onPagato={setPagPrecorsoPagato}
             onBonificoFile={(f) => setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f }))}
+            mostraSaltaFile={adminSbloccato}
+            onBonificoSkip={(v) => setPagPrecorso((prev) => ({ ...prev, bonificoSkip: v }))}
           />
           {precorsoExtra.map((riga, idx) => (
             <BloccoQuota
@@ -12568,6 +12639,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               onPagato={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
               onRimuovi={() => setPrecorsoExtra((prev) => prev.filter((_, i) => i !== idx))}
               onBonificoFile={(f) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
+              mostraSaltaFile={adminSbloccato}
+              onBonificoSkip={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
             />
           ))}
           <button
