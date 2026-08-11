@@ -2841,35 +2841,42 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           {tab === "attesa" ? "Niente da verificare." : "Nessun pagamento verificato ancora."}
         </div>
       ) : (() => {
-        // righe raggruppate per origine (Integrazione prima, Bonifico
-        // iscrizione poi) e rese contigue, così l'etichetta del gruppo può
-        // stare come prima colonna della stessa tabella con un rowSpan
-        // invece di essere una tabella separata a fianco
-        const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
-          .map((origine) => ({ origine, righe: righe.filter((a) => (a.origine || "manuale") === origine) }))
-          .filter((g) => g.righe.length > 0);
+        // le righe si dividono prima per giorno di inserimento (ts), dal
+        // più recente al più vecchio, con un'intestazione centrata sopra
+        // ciascun gruppo — stesso linguaggio già usato in "Ultime
+        // iscrizioni". Dentro ogni giorno, restano raggruppate per origine
+        // (Integrazione prima, Bonifico iscrizione poi) e rese contigue,
+        // così l'etichetta del gruppo può stare come prima colonna della
+        // stessa tabella con un rowSpan invece di essere una tabella
+        // separata a fianco
+        const chiaviData = Array.from(new Set(righe.map((a) => (a.ts || "").slice(0, 10)).filter(Boolean))).sort((a, b) => b.localeCompare(a));
         const gruppoStyle = { ...fontDisplay, fontSize: 10, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.2 };
-        return (
-          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
-              <thead>
-                <tr>
-                  <th style={{ ...thStyle, width: "9%" }}>Tipologia</th>
-                  <th style={{ ...thStyle, width: "7%" }}>Città</th>
-                  <th style={{ ...thStyle, width: "9%" }}>Corso</th>
-                  <th style={{ ...thStyle, width: "7%" }}>Data corso</th>
-                  <th style={{ ...thStyle, width: "12%" }}>Allievo</th>
-                  <th style={{ ...thStyle, width: "7%" }}>Venditore</th>
-                  <th style={{ ...thStyle, width: "6%" }}>Data pag.</th>
-                  <th style={{ ...thStyle, width: "6%" }}>Importo</th>
-                  <th style={{ ...thStyle, width: "6%" }}>Metodo</th>
-                  <th style={{ ...thStyle, width: "8%" }}>Nota</th>
-                  <th style={{ ...thStyle, width: "4%" }}>File</th>
-                  <th style={{ ...thStyle, width: "19%", borderRight: "none" }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {gruppi.map((g) => g.righe.map((a, idx) => {
+
+        const tabellaGiorno = (righeGiorno) => {
+          const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
+            .map((origine) => ({ origine, righe: righeGiorno.filter((a) => (a.origine || "manuale") === origine) }))
+            .filter((g) => g.righe.length > 0);
+          return (
+            <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, width: "9%" }}>Tipologia</th>
+                    <th style={{ ...thStyle, width: "7%" }}>Città</th>
+                    <th style={{ ...thStyle, width: "9%" }}>Corso</th>
+                    <th style={{ ...thStyle, width: "7%" }}>Data corso</th>
+                    <th style={{ ...thStyle, width: "12%" }}>Allievo</th>
+                    <th style={{ ...thStyle, width: "7%" }}>Venditore</th>
+                    <th style={{ ...thStyle, width: "6%" }}>Data pag.</th>
+                    <th style={{ ...thStyle, width: "6%" }}>Importo</th>
+                    <th style={{ ...thStyle, width: "6%" }}>Metodo</th>
+                    <th style={{ ...thStyle, width: "8%" }}>Nota</th>
+                    <th style={{ ...thStyle, width: "4%" }}>File</th>
+                    <th style={{ ...thStyle, width: "19%", borderRight: "none" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {gruppi.map((g) => g.righe.map((a, idx) => {
                   const iscrittoPrincipale = iscrittoById[a.iscritto_id];
                   // ogni corso associato ("Associa altri corsi") è la
                   // stessa persona iscritta a un'altra data: si ritrova per
@@ -2952,12 +2959,22 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                         )}
                       </td>
                     </tr>
-                  );
-                }))}
-              </tbody>
-            </table>
+                    );
+                  }))}
+                </tbody>
+              </table>
+            </div>
+          );
+        };
+
+        return chiaviData.map((data) => (
+          <div key={data} style={{ marginBottom: 28 }}>
+            <div style={{ ...fontBody, fontSize: 15, fontWeight: 600, color: NAVY, textAlign: "center", marginBottom: 12 }}>
+              {fmtDataLunga(data)}
+            </div>
+            {tabellaGiorno(righe.filter((a) => (a.ts || "").slice(0, 10) === data))}
           </div>
-        );
+        ));
       })()}
       {modificaAcconto && iscrittoById[modificaAcconto.iscritto_id] && (
         <ModalePagamentoVenditore
