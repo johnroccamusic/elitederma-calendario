@@ -2410,7 +2410,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
     const q = testoRicercaCorso.trim().toLowerCase();
     return (iscritti || [])
       .filter((i) => i.id !== iscritto.id && i.corso_data_id !== iscritto.corso_data_id && !corsiExtra.includes(i.corso_data_id))
-      .map((i) => ({ cd: { id: i.corso_data_id }, etichetta: `${i.nome} ${i.cognome} — ${etichettaCorsoData(i.corso_data_id)}` }))
+      .map((i) => ({ id: i.id, cd: { id: i.corso_data_id }, etichetta: `${i.nome} ${i.cognome} — ${etichettaCorsoData(i.corso_data_id)}` }))
       .filter(({ etichetta }) => !q || etichetta.toLowerCase().includes(q))
       .slice(0, 30);
   }, [ricercaCorsoAperta, testoRicercaCorso, iscritti, corsiExtra, iscritto.id, iscritto.corso_data_id]);
@@ -2517,9 +2517,9 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
             <div style={{ marginTop: 6 }}>
               <CampoRicerca value={testoRicercaCorso} onChange={(e) => setTestoRicercaCorso(e.target.value)} placeholder="Cerca allievo, città, corso, data…" />
               <div style={{ maxHeight: 160, overflowY: "auto", marginTop: 6, border: risultatiRicercaCorso.length > 0 ? `1px solid ${CREAM_BORDER}` : "none", borderRadius: 8 }}>
-                {risultatiRicercaCorso.map(({ cd, etichetta }) => (
+                {risultatiRicercaCorso.map(({ id, cd, etichetta }) => (
                   <button
-                    key={cd.id} type="button" onClick={() => aggiungiCorsoExtra(cd.id)}
+                    key={id} type="button" onClick={() => aggiungiCorsoExtra(cd.id)}
                     style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: "8px 10px", ...fontBody, fontSize: 13, color: NAVY }}
                   >
                     {etichetta}
