@@ -2599,19 +2599,14 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
   const quotaNonValida = quotaDaContabilizzare !== "" && (quotaNum <= 0 || quotaNum > residuoImponibile);
   const restanoDaCont = round2(residuoImponibile - quotaNum);
 
-  // "Restano da cont." è anche correggibile a mano: serve per le righe
-  // contabilizzate prima che esistesse il collegamento automatico con
-  // questa segnalazione (eliminandole oggi il credito non torna da solo,
-  // perché non hanno il riferimento per sapere da dove ripristinarlo)
-  const [correzioneResiduo, setCorrezioneResiduo] = useState(null); // stringa mentre si sta scrivendo, null quando il campo non è in modifica
-  async function salvaCorrezioneResiduo() {
-    if (correzioneResiduo === null) return;
-    const testo = correzioneResiduo;
-    setCorrezioneResiduo(null);
-    if (testo.trim() === "" || parseNum(testo) === residuoImponibile) return;
-    const nuovoImponibile = Math.max(0, Math.min(imponibileIniziale, parseNum(testo)));
-    const nuovoResiduo = round2(nuovoImponibile * 1.22);
-    const { error } = await supabase.from("acconti_da_verificare").update({ importo_residuo: nuovoResiduo }).eq("id", integrazione.id);
+  // azzera ogni contabilizzazione parziale fatta finora su questa
+  // segnalazione, riportando il residuo all'importo pieno originale:
+  // serve soprattutto per le righe contabilizzate prima che esistesse il
+  // collegamento automatico (eliminandole oggi il credito non torna da
+  // solo, perché non hanno il riferimento per sapere da dove ripristinarlo)
+  async function resetResiduo() {
+    if (!window.confirm("Sei sicuro di voler ricominciare? Tutto quello che risulta già contabilizzato tornerà disponibile.")) return;
+    const { error } = await supabase.from("acconti_da_verificare").update({ importo_residuo: integrazione.importo }).eq("id", integrazione.id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
@@ -2680,19 +2675,7 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
           </div>
           <div style={{ width: 100 }}>
             <Field label="Restano da cont.">
-              {quotaDaContabilizzare === "" ? (
-                <input
-                  style={inputStyle}
-                  inputMode="decimal"
-                  title="Correggibile a mano: serve se una riga già contabilizzata è stata eliminata senza che il credito tornasse da solo (righe più vecchie di questa funzione)"
-                  value={correzioneResiduo !== null ? correzioneResiduo : residuoImponibile.toFixed(2)}
-                  onFocus={() => setCorrezioneResiduo(residuoImponibile.toFixed(2))}
-                  onChange={(e) => setCorrezioneResiduo(e.target.value)}
-                  onBlur={salvaCorrezioneResiduo}
-                />
-              ) : (
-                <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={restanoDaCont.toFixed(2)} disabled />
-              )}
+              <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={(quotaDaContabilizzare === "" ? residuoImponibile : restanoDaCont).toFixed(2)} disabled />
             </Field>
           </div>
           <Button onClick={contabilizza} disabled={!destinazione || quotaNonValida || contabilizzando}>
@@ -2703,6 +2686,18 @@ function BloccoIntegrazioneDaApprovare({ integrazione, onContabilizza, ricarica 
       {quotaNonValida && (
         <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6, textAlign: "right" }}>
           La quota da contabilizzare non può superare quanto resta da contabilizzare ({fmtEuroErp(residuoImponibile)}).
+        </div>
+      )}
+      {giaContabilizzato > 0 && (
+        <div style={{ textAlign: "right", marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={resetResiduo}
+            title="Annulla ogni contabilizzazione parziale fatta finora su questa segnalazione"
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}
+          >
+            Reset — annulla il contabilizzato e riparti da zero
+          </button>
         </div>
       )}
     </div>
