@@ -16351,22 +16351,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
-          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <div style={{ width: 58, height: 58, borderRadius: 8, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={22} color={MUTED} />}
+          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ width: 42, height: 42, borderRadius: 7, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {immagineUrlPerProdotto[p.id] ? <img src={immagineUrlPerProdotto[p.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaTilePos size={17} color={MUTED} />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{p.nome}</div>
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{nomiCategorie || "—"}</div>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</div>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nomiCategorie || "—"}</div>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{fmtEuroErp(p.prezzo_vendita)}</div>
-              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>IVA incl.</div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(p.prezzo_vendita)}</div>
+              <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>IVA incl.</div>
             </div>
             <button
               onClick={() => aggiungiAlCarrello(p)} disabled={esaurito} title="Aggiungi al carrello"
-              style={{ width: 42, height: 42, borderRadius: 10, border: "none", background: esaurito ? "#E5E1D6" : GOLD, color: "#fff", fontSize: 20, flexShrink: 0, cursor: esaurito ? "default" : "pointer" }}
+              style={{ width: 34, height: 34, borderRadius: 9, border: "none", background: esaurito ? "#E5E1D6" : GOLD, color: "#fff", fontSize: 18, flexShrink: 0, cursor: esaurito ? "default" : "pointer" }}
             >+</button>
           </div>
         );
@@ -16464,10 +16464,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
           <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1 }} />
         </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-          <TabPillola attivo={!categoriaSel} onClick={() => cambiaFiltro(() => setCategoriaSel(""))}>Tutti</TabPillola>
-          {categorieOrdinate.map((c) => (
-            <TabPillola key={c.id} attivo={categoriaSel === c.id} onClick={() => cambiaFiltro(() => setCategoriaSel(c.id))}>{c.nome}</TabPillola>
+        <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", marginBottom: 10, marginLeft: -16, marginRight: -16, padding: "0 16px 4px", scrollbarWidth: "none" }}>
+          {[{ id: "", nome: "Tutti" }, ...categorieOrdinate].map((c) => (
+            <button
+              key={c.id || "tutti"}
+              onClick={() => cambiaFiltro(() => setCategoriaSel(c.id))}
+              style={{ ...fontBody, fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 14, border: categoriaSel === c.id ? "none" : `1px solid ${CREAM_BORDER}`, background: categoriaSel === c.id ? NAVY : "#fff", color: categoriaSel === c.id ? "#fff" : NAVY, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
+            >
+              {c.nome}
+            </button>
           ))}
         </div>
 
