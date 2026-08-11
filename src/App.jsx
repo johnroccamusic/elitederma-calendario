@@ -23736,7 +23736,21 @@ export default function App() {
     setCorsiGiorni(cg.data || []);
     setTipiModella(tm.data || []);
     setCorsiTipiModella(ctm.data || []);
-    setVenditori(ve.data || []);
+    // L'elenco venditori è usato ovunque (login alla Dashboard venditori,
+    // selezione "Tutor" in iscrizione, classifiche): se la select con le
+    // colonne opzionali "permessi"/"password" fallisce perché una di quelle
+    // colonne non è ancora stata creata su questo database (ultimi file SQL
+    // non ancora eseguiti), NON deve sparire tutto l'elenco. In quel caso
+    // ricarico con le sole colonne sempre presenti e riempio le opzionali
+    // con i valori di default, così i venditori restano visibili e
+    // utilizzabili — esattamente come già facciamo per "telefono".
+    let venditoriData = ve.data;
+    if (ve.error) {
+      let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
+      if (alt.error) alt = await supabase.from("venditori").select("id, nome, ts").order("nome");
+      venditoriData = (alt.data || []).map((v) => ({ permessi: [], password: "0000", ...v }));
+    }
+    setVenditori(venditoriData || []);
     setPasswordMenu(pm.data || []);
     setUtentiApp(ua.data || []);
     setCorsiKitProdotti(ckp.data || []);
