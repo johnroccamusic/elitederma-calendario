@@ -2594,11 +2594,11 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
   }
 
   const bordoV = `1px solid ${CREAM_BORDER}`;
-  const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV };
-  const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
+  const celStyle = { padding: "5px 7px", borderBottom: bordoV, borderRight: bordoV };
+  const thStyle = { ...celStyle, ...fontBody, fontSize: 9.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+    <div style={{ maxWidth: 1320, margin: "0 auto", padding: "40px 20px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
           <IconaFrecciaSinistra size={20} />
@@ -2614,82 +2614,83 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>
           {tab === "attesa" ? "Niente da verificare." : "Nessun pagamento verificato ancora."}
         </div>
-      ) : (
-        Object.keys(TITOLO_GRUPPO_ORIGINE).map((origine) => {
-          const righeGruppo = righe.filter((a) => (a.origine || "manuale") === origine);
-          if (righeGruppo.length === 0) return null;
-          return (
-            <div key={origine} style={{ display: "flex", gap: 18, alignItems: "flex-start", marginBottom: 22 }}>
-              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, width: 140, flexShrink: 0, paddingTop: 14 }}>
-                {TITOLO_GRUPPO_ORIGINE[origine]}
-              </div>
-              <div style={{ flex: 1, minWidth: 0, overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-                <table style={{ borderCollapse: "collapse", width: "100%" }}>
-                  <thead>
-                    <tr>
-                      <th style={thStyle}>Città</th>
-                      <th style={thStyle}>Corso</th>
-                      <th style={thStyle}>Data del corso</th>
-                      <th style={thStyle}>Allievo</th>
-                      <th style={thStyle}>Venditore</th>
-                      {origine === "manuale" && <th style={thStyle}>Data pagamento</th>}
-                      {origine === "manuale" && <th style={thStyle}>Importo</th>}
-                      {origine === "manuale" && <th style={thStyle}>Metodo</th>}
-                      <th style={thStyle}>Nota</th>
-                      <th style={thStyle}>File</th>
-                      <th style={{ ...thStyle, borderRight: "none" }}></th>
+      ) : (() => {
+        // righe raggruppate per origine (Integrazione prima, Bonifico
+        // iscrizione poi) e rese contigue, così l'etichetta del gruppo può
+        // stare come prima colonna della stessa tabella con un rowSpan
+        // invece di essere una tabella separata a fianco
+        const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
+          .map((origine) => ({ origine, righe: righe.filter((a) => (a.origine || "manuale") === origine) }))
+          .filter((g) => g.righe.length > 0);
+        const gruppoStyle = { ...fontDisplay, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, verticalAlign: "top" };
+        return (
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, width: "9%" }}>Tipologia</th>
+                  <th style={{ ...thStyle, width: "7%" }}>Città</th>
+                  <th style={{ ...thStyle, width: "10%" }}>Corso</th>
+                  <th style={{ ...thStyle, width: "7%" }}>Data corso</th>
+                  <th style={{ ...thStyle, width: "13%" }}>Allievo</th>
+                  <th style={{ ...thStyle, width: "8%" }}>Venditore</th>
+                  <th style={{ ...thStyle, width: "7%" }}>Data pag.</th>
+                  <th style={{ ...thStyle, width: "7%" }}>Importo</th>
+                  <th style={{ ...thStyle, width: "7%" }}>Metodo</th>
+                  <th style={{ ...thStyle, width: "14%" }}>Nota</th>
+                  <th style={{ ...thStyle, width: "5%" }}>File</th>
+                  <th style={{ ...thStyle, width: "9%", borderRight: "none" }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {gruppi.map((g) => g.righe.map((a, idx) => {
+                  const iscritto = iscrittoById[a.iscritto_id];
+                  const cd = iscritto ? cdById[iscritto.corso_data_id] : null;
+                  const corso = cd ? corsoById[cd.corso_id] : null;
+                  const loc = cd ? locById[cd.location_id] : null;
+                  const cliccabile = iscritto && onApriIscritto;
+                  const eBonifico = a.origine === "bonifico_modulo";
+                  return (
+                    <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
+                      {idx === 0 && <td rowSpan={g.righe.length} style={{ ...celStyle, ...gruppoStyle }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</td>}
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}
+                        <div style={{ marginTop: 3 }}>
+                          <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "1px 6px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.2 }}>
+                            {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
+                          </span>
+                        </div>
+                      </td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>
+                      <td style={{ ...celStyle, ...fontBody, fontSize: 11, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.nota || ""}>{a.nota || "—"}</td>
+                      <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
+                        {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>}
+                      </td>
+                      <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
+                        {tab === "attesa" && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); approva(a); }}
+                            disabled={approvandoId === a.id}
+                            style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "5px 10px", cursor: approvandoId === a.id ? "default" : "pointer" }}
+                          >
+                            {approvandoId === a.id ? "…" : "Approva"}
+                          </button>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {righeGruppo.map((a) => {
-                      const iscritto = iscrittoById[a.iscritto_id];
-                      const cd = iscritto ? cdById[iscritto.corso_data_id] : null;
-                      const corso = cd ? corsoById[cd.corso_id] : null;
-                      const loc = cd ? locById[cd.location_id] : null;
-                      const cliccabile = iscritto && onApriIscritto;
-                      const eBonifico = a.origine === "bonifico_modulo";
-                      return (
-                        <tr key={a.id} onClick={cliccabile ? () => onApriIscritto(iscritto) : undefined} style={{ cursor: cliccabile ? "pointer" : undefined }}>
-                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{corso?.nome?.toUpperCase() || "?"}</td>
-                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"}</td>
-                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, whiteSpace: "nowrap" }}>
-                            {iscritto ? `${iscritto.nome} ${iscritto.cognome}` : "—"}
-                            <div style={{ marginTop: 4 }}>
-                              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: eBonifico ? "#8A6D1D" : NAVY, background: eBonifico ? "#FBF0D6" : BG, border: `1px solid ${eBonifico ? "#E9D9A0" : CREAM_BORDER}`, borderRadius: 20, padding: "2px 8px", display: "inline-block", textTransform: "uppercase", letterSpacing: 0.3 }}>
-                                {ETICHETTA_ORIGINE_ACCONTO[a.origine] || ETICHETTA_ORIGINE_ACCONTO.manuale}
-                              </span>
-                            </div>
-                          </td>
-                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.venditore_nome || "—"}</td>
-                          {origine === "manuale" && <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.data_pagamento ? fmtData(a.data_pagamento) : "—"}</td>}
-                          {origine === "manuale" && <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.importo != null ? fmtEuroErp(a.importo) : "—"}</td>}
-                          {origine === "manuale" && <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.metodo || "—"}</td>}
-                          <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, maxWidth: 260 }}>{a.nota || "—"}</td>
-                          <td style={{ ...celStyle, whiteSpace: "nowrap" }} onClick={(e) => e.stopPropagation()}>
-                            {a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri" /> : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
-                          </td>
-                          <td style={{ ...celStyle, borderRight: "none", whiteSpace: "nowrap" }}>
-                            {tab === "attesa" && (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); approva(a); }}
-                                disabled={approvandoId === a.id}
-                                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "6px 14px", cursor: approvandoId === a.id ? "default" : "pointer" }}
-                              >
-                                {approvandoId === a.id ? "…" : "Approva"}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        })
-      )}
+                  );
+                }))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
     </div>
   );
 }
