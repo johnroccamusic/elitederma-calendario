@@ -16179,7 +16179,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   const venditePos = (venditeShop || []).filter((v) => v.origine === "pos").sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
 
-  const tileImg = { width: "100%", height: 90, borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 };
+  // quadrata come sullo shop: aspectRatio invece di un'altezza fissa, così
+  // il riquadro resta un quadrato vero qualunque sia la larghezza della
+  // colonna (mobile/desktop) invece di schiacciare l'immagine
+  const tileImg = { width: "100%", aspectRatio: "1 / 1", borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 };
 
   if (mostraStorico) {
     return (
