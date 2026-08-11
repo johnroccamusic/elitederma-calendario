@@ -19997,6 +19997,15 @@ export default function App() {
     return utentiApp.find((u) => u.chiave_sistema === "__admin")?.password || ADMIN_CODE;
   }
   function apriLoginVenditore() {
+    // chi è entrato con la propria password venditore direttamente dal
+    // Gate (utenteLoggato.venditoreId) torna sempre e solo alla propria
+    // dashboard, mai al picker "scegli venditore" — anche dopo essere
+    // passato da "Home"
+    if (utenteLoggato?.venditoreId) {
+      setVenditoreLoggato({ id: utenteLoggato.venditoreId, nome: utenteLoggato.nome });
+      setView("dashboardvenditori");
+      return;
+    }
     // chi ha già una propria password (Programmatore, Amministratore,
     // master, utente nominale) e ha il tasto abilitato entra subito,
     // senza il picker/la password aggiuntiva del venditore — quel picker
