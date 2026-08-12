@@ -7619,7 +7619,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -7881,9 +7881,16 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     ricarica();
   }
   async function toggleMagazzinoLocale(locationId, valore) {
+    // aggiorna lo stato locale invece di ricaricare tutti i dati
+    // dell'app: è un solo flag booleano, senza nessuna chiamata esterna
+    // (a differenza dei movimenti di stock verso WooCommerce), quindi
+    // può riflettersi sull'interfaccia all'istante
+    setLocation((prev) => prev.map((l) => (l.id === locationId ? { ...l, magazzino_locale: valore } : l)));
     const { error } = await supabase.from("location").update({ magazzino_locale: valore }).eq("id", locationId);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
+    if (error) {
+      window.alert("Errore: " + error.message);
+      setLocation((prev) => prev.map((l) => (l.id === locationId ? { ...l, magazzino_locale: !valore } : l)));
+    }
   }
 
   const gruppiSetting = [
@@ -23202,7 +23209,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} />
       )}
 
       {view === "gestionedate" && (
