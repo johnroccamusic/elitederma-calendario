@@ -3943,7 +3943,7 @@ function SezioneDateCorsi({
           onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
         />
       ) : (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} />
       )}
     </div>
   );
@@ -8277,6 +8277,10 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // sua pagina separata (stesso sblocco amministratore condiviso)
 function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro }) {
   const [msg, setMsg] = useState("");
+  // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
+  // il popup "Nuova data" già pronto su oggi, invece di dover passare
+  // dalla vista Calendario e cliccare un giorno vuoto
+  const [mostraAggiungiCorso, setMostraAggiungiCorso] = useState(false);
 
   // i filtri (corso/città/master/cronologico) vivono in App, non qui: così
   // restano impostati anche se si esce da "Gestione date" e ci si torna,
@@ -8339,10 +8343,22 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     setMsg("Data aggiornata.");
     ricarica();
   }
+
+  if (mostraAggiungiCorso) {
+    return (
+      <Calendario
+        corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
+        onApriData={onApriData} onBack={() => setMostraAggiungiCorso(false)} ricarica={ricarica}
+        apriPopupInizialeData={dataOggiStr()}
+      />
+    );
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
       <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
+        <Button onClick={() => setMostraAggiungiCorso(true)}>Aggiungi Corso</Button>
         <Button variant="ghost" onClick={onApriUltimeIscrizioni}>Ultime iscrizioni</Button>
         {numeroAccontiInAttesa > 0 ? (
           <>
@@ -8383,6 +8399,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
                 location={location}
                 corsiDate={corsiDate}
                 iscritti={iscritti}
+                master={master}
                 cdId={dataInModifica}
                 valore={{ inizio: modDataInizio, fine: modDataFine }}
                 onCambia={({ inizio, fine }) => { setModDataInizio(inizio); setModDataFine(fine); }}
@@ -11320,10 +11337,11 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
 // finestra per creare rapidamente una nuova data cliccando un giorno vuoto
 // nel calendario: tipo di corso, città (se non già fissata dal contesto) e
 // durata in giorni con +/-, poi Salva o Annulla
-function PopupNuovaData({ corsi, location, cittaFissa, dataClic, onSalva, onChiudi }) {
+function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva, onChiudi }) {
   const [corsoSel, setCorsoSel] = useState("");
   const [locSel, setLocSel] = useState(cittaFissa || "");
   const [giorni, setGiorni] = useState(1);
+  const [masterSel, setMasterSel] = useState(""); // vuoto = "La assegno in seguito"
 
   return (
     <Modal title={`Nuova data — ${fmtData(dataClic)}`} onClose={onChiudi}>
@@ -11360,10 +11378,18 @@ function PopupNuovaData({ corsi, location, cittaFissa, dataClic, onSalva, onChiu
           </button>
         </div>
       </Field>
+      {master && (
+        <Field label="Assegna Master (non obbligatorio)">
+          <select style={inputStyle} value={masterSel} onChange={(e) => setMasterSel(e.target.value)}>
+            <option value="">La assegno in seguito</option>
+            {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+          </select>
+        </Field>
+      )}
       <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
         <Button
           disabled={!corsoSel || !locSel}
-          onClick={() => onSalva({ corso_id: corsoSel, location_id: locSel, data_inizio: dataClic, data_fine: addGiorni(dataClic, giorni - 1) })}
+          onClick={() => onSalva({ corso_id: corsoSel, location_id: locSel, data_inizio: dataClic, data_fine: addGiorni(dataClic, giorni - 1), master_id: masterSel || null })}
         >
           Salva
         </Button>
@@ -11392,15 +11418,20 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
   );
 }
 
-function Calendario({ corsi, location, corsiDate, iscritti, onApriData, onBack, ricarica }) {
+function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
-  const [popupNuovo, setPopupNuovo] = useState(null); // data "yyyy-mm-dd" cliccata, o null
+  // apriPopupInizialeData: solo chi monta un Calendario fresco apposta per
+  // aggiungere subito una data (es. tasto "Aggiungi Corso" di Gestione
+  // corsi) lo passa, per aprire già il popup invece di dover cliccare un
+  // giorno vuoto — un giro di iniziale useState, non un effetto, perché
+  // serve solo alla primissima apertura di un'istanza nuova del componente
+  const [popupNuovo, setPopupNuovo] = useState(apriPopupInizialeData || null);
   const [popupElimina, setPopupElimina] = useState(null); // evento corsi_date cliccato, o null
 
-  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine }) {
-    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine });
+  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine, master_id }) {
+    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine, master_id: master_id || null });
     if (error) { window.alert("Errore: " + error.message); return; }
     setPopupNuovo(null);
     ricarica();
@@ -11454,7 +11485,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, onApriData, onBack, 
       ))}
 
       {popupNuovo && (
-        <PopupNuovaData corsi={corsi} location={location} dataClic={popupNuovo} onSalva={salvaNuovo} onChiudi={() => setPopupNuovo(null)} />
+        <PopupNuovaData corsi={corsi} location={location} master={master} dataClic={popupNuovo} onSalva={salvaNuovo} onChiudi={() => setPopupNuovo(null)} />
       )}
       {popupElimina && (
         <PopupEliminaData evento={popupElimina} corsoById={corsoById} locById={locById} onElimina={eliminaEsistente} onChiudi={() => setPopupElimina(null)} />
@@ -11467,7 +11498,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, onApriData, onBack, 
 // mostra tutto il calendario, scorribile, con le barre colorate di tutti i
 // corsi: quella dell'edizione in modifica si può trascinare per spostarla su
 // altre date, oppure allungare/accorciare trascinandone i bordi
-function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore, onCambia, ricarica, onDataEliminata }) {
+function CalendarioModifica({ corsi, location, corsiDate, iscritti, master, cdId, valore, onCambia, ricarica, onDataEliminata }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -11475,8 +11506,8 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore
   // calendario disponibile nell'altro Calendario e in "Aggiungi data"
   const [popupNuovo, setPopupNuovo] = useState(null);
   const [popupElimina, setPopupElimina] = useState(null);
-  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine }) {
-    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine });
+  async function salvaNuovo({ corso_id, location_id, data_inizio, data_fine, master_id }) {
+    const { error } = await supabase.from("corsi_date").insert({ corso_id, location_id, data_inizio, data_fine, master_id: master_id || null });
     if (error) { window.alert("Errore: " + error.message); return; }
     setPopupNuovo(null);
     ricarica();
@@ -11630,7 +11661,7 @@ function CalendarioModifica({ corsi, location, corsiDate, iscritti, cdId, valore
         />
       ))}
       {popupNuovo && (
-        <PopupNuovaData corsi={corsi} location={location} dataClic={popupNuovo} onSalva={salvaNuovo} onChiudi={() => setPopupNuovo(null)} />
+        <PopupNuovaData corsi={corsi} location={location} master={master} dataClic={popupNuovo} onSalva={salvaNuovo} onChiudi={() => setPopupNuovo(null)} />
       )}
       {popupElimina && (
         <PopupEliminaData evento={popupElimina} corsoById={corsoById} locById={locById} onElimina={eliminaEsistente} onChiudi={() => setPopupElimina(null)} />
@@ -23480,7 +23511,7 @@ export default function App() {
       )}
 
       {view === "calendario" && (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} onApriData={apriData} onBack={() => setView("home")} ricarica={fetchDati} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} onApriData={apriData} onBack={() => setView("home")} ricarica={fetchDati} />
       )}
 
       {view === "cerca" && (
