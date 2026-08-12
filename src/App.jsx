@@ -4858,15 +4858,38 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
 }
 // una riga di "Inventario corso corrente": nome del prodotto/attrezzatura
 // + quantità, salvata da sola all'uscita dal campo (nessun tasto Salva)
-function RigaInventarioProdotto({ riga, voce, onSalva }) {
-  const [quantita, setQuantita] = useState(riga?.quantita ?? "");
-  async function salva() {
-    await onSalva(voce.id, quantita === "" ? 0 : Math.max(0, Number(quantita) || 0));
+// riga di un'attrezzatura già dichiarata in questa sede: mostra "risultano
+// in magazzino N" (l'ultimo valore confermato) e tiene la modifica sempre
+// dietro un passaggio esplicito di conferma — mai un numero che si salva
+// da solo appena si sfiora il campo, per non correggere per sbaglio un
+// dato che magari è ancora giusto
+function RigaAttrezzaturaInventario({ riga, voce, onSalva, onRimuovi }) {
+  const [inModifica, setInModifica] = useState(false);
+  const [valore, setValore] = useState(riga?.quantita ?? 0);
+  function apriModifica() { setValore(riga?.quantita ?? 0); setInModifica(true); }
+  async function conferma() {
+    await onSalva(voce.id, Math.max(0, Number(valore) || 0));
+    setInModifica(false);
   }
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{voce.nome}</span>
-      <input type="number" min="0" value={quantita} onChange={(e) => setQuantita(e.target.value)} onBlur={salva} placeholder="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }} />
+    <div style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{voce.nome}</span>
+        {!inModifica && <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>Risultano in magazzino: {riga?.quantita ?? 0}</span>}
+        {onRimuovi && <button onClick={onRimuovi} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>}
+      </div>
+      {!inModifica ? (
+        <button onClick={apriModifica} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", marginTop: 4 }}>
+          Conferma quantità
+        </button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+          <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Quantità reale:</span>
+          <input type="number" min="0" autoFocus value={valore} onChange={(e) => setValore(e.target.value)} style={{ ...inputStyle, width: 70, padding: "5px 7px" }} />
+          <button onClick={conferma} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "5px 12px", cursor: "pointer" }}>Conferma</button>
+          <button onClick={() => setInModifica(false)} style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -4954,7 +4977,11 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   const [salvandoAperto, setSalvandoAperto] = useState(false);
   const [mostraCongruita, setMostraCongruita] = useState(false);
   const loc = location.find((l) => l.id === corsoData?.location_id) || null;
-  const attrezzature = costiSottocategorie
+  // catalogo delle attrezzature (gestito dall'admin in Impostazioni): qui
+  // è solo il bacino da cui cercare — quali di queste sono davvero
+  // presenti in QUESTA sede lo decide la master, aggiungendo/togliendo
+  // righe come per Consumabili, non più un elenco fisso sempre uguale
+  const attrezzatureCatalogo = costiSottocategorie
     .filter((sc) => sc.categoria_id === "attrezzature_corsi" && sc.attiva && !sc.automatico)
     .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
 
@@ -4967,6 +4994,21 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     );
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
+  }
+  async function eliminaVoceInventario(id) {
+    const { error } = await supabase.from("inventario_sede").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  const attrezzatureQui = inventarioQui.filter((r) => r.tipo === "attrezzatura");
+  const [ricercaAttrezzatura, setRicercaAttrezzatura] = useState("");
+  const risultatiAttrezzatura = ricercaAttrezzatura.trim()
+    ? attrezzatureCatalogo.filter((sc) => !attrezzatureQui.some((r) => r.riferimento === sc.id) && sc.nome.toLowerCase().includes(ricercaAttrezzatura.trim().toLowerCase()))
+    : [];
+  function aggiungiAttrezzatura(sc) {
+    setRicercaAttrezzatura("");
+    salvaVoce("attrezzatura", sc.id, 1);
   }
 
   // consumabili di servizio del magazzino locale (livello a pallini):
@@ -5173,12 +5215,34 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             </div>
 
             <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Attrezzature</div>
-              {attrezzature.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna attrezzatura definita.</div>
-              ) : attrezzature.map((sc) => (
-                <RigaInventarioProdotto key={sc.id} riga={rigaDi("attrezzatura", sc.id)} voce={{ id: sc.id, nome: sc.nome }} onSalva={(id, q) => salvaVoce("attrezzatura", id, q)} />
-              ))}
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Attrezzature</div>
+              <div style={labelStyleInv}>Aggiungi solo quelle davvero presenti in questa sede.</div>
+              <div style={{ position: "relative" }}>
+                <input style={inputStyle} value={ricercaAttrezzatura} onChange={(e) => setRicercaAttrezzatura(e.target.value)} placeholder="Cerca attrezzatura…" />
+                {risultatiAttrezzatura.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
+                    {risultatiAttrezzatura.map((sc) => (
+                      <div key={sc.id} onClick={() => aggiungiAttrezzatura(sc)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{sc.nome}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {attrezzatureQui.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessuna attrezzatura dichiarata ancora.</div>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  {attrezzatureQui.map((r) => {
+                    const sc = attrezzatureCatalogo.find((c) => c.id === r.riferimento);
+                    return (
+                      <RigaAttrezzaturaInventario
+                        key={r.id} riga={r} voce={{ id: r.riferimento, nome: sc?.nome || "—" }}
+                        onSalva={(id, q) => salvaVoce("attrezzatura", id, q)}
+                        onRimuovi={() => eliminaVoceInventario(r.id)}
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
