@@ -18,8 +18,14 @@
 //
 // Chiamata dall'app (già autenticata con l'anon key, la verifica JWT
 // di Supabase resta quindi attiva su questa funzione):
-//   supabase.functions.invoke('woo-aggiorna-prodotto', { body: { prodottoId, prezzoVendita, giacenza } })
-// prezzoVendita/giacenza sono opzionali: passa solo quelli che sono cambiati.
+//   supabase.functions.invoke('woo-aggiorna-prodotto', { body: { prodottoId, prezzoVendita, giacenza, giacenzaMagazzino } })
+// prezzoVendita/giacenza/giacenzaMagazzino sono opzionali: passa solo
+// quelli che sono cambiati. giacenzaMagazzino (il magazzino fisico, dato
+// solo dell'app, mai su WooCommerce) viene scritto insieme a "giacenza"
+// nello stesso aggiornamento locale invece che con una seconda chiamata
+// separata dal browser — un giro di rete in meno quando un movimento
+// tocca entrambe (es. "sposta da magazzino a shop"), stessa garanzia:
+// si scrive solo dopo che WooCommerce ha confermato.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -51,12 +57,13 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ errore: "JSON non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const { prodottoId, prezzoVendita, giacenza } = corpo || {};
+  const { prodottoId, prezzoVendita, giacenza, giacenzaMagazzino } = corpo || {};
   if (!prodottoId) {
     return new Response(JSON.stringify({ errore: "Parametro mancante: prodottoId" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   const cambiaPrezzo = prezzoVendita != null && Number.isFinite(prezzoVendita);
   const cambiaGiacenza = giacenza != null && Number.isFinite(giacenza);
+  const cambiaMagazzino = giacenzaMagazzino != null && Number.isFinite(giacenzaMagazzino);
   if (!cambiaPrezzo && !cambiaGiacenza) {
     return new Response(JSON.stringify({ errore: "Nulla da aggiornare: servono prezzoVendita e/o giacenza" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
@@ -65,6 +72,9 @@ Deno.serve(async (req) => {
   }
   if (cambiaGiacenza && giacenza < 0) {
     return new Response(JSON.stringify({ errore: "La giacenza non può essere negativa" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+  if (cambiaMagazzino && giacenzaMagazzino < 0) {
+    return new Response(JSON.stringify({ errore: "La giacenza in magazzino non può essere negativa" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
   const siteUrl = Deno.env.get("WC_SITE_URL");
@@ -106,6 +116,12 @@ Deno.serve(async (req) => {
   const aggiornamentoLocale: Record<string, unknown> = { ts_sync: new Date().toISOString() };
   if (cambiaPrezzo) aggiornamentoLocale.prezzo_vendita = prezzoVendita;
   if (cambiaGiacenza) aggiornamentoLocale.giacenza = giacenza;
+  // giacenza_magazzino non esiste su WooCommerce (dato solo dell'app):
+  // si scrive qui, nello stesso aggiornamento, solo per risparmiare al
+  // browser una seconda chiamata separata — non richiede una sua verifica
+  // su WooCommerce, quindi può stare insieme senza cambiare la garanzia
+  // "si scrive in locale solo dopo la conferma di WooCommerce"
+  if (cambiaMagazzino) aggiornamentoLocale.giacenza_magazzino = giacenzaMagazzino;
 
   const { error: erroreAggiorna } = await supabase.from("prodotti_shop").update(aggiornamentoLocale).eq("id", prodottoId);
   if (erroreAggiorna) {
@@ -117,5 +133,5 @@ Deno.serve(async (req) => {
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, giacenza: cambiaGiacenza ? giacenza : undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, giacenza: cambiaGiacenza ? giacenza : undefined, giacenzaMagazzino: cambiaMagazzino ? giacenzaMagazzino : undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

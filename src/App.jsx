@@ -16251,10 +16251,11 @@ async function spostaUnitaStock(prodotto, verso) {
   if (verso === "shop" && magazzino <= 0) return { errore: null };
   const nuovoShop = verso === "magazzino" ? shop - 1 : shop + 1;
   const nuovoMagazzino = verso === "magazzino" ? magazzino + 1 : magazzino - 1;
-  const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, giacenza: nuovoShop } });
+  // giacenza (shop) e giacenza_magazzino nello stesso giro: la funzione
+  // scrive entrambe in un solo aggiornamento locale dopo la conferma di
+  // WooCommerce, un giro di rete in meno rispetto a due chiamate separate
+  const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, giacenza: nuovoShop, giacenzaMagazzino: nuovoMagazzino } });
   if (error || data?.errore) return { errore: data?.errore || error.message };
-  const { error: erroreLocale } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", prodotto.id);
-  if (erroreLocale) return { errore: erroreLocale.message };
   return { errore: null };
 }
 
@@ -17276,10 +17277,11 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
       const daMagazzino = Math.min(u.quantita, magazzino);
       const daShop = u.quantita - daMagazzino;
       if (daShop > 0) {
-        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: u.prodotto.id, giacenza: shop - daShop } });
+        // giacenza e giacenza_magazzino nello stesso giro quando servono
+        // entrambe (riga divisa tra le due fonti): un giro di rete in meno
+        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: u.prodotto.id, giacenza: shop - daShop, ...(daMagazzino > 0 ? { giacenzaMagazzino: magazzino - daMagazzino } : {}) } });
         if (error || data?.errore) { setSalvando(false); setMsg(`"${u.prodotto.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`); return; }
-      }
-      if (daMagazzino > 0) {
+      } else if (daMagazzino > 0) {
         const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino - daMagazzino }).eq("id", u.prodotto.id);
         if (error) { setSalvando(false); setMsg(`"${u.prodotto.nome}": errore nello scarico del magazzino — ${error.message}`); return; }
       }
@@ -17799,10 +17801,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       const daShop = r.quantita - daMagazzino;
 
       if (daShop > 0) {
-        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: r.prodottoId, giacenza: shop - daShop } });
+        // giacenza e giacenza_magazzino nello stesso giro quando servono
+        // entrambe (riga divisa tra le due fonti): un giro di rete in meno
+        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: r.prodottoId, giacenza: shop - daShop, ...(daMagazzino > 0 ? { giacenzaMagazzino: magazzino - daMagazzino } : {}) } });
         if (error || data?.errore) { setSalvando(false); setMsg(`"${r.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`); return; }
-      }
-      if (daMagazzino > 0) {
+      } else if (daMagazzino > 0) {
         const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino - daMagazzino }).eq("id", r.prodottoId);
         if (error) { setSalvando(false); setMsg(`"${r.nome}": errore nello scarico del magazzino — ${error.message}`); return; }
       }
