@@ -4020,6 +4020,7 @@ function PaginaDashboardVenditori({
   const [meseClassifica, setMeseClassifica] = useState(() => { const o = new Date(); return { anno: o.getFullYear(), mese: o.getMonth() }; });
   const [classificaCorsiCompleta, setClassificaCorsiCompleta] = useState(false);
   const [classificaTicketCompleta, setClassificaTicketCompleta] = useState(false);
+  const [mostraRiepilogoPos, setMostraRiepilogoPos] = useState(false);
 
   const venditoreSel = venditoreBloccato
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
@@ -4219,6 +4220,10 @@ function PaginaDashboardVenditori({
   const etichettaMeseClassifica = `${MESI[meseClassifica.mese].toUpperCase()} ${meseClassifica.anno}`;
   const meseClassificaFuturo = (() => { const o = new Date(); return meseClassifica.anno > o.getFullYear() || (meseClassifica.anno === o.getFullYear() && meseClassifica.mese >= o.getMonth()); })();
 
+  if (mostraRiepilogoPos && venditoreSel) {
+    return <PaginaRiepilogoVenditeProdotti soggettoTipo="venditore" soggettoId={venditoreSel.id} nomeSoggetto={venditoreSel.nome} venditeShop={venditeShop} onBack={() => setMostraRiepilogoPos(false)} />;
+  }
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -4294,6 +4299,9 @@ function PaginaDashboardVenditori({
                 {targetAttiviVenditore.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
               </div>
             )}
+            <div style={{ marginBottom: 20 }}>
+              <Button variant="ghost" onClick={() => setMostraRiepilogoPos(true)}>Riepilogo vendita prodotti</Button>
+            </div>
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Periodo di analisi</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -4575,16 +4583,125 @@ function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
     </div>
   );
 }
+// range di periodo per "Riepilogo vendita prodotti": stessa idea dei
+// periodi già usati altrove nell'ERP, con "Anno accademico" che segue la
+// stessa convenzione settembre→agosto di annoStagioneDaData/stagioneCorrente
+function rangeRiepilogoPos(periodo, customDa, customA) {
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (periodo === "mese") return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 1, oggi.getDate() + 1)), fine: fmt(oggi) };
+  if (periodo === "trimestre") return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1)), fine: fmt(oggi) };
+  if (periodo === "seimesi") return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 6, oggi.getDate() + 1)), fine: fmt(oggi) };
+  if (periodo === "annoaccademico") { const s = stagioneCorrente(); return { inizio: `${s}-09-01`, fine: `${s + 1}-08-31` }; }
+  return { inizio: customDa || fmt(oggi), fine: customA || fmt(oggi) };
+}
+// "Riepilogo Vendita prodotti": lo storico personale delle vendite POS di
+// UNA master o UN venditore (mai aggregato — quello è "Statistiche Vendite
+// Prodotti" in ERP, riservata all'admin), con filtro periodo, in ordine
+// cronologico di default
+function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto, venditeShop, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("mese");
+  const [customDa, setCustomDa] = useState("");
+  const [customA, setCustomA] = useState("");
+  const [ordineCronologico, setOrdineCronologico] = useState(true); // true = dal più vecchio (default richiesto), false = dal più recente
+
+  const range = rangeRiepilogoPos(periodo, customDa, customA);
+  const righe = (venditeShop || [])
+    .filter((v) => v.origine === "pos" && v.operatore_tipo === soggettoTipo && v.operatore_id === soggettoId)
+    .filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= range.inizio && d <= range.fine; })
+    .sort((a, b) => ordineCronologico ? (a.data_ordine || "").localeCompare(b.data_ordine || "") : (b.data_ordine || "").localeCompare(a.data_ordine || ""));
+
+  const kpi = {
+    incasso: round2(righe.reduce((s, v) => s + (v.totale || 0), 0)),
+    pezzi: righe.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
+  };
+  const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" } };
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Riepilogo Vendita prodotti</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>{nomeSoggetto ? toTitleCase(nomeSoggetto) : "—"} · Solo vendite al POS</div>
+
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+          {[{ v: "mese", l: "Ultimo mese" }, { v: "trimestre", l: "Ultimo trimestre" }, { v: "seimesi", l: "Ultimi 6 mesi" }, { v: "annoaccademico", l: "Anno accademico" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 13px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : BG, color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+        </div>
+        {periodo === "personalizzato" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16 }}>
+            <input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} />
+            <span style={{ color: MUTED }}>–</span>
+            <input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} />
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2, minmax(0,1fr))", gap: 14, marginBottom: 20 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto nel periodo</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.incasso)}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi netti</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Vendite</div>
+          <button onClick={() => setOrdineCronologico((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "7px 13px", cursor: "pointer" }}>
+            {ordineCronologico ? "Dal più vecchio" : "Dal più recente"}
+          </button>
+        </div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+              <thead>
+                <tr>
+                  {["Data", "Tipo", "Prodotti", "Totale"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righe.map((v) => {
+                  const b = badgeTipo[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
+                  return (
+                    <tr key={v.id}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}><span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: b.c, background: b.s, borderRadius: 8, padding: "3px 9px" }}>{b.l}</span></td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                    </tr>
+                  );
+                })}
+                {righe.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 // Dashboard master: chi entra con la password di una specifica master
 // (Password menù > Password Master) trova già selezionata la propria
 // scheda, senza tendina — a differenza della Dashboard venditori, non
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
+  const [mostraRiepilogoPos, setMostraRiepilogoPos] = useState(false);
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
   // Master in Impostazioni)
@@ -4614,21 +4731,25 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, m
     () => corsiDate.find((cd) => cd.master_id === masterSelId && inFinestraInventario(cd)) || null,
     [corsiDate, masterSelId, oggiStr]
   );
-  // incasso generato dai corsi di questa master: somma del totale
-  // pattuito degli iscritti alle sue edizioni, sia nel mese corrente
-  // (l'edizione si sovrappone al mese) sia da sempre
-  const incassi = useMemo(() => {
+  // l'incasso generato dai corsi (quanto incassa l'accademia dalle
+  // iscrizioni) non è un dato che la master deve vedere — qui compare
+  // solo l'incasso delle SUE vendite prodotti al POS, vedi incassiPos
+  // incasso vendite PRODOTTI al POS di questa master: dato separato da
+  // "incassi" qui sopra (silo corsi) — somma netta (resi/annullamenti/
+  // cambio già inclusi come righe negative, vedi Resi/Cambio nel POS)
+  const incassiPos = useMemo(() => {
     const oggi = new Date();
     const meseInizio = fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 1));
     const meseFine = fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0));
-    const dateDiQuestaMaster = corsiDate.filter((cd) => cd.master_id === masterSelId);
-    const dateMeseCorrente = dateDiQuestaMaster.filter((cd) => cd.data_inizio <= meseFine && cd.data_fine >= meseInizio);
-    function somma(listaDate) {
-      const ids = new Set(listaDate.map((cd) => cd.id));
-      return (iscritti || []).filter((i) => ids.has(i.corso_data_id)).reduce((s, i) => s + (i.totale_pattuito || 0), 0);
-    }
-    return { mese: somma(dateMeseCorrente), totale: somma(dateDiQuestaMaster) };
-  }, [corsiDate, iscritti, masterSelId]);
+    const righeMaster = (venditeShop || []).filter((v) => v.origine === "pos" && v.operatore_tipo === "master" && v.operatore_id === masterSelId);
+    function somma(righe) { return round2(righe.reduce((s, v) => s + (v.totale || 0), 0)); }
+    const righeMese = righeMaster.filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= meseInizio && d <= meseFine; });
+    return { mese: somma(righeMese), totale: somma(righeMaster) };
+  }, [venditeShop, masterSelId]);
+
+  if (mostraRiepilogoPos && masterSel) {
+    return <PaginaRiepilogoVenditeProdotti soggettoTipo="master" soggettoId={masterSel.id} nomeSoggetto={masterSel.nome} venditeShop={venditeShop} onBack={() => setMostraRiepilogoPos(false)} />;
+  }
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -4656,14 +4777,19 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, m
 
         {masterSel && (
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Incasso mese corrente</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassi.mese)}</div>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — mese corrente</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassiPos.mese)}</div>
             </div>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Incasso totale</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassi.totale)}</div>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — totale</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassiPos.totale)}</div>
             </div>
+          </div>
+        )}
+        {masterSel && (
+          <div style={{ marginBottom: 20 }}>
+            <Button variant="ghost" onClick={() => setMostraRiepilogoPos(true)}>Riepilogo vendita prodotti</Button>
           </div>
         )}
 
@@ -16470,7 +16596,12 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
   const [vistaAzione, setVistaAzione] = useState(null); // null | reso | annullamento | cambio
   const [quantitaResa, setQuantitaResa] = useState(1);
   const [ricercaNuovoProdotto, setRicercaNuovoProdotto] = useState("");
-  const [nuovoProdottoSel, setNuovoProdottoSel] = useState(null);
+  // cambio: liste, non più un prodotto solo — "succederà di sicuro" di
+  // dover cambiare più oggetti in un colpo solo (es. 2 pezzi difettosi
+  // sostituiti con 2 diversi)
+  const [prodottiRientranti, setProdottiRientranti] = useState([]); // righe-vendute con quantitaResa
+  const [prodottiUscenti, setProdottiUscenti] = useState([]); // { prodotto, quantita }
+  const [ricercaRientro, setRicercaRientro] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
@@ -16506,8 +16637,13 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
       }).slice(0, 40)
     : righeVenduteRicercabili.slice(0, 15);
 
+  const idsUscentiScelti = new Set(prodottiUscenti.map((u) => u.prodotto.id));
   const risultatiNuovoProdotto = ricercaNuovoProdotto.trim()
-    ? (prodottiShop || []).filter((p) => p.attivo !== false && p.prezzo_vendita != null && p.nome.toLowerCase().includes(ricercaNuovoProdotto.trim().toLowerCase())).slice(0, 8)
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && p.prezzo_vendita != null && !idsUscentiScelti.has(p.id) && p.nome.toLowerCase().includes(ricercaNuovoProdotto.trim().toLowerCase())).slice(0, 8)
+    : [];
+  const chiaviRientrantiScelte = new Set(prodottiRientranti.map((r) => r.chiave));
+  const risultatiRicercaRientro = ricercaRientro.trim()
+    ? righeVenduteRicercabili.filter((r) => !chiaviRientrantiScelte.has(r.chiave) && r.nome.toLowerCase().includes(ricercaRientro.trim().toLowerCase())).slice(0, 8)
     : [];
 
   function prodottoPerNome(nome) {
@@ -16516,10 +16652,40 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
   }
   function selezionaRiga(r) {
     setRigaSelezionata(r); setVistaAzione(null); setQuantitaResa(r.quantita); setMsg("");
-    setNuovoProdottoSel(null); setRicercaNuovoProdotto("");
+    setProdottiRientranti([]); setProdottiUscenti([]); setRicercaRientro(""); setRicercaNuovoProdotto("");
   }
   function tornaAllaRicerca() {
     setRigaSelezionata(null); setVistaAzione(null); setMsg("");
+    setProdottiRientranti([]); setProdottiUscenti([]); setRicercaRientro(""); setRicercaNuovoProdotto("");
+  }
+  function apriCambio() {
+    setProdottiRientranti([{ ...rigaSelezionata, quantitaResa: rigaSelezionata.quantita }]);
+    setProdottiUscenti([]); setRicercaRientro(""); setRicercaNuovoProdotto(""); setMsg("");
+    setVistaAzione("cambio");
+  }
+  function aggiungiRientro(r) {
+    setProdottiRientranti((prev) => [...prev, { ...r, quantitaResa: r.quantita }]);
+    setRicercaRientro("");
+  }
+  function rimuoviRientro(chiave) {
+    setProdottiRientranti((prev) => prev.filter((r) => r.chiave !== chiave));
+  }
+  function cambiaQuantitaRientro(chiave, valore) {
+    setProdottiRientranti((prev) => prev.map((r) => (r.chiave === chiave ? { ...r, quantitaResa: valore } : r)));
+  }
+  function aggiungiUscita(p) {
+    setProdottiUscenti((prev) => {
+      const esistente = prev.find((u) => u.prodotto.id === p.id);
+      if (esistente) return prev.map((u) => (u.prodotto.id === p.id ? { ...u, quantita: u.quantita + 1 } : u));
+      return [...prev, { prodotto: p, quantita: 1 }];
+    });
+    setRicercaNuovoProdotto("");
+  }
+  function rimuoviUscita(prodottoId) {
+    setProdottiUscenti((prev) => prev.filter((u) => u.prodotto.id !== prodottoId));
+  }
+  function cambiaQuantitaUscita(prodottoId, delta) {
+    setProdottiUscenti((prev) => prev.map((u) => (u.prodotto.id === prodottoId ? { ...u, quantita: Math.max(1, u.quantita + delta) } : u)));
   }
 
   async function eseguiReso() {
@@ -16576,40 +16742,53 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
   }
 
   async function eseguiCambio() {
-    if (!rigaSelezionata || !nuovoProdottoSel) { setMsg("Scegli il prodotto che entra."); return; }
+    if (prodottiRientranti.length === 0) { setMsg("Aggiungi almeno un prodotto che rientra."); return; }
+    if (prodottiUscenti.length === 0) { setMsg("Aggiungi almeno un prodotto che esce."); return; }
+    for (const r of prodottiRientranti) {
+      if (!(Number(r.quantitaResa) > 0) || Number(r.quantitaResa) > r.quantita) { setMsg(`Quantità non valida per "${r.nome}".`); return; }
+    }
     setSalvando(true); setMsg("");
-    const pVecchio = prodottoPerNome(rigaSelezionata.nome);
-    const prezzoVecchio = rigaSelezionata.prezzoUnitario;
-    const prezzoNuovo = nuovoProdottoSel.prezzo_vendita;
-    const differenza = round2(prezzoNuovo - prezzoVecchio);
 
-    if (pVecchio) {
-      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (pVecchio.giacenza_magazzino || 0) + 1 }).eq("id", pVecchio.id);
-      if (error) { setSalvando(false); setMsg("Errore magazzino (rientro): " + error.message); return; }
+    // rientrano tutti i prodotti scelti
+    for (const r of prodottiRientranti) {
+      const p = prodottoPerNome(r.nome);
+      if (!p) continue;
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (p.giacenza_magazzino || 0) + Number(r.quantitaResa) }).eq("id", p.id);
+      if (error) { setSalvando(false); setMsg(`Errore magazzino ("${r.nome}"): ` + error.message); return; }
     }
-    const magazzinoNuovo = nuovoProdottoSel.giacenza_magazzino || 0;
-    const shopNuovo = nuovoProdottoSel.giacenza || 0;
-    if (magazzinoNuovo > 0) {
-      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzinoNuovo - 1 }).eq("id", nuovoProdottoSel.id);
-      if (error) { setSalvando(false); setMsg("Errore magazzino (uscita): " + error.message); return; }
-    } else if (shopNuovo > 0) {
-      const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: nuovoProdottoSel.id, giacenza: shopNuovo - 1 } });
-      if (error || data?.errore) { setSalvando(false); setMsg("Scarico dallo shop online non riuscito: " + (data?.errore || error.message)); return; }
-    } else {
-      setSalvando(false); setMsg(`"${nuovoProdottoSel.nome}" non ha più disponibilità.`); return;
+    // escono tutti i prodotti scelti, stessa cascata magazzino→shop del POS
+    for (const u of prodottiUscenti) {
+      const magazzino = u.prodotto.giacenza_magazzino || 0;
+      const shop = u.prodotto.giacenza || 0;
+      const daMagazzino = Math.min(u.quantita, magazzino);
+      const daShop = u.quantita - daMagazzino;
+      if (daShop > 0) {
+        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: u.prodotto.id, giacenza: shop - daShop } });
+        if (error || data?.errore) { setSalvando(false); setMsg(`"${u.prodotto.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`); return; }
+      }
+      if (daMagazzino > 0) {
+        const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino - daMagazzino }).eq("id", u.prodotto.id);
+        if (error) { setSalvando(false); setMsg(`"${u.prodotto.nome}": errore nello scarico del magazzino — ${error.message}`); return; }
+      }
     }
 
-    const imponibile = round2(differenza / 1.22);
-    const iva = round2(differenza - imponibile);
+    // segue chi ha generato la vendita originale del PRIMO prodotto
+    // rientrante (§8.4) — in pratica un cambio riguarda quasi sempre
+    // prodotti della stessa vendita/venditore
+    const rigaAttribuzione = prodottiRientranti[0];
+    const prodottiRiga = [
+      ...prodottiRientranti.map((r) => ({ nome: r.nome, quantita: -Number(r.quantitaResa), totale_riga: -round2(r.prezzoUnitario * Number(r.quantitaResa)) })),
+      ...prodottiUscenti.map((u) => ({ nome: u.prodotto.nome, quantita: u.quantita, totale_riga: round2(u.prodotto.prezzo_vendita * u.quantita) })),
+    ];
+    const differenzaFinale = round2(prodottiRiga.reduce((s, p) => s + p.totale_riga, 0));
+    const imponibile = round2(differenzaFinale / 1.22);
+    const iva = round2(differenzaFinale - imponibile);
     const { error: erroreInsert } = await supabase.from("vendite_shop").insert({
       woo_order_id: null, numero_ordine: `CAMBIO-${Date.now()}`, data_ordine: new Date().toISOString(), stato: "completed",
-      totale: differenza, totale_imponibile: imponibile, totale_iva: iva,
-      prodotti: [
-        { nome: rigaSelezionata.nome, quantita: -1, totale_riga: -prezzoVecchio },
-        { nome: nuovoProdottoSel.nome, quantita: 1, totale_riga: prezzoNuovo },
-      ],
-      origine: "pos", tipo_movimento: "cambio", vendita_collegata_id: rigaSelezionata.venditaId,
-      operatore_tipo: rigaSelezionata.operatoreTipo, operatore_id: rigaSelezionata.operatoreId, operatore_nome: rigaSelezionata.operatoreNome,
+      totale: differenzaFinale, totale_imponibile: imponibile, totale_iva: iva,
+      prodotti: prodottiRiga,
+      origine: "pos", tipo_movimento: "cambio", vendita_collegata_id: rigaAttribuzione.venditaId,
+      operatore_tipo: rigaAttribuzione.operatoreTipo, operatore_id: rigaAttribuzione.operatoreId, operatore_nome: rigaAttribuzione.operatoreNome,
     });
     setSalvando(false);
     if (erroreInsert) { setMsg("Magazzino aggiornato, ma il cambio non è stato registrato: " + erroreInsert.message); return; }
@@ -16618,7 +16797,9 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
     ricarica();
   }
 
-  const differenzaCambio = nuovoProdottoSel && rigaSelezionata ? round2(nuovoProdottoSel.prezzo_vendita - rigaSelezionata.prezzoUnitario) : null;
+  const totaleRientranti = round2(prodottiRientranti.reduce((s, r) => s + r.prezzoUnitario * (Number(r.quantitaResa) || 0), 0));
+  const totaleUscenti = round2(prodottiUscenti.reduce((s, u) => s + u.prodotto.prezzo_vendita * u.quantita, 0));
+  const differenzaCambio = round2(totaleUscenti - totaleRientranti);
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -16656,7 +16837,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
             </div>
             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 16 }}>
               <Button onClick={() => setVistaAzione("reso")} style={{ flex: 1 }}>Reso</Button>
-              <Button variant="ghost" onClick={() => setVistaAzione("cambio")} style={{ flex: 1 }}>Cambio</Button>
+              <Button variant="ghost" onClick={apriCambio} style={{ flex: 1 }}>Cambio</Button>
               <Button variant="danger" onClick={() => setVistaAzione("annullamento")} style={{ flex: 1 }}>Annulla l'intera vendita</Button>
             </div>
           </>
@@ -16689,39 +16870,64 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
           </div>
         ) : (
           <div style={{ ...cardStyle, marginTop: 8 }}>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Cambio — esce {rigaSelezionata.nome}</div>
-            {!nuovoProdottoSel ? (
-              <div style={{ position: "relative" }}>
-                <Field label="Prodotto che entra">
-                  <input style={inputStyle} value={ricercaNuovoProdotto} onChange={(e) => setRicercaNuovoProdotto(e.target.value)} placeholder="Cerca il prodotto sostitutivo…" autoFocus />
-                </Field>
-                {risultatiNuovoProdotto.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10 }}>
-                    {risultatiNuovoProdotto.map((p) => (
-                      <div key={p.id} onClick={() => setNuovoProdottoSel(p)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", justifyContent: "space-between" }}>
-                        <span>{p.nome}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp(p.prezzo_vendita)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Cambio</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Aggiungi tutti i prodotti che rientrano e tutti quelli che escono — il cambio può coinvolgere più di un pezzo.</div>
+
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Rientrano</div>
+            {prodottiRientranti.map((r) => (
+              <div key={r.chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{r.nome} <span style={{ color: MUTED }}>({fmtEuroErp(r.prezzoUnitario)} cad.)</span></div>
+                <input type="number" min="1" max={r.quantita} style={{ ...inputStyle, width: 60, padding: "6px 8px" }} value={r.quantitaResa} onChange={(e) => cambiaQuantitaRientro(r.chiave, e.target.value)} />
+                <button onClick={() => rimuoviRientro(r.chiave)} disabled={prodottiRientranti.length <= 1} title={prodottiRientranti.length <= 1 ? "Deve rimanerne almeno uno" : "Rimuovi"} style={{ background: "none", border: "none", color: prodottiRientranti.length <= 1 ? "#C9C4B8" : "#C0392B", cursor: prodottiRientranti.length <= 1 ? "default" : "pointer", fontSize: 15 }}>✕</button>
               </div>
-            ) : (
-              <>
-                <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 4 }}>Rientra: {rigaSelezionata.nome} ({fmtEuroErp(rigaSelezionata.prezzoUnitario)})</div>
-                <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 10 }}>Esce: {nuovoProdottoSel.nome} ({fmtEuroErp(nuovoProdottoSel.prezzo_vendita)}) <button onClick={() => { setNuovoProdottoSel(null); setRicercaNuovoProdotto(""); }} style={{ background: "none", border: "none", color: NAVY, textDecoration: "underline", cursor: "pointer", ...fontBody, fontSize: 12.5, marginLeft: 8 }}>cambia</button></div>
-                <div style={{ background: BG, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
-                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
-                    {differenzaCambio > 0 ? "Da incassare" : differenzaCambio < 0 ? "Da rimborsare" : "Nessuna differenza"}
-                  </div>
-                  <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(Math.abs(differenzaCambio))}</div>
+            ))}
+            <div style={{ position: "relative", marginTop: 8, marginBottom: 18 }}>
+              <input style={inputStyle} value={ricercaRientro} onChange={(e) => setRicercaRientro(e.target.value)} placeholder="Cerca un altro prodotto venduto da far rientrare…" />
+              {risultatiRicercaRientro.length > 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10 }}>
+                  {risultatiRicercaRientro.map((r) => (
+                    <div key={r.chiave} onClick={() => aggiungiRientro(r)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", justifyContent: "space-between" }}>
+                      <span>{r.nome} — {r.dataOrdine ? fmtData(r.dataOrdine.slice(0, 10)) : "—"}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp(r.prezzoUnitario)}</span>
+                    </div>
+                  ))}
                 </div>
-                {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Cambio registrato." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Button onClick={eseguiCambio} disabled={salvando}>{salvando ? "Registro…" : "Conferma cambio"}</Button>
-                  <Button variant="ghost" onClick={() => setVistaAzione(null)}>Annulla</Button>
+              )}
+            </div>
+
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Escono</div>
+            {prodottiUscenti.map((u) => (
+              <div key={u.prodotto.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{u.prodotto.nome} <span style={{ color: MUTED }}>({fmtEuroErp(u.prodotto.prezzo_vendita)} cad.)</span></div>
+                <button onClick={() => cambiaQuantitaUscita(u.prodotto.id, -1)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, minWidth: 16, textAlign: "center" }}>{u.quantita}</span>
+                <button onClick={() => cambiaQuantitaUscita(u.prodotto.id, 1)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>+</button>
+                <button onClick={() => rimuoviUscita(u.prodotto.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15 }}>✕</button>
+              </div>
+            ))}
+            <div style={{ position: "relative", marginTop: 8, marginBottom: 18 }}>
+              <input style={inputStyle} value={ricercaNuovoProdotto} onChange={(e) => setRicercaNuovoProdotto(e.target.value)} placeholder="Cerca il prodotto che esce…" />
+              {risultatiNuovoProdotto.length > 0 && (
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10 }}>
+                  {risultatiNuovoProdotto.map((p) => (
+                    <div key={p.id} onClick={() => aggiungiUscita(p)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", justifyContent: "space-between" }}>
+                      <span>{p.nome}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp(p.prezzo_vendita)}</span>
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
+              )}
+            </div>
+
+            <div style={{ background: BG, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+              <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                {differenzaCambio > 0 ? "Da incassare" : differenzaCambio < 0 ? "Da rimborsare" : "Nessuna differenza"}
+              </div>
+              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(Math.abs(differenzaCambio))}</div>
+            </div>
+            {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Cambio registrato." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button onClick={eseguiCambio} disabled={salvando || prodottiUscenti.length === 0}>{salvando ? "Registro…" : "Conferma cambio"}</Button>
+              <Button variant="ghost" onClick={() => setVistaAzione(null)}>Annulla</Button>
+            </div>
           </div>
         )}
       </div>
@@ -16898,13 +17104,24 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // escluso automaticamente
   const puoGestireResi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
   const isMobile = useIsMobile();
+  // chi ha una password collegata sia a un profilo master sia a un
+  // profilo venditore (es. Andrea/Andrea Paura) svolge davvero entrambi
+  // i ruoli: le vendite di oggi possono essere sue come master O come
+  // venditore, mai automaticamente sempre l'uno o l'altro — un selettore
+  // nell'header lascia scegliere con quale cappello sta vendendo ORA,
+  // così ogni vendita finisce nel silo/target giusto
+  const haEntrambiIRuoli = !!(utenteLoggato?.masterId && utenteLoggato?.venditoreId);
+  const [ruoloOperativoPOS, setRuoloOperativoPOS] = useState(utenteLoggato?.masterId ? "master" : "venditore");
   // ogni vendita nasce attribuita a chi è loggato in questo momento (mai
-  // "anonima"): priorità alla master se l'identità è doppia (master +
-  // venditore collegati), poi venditore, poi utente operativo nominale
-  // (Amministratore/Stefano/Elena…) — sulle vendite prodotti si
-  // definiscono i target con premio produzione, quindi va sempre saputo
-  // con certezza chi ha venduto
-  const operatore = utenteLoggato?.masterId
+  // "anonima"): identità doppia → segue il selettore qui sopra, altrimenti
+  // master, poi venditore, poi utente operativo nominale (Amministratore/
+  // Stefano/Elena…) — sulle vendite prodotti si definiscono i target con
+  // premio produzione, quindi va sempre saputo con certezza chi ha venduto
+  const operatore = haEntrambiIRuoli
+    ? (ruoloOperativoPOS === "master"
+        ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
+        : { tipo: "venditore", id: utenteLoggato.venditoreId, nome: utenteLoggato.venditoreNome || utenteLoggato.nome })
+    : utenteLoggato?.masterId
     ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
     : (venditoreLoggato || utenteLoggato?.venditoreId)
     ? { tipo: "venditore", id: venditoreLoggato?.id || utenteLoggato.venditoreId, nome: venditoreLoggato?.nome || utenteLoggato.venditoreNome || utenteLoggato.nome }
@@ -17343,6 +17560,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         </div>
 
+        {haEntrambiIRuoli && (
+          <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+            <button onClick={() => setRuoloOperativoPOS("master")} style={{ flex: 1, padding: "9px 10px", borderRadius: 10, border: ruoloOperativoPOS === "master" ? "none" : `1px solid ${CREAM_BORDER}`, background: ruoloOperativoPOS === "master" ? NAVY : "#fff", color: ruoloOperativoPOS === "master" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700 }}>Master {toTitleCase(utenteLoggato.nome)}</button>
+            <button onClick={() => setRuoloOperativoPOS("venditore")} style={{ flex: 1, padding: "9px 10px", borderRadius: 10, border: ruoloOperativoPOS === "venditore" ? "none" : `1px solid ${CREAM_BORDER}`, background: ruoloOperativoPOS === "venditore" ? NAVY : "#fff", color: ruoloOperativoPOS === "venditore" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 12.5, fontWeight: 700 }}>Venditore {toTitleCase(utenteLoggato.venditoreNome || utenteLoggato.nome)}</button>
+          </div>
+        )}
+
         {targetAttivi.length > 0 && (
           <div style={{ marginBottom: 14 }}>
             {targetAttivi.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
@@ -17426,6 +17650,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <Button onClick={nuovaVendita}>+ Nuova vendita</Button>
           </div>
         </div>
+
+        {haEntrambiIRuoli && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 20, width: "fit-content", background: BG, borderRadius: 12, padding: 4 }}>
+            <button onClick={() => setRuoloOperativoPOS("master")} style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: ruoloOperativoPOS === "master" ? NAVY : "transparent", color: ruoloOperativoPOS === "master" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700 }}>Master {toTitleCase(utenteLoggato.nome)}</button>
+            <button onClick={() => setRuoloOperativoPOS("venditore")} style={{ padding: "8px 16px", borderRadius: 9, border: "none", background: ruoloOperativoPOS === "venditore" ? NAVY : "transparent", color: ruoloOperativoPOS === "venditore" ? "#fff" : NAVY, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700 }}>Venditore {toTitleCase(utenteLoggato.venditoreNome || utenteLoggato.nome)}</button>
+          </div>
+        )}
 
         {targetAttivi.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(3, targetAttivi.length)}, minmax(0,1fr))`, gap: 14, marginBottom: 20 }}>
@@ -22317,7 +22548,7 @@ export default function App() {
 
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
-          master={master} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          master={master} corsi={corsi} location={location} corsiDate={corsiDate}
           masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
           onApriInventarioSede={apriInventarioSede}
