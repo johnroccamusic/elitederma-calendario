@@ -16129,8 +16129,21 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack, utenteLoggato, venditoreLoggato }) {
   const isMobile = useIsMobile();
+  // ogni vendita nasce attribuita a chi è loggato in questo momento (mai
+  // "anonima"): priorità alla master se l'identità è doppia (master +
+  // venditore collegati), poi venditore, poi utente operativo nominale
+  // (Amministratore/Stefano/Elena…) — sulle vendite prodotti si
+  // definiscono i target con premio produzione, quindi va sempre saputo
+  // con certezza chi ha venduto
+  const operatore = utenteLoggato?.masterId
+    ? { tipo: "master", id: utenteLoggato.masterId, nome: utenteLoggato.nome }
+    : (venditoreLoggato || utenteLoggato?.venditoreId)
+    ? { tipo: "venditore", id: venditoreLoggato?.id || utenteLoggato.venditoreId, nome: venditoreLoggato?.nome || utenteLoggato.venditoreNome || utenteLoggato.nome }
+    : utenteLoggato
+    ? { tipo: "utente", id: utenteLoggato.id, nome: utenteLoggato.nome }
+    : null;
   const [ricerca, setRicerca] = useState("");
   const [categoriaSel, setCategoriaSel] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -16172,13 +16185,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function vaiAPagina(n) { setPagina(Math.min(Math.max(1, n), totalePagine)); }
   function cambiaFiltro(fn) { fn(); setPagina(1); }
 
+  function trovaProdotto(prodottoId) {
+    return (prodottiShop || []).find((pp) => pp.id === prodottoId) || null;
+  }
+  // disponibilità venduta al banco = magazzino fisico + shop online: il
+  // POS scarica prima dal magazzino e solo se non basta attinge dallo
+  // shop (vedi confermaVendita), quindi il totale che l'operatore vede
+  // qui è la somma delle due
   function disponibiliDi(prodottoId) {
-    const p = (prodottiShop || []).find((pp) => pp.id === prodottoId);
-    return p ? (p.giacenza_magazzino || 0) : 0;
+    const p = trovaProdotto(prodottoId);
+    return p ? (p.giacenza_magazzino || 0) + (p.giacenza || 0) : 0;
   }
 
   function aggiungiAlCarrello(p) {
-    const disponibili = p.giacenza_magazzino || 0;
+    const disponibili = disponibiliDi(p.id);
     if (disponibili <= 0) return;
     setCarrello((prev) => {
       const esistente = prev.find((r) => r.prodottoId === p.id);
@@ -16213,19 +16233,33 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   async function confermaVendita() {
     if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
+    if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
     for (const r of carrello) {
-      if (r.quantita > disponibiliDi(r.prodottoId)) { setMsg(`"${r.nome}" non ha più abbastanza disponibilità in magazzino.`); return; }
+      if (r.quantita > disponibiliDi(r.prodottoId)) { setMsg(`"${r.nome}" non ha più abbastanza disponibilità.`); return; }
     }
     setSalvando(true);
     setMsg("");
 
-    const scritture = carrello.map((r) => {
-      const disponibili = disponibiliDi(r.prodottoId);
-      return supabase.from("prodotti_shop").update({ giacenza_magazzino: disponibili - r.quantita }).eq("id", r.prodottoId);
-    });
-    const risultatiScritture = await Promise.all(scritture);
-    const erroreScrittura = risultatiScritture.find((r) => r.error);
-    if (erroreScrittura) { setSalvando(false); setMsg("Errore nello scarico del magazzino: " + erroreScrittura.error.message); return; }
+    // scarico: prima dal magazzino fisico, solo per l'eventuale resto si
+    // attinge dallo shop online — quella quota va scritta PRIMA su
+    // WooCommerce (valore assoluto) e solo se riesce anche in locale,
+    // altrimenti si rischia di vendere online un pezzo già dato al banco
+    for (const r of carrello) {
+      const p = trovaProdotto(r.prodottoId);
+      const magazzino = p?.giacenza_magazzino || 0;
+      const shop = p?.giacenza || 0;
+      const daMagazzino = Math.min(r.quantita, magazzino);
+      const daShop = r.quantita - daMagazzino;
+
+      if (daShop > 0) {
+        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: r.prodottoId, giacenza: shop - daShop } });
+        if (error || data?.errore) { setSalvando(false); setMsg(`"${r.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`); return; }
+      }
+      if (daMagazzino > 0) {
+        const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino - daMagazzino }).eq("id", r.prodottoId);
+        if (error) { setSalvando(false); setMsg(`"${r.nome}": errore nello scarico del magazzino — ${error.message}`); return; }
+      }
+    }
 
     // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
     // righe, così il fatturato per prodotto in Magazzino/Analisi resta
@@ -16245,6 +16279,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       origine: "pos",
       metodo_pagamento: metodoPagamento,
       note: note.trim() || null,
+      tipo_movimento: "vendita",
+      operatore_tipo: operatore.tipo,
+      operatore_id: operatore.id,
+      operatore_nome: operatore.nome,
     });
     setSalvando(false);
     if (erroreVendita) { setMsg("Magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message); return; }
@@ -16273,7 +16311,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
                 <thead>
                   <tr>
-                    {["Vendita", "Data", "Prodotti", "Metodo", "Totale"].map((th) => (
+                    {["Vendita", "Data", "Operatore", "Prodotti", "Metodo", "Totale"].map((th) => (
                       <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
                     ))}
                   </tr>
@@ -16283,13 +16321,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                     <tr key={v.id}>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.numero_ordine}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
                     </tr>
                   ))}
                   {venditePos.length === 0 && (
-                    <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco registrata.</td></tr>
+                    <tr><td colSpan={6} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco registrata.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -16388,8 +16427,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
+      {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita registrata." ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
-      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
+      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0 || !operatore} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
         {salvando ? "Registro…" : `Conferma vendita e incassa ${fmtEuroErp(totaleNetto)}`}
       </Button>
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
@@ -16399,7 +16439,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const elencoProdotti = isMobile ? (
     <div>
       {prodottiPagina.map((p) => {
-        const disponibili = p.giacenza_magazzino || 0;
+        const disponibili = disponibiliDi(p.id);
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
@@ -16430,7 +16470,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   ) : (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
       {prodottiPagina.map((p) => {
-        const disponibili = p.giacenza_magazzino || 0;
+        const disponibili = disponibiliDi(p.id);
         const esaurito = disponibili <= 0;
         const nomiCategorie = (categorieIdPerProdottoId[p.id] || []).map((id) => categorieNomeById[id]).filter(Boolean).join(", ");
         return (
@@ -16492,7 +16532,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, flexShrink: 0 }}><IconaFrecciaSinistra size={20} /></button>
             <div style={{ minWidth: 0 }}>
-              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>POS Vendita diretta</div>
+              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : "POS Vendita diretta"}</div>
               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
             </div>
           </div>
@@ -16580,7 +16620,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
             <div>
-              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>POS Vendita diretta</div>
+              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : "POS Vendita diretta"}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
             </div>
           </div>
@@ -20724,6 +20764,30 @@ export default function App() {
 
   useEffect(() => { if (ok) caricaIniziale(); }, [ok]);
 
+  // timeout di sessione sul dispositivo condiviso (POS Vendite Prodotti):
+  // 15 minuti senza alcuna interazione forzano il logout completo, così
+  // chi arriva dopo su un terminale condiviso non eredita per sbaglio la
+  // sessione di chi ha finito prima. esciRef tiene sempre l'ultima
+  // versione di esci() senza dover rimontare i listener ad ogni render
+  // (stesso schema già usato per vaiIndietroRef più sotto)
+  const esciRef = React.useRef(null);
+  esciRef.current = esci;
+  useEffect(() => {
+    if (!ok) return;
+    const TIMEOUT_INATTIVITA_MS = 15 * 60 * 1000;
+    let timer = setTimeout(() => esciRef.current(), TIMEOUT_INATTIVITA_MS);
+    function resetTimer() {
+      clearTimeout(timer);
+      timer = setTimeout(() => esciRef.current(), TIMEOUT_INATTIVITA_MS);
+    }
+    const eventi = ["mousedown", "keydown", "touchstart", "scroll"];
+    eventi.forEach((ev) => window.addEventListener(ev, resetTimer, { passive: true }));
+    return () => {
+      clearTimeout(timer);
+      eventi.forEach((ev) => window.removeEventListener(ev, resetTimer));
+    };
+  }, [ok]);
+
   // cronologia di navigazione tra le schermate (view + eventuale corsoDataAperta
   // per "scheda"): senza, tornare indietro (swipe o pulsante) riportava sempre
   // e solo alla home invece che alla schermata da cui si era davvero venuti,
@@ -21365,6 +21429,7 @@ export default function App() {
         <PaginaPOS
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
+          utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato}
         />
       )}
 
