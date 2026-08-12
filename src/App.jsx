@@ -4895,6 +4895,39 @@ function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, 
   });
   return Array.from(ids);
 }
+// quantità EFFETTIVAMENTE inviata di ciascun prodotto a questa edizione:
+// stessa identica logica di quantità di PannelloPreparazioneKit/
+// Logistica prodotti (kit_per_iscritti+kit_di_riserva, kit speciale,
+// accessori con override manuale) — è il termine "Inviati" della
+// verifica di congruità dell'Inventario Post Corso
+function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni) {
+  const mappa = {};
+  if (!corsoData) return mappa;
+  const stato = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData.id) || {};
+  const kitDefault = (kitDefinizioni || []).find((k) => k.corso_id === corso?.id) || null;
+  const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
+  const kitSpecialeId = stato.kit_speciale_id || null;
+  const quantitaPrincipale = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
+  const quantitaSpeciale = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
+  [{ kitId: kitPrincipaleId, qta: quantitaPrincipale }, { kitId: kitSpecialeId, qta: quantitaSpeciale }].forEach(({ kitId, qta }) => {
+    if (!kitId || qta <= 0) return;
+    (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && r.tipo === "kit").forEach((r) => {
+      mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + r.quantita * qta;
+    });
+    (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
+      const q = stato.accessori_quantita?.[`${kitId}::${r.prodotto_id}`] ?? 0;
+      mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + q;
+    });
+  });
+  (corsiKitProdotti || []).filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null)).forEach((r) => {
+    mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + (r.quantita || 0);
+  });
+  return mappa;
+}
+// elenco causali dell'Inventario Post Corso — "Da verificare"/"Non so"
+// esistono apposta per non bloccare la master quando non ha la
+// risposta: il pezzo resta segnato aperto/da chiarire, non sparisce
+const CAUSALI_AMMANCO = ["Persi", "Rotti", "Regalati / omaggio", "Rubati", "Errore di conteggio", "Prodotto aperto", "Da verificare", "Non so"];
 // una riga di "Materiali che vengono rispediti": prodotto + quantità +
 // rimuovi (a differenza di Prodotti/Attrezzature a sinistra, qui la
 // lista è libera: si aggiunge dalla tendina, si può togliere)
@@ -4911,11 +4944,15 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
     </div>
   );
 }
-function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, inventarioSede, masterLoggataId, ricarica, onBack }) {
+function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, ricarica, onBack }) {
   const isMobile = useIsMobile();
-  const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [interoSel, setInteroSel] = useState("");
-  const [apertoSel, setApertoSel] = useState("");
+  const [ricercaAperto, setRicercaAperto] = useState("");
+  const [ricercaConsumabile, setRicercaConsumabile] = useState("");
+  const [prodottoApertoScelto, setProdottoApertoScelto] = useState(null); // prodotto in attesa di nota (flag SÌ)
+  const [notaAperto, setNotaAperto] = useState("");
+  const [salvandoAperto, setSalvandoAperto] = useState(false);
+  const [mostraCongruita, setMostraCongruita] = useState(false);
   const loc = location.find((l) => l.id === corsoData?.location_id) || null;
   const attrezzature = costiSottocategorie
     .filter((sc) => sc.categoria_id === "attrezzature_corsi" && sc.attiva && !sc.automatico)
@@ -4923,12 +4960,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
 
   const inventarioQui = inventarioSede.filter((r) => r.location_id === corsoData?.location_id);
   const rigaDi = (tipo, riferimento) => inventarioQui.find((r) => r.tipo === tipo && r.riferimento === riferimento) || null;
-  const prodottiDichiarati = inventarioQui.filter((r) => r.tipo === "prodotto").map((r) => prodottiShop.find((p) => p.id === r.riferimento)).filter(Boolean);
-  const idsDichiarati = new Set(prodottiDichiarati.map((p) => p.id));
-  const risultatiRicerca = ricercaProdotto.trim()
-    ? prodottiShop.filter((p) => !idsDichiarati.has(p.id) && p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase())).slice(0, 8)
-    : [];
-
   async function salvaVoce(tipo, riferimento, quantita) {
     const { error } = await supabase.from("inventario_sede").upsert(
       { location_id: corsoData.location_id, tipo, riferimento, quantita, corso_data_id: corsoData.id, master_id: masterLoggataId || null },
@@ -4937,14 +4968,37 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  async function aggiungiProdotto(prodottoId) {
-    setRicercaProdotto("");
-    await salvaVoce("prodotto", prodottoId, 0);
+
+  // consumabili di servizio del magazzino locale (livello a pallini):
+  // stock persistente per città, non solo di questo corso — restano
+  // visibili/modificabili anche in inventari futuri della stessa sede
+  const consumabiliQui = (magazzinoLocaleConsumabili || []).filter((r) => r.location_id === corsoData?.location_id);
+  const risultatiConsumabile = ricercaConsumabile.trim()
+    ? prodottiShop.filter((p) => p.attivo !== false && p.nome.toLowerCase().includes(ricercaConsumabile.trim().toLowerCase())).slice(0, 8)
+    : [];
+  async function aggiungiConsumabile(p) {
+    setRicercaConsumabile("");
+    const { error } = await supabase.from("magazzino_locale_consumabili").insert({
+      location_id: corsoData.location_id, prodotto_id: p.id, quantita: 1, livello: 5,
+      corso_data_id: corsoData.id, master_id: masterLoggataId || null,
+    });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function aggiornaConsumabile(id, campi) {
+    const { error } = await supabase.from("magazzino_locale_consumabili").update(campi).eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function rimuoviConsumabile(id) {
+    const { error } = await supabase.from("magazzino_locale_consumabili").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
   }
 
-  // "Materiali che vengono rispediti": due liste libere (interi/aperti)
-  // salvate su logistica_kit_edizioni, limitate ai prodotti che questa
-  // edizione ha davvero ricevuto (kit scelto + accessori didattica)
+  // "Prodotti del corso": merce vendibile davvero inviata a questa
+  // edizione (kit scelto + accessori didattica) — unica fonte per
+  // "Prodotti interi"/"Prodotti aperti" e per la verifica di congruità
   const statoEdizione = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData?.id) || null;
   const idsSpediti = useMemo(
     () => prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni),
@@ -4952,39 +5006,106 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   );
   const prodottiSpediti = idsSpediti.map((id) => prodottiShop.find((p) => p.id === id)).filter(Boolean);
   const rientroInteri = statoEdizione?.rientro_prodotti_interi || {};
-  const rientroAperti = statoEdizione?.rientro_prodotti_aperti || {};
 
-  async function salvaRientro(campo, nuovoOggetto) {
+  async function salvaRientroInteri(nuovoOggetto) {
     // upsert invece di "trova o inserisci": se due salvataggi partono
     // vicini prima che statoEdizione si aggiorni, entrambi vedrebbero
     // "nessuna riga" e proverebbero un insert, violando il vincolo unique
     // su corso_data_id (visto nei log come "duplicate key value...")
     const { error } = await supabase
       .from("logistica_kit_edizioni")
-      .upsert({ corso_data_id: corsoData.id, [campo]: nuovoOggetto }, { onConflict: "corso_data_id" });
+      .upsert({ corso_data_id: corsoData.id, rientro_prodotti_interi: nuovoOggetto }, { onConflict: "corso_data_id" });
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
   function aggiungiInteroProdotto(prodottoId) {
     setInteroSel("");
     if (!prodottoId || rientroInteri[prodottoId] != null) return;
-    salvaRientro("rientro_prodotti_interi", { ...rientroInteri, [prodottoId]: 0 });
-  }
-  function aggiungiApertoProdotto(prodottoId) {
-    setApertoSel("");
-    if (!prodottoId || rientroAperti[prodottoId] != null) return;
-    salvaRientro("rientro_prodotti_aperti", { ...rientroAperti, [prodottoId]: 0 });
+    salvaRientroInteri({ ...rientroInteri, [prodottoId]: 1 });
   }
   function rimuoviIntero(prodottoId) {
     const resto = { ...rientroInteri };
     delete resto[prodottoId];
-    salvaRientro("rientro_prodotti_interi", resto);
+    salvaRientroInteri(resto);
   }
-  function rimuoviAperto(prodottoId) {
-    const resto = { ...rientroAperti };
-    delete resto[prodottoId];
-    salvaRientro("rientro_prodotti_aperti", resto);
+
+  // "Prodotti aperti" (rispedizione forzata): solo prodotti con flag
+  // rientro_obbligatorio_se_aperto — un prodotto senza quel flag non
+  // deve rientrare, quindi non compare qui: va aggiunto tra i
+  // Consumabili del magazzino locale (con il livello di utilizzo)
+  const apertiQui = (prodottiApertiMagazzino || []).filter((r) => r.corso_data_id === corsoData?.id);
+  const risultatiAperto = ricercaAperto.trim()
+    ? prodottiSpediti.filter((p) => !apertiQui.some((a) => a.prodotto_id === p.id) && p.nome.toLowerCase().includes(ricercaAperto.trim().toLowerCase()))
+    : [];
+  function selezionaProdottoAperto(p) {
+    setRicercaAperto("");
+    if (!p.rientro_obbligatorio_se_aperto) {
+      window.alert(`"${p.nome}" non richiede rientro se aperto: aggiungilo invece tra i Consumabili del magazzino locale, con il suo livello di utilizzo.`);
+      return;
+    }
+    setProdottoApertoScelto(p);
+    setNotaAperto("");
   }
+  async function confermaProdottoAperto() {
+    if (!notaAperto.trim()) { window.alert("Scrivi in breve perché il prodotto è stato aperto."); return; }
+    setSalvandoAperto(true);
+    const esistente = apertiQui.find((a) => a.prodotto_id === prodottoApertoScelto.id);
+    const { error } = await supabase.from("prodotti_aperti_magazzino").upsert({
+      prodotto_id: prodottoApertoScelto.id, corso_data_id: corsoData.id,
+      quantita: (esistente?.quantita || 0) + 1, nota: notaAperto.trim(),
+      master_id: masterLoggataId || null, stato: "da_valutare",
+    }, { onConflict: "prodotto_id,corso_data_id" });
+    setSalvandoAperto(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setProdottoApertoScelto(null);
+    ricarica();
+  }
+  async function rimuoviUnoAperto(riga) {
+    if (riga.quantita <= 1) {
+      const { error } = await supabase.from("prodotti_aperti_magazzino").delete().eq("id", riga.id);
+      if (error) { window.alert("Errore: " + error.message); return; }
+    } else {
+      const { error } = await supabase.from("prodotti_aperti_magazzino").update({ quantita: riga.quantita - 1 }).eq("id", riga.id);
+      if (error) { window.alert("Errore: " + error.message); return; }
+    }
+    ricarica();
+  }
+
+  // verifica di congruità: Inviati − Venduti − Rispediti − Restano = Da
+  // giustificare, per ogni prodotto del corso — calcolata solo qui,
+  // niente conferma finché non è tutto giustificato
+  const inviatiPerProdottoId = useMemo(
+    () => quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni),
+    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni]
+  );
+  const vendutiPerProdottoId = useMemo(() => {
+    const mappa = {};
+    (venditeShop || []).filter((v) => v.corso_data_id === corsoData?.id).forEach((v) => {
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+        const prod = prodottiShop.find((pp) => (pp.nome || "").trim().toLowerCase() === (p.nome || "").trim().toLowerCase());
+        if (!prod) return;
+        mappa[prod.id] = (mappa[prod.id] || 0) + (p.quantita || 0);
+      });
+    });
+    return mappa;
+  }, [venditeShop, corsoData, prodottiShop]);
+  const restanoPerProdottoId = useMemo(() => {
+    const mappa = {};
+    consumabiliQui.filter((c) => c.corso_data_id === corsoData?.id).forEach((c) => { mappa[c.prodotto_id] = (mappa[c.prodotto_id] || 0) + (c.quantita || 0); });
+    return mappa;
+  }, [consumabiliQui, corsoData]);
+  const righeCongruita = prodottiSpediti
+    .map((p) => {
+      const inviati = inviatiPerProdottoId[p.id] || 0;
+      const venduti = vendutiPerProdottoId[p.id] || 0;
+      const rispediti = (Number(rientroInteri[p.id]) || 0) + (apertiQui.find((a) => a.prodotto_id === p.id)?.quantita || 0);
+      const restano = restanoPerProdottoId[p.id] || 0;
+      const daGiustificare = Math.max(0, inviati - venduti - rispediti - restano);
+      const giaGiustificato = (inventarioAmmanchi || []).filter((a) => a.corso_data_id === corsoData?.id && a.prodotto_id === p.id).reduce((s, a) => s + (a.quantita || 0), 0);
+      return { prodotto: p, inviati, venduti, rispediti, restano, daGiustificare: Math.max(0, daGiustificare - giaGiustificato) };
+    })
+    .filter((r) => r.inviati > 0);
+  const totaleDaGiustificare = righeCongruita.reduce((s, r) => s + r.daGiustificare, 0);
 
   if (!corsoData) {
     return (
@@ -5004,31 +5125,41 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Inventario {toTitleCase(loc?.nome || "—")}</div>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Inventario {corso?.nome || "—"}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
-          {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} — cosa resta in sede e cosa torna indietro, per non rispedire quello che c'è già.
+          {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} — rendiconta cosa hai venduto, cosa rispedisci e cosa resta in magazzino locale.
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, alignItems: "flex-start" }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Materiali che restano in sede</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti che restano in magazzino locale</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>Magazzino {toTitleCase(loc?.nome || "—")}</div>
+
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Prodotti</div>
-              <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
-              {risultatiRicerca.length > 0 && (
-                <div style={{ marginTop: 6 }}>
-                  {risultatiRicerca.map((p) => (
-                    <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
-                  ))}
-                </div>
-              )}
-              {prodottiDichiarati.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun prodotto dichiarato ancora.</div>
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Consumabili</div>
+              <div style={labelStyleInv}>Dischetti, rotoli, guanti… con il livello di utilizzo rimasto.</div>
+              <div style={{ position: "relative" }}>
+                <CampoRicerca value={ricercaConsumabile} onChange={(e) => setRicercaConsumabile(e.target.value)} placeholder="Cerca prodotto…" />
+                {risultatiConsumabile.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+                    {risultatiConsumabile.map((p) => (
+                      <div key={p.id} onClick={() => aggiungiConsumabile(p)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {consumabiliQui.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun consumabile dichiarato ancora.</div>
               ) : (
                 <div style={{ marginTop: 10 }}>
-                  {prodottiDichiarati.map((p) => (
-                    <RigaInventarioProdotto key={p.id} riga={rigaDi("prodotto", p.id)} voce={p} onSalva={(id, q) => salvaVoce("prodotto", id, q)} />
+                  {consumabiliQui.map((r) => (
+                    <RigaConsumabileLocale
+                      key={r.id} riga={r} nome={prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"}
+                      onCambiaLivello={(livello) => aggiornaConsumabile(r.id, { livello })}
+                      onCambiaQuantita={(quantita) => aggiornaConsumabile(r.id, { quantita })}
+                      onRimuovi={() => rimuoviConsumabile(r.id)}
+                    />
                   ))}
                 </div>
               )}
@@ -5045,7 +5176,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
           </div>
 
           <div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Materiali che vengono rispediti</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Prodotti che sto per rispedire</div>
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti interi</div>
               <div style={labelStyleInv}>Tornano in magazzino così come sono.</div>
@@ -5053,7 +5184,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
                 value={interoSel} onChange={(e) => aggiungiInteroProdotto(e.target.value)}
                 style={{ ...inputStyle, width: "100%", marginBottom: 10 }}
               >
-                <option value="">— aggiungi tra i prodotti spediti —</option>
+                <option value="">— aggiungi tra i prodotti del corso —</option>
                 {prodottiSpediti.filter((p) => rientroInteri[p.id] == null).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
               {Object.keys(rientroInteri).length === 0 ? (
@@ -5061,7 +5192,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
               ) : Object.entries(rientroInteri).map(([pid, q]) => (
                 <RigaRientroProdotto
                   key={pid} nome={prodottiShop.find((p) => p.id === pid)?.nome || "—"} quantita={q}
-                  onQuantita={(v) => salvaRientro("rientro_prodotti_interi", { ...rientroInteri, [pid]: v })}
+                  onQuantita={(v) => salvaRientroInteri({ ...rientroInteri, [pid]: v })}
                   onRimuovi={() => rimuoviIntero(pid)}
                 />
               ))}
@@ -5069,28 +5200,179 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
 
             <div style={{ ...cardStyle, padding: 16 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: GOLD, marginBottom: 4 }}>Prodotti aperti</div>
-              <div style={labelStyleInv}>Non tornano in stock: restano tracciati a parte.</div>
-              <select
-                value={apertoSel} onChange={(e) => aggiungiApertoProdotto(e.target.value)}
-                style={{ ...inputStyle, width: "100%", marginBottom: 10 }}
-              >
-                <option value="">— aggiungi tra i prodotti spediti —</option>
-                {prodottiSpediti.filter((p) => rientroAperti[p.id] == null).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
-              {Object.keys(rientroAperti).length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun prodotto ancora.</div>
-              ) : Object.entries(rientroAperti).map(([pid, q]) => (
-                <RigaRientroProdotto
-                  key={pid} nome={prodottiShop.find((p) => p.id === pid)?.nome || "—"} quantita={q}
-                  onQuantita={(v) => salvaRientro("rientro_prodotti_aperti", { ...rientroAperti, [pid]: v })}
-                  onRimuovi={() => rimuoviAperto(pid)}
-                />
-              ))}
+              <div style={labelStyleInv}>Solo i prodotti che devono sempre rientrare una volta aperti (es. pigmenti).</div>
+              <div style={{ position: "relative" }}>
+                <input style={inputStyle} value={ricercaAperto} onChange={(e) => setRicercaAperto(e.target.value)} placeholder="Cerca tra i prodotti del corso…" />
+                {risultatiAperto.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+                    {risultatiAperto.map((p) => (
+                      <div key={p.id} onClick={() => selezionaProdottoAperto(p)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {apertiQui.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun prodotto ancora.</div>
+              ) : (
+                <div style={{ marginTop: 10 }}>
+                  {apertiQui.map((r) => (
+                    <div key={r.id} style={{ padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"} × {r.quantita}</span>
+                        <button onClick={() => rimuoviUnoAperto(r)} title="Rimuovi un pezzo" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+                      </div>
+                      {r.nota && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, fontStyle: "italic" }}>{r.nota}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", ...cardStyle, padding: 16 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Verifica di congruità</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+              {totaleDaGiustificare > 0 ? `${totaleDaGiustificare} pezz${totaleDaGiustificare === 1 ? "o" : "i"} da giustificare` : "Tutto torna, niente da giustificare."}
+            </div>
+          </div>
+          <Button onClick={() => setMostraCongruita(true)}>Verifica e conferma</Button>
+        </div>
+      </div>
+
+      {prodottoApertoScelto && (
+        <Modal title={`Prodotto aperto — ${prodottoApertoScelto.nome}`} onClose={() => setProdottoApertoScelto(null)}>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Scrivi in breve perché è stato aperto — questo prodotto rientra sempre in sede e viene verificato fisicamente.</div>
+          <Field label="Motivo">
+            <textarea value={notaAperto} onChange={(e) => setNotaAperto(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Es. Crema lenitiva aperta per il modello durante il corso di needling." />
+          </Field>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 14 }}>
+            Esempi: "Crema lenitiva aperta per il modello durante il corso di needling." · "Colore aperto per sostituire un prodotto fallato nel kit di un'allieva."
+          </div>
+          <Button onClick={confermaProdottoAperto} disabled={salvandoAperto} style={{ width: "100%" }}>{salvandoAperto ? "Salvo…" : "Conferma"}</Button>
+        </Modal>
+      )}
+
+      {mostraCongruita && (
+        <ModaleCongruitaInventario
+          corsoData={corsoData} masterLoggataId={masterLoggataId} righeCongruita={righeCongruita}
+          prodottiApertiFlagSi={(p) => p.rientro_obbligatorio_se_aperto}
+          onClose={() => setMostraCongruita(false)} ricarica={ricarica} onConfermato={onBack}
+        />
+      )}
+    </div>
+  );
+}
+// una riga di consumabile nel magazzino locale: quantità + livello a
+// pallini (1-5), modificabile in qualunque momento — la stima è
+// sempre manuale, a occhio, di chi fa l'inventario
+function RigaConsumabileLocale({ riga, nome, onCambiaLivello, onCambiaQuantita, onRimuovi }) {
+  return (
+    <div style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{nome}</span>
+        <input type="number" min="1" value={riga.quantita} onChange={(e) => onCambiaQuantita(Math.max(1, Number(e.target.value) || 1))} style={{ ...inputStyle, width: 56, padding: "5px 7px", fontSize: 12.5 }} />
+        <button onClick={onRimuovi} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+      </div>
+      <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} onClick={() => onCambiaLivello(n)} title={`${n}/5`} style={{ width: 16, height: 16, borderRadius: "50%", border: `1px solid ${GOLD}`, background: n <= riga.livello ? GOLD : "transparent", cursor: "pointer", padding: 0 }} />
+        ))}
       </div>
     </div>
+  );
+}
+// verifica di congruità e causali — non si può confermare l'inventario
+// finché ogni pezzo "da giustificare" non ha una causale assegnata
+function ModaleCongruitaInventario({ corsoData, masterLoggataId, righeCongruita, prodottiApertiFlagSi, onClose, ricarica, onConfermato }) {
+  const [causalePerProdotto, setCausalePerProdotto] = useState({}); // prodottoId -> { quantita, causale, nota, foto }
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const totaleDaGiustificare = righeCongruita.reduce((s, r) => s + r.daGiustificare, 0);
+
+  function campo(prodottoId) {
+    return causalePerProdotto[prodottoId] || { quantita: 1, causale: "", nota: "", file: null };
+  }
+  function aggiornaCampo(prodottoId, valori) {
+    setCausalePerProdotto((prev) => ({ ...prev, [prodottoId]: { ...campo(prodottoId), ...valori } }));
+  }
+
+  async function assegnaCausale(riga) {
+    const c = campo(riga.prodotto.id);
+    const qta = Number(c.quantita) || 0;
+    if (!c.causale) { setMsg("Scegli una causale."); return; }
+    if (!(qta > 0) || qta > riga.daGiustificare) { setMsg("Quantità non valida."); return; }
+    if (c.causale === "Rotti" && !c.file) { setMsg("Per \"Rotti\" serve una foto del pezzo."); return; }
+    if (c.causale === "Prodotto aperto" && !c.nota.trim()) { setMsg("Scrivi in breve perché il prodotto è stato aperto."); return; }
+
+    setSalvando(true); setMsg("");
+    let fotoPath = null;
+    if (c.file) {
+      const percorso = `${corsoData.id}/${riga.prodotto.id}-${Date.now()}-${c.file.name}`;
+      const { error: erroreUpload } = await supabase.storage.from("inventario-foto").upload(percorso, c.file);
+      if (erroreUpload) { setSalvando(false); setMsg("Errore caricamento foto: " + erroreUpload.message); return; }
+      fotoPath = percorso;
+    }
+    const { error } = await supabase.from("inventario_ammanchi").insert({
+      corso_data_id: corsoData.id, master_id: masterLoggataId || null, prodotto_id: riga.prodotto.id,
+      quantita: qta, causale: c.causale, nota: c.nota.trim() || null, foto_path: fotoPath,
+    });
+    if (error) { setSalvando(false); setMsg("Errore: " + error.message); return; }
+
+    // "Prodotto aperto" materializza anche nel magazzino aperti se il
+    // prodotto ha il flag di rientro obbligatorio (§6.3)
+    if (c.causale === "Prodotto aperto" && prodottiApertiFlagSi(riga.prodotto)) {
+      const { data: esistenti } = await supabase.from("prodotti_aperti_magazzino").select("*").eq("prodotto_id", riga.prodotto.id).eq("corso_data_id", corsoData.id).maybeSingle();
+      await supabase.from("prodotti_aperti_magazzino").upsert({
+        prodotto_id: riga.prodotto.id, corso_data_id: corsoData.id,
+        quantita: (esistenti?.quantita || 0) + qta, nota: c.nota.trim(),
+        master_id: masterLoggataId || null, stato: "da_valutare",
+      }, { onConflict: "prodotto_id,corso_data_id" });
+    }
+
+    setSalvando(false);
+    setCausalePerProdotto((prev) => { const n = { ...prev }; delete n[riga.prodotto.id]; return n; });
+    ricarica();
+  }
+
+  return (
+    <Modal title="Verifica di congruità" onClose={onClose} maxWidth={640}>
+      {righeCongruita.filter((r) => r.daGiustificare > 0 || r.inviati > 0).length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Nessun prodotto del corso da verificare.</div>
+      ) : righeCongruita.map((r) => (
+        <div key={r.prodotto.id} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{r.prodotto.nome}</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>
+            Inviati {r.inviati} · Venduti {r.venduti} · Rispediti {r.rispediti} · Restano {r.restano}
+            {r.daGiustificare > 0 && <span style={{ color: "#C0392B", fontWeight: 700 }}> → {r.daGiustificare} da giustificare</span>}
+          </div>
+          {r.daGiustificare > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input type="number" min="1" max={r.daGiustificare} value={campo(r.prodotto.id).quantita} onChange={(e) => aggiornaCampo(r.prodotto.id, { quantita: e.target.value })} style={{ ...inputStyle, width: 64, padding: "6px 8px" }} />
+                <select value={campo(r.prodotto.id).causale} onChange={(e) => aggiornaCampo(r.prodotto.id, { causale: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 160, padding: "6px 8px" }}>
+                  <option value="">— causale —</option>
+                  {CAUSALI_AMMANCO.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <Button onClick={() => assegnaCausale(r)} disabled={salvando} style={{ padding: "8px 14px" }}>Aggiungi</Button>
+              </div>
+              {campo(r.prodotto.id).causale === "Rotti" && (
+                <input type="file" accept="image/*" onChange={(e) => aggiornaCampo(r.prodotto.id, { file: e.target.files?.[0] || null })} style={inputStyle} />
+              )}
+              {campo(r.prodotto.id).causale === "Prodotto aperto" && (
+                <textarea value={campo(r.prodotto.id).nota} onChange={(e) => aggiornaCampo(r.prodotto.id, { nota: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Perché è stato aperto? Es. sostituito un prodotto fallato nel kit di un'allieva." />
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={onConfermato} disabled={totaleDaGiustificare > 0} style={{ width: "100%" }}>
+        {totaleDaGiustificare > 0 ? `Giustifica ancora ${totaleDaGiustificare} pezz${totaleDaGiustificare === 1 ? "o" : "i"}` : "Conferma inventario"}
+      </Button>
+    </Modal>
   );
 }
 
@@ -22607,6 +22889,8 @@ export default function App() {
           location={location} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           inventarioSede={inventarioSede} masterLoggataId={utenteLoggato?.masterId || null}
+          venditeShop={venditeShop} prodottiApertiMagazzino={prodottiApertiMagazzino}
+          magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioAmmanchi={inventarioAmmanchi}
           ricarica={fetchDati} onBack={() => setView("dashboardmaster")}
         />
       )}
