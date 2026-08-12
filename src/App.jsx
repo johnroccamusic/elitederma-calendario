@@ -4714,23 +4714,25 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const oggiStr = dataOggiStr();
-  // resta in lista anche fino a 2 giorni dopo la fine (stessa finestra
-  // dell'inventario di sede), così la card resta cliccabile per
-  // dichiararlo appena tornati dalla sede, non solo mentre il corso è in corso
+  // resta in lista anche fino a 2 giorni dopo la fine, così la card
+  // resta cliccabile (per aprire la scheda del corso) appena tornati
+  // dalla sede, non solo mentre il corso è in corso — finestra distinta
+  // da quella, più larga, dell'Inventario Post Corso qui sotto
   const prossimeDate = useMemo(
     () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= addGiorni(cd.data_fine, 2)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [corsiDate, masterSelId, oggiStr]
   );
-  // "corso corrente": quello in corso o finito da al massimo 2 giorni —
-  // la finestra resta attiva fino a 2 giorni DOPO la fine, per lasciare
-  // il tempo di dichiarare l'inventario anche una volta tornati dalla sede
+  // Inventario Post Corso: eleggibile un corso in corso o finito da al
+  // massimo ~1 settimana, per lasciare il tempo di farlo anche a
+  // posteriori se non fatto subito tornando dalla sede
   function inFinestraInventario(cd) {
-    return oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 2);
+    return oggiStr >= cd.data_inizio && oggiStr <= addGiorni(cd.data_fine, 7);
   }
-  const corsoCorrente = useMemo(
-    () => corsiDate.find((cd) => cd.master_id === masterSelId && inFinestraInventario(cd)) || null,
+  const corsiEleggibiliInventario = useMemo(
+    () => corsiDate.filter((cd) => cd.master_id === masterSelId && inFinestraInventario(cd)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [corsiDate, masterSelId, oggiStr]
   );
+  const [mostraListaInventario, setMostraListaInventario] = useState(false);
   // l'incasso generato dai corsi (quanto incassa l'accademia dalle
   // iscrizioni) non è un dato che la master deve vedere — qui compare
   // solo l'incasso delle SUE vendite prodotti al POS, vedi incassiPos
@@ -4751,6 +4753,29 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
     return <PaginaRiepilogoVenditeProdotti soggettoTipo="master" soggettoId={masterSel.id} nomeSoggetto={masterSel.nome} venditeShop={venditeShop} onBack={() => setMostraRiepilogoPos(false)} />;
   }
 
+  if (mostraListaInventario) {
+    return (
+      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ maxWidth: 640, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+            <button onClick={() => setMostraListaInventario(false)} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Inventario corso corrente</div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Scegli il corso da rendicontare — in cima anche quelli finiti da circa una settimana.</div>
+          {corsiEleggibiliInventario.map((cd) => {
+            const c = corsoById[cd.corso_id]; const l = locById[cd.location_id];
+            return (
+              <div key={cd.id} onClick={() => onApriInventarioSede(cd.id)} style={{ ...cardStyle, marginBottom: 10, padding: 16, cursor: "pointer" }}>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{c?.nome || "—"}</div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)} · {toTitleCase(l?.nome || "—")}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
@@ -4761,10 +4786,10 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
           </div>
           {masterSel && (
             <button
-              onClick={() => corsoCorrente && onApriInventarioSede(corsoCorrente.id)}
-              disabled={!corsoCorrente}
-              title={corsoCorrente ? "" : "Attivo solo durante il corso e fino a 2 giorni dopo la fine"}
-              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: corsoCorrente ? NAVY : "#C9C4B8", background: "#fff", border: `1px solid ${corsoCorrente ? CREAM_BORDER : "#EDEAE0"}`, borderRadius: 16, padding: "9px 14px", cursor: corsoCorrente ? "pointer" : "default", flexShrink: 0 }}
+              onClick={() => corsiEleggibiliInventario.length > 0 && setMostraListaInventario(true)}
+              disabled={corsiEleggibiliInventario.length === 0}
+              title={corsiEleggibiliInventario.length > 0 ? "" : "Attivo durante il corso e fino a circa una settimana dopo la fine"}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: corsiEleggibiliInventario.length > 0 ? NAVY : "#C9C4B8", background: "#fff", border: `1px solid ${corsiEleggibiliInventario.length > 0 ? CREAM_BORDER : "#EDEAE0"}`, borderRadius: 16, padding: "9px 14px", cursor: corsiEleggibiliInventario.length > 0 ? "pointer" : "default", flexShrink: 0 }}
             >
               Inventario corso corrente
             </button>
