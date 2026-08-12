@@ -410,6 +410,24 @@ function IconaVenditoreRiga({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+function IconaTargetRiga({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="12" cy="12" r="0.6" fill={color} />
+    </svg>
+  );
+}
+function IconaGruppoVenditeProdotti({ size = 22, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="0.6" fill={color} />
+    </svg>
+  );
+}
 function IconaGruppoSediCorsi({ size = 22, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -1321,6 +1339,75 @@ function round2(n) {
 function parseNum(v) {
   const n = parseFloat(String(v).replace(",", "."));
   return isNaN(n) ? 0 : n;
+}
+// avanzamento di un target vendite prodotti (Target Master/Venditori):
+// somma le vendite POS dello stesso soggetto nel periodo del target — un
+// domani, un reso/annullamento (righe negative, vedi §8 della specifica)
+// si sottrae da solo qui dentro, senza bisogno di gestirlo a parte,
+// perché è una somma semplice dei "totale"/quantità già registrati.
+// tipo_target "combinato" richiede AND rigido: nessun premio parziale
+function calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) {
+  const righe = (venditeShop || []).filter((v) =>
+    v.origine === "pos" && v.operatore_tipo === t.soggetto_tipo && v.operatore_id === t.soggetto_id &&
+    v.data_ordine && v.data_ordine.slice(0, 10) >= t.data_inizio && v.data_ordine.slice(0, 10) <= t.data_fine
+  );
+  const incassoRaggiunto = round2(righe.reduce((s, v) => s + (v.totale || 0), 0));
+  const quantitaPerNome = {};
+  righe.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+    const chiave = (p.nome || "").trim().toLowerCase();
+    quantitaPerNome[chiave] = (quantitaPerNome[chiave] || 0) + (Number(p.quantita) || 0);
+  }));
+  const prodottiConProgresso = (t.prodotti_obiettivo || []).map((po) => {
+    const nomeProdotto = (prodottiShop || []).find((p) => p.id === po.prodotto_id)?.nome || "?";
+    const raggiunto = quantitaPerNome[nomeProdotto.trim().toLowerCase()] || 0;
+    return { nome: nomeProdotto, obiettivo: po.quantita_minima, raggiunto, completato: raggiunto >= po.quantita_minima };
+  });
+  const incassoCompletato = t.soglia_incasso == null || incassoRaggiunto >= t.soglia_incasso;
+  const prodottiCompletati = prodottiConProgresso.every((p) => p.completato);
+  const completato = t.tipo_target === "incasso" ? incassoCompletato
+    : t.tipo_target === "prodotto" ? prodottiCompletati
+    : incassoCompletato && prodottiCompletati;
+  const percentualeIncasso = t.soglia_incasso ? Math.min(100, Math.round((incassoRaggiunto / t.soglia_incasso) * 100)) : null;
+  return { incassoRaggiunto, prodottiConProgresso, completato, percentualeIncasso };
+}
+// card compatta con l'avanzamento di un target — riusata da POS e dalle
+// dashboard di master/venditore
+function SchedaAvanzamentoTarget({ t, avanzamento }) {
+  return (
+    <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
+          {t.tipo_target === "incasso" ? "Target incasso" : t.tipo_target === "prodotto" ? "Target prodotto" : "Target combinato"}
+        </div>
+        {avanzamento.completato && (
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>Obiettivo raggiunto</span>
+        )}
+      </div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 10 }}>{fmtData(t.data_inizio)} → {fmtData(t.data_fine)}</div>
+      {t.soglia_incasso != null && (
+        <div style={{ marginBottom: (avanzamento.prodottiConProgresso || []).length > 0 ? 10 : 0 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 4 }}>
+            <span>{fmtEuroErp(avanzamento.incassoRaggiunto)} di {fmtEuroErp(t.soglia_incasso)}</span>
+            <span style={{ fontWeight: 700 }}>{avanzamento.percentualeIncasso}%</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 3, background: "#EFE9DC", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${avanzamento.percentualeIncasso}%`, background: avanzamento.incassoRaggiunto >= t.soglia_incasso ? "#2E7D32" : NAVY, borderRadius: 3 }} />
+          </div>
+        </div>
+      )}
+      {(avanzamento.prodottiConProgresso || []).map((p) => (
+        <div key={p.nome} style={{ marginBottom: 6 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 3 }}>
+            <span>{p.nome}</span>
+            <span style={{ fontWeight: 700, color: p.completato ? "#2E7D32" : NAVY }}>{p.raggiunto} / {p.obiettivo}</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 3, background: "#EFE9DC", overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(100, Math.round((p.raggiunto / p.obiettivo) * 100))}%`, background: p.completato ? "#2E7D32" : GOLD, borderRadius: 3 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 // data una quota { imponibile, totale, metodo }, aggiorna l'imponibile e ricalcola il totale
 // (o viceversa). applicaIva=false = nessun calcolo IVA (es. saldo pagato in contanti)
@@ -3918,6 +4005,7 @@ function PaginaDashboardVenditori({
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
   registraInterceptaIndietro,
+  venditeShop, prodottiShop, targetVenditeProdotti,
 }) {
   const isMobile = useIsMobile();
   // se un venditore ha fatto login (venditoreBloccato valorizzato), la
@@ -3937,6 +4025,14 @@ function PaginaDashboardVenditori({
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
     : (venditori.find((v) => v.id === venditoreSelId) || null);
   const oggiStr = dataOggiStr();
+  // target vendite PRODOTTI (POS) del venditore selezionato: dato
+  // completamente separato dalle "Chiusure e commissioni" qui sotto, che
+  // restano sul silo vendite corsi — vedi Target Venditori in Impostazioni
+  const targetAttiviVenditore = venditoreSel
+    ? (targetVenditeProdotti || [])
+        .filter((t) => t.soggetto_tipo === "venditore" && t.soggetto_id === venditoreSel.id && t.data_inizio <= oggiStr && t.data_fine >= oggiStr)
+        .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
+    : [];
   const numeroDateProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
 
   const range = useMemo(() => {
@@ -4191,6 +4287,13 @@ function PaginaDashboardVenditori({
 
             {tabDashboardVenditore === "performance" && (
             <>
+            {targetAttiviVenditore.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Target vendite prodotti</div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Vendite al POS — dato separato dalle chiusure corsi qui sotto.</div>
+                {targetAttiviVenditore.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+              </div>
+            )}
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Periodo di analisi</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -4478,10 +4581,19 @@ function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, masterLoggataId, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
+  // target vendite prodotti in corso per la master selezionata (mai per
+  // il team vendite corsi: i due silos restano separati, vedi Target
+  // Master in Impostazioni)
+  const oggiStrTarget = dataOggiStr();
+  const targetAttiviMaster = masterSelId
+    ? (targetVenditeProdotti || [])
+        .filter((t) => t.soggetto_tipo === "master" && t.soggetto_id === masterSelId && t.data_inizio <= oggiStrTarget && t.data_fine >= oggiStrTarget)
+        .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
+    : [];
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const oggiStr = dataOggiStr();
@@ -4552,6 +4664,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, iscritti, m
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Incasso totale</div>
               <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassi.totale)}</div>
             </div>
+          </div>
+        )}
+
+        {masterSel && targetAttiviMaster.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Target vendite prodotti</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Vendite al POS, separate dall'incasso corsi qui sopra.</div>
+            {targetAttiviMaster.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
           </div>
         )}
 
@@ -6991,7 +7111,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit }) {
+function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -7017,6 +7137,8 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [showAssistenteModal, setShowAssistenteModal] = useState(false);
   const [showLevaModal, setShowLevaModal] = useState(false);
   const [showVenditoriModal, setShowVenditoriModal] = useState(false);
+  const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
+  const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // il cellulare vive in una colonna a sé, interrogata solo qui (non nel
   // caricamento generale): così, se in futuro dovesse mai mancare o dare
   // errore, non rischia di svuotare l'elenco venditori usato ovunque
@@ -7278,6 +7400,13 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
         { etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
+    {
+      chiave: "venditeprodotti", titolo: "Vendite prodotti", coloreBg: "#F5DCC8", Icona: IconaGruppoVenditeProdotti,
+      voci: [
+        { etichetta: "Target Master", Icona: IconaTargetRiga, onClick: () => setShowTargetMasterModal(true) },
+        { etichetta: "Target Venditori", Icona: IconaTargetRiga, onClick: () => setShowTargetVenditoriModal(true) },
+      ],
+    },
   ];
 
   return (
@@ -7529,6 +7658,20 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
             placeholder="es. MARIA ROSSI"
             mostraFirmaCheckbox
           />
+        </Modal>
+      )}
+
+      {showTargetMasterModal && (
+        <Modal title="Target Master" onClose={() => setShowTargetMasterModal(false)} maxWidth={720}>
+          <div style={{ ...subStyle, marginTop: -4 }}>Obiettivi individuali sulle vendite prodotti al POS (incasso, quantità di prodotto, o entrambi). Solo segnalazione dell'avanzamento — l'erogazione del premio resta un processo manuale.</div>
+          <GestioneTarget soggettoTipo="master" soggetti={master} prodottiShop={prodottiShop} target={targetVenditeProdotti} ricarica={ricarica} />
+        </Modal>
+      )}
+
+      {showTargetVenditoriModal && (
+        <Modal title="Target Venditori" onClose={() => setShowTargetVenditoriModal(false)} maxWidth={720}>
+          <div style={{ ...subStyle, marginTop: -4 }}>Obiettivi individuali sulle vendite prodotti al POS (incasso, quantità di prodotto, o entrambi). Solo segnalazione dell'avanzamento — l'erogazione del premio resta un processo manuale.</div>
+          <GestioneTarget soggettoTipo="venditore" soggetti={venditori} prodottiShop={prodottiShop} target={targetVenditeProdotti} ricarica={ricarica} />
         </Modal>
       )}
 
@@ -9741,6 +9884,192 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
       ))}
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
     </>
+  );
+}
+
+const TIPI_TARGET = [
+  { v: "incasso", l: "Per incasso" },
+  { v: "prodotto", l: "Per prodotto" },
+  { v: "combinato", l: "Combinato (incasso + prodotto)" },
+];
+// "Target Master"/"Target Venditori" (Impostazioni > Vendite prodotti):
+// stessa struttura per entrambe, cambia solo l'elenco di soggetti tra cui
+// scegliere (master o venditori) e la tabella target_vendite_prodotti
+// resta condivisa, filtrata per soggettoTipo — l'avanzamento vero e
+// proprio si calcola altrove (dashboard/POS), qui solo si definiscono
+function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica }) {
+  const [soggettoId, setSoggettoId] = useState("");
+  const [tipoTarget, setTipoTarget] = useState("incasso");
+  const [sogliaIncasso, setSogliaIncasso] = useState("");
+  const [prodottiObiettivo, setProdottiObiettivo] = useState([]); // { prodotto_id, nome, quantita_minima }
+  const [ricercaProdotto, setRicercaProdotto] = useState("");
+  const [dataInizio, setDataInizio] = useState("");
+  const [dataFine, setDataFine] = useState("");
+  const [targetInModifica, setTargetInModifica] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const soggettiOrdinati = [...(soggetti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const nomeSoggetto = (id) => soggettiOrdinati.find((s) => s.id === id)?.nome || "?";
+  const targetFiltrati = (target || []).filter((t) => t.soggetto_tipo === soggettoTipo).sort((a, b) => b.data_inizio.localeCompare(a.data_inizio));
+
+  const idsGiaScelti = new Set(prodottiObiettivo.map((p) => p.prodotto_id));
+  const risultatiRicerca = ricercaProdotto.trim()
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && !idsGiaScelti.has(p.id) && p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  function aggiungiProdottoObiettivo(p) {
+    setProdottiObiettivo((prev) => [...prev, { prodotto_id: p.id, nome: p.nome, quantita_minima: 1 }]);
+    setRicercaProdotto("");
+  }
+  function rimuoviProdottoObiettivo(prodottoId) {
+    setProdottiObiettivo((prev) => prev.filter((p) => p.prodotto_id !== prodottoId));
+  }
+  function cambiaQuantitaMinima(prodottoId, valore) {
+    setProdottiObiettivo((prev) => prev.map((p) => (p.prodotto_id === prodottoId ? { ...p, quantita_minima: valore } : p)));
+  }
+  function resetForm() {
+    setTargetInModifica(null);
+    setSoggettoId(""); setTipoTarget("incasso"); setSogliaIncasso("");
+    setProdottiObiettivo([]); setRicercaProdotto(""); setDataInizio(""); setDataFine(""); setMsg("");
+  }
+  function modificaTarget(t) {
+    setTargetInModifica(t.id);
+    setSoggettoId(t.soggetto_id);
+    setTipoTarget(t.tipo_target);
+    setSogliaIncasso(t.soglia_incasso != null ? String(t.soglia_incasso) : "");
+    setProdottiObiettivo((t.prodotti_obiettivo || []).map((p) => ({ ...p, nome: (prodottiShop || []).find((ps) => ps.id === p.prodotto_id)?.nome || "?" })));
+    setDataInizio(t.data_inizio); setDataFine(t.data_fine); setMsg("");
+  }
+  async function eliminaTarget(id) {
+    if (!window.confirm("Eliminare questo target?")) return;
+    const { error } = await supabase.from("target_vendite_prodotti").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    if (targetInModifica === id) resetForm();
+    ricarica();
+  }
+
+  async function salvaTarget() {
+    if (!soggettoId) { setMsg("Scegli a chi assegnare il target."); return; }
+    if (!dataInizio || !dataFine) { setMsg("Scegli il periodo (data inizio e fine)."); return; }
+    if (dataFine < dataInizio) { setMsg("La data fine non può precedere la data inizio."); return; }
+    const serveIncasso = tipoTarget === "incasso" || tipoTarget === "combinato";
+    const serveProdotti = tipoTarget === "prodotto" || tipoTarget === "combinato";
+    const sogliaNum = sogliaIncasso === "" ? null : parseNum(sogliaIncasso);
+    if (serveIncasso && !(sogliaNum > 0)) { setMsg("Scrivi una soglia di incasso maggiore di zero."); return; }
+    if (serveProdotti && prodottiObiettivo.length === 0) { setMsg("Aggiungi almeno un prodotto obiettivo."); return; }
+    if (serveProdotti && prodottiObiettivo.some((p) => !(Number(p.quantita_minima) > 0))) { setMsg("Ogni prodotto obiettivo deve avere una quantità minima maggiore di zero."); return; }
+
+    setSalvando(true); setMsg("");
+    const riga = {
+      soggetto_tipo: soggettoTipo,
+      soggetto_id: soggettoId,
+      tipo_target: tipoTarget,
+      soglia_incasso: serveIncasso ? sogliaNum : null,
+      prodotti_obiettivo: serveProdotti ? prodottiObiettivo.map((p) => ({ prodotto_id: p.prodotto_id, quantita_minima: Number(p.quantita_minima) })) : [],
+      data_inizio: dataInizio,
+      data_fine: dataFine,
+    };
+    const { error } = targetInModifica
+      ? await supabase.from("target_vendite_prodotti").update(riga).eq("id", targetInModifica)
+      : await supabase.from("target_vendite_prodotti").insert(riga);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    resetForm();
+    ricarica();
+  }
+
+  return (
+    <div>
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{targetInModifica ? "Modifica target" : "Nuovo target"}</div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label={soggettoTipo === "master" ? "Master" : "Venditore"}>
+            <select style={inputStyle} value={soggettoId} onChange={(e) => setSoggettoId(e.target.value)}>
+              <option value="">— scegli —</option>
+              {soggettiOrdinati.map((s) => <option key={s.id} value={s.id}>{s.nome.toUpperCase()}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Tipo di target">
+            <select style={inputStyle} value={tipoTarget} onChange={(e) => setTipoTarget(e.target.value)}>
+              {TIPI_TARGET.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+            </select>
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Data inizio">
+            <input type="date" style={inputStyle} value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Data fine">
+            <input type="date" style={inputStyle} value={dataFine} min={dataInizio || undefined} onChange={(e) => setDataFine(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      {(tipoTarget === "incasso" || tipoTarget === "combinato") && (
+        <Field label="Soglia di incasso (€)">
+          <input style={inputStyle} inputMode="decimal" value={sogliaIncasso} onChange={(e) => setSogliaIncasso(e.target.value)} placeholder="0" />
+        </Field>
+      )}
+      {(tipoTarget === "prodotto" || tipoTarget === "combinato") && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 6 }}>Prodotti obiettivo (quantità minima da vendere nel periodo)</div>
+          {prodottiObiettivo.map((p) => (
+            <div key={p.prodotto_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{p.nome}</div>
+              <input type="number" min="1" style={{ ...inputStyle, width: 70, padding: "6px 8px" }} value={p.quantita_minima} onChange={(e) => cambiaQuantitaMinima(p.prodotto_id, e.target.value)} />
+              <button onClick={() => rimuoviProdottoObiettivo(p.prodotto_id)} style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15 }}>✕</button>
+            </div>
+          ))}
+          <div style={{ position: "relative", marginTop: 8 }}>
+            <input style={inputStyle} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca un prodotto da aggiungere…" />
+            {risultatiRicerca.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+                {risultatiRicerca.map((p) => (
+                  <div key={p.id} onClick={() => aggiungiProdottoObiettivo(p)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
+        <Button onClick={salvaTarget} disabled={salvando}>{salvando ? "Salvo…" : targetInModifica ? "Salva modifiche" : "Aggiungi target"}</Button>
+        {targetInModifica && <Button variant="ghost" onClick={resetForm}>Annulla</Button>}
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Target esistenti</div>
+      {targetFiltrati.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun target ancora assegnato.</div>
+      ) : targetFiltrati.map((t) => (
+        <div key={t.id} style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          <div>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nomeSoggetto(t.soggetto_id).toUpperCase()} — {TIPI_TARGET.find((tt) => tt.v === t.tipo_target)?.l}</div>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtData(t.data_inizio)} → {fmtData(t.data_fine)}</div>
+            {t.soglia_incasso != null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Soglia: {fmtEuroErp(t.soglia_incasso)}</div>}
+            {(t.prodotti_obiettivo || []).length > 0 && (
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                {t.prodotti_obiettivo.map((p) => `${p.quantita_minima}× ${(prodottiShop || []).find((ps) => ps.id === p.prodotto_id)?.nome || "?"}`).join(", ")}
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+            <button onClick={() => modificaTarget(t)} title="Modifica" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+            </button>
+            <button onClick={() => eliminaTarget(t.id)} title="Elimina" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -16129,7 +16458,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack, utenteLoggato, venditoreLoggato }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti }) {
   const isMobile = useIsMobile();
   // ogni vendita nasce attribuita a chi è loggato in questo momento (mai
   // "anonima"): priorità alla master se l'identità è doppia (master +
@@ -16144,6 +16473,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     : utenteLoggato
     ? { tipo: "utente", id: utenteLoggato.id, nome: utenteLoggato.nome }
     : null;
+  // target in corso per l'operatore loggato (solo master/venditore: i
+  // target esistono solo per questi due soggetti, vedi Target
+  // Master/Venditori in Impostazioni), con l'avanzamento già calcolato
+  const oggiPosStr = dataOggiStr();
+  const targetAttivi = operatore && (operatore.tipo === "master" || operatore.tipo === "venditore")
+    ? (targetVenditeProdotti || [])
+        .filter((t) => t.soggetto_tipo === operatore.tipo && t.soggetto_id === operatore.id && t.data_inizio <= oggiPosStr && t.data_fine >= oggiPosStr)
+        .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
+    : [];
   const [ricerca, setRicerca] = useState("");
   const [categoriaSel, setCategoriaSel] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -16553,6 +16891,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         </div>
 
+        {targetAttivi.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            {targetAttivi.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
           <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1 }} />
         </div>
@@ -16629,6 +16973,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <Button onClick={nuovaVendita}>+ Nuova vendita</Button>
           </div>
         </div>
+
+        {targetAttivi.length > 0 && (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(3, targetAttivi.length)}, minmax(0,1fr))`, gap: 14, marginBottom: 20 }}>
+            {targetAttivi.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+          </div>
+        )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 18, alignItems: "flex-start" }}>
           <div>
@@ -20567,6 +20917,9 @@ export default function App() {
   const [prodottiShop, setProdottiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
+  // obiettivi individuali (Target Master/Venditori, Impostazioni > Vendite
+  // prodotti) sulle vendite POS: incasso, quantità di prodotto, o entrambi
+  const [targetVenditeProdotti, setTargetVenditeProdotti] = useState([]);
   // template dei giorni di ogni corso-tipo (Modella del Master/Allievi per giorno)
   const [corsiGiorni, setCorsiGiorni] = useState([]);
   // catalogo generale dei tipi di modella + quali sono selezionabili per ciascun corso
@@ -20634,7 +20987,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -20681,6 +21034,7 @@ export default function App() {
       supabase.from("prodotti_aperti_magazzino").select("*"),
       supabase.from("agenda_note_settimanali").select("*"),
       supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false }),
+      supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -20724,6 +21078,7 @@ export default function App() {
     setAccontiDaVerificare(adv.data || []);
     setInventarioSede(invs.data || []);
     setProdottiApertiMagazzino(pam.data || []);
+    setTargetVenditeProdotti(tvp.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -21339,7 +21694,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} />
+        <Impostazioni corsi={corsi} location={location} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} />
       )}
 
       {view === "gestionedate" && (
@@ -21429,7 +21784,7 @@ export default function App() {
         <PaginaPOS
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
-          utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato}
+          utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
         />
       )}
 
@@ -21493,6 +21848,7 @@ export default function App() {
           apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
           registraInterceptaIndietro={registraInterceptaIndietro}
+          venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
         />
       )}
 
@@ -21500,6 +21856,7 @@ export default function App() {
         <PaginaDashboardMaster
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
+          venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
           onApriInventarioSede={apriInventarioSede}
           onBack={() => setView("home")}
         />
