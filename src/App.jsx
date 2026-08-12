@@ -15989,6 +15989,7 @@ const COLONNE_MAGAZZINO = [
   { label: "In magazzino", campo: null },
   { label: "Shop online", campo: null },
   { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc" },
+  { label: "Rientro se aperto", campo: null },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc" },
   { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc" },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc" },
@@ -16216,6 +16217,11 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica }) 
     await ricarica();
     setSpostando(false);
   }
+  async function salvaFlagRientro(checked) {
+    const { error } = await supabase.from("prodotti_shop").update({ rientro_obbligatorio_se_aperto: checked }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   const tdStyle = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` };
   const cellInputStyle = { ...inputStyle, width: 68, padding: "5px 7px", fontSize: 12.5 };
@@ -16249,6 +16255,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica }) 
       </td>
       <td style={tdStyle}>
         <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
+      </td>
+      <td style={{ ...tdStyle, textAlign: "center" }} title="Se aperto, questo prodotto deve sempre rientrare in sede (inventario post corso)">
+        <input type="checkbox" checked={!!p.rientro_obbligatorio_se_aperto} onChange={(e) => salvaFlagRientro(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>
@@ -21638,6 +21647,12 @@ export default function App() {
   // una riga per prodotto+edizione, sommate per prodotto in Logistica
   // prodotti — alimentato dal tasto "Prodotti rientrati"
   const [prodottiApertiMagazzino, setProdottiApertiMagazzino] = useState([]);
+  // stock persistente per città dei consumabili di servizio parzialmente
+  // usati (Inventario Post Corso), con livello a pallini 1-5
+  const [magazzinoLocaleConsumabili, setMagazzinoLocaleConsumabili] = useState([]);
+  // causali assegnate ai pezzi "da giustificare" nella verifica di
+  // congruità dell'Inventario Post Corso
+  const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -21671,7 +21686,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -21719,6 +21734,8 @@ export default function App() {
       supabase.from("agenda_note_settimanali").select("*"),
       supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false }),
       supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false }),
+      supabase.from("magazzino_locale_consumabili").select("*"),
+      supabase.from("inventario_ammanchi").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -21763,6 +21780,8 @@ export default function App() {
     setInventarioSede(invs.data || []);
     setProdottiApertiMagazzino(pam.data || []);
     setTargetVenditeProdotti(tvp.data || []);
+    setMagazzinoLocaleConsumabili(mlc.data || []);
+    setInventarioAmmanchi(iam.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
