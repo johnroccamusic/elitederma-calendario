@@ -7640,6 +7640,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
+  const [showMagazziniModal, setShowMagazziniModal] = useState(false);
   const [showMasterModal, setShowMasterModal] = useState(false);
   const [showHotelModal, setShowHotelModal] = useState(false);
   const [showAssistenteModal, setShowAssistenteModal] = useState(false);
@@ -7879,6 +7880,11 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
     setNomeLoc(""); setPostiMaxLoc(""); setMsg("Location aggiunta.");
     ricarica();
   }
+  async function toggleMagazzinoLocale(locationId, valore) {
+    const { error } = await supabase.from("location").update({ magazzino_locale: valore }).eq("id", locationId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   const gruppiSetting = [
     {
@@ -7897,6 +7903,7 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
         { etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { etichetta: "Definisci Hotel", Icona: IconaHotelRiga, onClick: () => setShowHotelModal(true) },
         { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
+        { etichetta: "Definisci magazzini distaccati", Icona: IconaPin, onClick: () => setShowMagazziniModal(true) },
         { etichetta: "Assegna Master", Icona: IconaMasterRiga, onClick: onApriAssegnazioneMaster },
       ],
     },
@@ -8154,6 +8161,19 @@ function Impostazioni({ corsi, location, master, hotel, assistente, leva, corsiG
             </div>
           ))}
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
+        </Modal>
+      )}
+
+      {showMagazziniModal && (
+        <Modal title="Magazzini distaccati" onClose={() => setShowMagazziniModal(false)}>
+          <div style={subStyle}>Spunta le città che hanno un magazzino locale (attrezzatura e consumabili in loco): compaiono in "Magazzini locali" e nell'Inventario post corso. Le città non spuntate restano nell'elenco Location per i corsi, ma non nella vista magazzini.</div>
+          {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora — aggiungila prima da "Definisci Location".</div>}
+          {location.map((l) => (
+            <label key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!l.magazzino_locale} onChange={(e) => toggleMagazzinoLocale(l.id, e.target.checked)} style={{ width: 16, height: 16 }} />
+              <span style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>{toTitleCase(l.nome)}</span>
+            </label>
+          ))}
         </Modal>
       )}
 
@@ -15466,7 +15486,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Gestisci costi, prodotti, scorte e vendite del magazzino.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Inserimento costi e ricavi" descrizione="Registra e gestisci costi, ricavi e altri movimenti contabili." Icona={IconaTileCostiRicavi} onClick={onApriInserimentoCostiRicavi} />
-          <TileHome title="Catalogo categorie" descrizione="Organizza e gestisci le categorie dei prodotti e dei costi." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
+          <TileHome title="Gestisci categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Costi e ricavi." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
           <TileHome title="Gestione magazzino" descrizione="Controlla giacenze, movimenti e disponibilità dei prodotti." Icona={IconaTileGestioneMagazzino} onClick={onApriMagazzino} />
           <TileHome title="Gestione shop" descrizione="Gestisci prodotti, ordini, clienti e impostazioni dello shop." Icona={IconaTileGestioneShop} onClick={onApriGestioneShop} />
           <TileHome title="Vendite shop" descrizione="Monitora le vendite, ordini e performance dello shop." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
@@ -16361,6 +16381,99 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
   );
 }
 
+// gestione delle categorie prodotto da Gestione magazzino: quelle
+// sincronizzate da WooCommerce (woo_category_id valorizzato) restano di
+// sola lettura qui, modificabili solo dalla Gestione shop — quelle create
+// da qui invece sono locali (woo_category_id null), mai mandate online,
+// utili per organizzare il solo magazzino interno
+function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica }) {
+  const [ricerca, setRicerca] = useState("");
+  const [nomeNuova, setNomeNuova] = useState("");
+  const [inModificaId, setInModificaId] = useState(null);
+  const [nomeModifica, setNomeModifica] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const categorieViste = ricerca.trim()
+    ? categorieOrdinate.filter((c) => c.nome.toLowerCase().includes(ricerca.trim().toLowerCase()))
+    : categorieOrdinate;
+
+  async function creaCategoria() {
+    if (!nomeNuova.trim()) return;
+    setSalvando(true); setMsg("");
+    const { error } = await supabase.from("categorie_prodotti").insert({ nome: nomeNuova.trim(), woo_category_id: null });
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNomeNuova("");
+    ricarica();
+  }
+  function apriModifica(c) { setInModificaId(c.id); setNomeModifica(c.nome); }
+  async function salvaModifica(id) {
+    if (!nomeModifica.trim()) return;
+    const { error } = await supabase.from("categorie_prodotti").update({ nome: nomeModifica.trim() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setInModificaId(null);
+    ricarica();
+  }
+  async function eliminaCategoria(c) {
+    if (!window.confirm(`Eliminare la categoria "${c.nome}"? I prodotti che la usano restano, solo senza questa categoria.`)) return;
+    const { error } = await supabase.from("categorie_prodotti").delete().eq("id", c.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <Modal title="Gestisci categorie" onClose={onClose} maxWidth={560}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+        Le categorie provenienti dallo shop online sono di sola lettura qui: si modificano solo da Gestione shop. Quelle create qui restano locali, solo per organizzare il magazzino.
+      </div>
+      <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca categoria…" style={{ marginBottom: 14 }} />
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input style={{ ...inputStyle, flex: 1 }} value={nomeNuova} onChange={(e) => setNomeNuova(e.target.value)} placeholder="Nome nuova categoria…" onKeyDown={(e) => e.key === "Enter" && creaCategoria()} />
+        <Button onClick={creaCategoria} disabled={salvando || !nomeNuova.trim()} style={{ flexShrink: 0 }}>{salvando ? "Creo…" : "Crea"}</Button>
+      </div>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+
+      <div style={{ maxHeight: 360, overflowY: "auto" }}>
+        {categorieViste.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: "20px 0" }}>Nessuna categoria trovata.</div>
+        ) : categorieViste.map((c) => {
+          const dalloShop = c.woo_category_id != null;
+          return (
+            <div key={c.id} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              {inModificaId === c.id ? (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input style={{ ...inputStyle, flex: 1 }} autoFocus value={nomeModifica} onChange={(e) => setNomeModifica(e.target.value)} onKeyDown={(e) => e.key === "Enter" && salvaModifica(c.id)} />
+                  <Button onClick={() => salvaModifica(c.id)} style={{ flexShrink: 0 }}>Salva</Button>
+                  <Button variant="ghost" onClick={() => setInModificaId(null)} style={{ flexShrink: 0 }}>Annulla</Button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ flex: 1, ...fontBody, fontSize: 13.5, color: NAVY }}>{c.nome}</span>
+                  {dalloShop ? (
+                    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }} title="Modificabile solo da Gestione shop">Dallo shop</span>
+                  ) : (
+                    <>
+                      <button onClick={() => apriModifica(c)} title="Rinomina" style={{ background: "none", border: "none", color: NAVY, cursor: "pointer", display: "flex", padding: 4 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+                      </button>
+                      <button onClick={() => eliminaCategoria(c)} title="Elimina" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Modal>
+  );
+}
+
 // colonne ordinabili della tabella dettaglio, e direzione di default al
 // primo click su ciascuna (stile Windows Explorer): testo parte
 // crescente A→Z, numeri partono decrescente (più alto in cima)
@@ -16676,6 +16789,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
   const [prodottoRiassortimento, setProdottoRiassortimento] = useState(null);
   const [mostraNuovoProdotto, setMostraNuovoProdotto] = useState(false);
+  const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
 
@@ -16816,6 +16930,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione magazzino</div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+            <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
             <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
             <div style={{ textAlign: "right" }}>
               <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
@@ -16965,6 +17080,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           categorieProdotti={categorieProdotti}
           onClose={() => setMostraNuovoProdotto(false)}
           onFatto={() => { setMostraNuovoProdotto(false); ricarica(); }}
+        />
+      )}
+      {mostraGestioneCategorie && (
+        <ModaleGestioneCategorieMagazzino
+          categorieProdotti={categorieProdotti}
+          onClose={() => setMostraGestioneCategorie(false)}
+          ricarica={ricarica}
         />
       )}
     </div>
@@ -19707,14 +19829,17 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
 // necessaria" è lo standard di 1 pezzo per tipo, non essendoci oggi un
 // fabbisogno per-corso: da spedire = necessaria − già presente, mai
 // negativo. La merce vendibile invece parte sempre nuova, non conta qui.
-function PaginaMagazziniLocali({ location, corsiDate, inventarioSede, magazzinoLocaleConsumabili, prodottiShop, costiSottocategorie, onBack }) {
+function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsumabili, prodottiShop, costiSottocategorie, onBack }) {
   const isMobile = useIsMobile();
   const [locSelId, setLocSelId] = useState(null);
 
-  const locazioniConCorsi = useMemo(() => {
-    const idsUsati = new Set((corsiDate || []).map((cd) => cd.location_id));
-    return (location || []).filter((l) => idsUsati.has(l.id)).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [location, corsiDate]);
+  // solo le città spuntate come "magazzino distaccato" in Impostazioni >
+  // Sedi e corsi, non tutte quelle con corsi (una sede occasionale non ha
+  // per forza un magazzino locale da tracciare)
+  const locazioniConCorsi = useMemo(
+    () => (location || []).filter((l) => l.magazzino_locale).sort((a, b) => a.nome.localeCompare(b.nome)),
+    [location]
+  );
   const locSel = locazioniConCorsi.find((l) => l.id === locSelId) || locazioniConCorsi[0] || null;
 
   const attrezzatureStandard = (costiSottocategorie || [])
@@ -19741,7 +19866,7 @@ function PaginaMagazziniLocali({ location, corsiDate, inventarioSede, magazzinoL
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Attrezzatura e consumabili già presenti in ogni città — usa questa vista per decidere cosa serve davvero spedire.</div>
 
         {locazioniConCorsi.length === 0 ? (
-          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna sede con corsi ancora.</div>
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun magazzino distaccato definito ancora — vai in Impostazioni &gt; Sedi e corsi &gt; "Definisci magazzini distaccati".</div>
         ) : (
           <>
             <select value={locSel?.id || ""} onChange={(e) => setLocSelId(e.target.value)} style={{ ...inputStyle, width: isMobile ? "100%" : 320, marginBottom: 16 }}>
@@ -21256,7 +21381,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Catalogo delle categorie</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Gestisci categorie di spesa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Aggiungi, rinomina, riordina o disattiva le categorie e le sotto-voci di "Analisi costi di gestione".</div>
 
         <div style={{ ...cardStyle, display: "flex", gap: 10 }}>
@@ -23300,7 +23425,7 @@ export default function App() {
 
       {view === "magazzinilocali" && (
         <PaginaMagazziniLocali
-          location={location} corsiDate={corsiDate} inventarioSede={inventarioSede}
+          location={location} inventarioSede={inventarioSede}
           magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
           onBack={() => setView("logisticaprodotti")}
         />

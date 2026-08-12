@@ -1958,3 +1958,13 @@ create policy "accesso interno spedizioni_pos" on public.spedizioni_pos for all 
 create index if not exists spedizioni_pos_stato_idx on public.spedizioni_pos (stato);
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- 69) Categorie prodotto locali (non solo da WooCommerce) e magazzini
+-- distaccati. Vedi supabase-categorie-magazzini-locali-setup.sql per i
+-- commenti completi.
+-- ---------------------------------------------------------
+alter table public.categorie_prodotti alter column woo_category_id drop not null;
+alter table public.location add column if not exists magazzino_locale boolean not null default false;
+
+notify pgrst, 'reload schema';
