@@ -4946,7 +4946,7 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
 }
 function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, ricarica, onBack }) {
   const isMobile = useIsMobile();
-  const [interoSel, setInteroSel] = useState("");
+  const [ricercaIntero, setRicercaIntero] = useState("");
   const [ricercaAperto, setRicercaAperto] = useState("");
   const [ricercaConsumabile, setRicercaConsumabile] = useState("");
   const [prodottoApertoScelto, setProdottoApertoScelto] = useState(null); // prodotto in attesa di nota (flag SÌ)
@@ -5019,23 +5019,30 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     ricarica();
   }
   function aggiungiInteroProdotto(prodottoId) {
-    setInteroSel("");
+    setRicercaIntero("");
     if (!prodottoId || rientroInteri[prodottoId] != null) return;
     salvaRientroInteri({ ...rientroInteri, [prodottoId]: 1 });
   }
+  // ricerca su tutto il magazzino, non solo sui prodotti risultanti
+  // spediti a questa edizione (vedi stesso motivo in "Prodotti aperti")
+  const risultatiIntero = ricercaIntero.trim()
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && rientroInteri[p.id] == null && p.nome.toLowerCase().includes(ricercaIntero.trim().toLowerCase()))
+    : [];
   function rimuoviIntero(prodottoId) {
     const resto = { ...rientroInteri };
     delete resto[prodottoId];
     salvaRientroInteri(resto);
   }
 
-  // "Prodotti aperti" (rispedizione forzata): solo prodotti con flag
-  // rientro_obbligatorio_se_aperto — un prodotto senza quel flag non
-  // deve rientrare, quindi non compare qui: va aggiunto tra i
-  // Consumabili del magazzino locale (con il livello di utilizzo)
+  // "Prodotti aperti" (rispedizione forzata): cerca su tutto il
+  // magazzino, non solo sui prodotti risultanti spediti a questa
+  // edizione (quel calcolo dipende dal kit configurato, che può essere
+  // incompleto) — resta comunque valido solo chi ha il flag
+  // rientro_obbligatorio_se_aperto, un prodotto senza quel flag non
+  // deve rientrare, va aggiunto tra i Consumabili del magazzino locale
   const apertiQui = (prodottiApertiMagazzino || []).filter((r) => r.corso_data_id === corsoData?.id);
   const risultatiAperto = ricercaAperto.trim()
-    ? prodottiSpediti.filter((p) => !apertiQui.some((a) => a.prodotto_id === p.id) && p.nome.toLowerCase().includes(ricercaAperto.trim().toLowerCase()))
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && !apertiQui.some((a) => a.prodotto_id === p.id) && p.nome.toLowerCase().includes(ricercaAperto.trim().toLowerCase()))
     : [];
   function selezionaProdottoAperto(p) {
     setRicercaAperto("");
@@ -5180,13 +5187,17 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti interi</div>
               <div style={labelStyleInv}>Tornano in magazzino così come sono.</div>
-              <select
-                value={interoSel} onChange={(e) => aggiungiInteroProdotto(e.target.value)}
-                style={{ ...inputStyle, width: "100%", marginBottom: 10 }}
-              >
-                <option value="">— aggiungi tra i prodotti del corso —</option>
-                {prodottiSpediti.filter((p) => rientroInteri[p.id] == null).map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
+              <div style={{ position: "relative" }}>
+                <input style={inputStyle} value={ricercaIntero} onChange={(e) => setRicercaIntero(e.target.value)} placeholder="Cerca nel magazzino…" />
+                {risultatiIntero.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
+                    {risultatiIntero.map((p) => (
+                      <div key={p.id} onClick={() => aggiungiInteroProdotto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ marginBottom: 10 }} />
               {Object.keys(rientroInteri).length === 0 ? (
                 <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun prodotto ancora.</div>
               ) : Object.entries(rientroInteri).map(([pid, q]) => (
