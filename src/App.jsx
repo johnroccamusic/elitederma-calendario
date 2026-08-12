@@ -238,6 +238,16 @@ function fmtData(d) {
   return `${day}/${m}/${y}`;
 }
 
+// Supabase Storage rifiuta le chiavi con lettere accentate o altri
+// caratteri non ASCII ("Invalid key") — i nomi dei file caricati
+// dall'utente (es. "Hennè.pdf") vanno sempre ripuliti prima di entrare
+// in un percorso di upload: accenti tolti (è→e), tutto il resto che non
+// è lettera/numero/punto/trattino diventa "-"
+function sanitizzaNomeFile(nome) {
+  const base = (nome || "file").normalize("NFD").replace(new RegExp("[\\u0300-\\u036f]", "g"), "");
+  return base.replace(/[^a-zA-Z0-9.-]+/g, "-");
+}
+
 // wa.me vuole solo cifre col prefisso internazionale: i numeri qui sono
 // quasi sempre cellulari italiani inseriti senza prefisso, quindi si
 // aggiunge "39" solo se non sembra già averlo (numero internazionale più lungo)
@@ -2048,7 +2058,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   async function caricaBiglietti(cd, fileList, campo) {
     const nuovi = [];
     for (const file of Array.from(fileList || [])) {
-      const percorso = `${cd.id}/biglietto-${Date.now()}-${file.name}`;
+      const percorso = `${cd.id}/biglietto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
       const { error } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
       if (error) { window.alert("Errore caricamento: " + error.message); return; }
       nuovi.push(percorso);
@@ -2647,7 +2657,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
     setInviando(true);
     let filePath = accontoEsistente?.file_path || null;
     if (file) {
-      const percorso = `acconti/${iscritto.id}-${Date.now()}-${file.name}`;
+      const percorso = `acconti/${iscritto.id}-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
       const { error: erroreUpload } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
       if (erroreUpload) { setInviando(false); window.alert("Errore nel caricamento del file: " + erroreUpload.message); return; }
       filePath = percorso;
@@ -5385,7 +5395,7 @@ function ModaleCongruitaInventario({ corsoData, masterLoggataId, righeCongruita,
     setSalvando(true); setMsg("");
     let fotoPath = null;
     if (c.file) {
-      const percorso = `${corsoData.id}/${riga.prodotto.id}-${Date.now()}-${c.file.name}`;
+      const percorso = `${corsoData.id}/${riga.prodotto.id}-${Date.now()}-${sanitizzaNomeFile(c.file.name)}`;
       const { error: erroreUpload } = await supabase.storage.from("inventario-foto").upload(percorso, c.file);
       if (erroreUpload) { setSalvando(false); setMsg("Errore caricamento foto: " + erroreUpload.message); return; }
       fotoPath = percorso;
@@ -7790,7 +7800,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   // carica il template PDF del diploma di un corso nello storage
   // "diploma-templates" e restituisce il percorso salvato
   async function caricaTemplateDiploma(file, corsoId) {
-    const percorso = `${corsoId}/template-${Date.now()}-${file.name}`;
+    const percorso = `${corsoId}/template-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error } = await supabase.storage.from("diploma-templates").upload(percorso, file);
     if (error) throw error;
     return percorso;
@@ -8732,7 +8742,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
   }
 
   async function caricaFile(file, bucket, prefisso) {
-    const percorso = `${prefisso}-${Date.now()}-${file.name}`;
+    const percorso = `${prefisso}-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error } = await supabase.storage.from(bucket).upload(percorso, file);
     if (error) throw error;
     return percorso;
@@ -9667,7 +9677,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
     if (campo === "logo_nero_path") setPreviewNeroUrl(URL.createObjectURL(file));
     else setPreviewBiancoUrl(URL.createObjectURL(file));
     try {
-      const percorso = `${categoria.chiave}/${campo === "logo_nero_path" ? "nero" : "bianco"}-${Date.now()}-${file.name}`;
+      const percorso = `${categoria.chiave}/${campo === "logo_nero_path" ? "nero" : "bianco"}-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
       const { error } = await supabase.storage.from("loghi-immagini").upload(percorso, file);
       if (error) throw error;
       await aggiorna({ [campo]: percorso });
@@ -9795,7 +9805,7 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
   async function caricaFont(file, campo) {
     if (!file) return;
     try {
-      const percorso = `${campo}-${Date.now()}-${file.name}`;
+      const percorso = `${campo}-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
       const { error } = await supabase.storage.from("loghi-fonts").upload(percorso, file);
       if (error) throw error;
       await aggiorna({ [campo]: percorso });
@@ -12730,7 +12740,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // carica un file nello storage "allegati-iscritti" e restituisce il percorso salvato
   async function caricaAllegato(file, prefisso) {
     if (!file) return null;
-    const percorso = `${corsoData.id}/${prefisso}-${Date.now()}-${file.name}`;
+    const percorso = `${corsoData.id}/${prefisso}-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
     if (error) throw error;
     return percorso;
@@ -21619,7 +21629,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
 
     let allegatoPath = allegatoPathEsistente;
     if (allegatoFile) {
-      const nomeFile = `${Date.now()}-${allegatoFile.name}`;
+      const nomeFile = `${Date.now()}-${sanitizzaNomeFile(allegatoFile.name)}`;
       const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nomeFile, allegatoFile);
       if (erroreUpload) { setMsg("Errore allegato: " + erroreUpload.message); setSalvando(false); return; }
       const { data: pubData } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
