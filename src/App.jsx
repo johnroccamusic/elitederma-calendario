@@ -14934,7 +14934,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // hub d'ingresso di "ERP / Magazzino": griglia di tasti stile Home (stesso
 // TileHome usato lì), ciascuno dedicato a una sola area — sostituisce la
 // vecchia dashboard con barra di navigazione orizzontale in cima
-function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriDashboardAnalisi }) {
+function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriDashboardAnalisi, onApriStatisticheVenditeProdotti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -14963,6 +14963,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
           <TileHome title="Gestione shop" descrizione="Gestisci prodotti, ordini, clienti e impostazioni dello shop." Icona={IconaTileGestioneShop} onClick={onApriGestioneShop} />
           <TileHome title="Vendite shop" descrizione="Monitora le vendite, ordini e performance dello shop." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
           <TileHome title="Dashboard analisi" descrizione="Analizza performance, trend e KPI del magazzino." Icona={IconaTileDashboardAnalisi} onClick={onApriDashboardAnalisi} />
+          <TileHome title="Statistiche Vendite Prodotti" descrizione="Vendite al POS per master/venditore, separate dalle vendite corsi." Icona={IconaGruppoVenditeProdotti} onClick={onApriStatisticheVenditeProdotti} />
         </div>
       </div>
     </div>
@@ -16723,6 +16724,161 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
             )}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Statistiche Vendite Prodotti (ERP) ----------
+// aggregato ammnistrativo delle vendite al POS, per periodo/operatore/
+// prodotto, con l'avanzamento dei target in corso — deliberatamente
+// filtrato a origine="pos": mai un ordine WooCommerce qui dentro, mai
+// una cifra di "Vendite Corsi" (tutt'altra pagina) — §7 della specifica
+// vuole i due mondi inequivocabili anche nei nomi delle sezioni
+function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("30giorni");
+  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+
+  const righePos = (venditeShop || []).filter((v) => v.origine === "pos").filter((v) => {
+    const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    return d && d >= range.inizio && d <= range.fine;
+  });
+
+  const kpi = {
+    incasso: round2(righePos.reduce((s, v) => s + (v.totale || 0), 0)),
+    pezzi: righePos.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
+    vendite: righePos.filter((v) => v.tipo_movimento === "vendita").length,
+  };
+
+  const perOperatore = {};
+  righePos.forEach((v) => {
+    if (!v.operatore_id) return;
+    const chiave = `${v.operatore_tipo}:${v.operatore_id}`;
+    if (!perOperatore[chiave]) perOperatore[chiave] = { tipo: v.operatore_tipo, id: v.operatore_id, nome: v.operatore_nome, incasso: 0, pezzi: 0 };
+    perOperatore[chiave].incasso += (v.totale || 0);
+    perOperatore[chiave].pezzi += (Array.isArray(v.prodotti) ? v.prodotti.reduce((s, p) => s + (p.quantita || 0), 0) : 0);
+  });
+  const righeOperatori = Object.values(perOperatore).map((o) => ({ ...o, incasso: round2(o.incasso) })).sort((a, b) => b.incasso - a.incasso);
+
+  const perProdotto = {};
+  righePos.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+    const chiave = (p.nome || "").trim();
+    if (!chiave) return;
+    if (!perProdotto[chiave]) perProdotto[chiave] = { nome: chiave, pezzi: 0, ricavo: 0 };
+    perProdotto[chiave].pezzi += (p.quantita || 0);
+    perProdotto[chiave].ricavo += (p.totale_riga || 0);
+  }));
+  const righeProdotti = Object.values(perProdotto).map((p) => ({ ...p, ricavo: round2(p.ricavo) })).filter((p) => p.pezzi !== 0).sort((a, b) => b.ricavo - a.ricavo);
+
+  const oggiStr = dataOggiStr();
+  const targetAttivi = (targetVenditeProdotti || [])
+    .filter((t) => t.data_inizio <= oggiStr && t.data_fine >= oggiStr)
+    .map((t) => ({
+      t,
+      avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop),
+      nome: t.soggetto_tipo === "master" ? (master || []).find((m) => m.id === t.soggetto_id)?.nome : (venditori || []).find((v) => v.id === t.soggetto_id)?.nome,
+    }));
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>ERP</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Vendite Prodotti</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Solo vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
+
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
+          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 28 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.incasso)}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
+          </div>
+        </div>
+
+        {targetAttivi.length > 0 && (
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Target in corso</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
+              {targetAttivi.map(({ t, avanzamento, nome }) => (
+                <div key={t.id}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 4 }}>{t.soggetto_tipo === "master" ? "Master" : "Venditore"} {nome ? toTitleCase(nome) : "?"}</div>
+                  <SchedaAvanzamentoTarget t={t} avanzamento={avanzamento} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Per operatore</div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginBottom: 28 }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+              <thead>
+                <tr>
+                  {["Nome", "Ruolo", "Incasso netto", "Pezzi netti"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righeOperatori.map((o) => (
+                  <tr key={`${o.tipo}:${o.id}`}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{o.nome ? toTitleCase(o.nome) : "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{o.tipo === "master" ? "Master" : o.tipo === "venditore" ? "Venditore" : "Utente"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: o.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(o.incasso)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{o.pezzi}</td>
+                  </tr>
+                ))}
+                {righeOperatori.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Per prodotto</div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righeProdotti.slice(0, 30).map((p) => (
+                  <tr key={p.nome}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.ricavo)}</td>
+                  </tr>
+                ))}
+                {righeProdotti.length === 0 && (
+                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -21718,6 +21874,7 @@ export default function App() {
   function apriInserimentoCostiRicavi() { apriViewProtetta("inserimentocostiricavi"); }
   function apriDashboardAnalisi() { apriViewProtetta("dashboardanalisi"); }
   function apriVenditeShop() { apriViewProtetta("venditeshop"); }
+  function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -22044,6 +22201,14 @@ export default function App() {
           onApriGestioneShop={apriGestioneShop}
           onApriVenditeShop={apriVenditeShop}
           onApriDashboardAnalisi={apriDashboardAnalisi}
+          onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
+        />
+      )}
+
+      {view === "statistichevenditeprodotti" && (
+        <PaginaStatisticheVenditeProdotti
+          venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
+          targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("erp")}
         />
       )}
 
