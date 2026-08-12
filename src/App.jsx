@@ -17413,7 +17413,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente }) {
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
   // programmatore — chi entra con la propria password di master o
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
@@ -17453,6 +17453,44 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         .filter((t) => t.soggetto_tipo === operatore.tipo && t.soggetto_id === operatore.id && t.data_inizio <= oggiPosStr && t.data_fine >= oggiPosStr)
         .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
     : [];
+
+  // "Corso in corso" (opzionale): permette di legare la vendita al
+  // corso attivo — serve alla verifica di congruità dell'Inventario
+  // post corso ("Venduti") e alla spedizione a domicilio qui sotto.
+  // Una master vede solo i corsi assegnati a lei; un venditore, non
+  // essendo assegnato a un corso specifico, vede tutti quelli in corso
+  // oggi in una qualunque sede.
+  const oggiStrPos = dataOggiStr();
+  const corsiInCorsoOggi = (corsiDate || []).filter((cd) => cd.data_inizio <= oggiStrPos && cd.data_fine >= oggiStrPos);
+  const corsiEleggibiliPos = operatore?.tipo === "master"
+    ? corsiInCorsoOggi.filter((cd) => cd.master_id === operatore.id)
+    : corsiInCorsoOggi;
+  const [corsoPosId, setCorsoPosId] = useState("");
+  const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
+  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+
+  // spedizione a domicilio: quando il prodotto venduto non è
+  // fisicamente con l'operatore al corso, la vendita resta comunque
+  // registrata ma genera un ordine per la sede (spedizioni_pos)
+  const [spedizioneAttiva, setSpedizioneAttiva] = useState(false);
+  const [spedIscrittoId, setSpedIscrittoId] = useState("");
+  const [spedDestinatario, setSpedDestinatario] = useState("");
+  const [spedIndirizzo, setSpedIndirizzo] = useState("");
+  const [spedCitta, setSpedCitta] = useState("");
+  const [spedCap, setSpedCap] = useState("");
+  const iscrittiCorsoPos = corsoPosSel ? (iscritti || []).filter((i) => i.corso_data_id === corsoPosSel.id) : [];
+  function selezionaIscrittoSped(iscrittoId) {
+    setSpedIscrittoId(iscrittoId);
+    const isc = iscrittiCorsoPos.find((i) => i.id === iscrittoId);
+    if (isc) {
+      setSpedDestinatario(`${isc.nome || ""} ${isc.cognome || ""}`.trim());
+      setSpedIndirizzo(isc.fattura_indirizzo ? `${isc.fattura_indirizzo}${isc.fattura_civico ? " " + isc.fattura_civico : ""}` : "");
+      setSpedCitta(isc.fattura_citta || "");
+      setSpedCap(isc.fattura_cap || "");
+    }
+  }
+
   const [ricerca, setRicerca] = useState("");
   const [categoriaSel, setCategoriaSel] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -17532,6 +17570,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function svuotaCarrello() { setCarrello([]); }
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
+    setSpedizioneAttiva(false); setSpedIscrittoId(""); setSpedDestinatario(""); setSpedIndirizzo(""); setSpedCitta(""); setSpedCap("");
   }
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
@@ -17544,6 +17583,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   async function confermaVendita() {
     if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
     if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
+    if (spedizioneAttiva && !spedDestinatario.trim()) { setMsg("Indica il destinatario della spedizione."); return; }
     for (const r of carrello) {
       if (r.quantita > disponibiliDi(r.prodottoId)) { setMsg(`"${r.nome}" non ha più abbastanza disponibilità.`); return; }
     }
@@ -17577,7 +17617,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const fattoreSconto = subtotale > 0 ? totaleNetto / subtotale : 1;
     const prodottiRiga = carrello.map((r) => ({ nome: r.nome, quantita: r.quantita, totale_riga: round2(r.prezzo * r.quantita * fattoreSconto) }));
 
-    const { error: erroreVendita } = await supabase.from("vendite_shop").insert({
+    const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert({
       woo_order_id: null,
       numero_ordine: `POS-${Date.now()}`,
       data_ordine: new Date().toISOString(),
@@ -17593,11 +17633,26 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       operatore_tipo: operatore.tipo,
       operatore_id: operatore.id,
       operatore_nome: operatore.nome,
-    });
+      corso_data_id: corsoPosSel?.id || null,
+    }).select().single();
+    if (erroreVendita) { setSalvando(false); setMsg("Magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message); return; }
+
+    if (spedizioneAttiva) {
+      const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({
+        vendita_id: venditaCreata.id,
+        corso_data_id: corsoPosSel?.id || null,
+        iscritto_id: spedIscrittoId || null,
+        destinatario_nome: spedDestinatario.trim(),
+        indirizzo: spedIndirizzo.trim() || null,
+        citta: spedCitta.trim() || null,
+        cap: spedCap.trim() || null,
+        prodotti: prodottiRiga,
+      });
+      if (erroreSped) { setSalvando(false); setMsg("Vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message); ricarica(); return; }
+    }
     setSalvando(false);
-    if (erroreVendita) { setMsg("Magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message); return; }
     nuovaVendita();
-    setMsg("Vendita registrata.");
+    setMsg(spedizioneAttiva ? "Vendita registrata e spedizione inviata a Raf." : "Vendita registrata.");
     ricarica();
   }
 
@@ -17728,6 +17783,49 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleNetto)}</span>
       </div>
 
+      {corsiEleggibiliPos.length > 0 && (
+        <div style={{ marginBottom: isMobile ? 8 : 14 }}>
+          <Field label="Corso in corso (opzionale)">
+            <select style={inputStyle} value={corsoPosId} onChange={(e) => { setCorsoPosId(e.target.value); setSpedIscrittoId(""); }}>
+              <option value="">— vendita non legata a un corso —</option>
+              {corsiEleggibiliPos.map((cd) => (
+                <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: spedizioneAttiva ? 8 : (isMobile ? 8 : 14) }}>
+        <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 16, height: 16 }} />
+        <label htmlFor="pos-spedizione" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Aggiungi spese di spedizione — non ho il prodotto con me</label>
+      </div>
+      {spedizioneAttiva && (
+        <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
+          {iscrittiCorsoPos.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <Field label="Iscritto (opzionale, precompila indirizzo)">
+                <select style={inputStyle} value={spedIscrittoId} onChange={(e) => selezionaIscrittoSped(e.target.value)}>
+                  <option value="">— nessuno, compila a mano —</option>
+                  {iscrittiCorsoPos.map((i) => <option key={i.id} value={i.id}>{i.nome} {i.cognome}</option>)}
+                </select>
+              </Field>
+            </div>
+          )}
+          <div style={{ marginBottom: 8 }}>
+            <Field label="Destinatario"><input style={inputStyle} value={spedDestinatario} onChange={(e) => setSpedDestinatario(e.target.value)} /></Field>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <Field label="Indirizzo"><input style={inputStyle} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti.</div>
+        </div>
+      )}
+
       <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 6 : 8 }}>Modalità di pagamento</div>
       <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 8 : 14 }}>
         {[{ v: "pos", l: "POS / Carta" }, { v: "contanti", l: "Contanti" }].map((m) => (
@@ -17748,7 +17846,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       )}
 
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita registrata." ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Vendita registrata") ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
       <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0 || !operatore} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
         {salvando ? "Registro…" : `Conferma vendita e incassa ${fmtEuroErp(totaleNetto)}`}
       </Button>
@@ -19220,7 +19318,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, onBack, ricarica }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, spedizioniPos, onApriMagazziniLocali, onApriSpedizioniPos, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -19231,6 +19329,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   );
   const [edizioneSelId, setEdizioneSelId] = useState(null);
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
+  const numeroSpedizioniDaEvadere = (spedizioniPos || []).filter((s) => s.stato === "da_spedire").length;
 
   function statoDi(corsoDataId) {
     return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || {
@@ -19368,6 +19467,22 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra.</div>
             </div>
           </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={onApriMagazziniLocali} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer" }}>
+              Magazzini locali
+            </button>
+            <button
+              onClick={onApriSpedizioniPos}
+              style={{
+                ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 10, padding: "9px 14px", cursor: "pointer", border: "none",
+                color: numeroSpedizioniDaEvadere > 0 ? "#fff" : NAVY,
+                background: numeroSpedizioniDaEvadere > 0 ? "#C0392B" : "#fff",
+                boxShadow: numeroSpedizioniDaEvadere > 0 ? "none" : `0 0 0 1px ${CREAM_BORDER} inset`,
+              }}
+            >
+              {numeroSpedizioniDaEvadere > 0 ? `Spedizioni da evadere (${numeroSpedizioniDaEvadere})` : "Nessuna spedizione da evadere"}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
@@ -19426,6 +19541,180 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               ))}
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// coda per Raf: ordini di spedizione a domicilio generati dal POS quando
+// chi vende non ha il prodotto fisicamente con sé al corso (§10) — "Da
+// evadere" e "Evase" sono lo stesso fetch, filtrato solo per stato
+function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack, ricarica }) {
+  const isMobile = useIsMobile();
+  const [tab, setTab] = useState("daevadere"); // daevadere | evase
+  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const corsoDataById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+
+  const righe = (spedizioniPos || [])
+    .filter((s) => (tab === "daevadere" ? s.stato === "da_spedire" : s.stato === "spedito"))
+    .sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+
+  async function segnaSpedita(id) {
+    const { error } = await supabase.from("spedizioni_pos").update({ stato: "spedito", spedito_il: new Date().toISOString() }).eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  function etichettaCorso(s) {
+    const cd = s.corso_data_id ? corsoDataById[s.corso_data_id] : null;
+    if (!cd) return "—";
+    return `${corsoById[cd.corso_id]?.nome || "—"} · ${toTitleCase(locById[cd.location_id]?.nome || "—")}`;
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Spedizioni da evadere</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Vendite POS di prodotti non disponibili fisicamente al corso, da spedire a casa dell'allievo.</div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          {[{ v: "daevadere", l: "Da evadere" }, { v: "evase", l: "Evase" }].map((t) => (
+            <button key={t.v} onClick={() => setTab(t.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: tab === t.v ? "#fff" : NAVY, background: tab === t.v ? NAVY : "#fff", border: `1px solid ${tab === t.v ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 14px", cursor: "pointer" }}>{t.l}</button>
+          ))}
+        </div>
+
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+              <thead>
+                <tr>
+                  {["Corso", "Destinatario", "Indirizzo", "Prodotti", tab === "daevadere" ? "" : "Spedita il"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righe.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{etichettaCorso(s)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{s.destinatario_nome}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{[s.indirizzo, s.cap, s.citta].filter(Boolean).join(", ") || "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                      {(Array.isArray(s.prodotti) ? s.prodotti : []).map((p) => `${p.nome} ×${p.quantita}`).join(", ")}
+                    </td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      {tab === "daevadere" ? (
+                        <button onClick={() => segnaSpedita(s.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Segna come spedita</button>
+                      ) : (
+                        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>{s.spedito_il ? fmtData(s.spedito_il.slice(0, 10)) : "—"}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {righe.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{tab === "daevadere" ? "Nessuna spedizione da evadere." : "Nessuna spedizione evasa ancora."}</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// vista consolidata dei magazzini locali (per città): cosa c'è già in
+// sede, usata per comporre le spedizioni ai corsi (§9) — "attrezzatura
+// necessaria" è lo standard di 1 pezzo per tipo, non essendoci oggi un
+// fabbisogno per-corso: da spedire = necessaria − già presente, mai
+// negativo. La merce vendibile invece parte sempre nuova, non conta qui.
+function PaginaMagazziniLocali({ location, corsiDate, inventarioSede, magazzinoLocaleConsumabili, prodottiShop, costiSottocategorie, onBack }) {
+  const isMobile = useIsMobile();
+  const [locSelId, setLocSelId] = useState(null);
+
+  const locazioniConCorsi = useMemo(() => {
+    const idsUsati = new Set((corsiDate || []).map((cd) => cd.location_id));
+    return (location || []).filter((l) => idsUsati.has(l.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [location, corsiDate]);
+  const locSel = locazioniConCorsi.find((l) => l.id === locSelId) || locazioniConCorsi[0] || null;
+
+  const attrezzatureStandard = (costiSottocategorie || [])
+    .filter((sc) => sc.categoria_id === "attrezzature_corsi" && sc.attiva && !sc.automatico)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+  const attrezzatureLocali = (inventarioSede || []).filter((r) => r.location_id === locSel?.id && r.tipo === "attrezzatura");
+  const consumabiliLocali = useMemo(() => {
+    const mappa = {};
+    (magazzinoLocaleConsumabili || []).filter((c) => c.location_id === locSel?.id).forEach((c) => {
+      if (!mappa[c.prodotto_id]) mappa[c.prodotto_id] = { quantitaTotale: 0, righe: [] };
+      mappa[c.prodotto_id].quantitaTotale += c.quantita || 0;
+      mappa[c.prodotto_id].righe.push(c);
+    });
+    return mappa;
+  }, [magazzinoLocaleConsumabili, locSel]);
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Magazzini locali</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Attrezzatura e consumabili già presenti in ogni città — usa questa vista per decidere cosa serve davvero spedire.</div>
+
+        {locazioniConCorsi.length === 0 ? (
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna sede con corsi ancora.</div>
+        ) : (
+          <>
+            <select value={locSel?.id || ""} onChange={(e) => setLocSelId(e.target.value)} style={{ ...inputStyle, width: isMobile ? "100%" : 320, marginBottom: 16 }}>
+              {locazioniConCorsi.map((l) => <option key={l.id} value={l.id}>{toTitleCase(l.nome)}</option>)}
+            </select>
+
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, alignItems: "flex-start" }}>
+              <div style={{ ...cardStyle, padding: 16 }}>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Attrezzature</div>
+                {attrezzatureStandard.length === 0 ? (
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna attrezzatura definita.</div>
+                ) : attrezzatureStandard.map((sc) => {
+                  const locale = attrezzatureLocali.find((r) => r.riferimento === sc.id)?.quantita || 0;
+                  const daSpedire = Math.max(0, 1 - locale);
+                  return (
+                    <div key={sc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                      <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{sc.nome}</span>
+                      <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{locale} in sede</span>
+                      <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: daSpedire > 0 ? "#C0392B" : "#2E7D32" }}>{daSpedire > 0 ? `${daSpedire} da spedire` : "presente"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ ...cardStyle, padding: 16 }}>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Consumabili</div>
+                {Object.keys(consumabiliLocali).length === 0 ? (
+                  <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun consumabile dichiarato ancora.</div>
+                ) : Object.entries(consumabiliLocali).map(([prodottoId, dati]) => (
+                  <div key={prodottoId} style={{ padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === prodottoId)?.nome || "—"}</span>
+                      <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{dati.quantitaTotale}x</span>
+                    </div>
+                    <div style={{ display: "flex", gap: 10, marginTop: 2, flexWrap: "wrap" }}>
+                      {dati.righe.map((r) => (
+                        <div key={r.id} style={{ display: "flex", gap: 2 }}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <span key={n} style={{ width: 7, height: 7, borderRadius: "50%", background: n <= r.livello ? GOLD : CREAM_BORDER }} />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -21960,6 +22249,7 @@ export default function App() {
   // causali assegnate ai pezzi "da giustificare" nella verifica di
   // congruità dell'Inventario Post Corso
   const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
+  const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -21993,7 +22283,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -22043,6 +22333,7 @@ export default function App() {
       supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false }),
       supabase.from("magazzino_locale_consumabili").select("*"),
       supabase.from("inventario_ammanchi").select("*"),
+      supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -22089,6 +22380,7 @@ export default function App() {
     setTargetVenditeProdotti(tvp.data || []);
     setMagazzinoLocaleConsumabili(mlc.data || []);
     setInventarioAmmanchi(iam.data || []);
+    setSpedizioniPos(sped.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -22438,6 +22730,8 @@ export default function App() {
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
+  function apriMagazziniLocali() { setView("magazzinilocali"); }
+  function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
@@ -22804,7 +23098,7 @@ export default function App() {
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
-          ruoloUtente={ruoloUtente}
+          ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti}
         />
       )}
 
@@ -22923,8 +23217,24 @@ export default function App() {
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} inventarioSede={inventarioSede}
-          prodottiApertiMagazzino={prodottiApertiMagazzino}
+          prodottiApertiMagazzino={prodottiApertiMagazzino} spedizioniPos={spedizioniPos}
+          onApriMagazziniLocali={apriMagazziniLocali} onApriSpedizioniPos={apriSpedizioniPos}
           ricarica={fetchDati} onBack={() => setView("home")}
+        />
+      )}
+
+      {view === "magazzinilocali" && (
+        <PaginaMagazziniLocali
+          location={location} corsiDate={corsiDate} inventarioSede={inventarioSede}
+          magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
+          onBack={() => setView("logisticaprodotti")}
+        />
+      )}
+
+      {view === "spedizionipos" && (
+        <PaginaSpedizioniPos
+          spedizioniPos={spedizioniPos} corsi={corsi} corsiDate={corsiDate} location={location}
+          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
         />
       )}
 

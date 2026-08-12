@@ -1933,3 +1933,28 @@ create policy "accesso interno inventario-foto" on storage.objects for all to an
   using (bucket_id = 'inventario-foto') with check (bucket_id = 'inventario-foto');
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- 68) Inventario Post Corso — fase 4: spedizioni a domicilio dal POS.
+-- Vedi supabase-magazzini-spedizioni-setup.sql per i commenti completi.
+-- ---------------------------------------------------------
+create table if not exists public.spedizioni_pos (
+  id uuid primary key default gen_random_uuid(),
+  vendita_id uuid references public.vendite_shop(id) on delete set null,
+  corso_data_id uuid references public.corsi_date(id) on delete set null,
+  iscritto_id uuid references public.iscritti(id) on delete set null,
+  destinatario_nome text not null,
+  indirizzo text,
+  cap text,
+  citta text,
+  prodotti jsonb not null default '[]',
+  stato text not null default 'da_spedire' check (stato in ('da_spedire', 'spedito')),
+  ts timestamptz not null default now(),
+  spedito_il timestamptz
+);
+alter table public.spedizioni_pos enable row level security;
+drop policy if exists "accesso interno spedizioni_pos" on public.spedizioni_pos;
+create policy "accesso interno spedizioni_pos" on public.spedizioni_pos for all to anon using (true) with check (true);
+create index if not exists spedizioni_pos_stato_idx on public.spedizioni_pos (stato);
+
+notify pgrst, 'reload schema';
