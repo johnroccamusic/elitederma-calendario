@@ -15630,7 +15630,9 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
                       <tr key={v.id}>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>#{v.numero_ordine || v.woo_order_id}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.origine === "pos" ? "#3B6FA0" : MUTED, background: v.origine === "pos" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>{v.origine === "pos" ? "POS" : "WooCommerce"}</span>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.origine === "pos" ? "#3B6FA0" : MUTED, background: v.origine === "pos" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
+                            {v.origine === "pos" ? "POS" : "WooCommerce"}{v.tipo_movimento && v.tipo_movimento !== "vendita" ? ` · ${{ reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || v.tipo_movimento}` : ""}
+                          </span>
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (v.origine === "pos" ? "Vendita al banco" : "—")}</td>
@@ -15639,7 +15641,7 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp(v.totale_imponibile) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp(v.totale_iva) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
                       </tr>
                     );
                   })}
@@ -16451,6 +16453,281 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   );
 }
 
+// ---------- Resi / Annullamenti / Cambio (POS) ----------
+// solo admin (vedi puoGestireResi in PaginaPOS). Le tre operazioni
+// registrano uno storno in vendite_shop (valori negativi, stesso
+// tipo_movimento diverso da "vendita") collegato alla vendita originale
+// tramite vendita_collegata_id — una somma semplice, nessuna logica
+// speciale da aggiungere alle statistiche/target che già sommano
+// vendite_shop. L'attribuzione segue SEMPRE chi ha generato la vendita
+// originale (operatore_* copiati dalla riga originale), mai chi esegue
+// l'operazione — vedi §8.4 della specifica
+function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const [rigaSelezionata, setRigaSelezionata] = useState(null);
+  const [vistaAzione, setVistaAzione] = useState(null); // null | reso | annullamento | cambio
+  const [quantitaResa, setQuantitaResa] = useState(1);
+  const [ricercaNuovoProdotto, setRicercaNuovoProdotto] = useState("");
+  const [nuovoProdottoSel, setNuovoProdottoSel] = useState(null);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const venditeAnnullateIds = useMemo(() => {
+    const set = new Set();
+    (venditeShop || []).filter((v) => v.tipo_movimento === "annullamento" && v.vendita_collegata_id).forEach((v) => set.add(v.vendita_collegata_id));
+    return set;
+  }, [venditeShop]);
+
+  const righeVenduteRicercabili = useMemo(() => {
+    const righe = [];
+    (venditeShop || []).filter((v) => v.origine === "pos" && v.tipo_movimento === "vendita" && !venditeAnnullateIds.has(v.id)).forEach((v) => {
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p, idx) => {
+        if (!(p.quantita > 0)) return;
+        righe.push({
+          chiave: `${v.id}-${idx}`, venditaId: v.id,
+          nome: p.nome, quantita: p.quantita, totaleRiga: p.totale_riga,
+          prezzoUnitario: p.quantita ? round2(p.totale_riga / p.quantita) : 0,
+          dataOrdine: v.data_ordine, numeroOrdine: v.numero_ordine,
+          operatoreTipo: v.operatore_tipo, operatoreId: v.operatore_id, operatoreNome: v.operatore_nome,
+          vendita: v,
+        });
+      });
+    });
+    return righe.sort((a, b) => (b.dataOrdine || "").localeCompare(a.dataOrdine || ""));
+  }, [venditeShop, venditeAnnullateIds]);
+
+  const risultatiRicerca = ricerca.trim()
+    ? righeVenduteRicercabili.filter((r) => {
+        const q = ricerca.trim().toLowerCase();
+        const dataFmt = r.dataOrdine ? fmtData(r.dataOrdine.slice(0, 10)) : "";
+        return r.nome.toLowerCase().includes(q) || (r.operatoreNome || "").toLowerCase().includes(q) || dataFmt.includes(q);
+      }).slice(0, 40)
+    : righeVenduteRicercabili.slice(0, 15);
+
+  const risultatiNuovoProdotto = ricercaNuovoProdotto.trim()
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && p.prezzo_vendita != null && p.nome.toLowerCase().includes(ricercaNuovoProdotto.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  function prodottoPerNome(nome) {
+    const chiave = (nome || "").trim().toLowerCase();
+    return (prodottiShop || []).find((p) => (p.nome || "").trim().toLowerCase() === chiave) || null;
+  }
+  function selezionaRiga(r) {
+    setRigaSelezionata(r); setVistaAzione(null); setQuantitaResa(r.quantita); setMsg("");
+    setNuovoProdottoSel(null); setRicercaNuovoProdotto("");
+  }
+  function tornaAllaRicerca() {
+    setRigaSelezionata(null); setVistaAzione(null); setMsg("");
+  }
+
+  async function eseguiReso() {
+    if (!rigaSelezionata) return;
+    const qta = Number(quantitaResa);
+    if (!(qta > 0) || qta > rigaSelezionata.quantita) { setMsg("Quantità non valida."); return; }
+    setSalvando(true); setMsg("");
+    const p = prodottoPerNome(rigaSelezionata.nome);
+    if (p) {
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (p.giacenza_magazzino || 0) + qta }).eq("id", p.id);
+      if (error) { setSalvando(false); setMsg("Errore magazzino: " + error.message); return; }
+    }
+    const importoReso = round2(rigaSelezionata.prezzoUnitario * qta);
+    const imponibile = round2(importoReso / 1.22);
+    const iva = round2(importoReso - imponibile);
+    const { error: erroreInsert } = await supabase.from("vendite_shop").insert({
+      woo_order_id: null, numero_ordine: `RESO-${Date.now()}`, data_ordine: new Date().toISOString(), stato: "completed",
+      totale: -importoReso, totale_imponibile: -imponibile, totale_iva: -iva,
+      prodotti: [{ nome: rigaSelezionata.nome, quantita: -qta, totale_riga: -importoReso }],
+      origine: "pos", tipo_movimento: "reso", vendita_collegata_id: rigaSelezionata.venditaId,
+      operatore_tipo: rigaSelezionata.operatoreTipo, operatore_id: rigaSelezionata.operatoreId, operatore_nome: rigaSelezionata.operatoreNome,
+    });
+    setSalvando(false);
+    if (erroreInsert) { setMsg("Magazzino aggiornato, ma il reso non è stato registrato: " + erroreInsert.message); return; }
+    setMsg("Reso registrato.");
+    tornaAllaRicerca();
+    ricarica();
+  }
+
+  async function eseguiAnnullamento() {
+    if (!rigaSelezionata) return;
+    const v = rigaSelezionata.vendita;
+    const righe = Array.isArray(v.prodotti) ? v.prodotti : [];
+    setSalvando(true); setMsg("");
+    for (const riga of righe) {
+      if (!(riga.quantita > 0)) continue;
+      const p = prodottoPerNome(riga.nome);
+      if (!p) continue;
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (p.giacenza_magazzino || 0) + riga.quantita }).eq("id", p.id);
+      if (error) { setSalvando(false); setMsg(`Errore magazzino ("${riga.nome}"): ` + error.message); return; }
+    }
+    const { error: erroreInsert } = await supabase.from("vendite_shop").insert({
+      woo_order_id: null, numero_ordine: `ANNULLO-${Date.now()}`, data_ordine: new Date().toISOString(), stato: "completed",
+      totale: -(v.totale || 0), totale_imponibile: -(v.totale_imponibile || 0), totale_iva: -(v.totale_iva || 0),
+      prodotti: righe.map((r) => ({ nome: r.nome, quantita: -(r.quantita || 0), totale_riga: -(r.totale_riga || 0) })),
+      origine: "pos", tipo_movimento: "annullamento", vendita_collegata_id: v.id,
+      operatore_tipo: v.operatore_tipo, operatore_id: v.operatore_id, operatore_nome: v.operatore_nome,
+    });
+    setSalvando(false);
+    if (erroreInsert) { setMsg("Magazzino aggiornato, ma l'annullamento non è stato registrato: " + erroreInsert.message); return; }
+    setMsg("Vendita annullata.");
+    tornaAllaRicerca();
+    ricarica();
+  }
+
+  async function eseguiCambio() {
+    if (!rigaSelezionata || !nuovoProdottoSel) { setMsg("Scegli il prodotto che entra."); return; }
+    setSalvando(true); setMsg("");
+    const pVecchio = prodottoPerNome(rigaSelezionata.nome);
+    const prezzoVecchio = rigaSelezionata.prezzoUnitario;
+    const prezzoNuovo = nuovoProdottoSel.prezzo_vendita;
+    const differenza = round2(prezzoNuovo - prezzoVecchio);
+
+    if (pVecchio) {
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (pVecchio.giacenza_magazzino || 0) + 1 }).eq("id", pVecchio.id);
+      if (error) { setSalvando(false); setMsg("Errore magazzino (rientro): " + error.message); return; }
+    }
+    const magazzinoNuovo = nuovoProdottoSel.giacenza_magazzino || 0;
+    const shopNuovo = nuovoProdottoSel.giacenza || 0;
+    if (magazzinoNuovo > 0) {
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzinoNuovo - 1 }).eq("id", nuovoProdottoSel.id);
+      if (error) { setSalvando(false); setMsg("Errore magazzino (uscita): " + error.message); return; }
+    } else if (shopNuovo > 0) {
+      const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: nuovoProdottoSel.id, giacenza: shopNuovo - 1 } });
+      if (error || data?.errore) { setSalvando(false); setMsg("Scarico dallo shop online non riuscito: " + (data?.errore || error.message)); return; }
+    } else {
+      setSalvando(false); setMsg(`"${nuovoProdottoSel.nome}" non ha più disponibilità.`); return;
+    }
+
+    const imponibile = round2(differenza / 1.22);
+    const iva = round2(differenza - imponibile);
+    const { error: erroreInsert } = await supabase.from("vendite_shop").insert({
+      woo_order_id: null, numero_ordine: `CAMBIO-${Date.now()}`, data_ordine: new Date().toISOString(), stato: "completed",
+      totale: differenza, totale_imponibile: imponibile, totale_iva: iva,
+      prodotti: [
+        { nome: rigaSelezionata.nome, quantita: -1, totale_riga: -prezzoVecchio },
+        { nome: nuovoProdottoSel.nome, quantita: 1, totale_riga: prezzoNuovo },
+      ],
+      origine: "pos", tipo_movimento: "cambio", vendita_collegata_id: rigaSelezionata.venditaId,
+      operatore_tipo: rigaSelezionata.operatoreTipo, operatore_id: rigaSelezionata.operatoreId, operatore_nome: rigaSelezionata.operatoreNome,
+    });
+    setSalvando(false);
+    if (erroreInsert) { setMsg("Magazzino aggiornato, ma il cambio non è stato registrato: " + erroreInsert.message); return; }
+    setMsg("Cambio registrato.");
+    tornaAllaRicerca();
+    ricarica();
+  }
+
+  const differenzaCambio = nuovoProdottoSel && rigaSelezionata ? round2(nuovoProdottoSel.prezzo_vendita - rigaSelezionata.prezzoUnitario) : null;
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={rigaSelezionata ? tornaAllaRicerca : onChiudi} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 24, fontWeight: 700, color: NAVY }}>Resi / Annullamenti / Cambio</div>
+        </div>
+
+        {!rigaSelezionata ? (
+          <>
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16, marginTop: 8 }}>Cerca il prodotto, il nome di chi ha venduto o la data, poi scegli la vendita giusta dall'elenco.</div>
+            <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca prodotto, venditore o data…" style={{ marginBottom: 16 }} />
+            <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+              {risultatiRicerca.length === 0 ? (
+                <div style={{ padding: 20, ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita trovata.</div>
+              ) : risultatiRicerca.map((r) => (
+                <div key={r.chiave} onClick={() => selezionaRiga(r)} style={{ padding: "12px 16px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{r.nome} {r.quantita > 1 ? `×${r.quantita}` : ""} — {r.dataOrdine ? fmtData(r.dataOrdine.slice(0, 10)) : "—"}</div>
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{r.operatoreTipo === "master" ? "Master" : r.operatoreTipo === "venditore" ? "Venditore" : "Utente"} {r.operatoreNome ? toTitleCase(r.operatoreNome) : "—"}</div>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.totaleRiga)}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : !vistaAzione ? (
+          <>
+            <div style={{ ...cardStyle, marginTop: 8 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Vendita selezionata</div>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{rigaSelezionata.nome} {rigaSelezionata.quantita > 1 ? `×${rigaSelezionata.quantita}` : ""}</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{rigaSelezionata.dataOrdine ? fmtData(rigaSelezionata.dataOrdine.slice(0, 10)) : "—"} · {rigaSelezionata.operatoreTipo === "master" ? "Master" : rigaSelezionata.operatoreTipo === "venditore" ? "Venditore" : "Utente"} {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "—"} · #{rigaSelezionata.numeroOrdine}</div>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 4 }}>{fmtEuroErp(rigaSelezionata.prezzoUnitario)} cad. — totale riga {fmtEuroErp(rigaSelezionata.totaleRiga)}</div>
+            </div>
+            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 16 }}>
+              <Button onClick={() => setVistaAzione("reso")} style={{ flex: 1 }}>Reso</Button>
+              <Button variant="ghost" onClick={() => setVistaAzione("cambio")} style={{ flex: 1 }}>Cambio</Button>
+              <Button variant="danger" onClick={() => setVistaAzione("annullamento")} style={{ flex: 1 }}>Annulla l'intera vendita</Button>
+            </div>
+          </>
+        ) : vistaAzione === "reso" ? (
+          <div style={{ ...cardStyle, marginTop: 8 }}>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Reso — {rigaSelezionata.nome}</div>
+            <Field label={`Quantità resa (max ${rigaSelezionata.quantita})`}>
+              <input type="number" min="1" max={rigaSelezionata.quantita} style={inputStyle} value={quantitaResa} onChange={(e) => setQuantitaResa(e.target.value)} />
+            </Field>
+            <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>Il pezzo rientra in magazzino; verranno scalati {fmtEuroErp(round2(rigaSelezionata.prezzoUnitario * (Number(quantitaResa) || 0)))} dall'incasso e dall'avanzamento target di {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "chi ha venduto"}.</div>
+            {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Reso registrato." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button onClick={eseguiReso} disabled={salvando}>{salvando ? "Registro…" : "Conferma reso"}</Button>
+              <Button variant="ghost" onClick={() => setVistaAzione(null)}>Annulla</Button>
+            </div>
+          </div>
+        ) : vistaAzione === "annullamento" ? (
+          <div style={{ ...cardStyle, marginTop: 8 }}>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Annulla l'intera vendita #{rigaSelezionata.numeroOrdine}</div>
+            {(Array.isArray(rigaSelezionata.vendita.prodotti) ? rigaSelezionata.vendita.prodotti : []).map((r, i) => (
+              <div key={i} style={{ ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>{r.quantita}× {r.nome} — {fmtEuroErp(r.totale_riga)}</div>
+            ))}
+            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginTop: 8, marginBottom: 14 }}>Totale da stornare: {fmtEuroErp(rigaSelezionata.vendita.totale)}</div>
+            <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 14 }}>Tutti i prodotti di questa vendita rientrano in magazzino e l'intero importo si scala dall'incasso e dall'avanzamento target di {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "chi ha venduto"}. Operazione non reversibile.</div>
+            {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita annullata." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <Button variant="danger" onClick={eseguiAnnullamento} disabled={salvando}>{salvando ? "Registro…" : "Conferma annullamento"}</Button>
+              <Button variant="ghost" onClick={() => setVistaAzione(null)}>Indietro</Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ ...cardStyle, marginTop: 8 }}>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Cambio — esce {rigaSelezionata.nome}</div>
+            {!nuovoProdottoSel ? (
+              <div style={{ position: "relative" }}>
+                <Field label="Prodotto che entra">
+                  <input style={inputStyle} value={ricercaNuovoProdotto} onChange={(e) => setRicercaNuovoProdotto(e.target.value)} placeholder="Cerca il prodotto sostitutivo…" autoFocus />
+                </Field>
+                {risultatiNuovoProdotto.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10 }}>
+                    {risultatiNuovoProdotto.map((p) => (
+                      <div key={p.id} onClick={() => setNuovoProdottoSel(p)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", justifyContent: "space-between" }}>
+                        <span>{p.nome}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp(p.prezzo_vendita)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 4 }}>Rientra: {rigaSelezionata.nome} ({fmtEuroErp(rigaSelezionata.prezzoUnitario)})</div>
+                <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 10 }}>Esce: {nuovoProdottoSel.nome} ({fmtEuroErp(nuovoProdottoSel.prezzo_vendita)}) <button onClick={() => { setNuovoProdottoSel(null); setRicercaNuovoProdotto(""); }} style={{ background: "none", border: "none", color: NAVY, textDecoration: "underline", cursor: "pointer", ...fontBody, fontSize: 12.5, marginLeft: 8 }}>cambia</button></div>
+                <div style={{ background: BG, borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
+                    {differenzaCambio > 0 ? "Da incassare" : differenzaCambio < 0 ? "Da rimborsare" : "Nessuna differenza"}
+                  </div>
+                  <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(Math.abs(differenzaCambio))}</div>
+                </div>
+                {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Cambio registrato." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={eseguiCambio} disabled={salvando}>{salvando ? "Registro…" : "Conferma cambio"}</Button>
+                  <Button variant="ghost" onClick={() => setVistaAzione(null)}>Annulla</Button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ---------- POS Vendita diretta ----------
 // vendita al banco: scarica lo stock da giacenza_magazzino (fisico, come
 // la Logistica prodotti — non tocca mai WooCommerce) e registra la
@@ -16458,7 +16735,12 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente }) {
+  // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
+  // programmatore — chi entra con la propria password di master o
+  // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
+  // escluso automaticamente
+  const puoGestireResi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
   const isMobile = useIsMobile();
   // ogni vendita nasce attribuita a chi è loggato in questo momento (mai
   // "anonima"): priorità alla master se l'identità è doppia (master +
@@ -16494,6 +16776,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
   const [mostraStorico, setMostraStorico] = useState(false);
+  const [mostraResiCambio, setMostraResiCambio] = useState(false);
   const [carrelloEspanso, setCarrelloEspanso] = useState(false); // solo mobile: carrello come foglio a comparsa dal basso
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
@@ -16636,6 +16919,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // colonna (mobile/desktop) invece di schiacciare l'immagine
   const tileImg = { width: "100%", aspectRatio: "1 / 1", borderRadius: 8, background: BG, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", marginBottom: 8 };
 
+  if (mostraResiCambio && puoGestireResi) {
+    return <PaginaResiCambioPOS prodottiShop={prodottiShop} venditeShop={venditeShop} ricarica={ricarica} onChiudi={() => setMostraResiCambio(false)} />;
+  }
+
   if (mostraStorico) {
     return (
       <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -16649,24 +16936,30 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
                 <thead>
                   <tr>
-                    {["Vendita", "Data", "Operatore", "Prodotti", "Metodo", "Totale"].map((th) => (
+                    {["Vendita", "Tipo", "Data", "Operatore", "Prodotti", "Metodo", "Totale"].map((th) => (
                       <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {venditePos.map((v) => (
-                    <tr key={v.id}>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.numero_ordine}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
-                    </tr>
-                  ))}
+                  {venditePos.map((v) => {
+                    const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" } }[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
+                    return (
+                      <tr key={v.id}>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.numero_ordine}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: badgeTipo.c, background: badgeTipo.s, borderRadius: 8, padding: "3px 9px" }}>{badgeTipo.l}</span>
+                        </td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                      </tr>
+                    );
+                  })}
                   {venditePos.length === 0 && (
-                    <tr><td colSpan={6} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco registrata.</td></tr>
+                    <tr><td colSpan={7} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco registrata.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -16882,6 +17175,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 <div onClick={() => setMostraMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 59 }} />
                 <div style={{ position: "absolute", top: 44, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.14)", zIndex: 60, minWidth: 170, overflow: "hidden" }}>
                   <button onClick={() => { nuovaVendita(); setMostraMenu(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>+ Nuova vendita</button>
+                  {puoGestireResi && (
+                    <button onClick={() => { setMostraResiCambio(true); setMostraMenu(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}` }}>Resi / Cambio</button>
+                  )}
                   {carrello.length > 0 && (
                     <button onClick={() => { svuotaCarrello(); setMostraMenu(false); }} style={{ display: "block", width: "100%", textAlign: "left", padding: "11px 14px", background: "none", border: "none", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B", borderTop: `1px solid ${CREAM_BORDER}` }}>Svuota carrello</button>
                   )}
@@ -16970,6 +17266,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <Button variant="ghost" onClick={() => setMostraStorico(true)}>Storico vendite</Button>
+            {puoGestireResi && <Button variant="ghost" onClick={() => setMostraResiCambio(true)}>Resi / Cambio</Button>}
             <Button onClick={nuovaVendita}>+ Nuova vendita</Button>
           </div>
         </div>
@@ -21785,6 +22082,7 @@ export default function App() {
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
+          ruoloUtente={ruoloUtente}
         />
       )}
 
