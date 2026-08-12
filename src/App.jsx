@@ -1817,6 +1817,18 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const [filtroLeva, setFiltroLeva] = useState("");
   const [apriFiltro, setApriFiltro] = useState(""); // quale tendina filtro è aperta, "" = nessuna
   const [ricercaTesto, setRicercaTesto] = useState("");
+  // agosto è tecnicamente l'ultimo mese della stagione PRECEDENTE (la
+  // stagione va da settembre ad agosto), ma è anche il mese in cui si
+  // organizza la stagione che sta per iniziare: questa spunta mostra anche
+  // quell'agosto insieme alla stagione in vista, senza spostare il confine
+  // usato ovunque altrove (annoStagioneDaData resta invariato)
+  const [includiAgostoPrecedente, setIncludiAgostoPrecedente] = useState(false);
+  function inStagioneVista(dataStr) {
+    if (annoStagioneDaData(dataStr) === stagioneVista) return true;
+    if (!includiAgostoPrecedente) return false;
+    const [anno, mese] = dataStr.split("-").map(Number);
+    return mese === 8 && anno === stagioneVista;
+  }
 
   // stagione bloccata (persistita): se assente, la stagione mostrata segue
   // sempre la data odierna e passa automaticamente a quella nuova a
@@ -1848,10 +1860,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const stagioniFuoriVista = useMemo(() => {
     const set = new Set();
     corsiDate
-      .filter((cd) => cd.data_fine >= dataOggiStr() && annoStagioneDaData(cd.data_inizio) !== stagioneVista)
+      .filter((cd) => cd.data_fine >= dataOggiStr() && !inStagioneVista(cd.data_inizio))
       .forEach((cd) => set.add(annoStagioneDaData(cd.data_inizio)));
     return Array.from(set).sort((a, b) => a - b);
-  }, [corsiDate, stagioneVista]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [corsiDate, stagioneVista, includiAgostoPrecedente]);
 
   function bloccaStagioneDiDefault() {
     try { localStorage.setItem(CHIAVE_STAGIONE_BLOCCATA, String(stagioneVista)); } catch { /* ignora */ }
@@ -1867,7 +1880,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 
   const righe = corsiDate
     .filter((cd) => cd.data_fine >= dataOggiStr())
-    .filter((cd) => annoStagioneDaData(cd.data_inizio) === stagioneVista)
+    .filter((cd) => inStagioneVista(cd.data_inizio))
     .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
     .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
     .filter((cd) => !filtroMaster || cd.master_id === filtroMaster)
@@ -1908,7 +1921,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   // classifica del carico di lavoro complessivo, non solo delle master
   const conteggioCarico = {};
   corsiDate
-    .filter((cd) => cd.data_fine >= dataOggiStr() && annoStagioneDaData(cd.data_inizio) === stagioneVista)
+    .filter((cd) => cd.data_fine >= dataOggiStr() && inStagioneVista(cd.data_inizio))
     .forEach((cd) => {
       if (cd.master_id) {
         const nome = master.find((m) => m.id === cd.master_id)?.nome;
@@ -2235,6 +2248,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
                 <option key={anno} value={anno}>{etichettaStagione(anno)}</option>
               ))}
             </select>
+            <label style={{ display: "flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap", cursor: "pointer" }}>
+              <input type="checkbox" checked={includiAgostoPrecedente} onChange={(e) => setIncludiAgostoPrecedente(e.target.checked)} style={{ width: 15, height: 15 }} />
+              Includi agosto precedente
+            </label>
             {stagioneBloccata === stagioneVista ? (
               <div style={{ display: "flex", alignItems: "center", gap: 7, background: "#EEF1FA", border: "1px solid #D9DEF2", borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
                 <IconaSpuntaCerchio size={15} color="#2E7D32" /> Stagione di default
