@@ -3769,11 +3769,11 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) 
 
 // ---------- Dashboard venditori ----------
 // tasto "pillola" per le tab (In programmazione/Archivio, Elenco/Calendario)
-function TabPillola({ attivo, onClick, children }) {
+function TabPillola({ attivo, onClick, children, compatto }) {
   return (
     <button
       onClick={onClick}
-      style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "9px 14px", borderRadius: 16, border: attivo ? "none" : `1px solid ${CREAM_BORDER}`, background: attivo ? NAVY : "#fff", color: attivo ? "#fff" : NAVY, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+      style={{ ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 600, padding: compatto ? "7px 8px" : "9px 14px", borderRadius: 16, border: attivo ? "none" : `1px solid ${CREAM_BORDER}`, background: attivo ? NAVY : "#fff", color: attivo ? "#fff" : NAVY, cursor: "pointer", display: "flex", alignItems: "center", gap: compatto ? 3 : 6, whiteSpace: "nowrap", flexShrink: 0 }}
     >
       {children}
     </button>
@@ -3850,6 +3850,7 @@ function SezioneDateCorsi({
   const vistaDateModo = modoForzato || vistaDateModoInterno;
   const setVistaDateTab = setVistaDateTabInterna;
   const setVistaDateModo = setVistaDateModoInterno;
+  const isMobile = useIsMobile();
   useEffect(() => {
     if (!registraInterceptaIndietro || nascondiControlli) return;
     if (vistaDateModo === "calendario") { registraInterceptaIndietro(() => setVistaDateModo("elenco")); return () => registraInterceptaIndietro(null); }
@@ -3907,25 +3908,25 @@ function SezioneDateCorsi({
 
   return (
     <div>
-      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: 70, marginBottom: -4 } : undefined}>
+      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
       {intestazioneSticky}
       {!nascondiControlli && (
         <>
           {!nascondiTitolo && (
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12, textAlign: "center", textTransform: "uppercase" }}>{titolo || "Corsi in programmazione"}</div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
-              <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? 4 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 12, ...(isMobile ? { overflowX: "auto" } : {}) }}>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, flexShrink: 0 }}>
+              <TabPillola compatto={isMobile} attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>Programmati ({numeroInProgrammazione})</TabPillola>
+              <TabPillola compatto={isMobile} attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Passati</TabPillola>
             </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
-              <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
-              <div style={{ display: "flex", alignItems: "center", marginLeft: 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff" }}>
-                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center", flexShrink: 0 }}>
+              <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
+              <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+              <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
+                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 22 : 30, height: isMobile ? 26 : 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
                 <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
+                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 22 : 30, height: isMobile ? 26 : 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
               </div>
             </div>
           </div>
@@ -8304,6 +8305,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // sua pagina separata (stesso sblocco amministratore condiviso)
 function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro }) {
   const [msg, setMsg] = useState("");
+  const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
   // il popup "Nuova data" già pronto su oggi, invece di dover passare
   // dalla vista Calendario e cliccare un giorno vuoto
@@ -8384,21 +8386,21 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   const intestazioneGestioneCorsi = (
     <>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
-        <Button onClick={() => setMostraAggiungiCorso(true)}>Aggiungi Corso</Button>
-        <Button variant="ghost" onClick={onApriUltimeIscrizioni}>Ultime iscrizioni</Button>
+      <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
+        <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
+        <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
         {numeroAccontiInAttesa > 0 ? (
           <>
             <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
             <button
               onClick={onApriVerificaAcconti}
-              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer", animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
+              style={{ ...fontBody, fontSize: isMobile ? 11 : 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: isMobile ? "7px 8px" : "10px 18px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
             >
               Verifica Pagamenti ({numeroAccontiInAttesa})
             </button>
           </>
         ) : (
-          <Button variant="ghost" onClick={onApriVerificaAcconti}>Niente da verificare</Button>
+          <Button variant="ghost" onClick={onApriVerificaAcconti} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Niente da verificare</Button>
         )}
       </div>
     </>
@@ -23736,7 +23738,21 @@ export default function App() {
     setCorsiGiorni(cg.data || []);
     setTipiModella(tm.data || []);
     setCorsiTipiModella(ctm.data || []);
-    setVenditori(ve.data || []);
+    // L'elenco venditori è usato ovunque (login alla Dashboard venditori,
+    // selezione "Tutor" in iscrizione, classifiche): se la select con le
+    // colonne opzionali "permessi"/"password" fallisce perché una di quelle
+    // colonne non è ancora stata creata su questo database (ultimi file SQL
+    // non ancora eseguiti), NON deve sparire tutto l'elenco. In quel caso
+    // ricarico con le sole colonne sempre presenti e riempio le opzionali
+    // con i valori di default, così i venditori restano visibili e
+    // utilizzabili — esattamente come già facciamo per "telefono".
+    let venditoriData = ve.data;
+    if (ve.error) {
+      let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
+      if (alt.error) alt = await supabase.from("venditori").select("id, nome, ts").order("nome");
+      venditoriData = (alt.data || []).map((v) => ({ permessi: [], password: "0000", ...v }));
+    }
+    setVenditori(venditoriData || []);
     setPasswordMenu(pm.data || []);
     setUtentiApp(ua.data || []);
     setCorsiKitProdotti(ckp.data || []);
