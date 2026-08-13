@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
@@ -3851,6 +3851,20 @@ function SezioneDateCorsi({
     registraInterceptaIndietro(null);
   }, [vistaDateModo, vistaDateTab, nascondiControlli, registraInterceptaIndietro]);
   const [ricercaDate, setRicercaDate] = useState("");
+  // dimensione del testo di questa sezione (elenco e calendario incorporato),
+  // regolabile coi tasti +/- vicino a "Elenco": resta memorizzata in locale,
+  // così l'ultima misura scelta vale anche alle aperture successive
+  const [fontScale, setFontScale] = useState(() => {
+    const salvato = parseFloat(localStorage.getItem("corsiDateFontScale"));
+    return Number.isFinite(salvato) ? salvato : 1;
+  });
+  function cambiaFontScale(delta) {
+    setFontScale((prev) => {
+      const nuovo = Math.round(Math.min(1.4, Math.max(0.8, prev + delta)) * 100) / 100;
+      localStorage.setItem("corsiDateFontScale", String(nuovo));
+      return nuovo;
+    });
+  }
   const oggiStr = dataOggiStr();
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -3877,7 +3891,7 @@ function SezioneDateCorsi({
   });
 
   return (
-    <div>
+    <div style={{ zoom: fontScale }}>
       {!nascondiControlli && (
         <>
           {!nascondiTitolo && (
@@ -3888,9 +3902,14 @@ function SezioneDateCorsi({
               <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
               <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
               <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+              <div style={{ display: "flex", alignItems: "center", marginLeft: 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff" }}>
+                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci dimensione testo" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
+                <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
+                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci dimensione testo" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
+              </div>
             </div>
           </div>
         </>
@@ -11431,25 +11450,39 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
   }, []);
 
   const refOggi = React.useRef(null);
+  const stickyRef = React.useRef(null);
+  // parte da una stima ragionevole e si corregge da sola non appena la
+  // barra sticky (titolo + tasto Oggi + istruzioni) è realmente disegnata:
+  // serve per lo scrollMarginTop dei mesi, altrimenti quello corrente si
+  // aprirebbe parzialmente nascosto dietro di essa
+  const [altezzaSticky, setAltezzaSticky] = useState(90);
+  useLayoutEffect(() => {
+    if (stickyRef.current) setAltezzaSticky(stickyRef.current.offsetHeight);
+  }, []);
+  // riscorre al mese corrente ogni volta che la vera altezza della barra
+  // sticky viene misurata, così l'apertura mostra sempre il mese corrente
+  // per intero, non parzialmente coperto dalla barra
   useEffect(() => {
     refOggi.current?.scrollIntoView({ block: "start" });
-  }, []);
+  }, [altezzaSticky]);
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <TopBar title="Calendario" onBack={onBack} />
-        <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
-      </div>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-        Scorri su o giù per vedere gli altri mesi. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
+    <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 20px 40px" }}>
+      <div ref={stickyRef} style={{ position: "sticky", top: 0, zIndex: 20, background: BG, paddingTop: 40, marginBottom: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <TopBar title="Calendario" onBack={onBack} />
+          <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
+        </div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
+          Scorri su o giù per vedere gli altri mesi. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
+        </div>
       </div>
 
       {mesi.map(({ anno, mese }) => (
         // scrollMarginTop: lo scroll automatico al mese corrente (block:"start")
-        // allineerebbe altrimenti il mese proprio sotto la barra fissa
-        // Indietro/Avanti, nascondendolo parzialmente dietro di essa
-        <div key={`${anno}-${mese}`} style={{ scrollMarginTop: 54 }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
+        // allineerebbe altrimenti il mese proprio sotto la barra sticky
+        // locale (titolo/Oggi/istruzioni), nascondendolo parzialmente dietro di essa
+        <div key={`${anno}-${mese}`} style={{ scrollMarginTop: altezzaSticky }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
           <MeseGriglia
             anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
             onApriData={onApriData} corsoById={corsoById} locById={locById}
