@@ -1350,7 +1350,7 @@ function SchedaAvanzamentoTarget({ t, avanzamento }) {
       {t.soglia_incasso != null && (
         <div style={{ marginBottom: (avanzamento.prodottiConProgresso || []).length > 0 ? 10 : 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 4 }}>
-            <span>{fmtEuroErp(avanzamento.incassoRaggiunto)} di {fmtEuroErp(t.soglia_incasso)}</span>
+            <span>{fmtEuroErp2(avanzamento.incassoRaggiunto)} di {fmtEuroErp2(t.soglia_incasso)}</span>
             <span style={{ fontWeight: 700 }}>{avanzamento.percentualeIncasso}%</span>
           </div>
           <div style={{ height: 6, borderRadius: 3, background: "#EFE9DC", overflow: "hidden" }}>
@@ -4637,7 +4637,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2, minmax(0,1fr))", gap: 14, marginBottom: 20 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto nel periodo</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.incasso)}</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi netti</div>
@@ -4669,7 +4669,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}><span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: b.c, background: b.s, borderRadius: 8, padding: "3px 9px" }}>{b.l}</span></td>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
-                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                     </tr>
                   );
                 })}
@@ -4797,11 +4797,11 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
           <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
             <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — mese corrente</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassiPos.mese)}</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(incassiPos.mese)}</div>
             </div>
             <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — totale</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp(incassiPos.totale)}</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(incassiPos.totale)}</div>
             </div>
           </div>
         )}
@@ -10597,7 +10597,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
           <div>
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nomeSoggetto(t.soggetto_id).toUpperCase()} — {TIPI_TARGET.find((tt) => tt.v === t.tipo_target)?.l}</div>
             <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtData(t.data_inizio)} → {fmtData(t.data_fine)}</div>
-            {t.soglia_incasso != null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Soglia: {fmtEuroErp(t.soglia_incasso)}</div>}
+            {t.soglia_incasso != null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Soglia: {fmtEuroErp2(t.soglia_incasso)}</div>}
             {(t.prodotti_obiettivo || []).length > 0 && (
               <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
                 {t.prodotti_obiettivo.map((p) => `${p.quantita_minima}× ${(prodottiShop || []).find((ps) => ps.id === p.prodotto_id)?.nome || "?"}`).join(", ")}
@@ -15056,10 +15056,10 @@ function costoClasseErp(cd) {
 function fmtEuroErp(n) {
   return `${Math.round(n || 0).toLocaleString("it-IT")} €`;
 }
-function fmtEuroKErp(n) {
-  const v = n || 0;
-  if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1).replace(".", ",")}K €`;
-  return fmtEuroErp(v);
+// prezzi di prodotti/POS/shop: sempre due cifre dopo la virgola (mai
+// arrotondati all'euro intero come i totali aggregati di fmtEuroErp)
+function fmtEuroErp2(n) {
+  return `${(n || 0).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 }
 function fmtPctErp(n) {
   if (n == null || !isFinite(n)) return "—";
@@ -15683,9 +15683,9 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 18 }}>
-          <CardKpiErp titolo="Ricavi totali" valore={fmtEuroKErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
-          <CardKpiErp titolo="Costi operativi" valore={fmtEuroKErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
-          <CardKpiErp titolo="Utile netto" valore={fmtEuroKErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
+          <CardKpiErp titolo="Ricavi totali" valore={fmtEuroErp(kpi.ricavi)} variazione={varRicavi} sub="vs stesso periodo precedente" Icona={IconaBanconota} coloreIcona="#2E7D32" coloreBgIcona="#E3F3E5" />
+          <CardKpiErp titolo="Costi operativi" valore={fmtEuroErp(kpi.costi)} variazione={varCosti} variazioneInvertita sub={kpi.ricavi > 0 ? `${round1Erp((kpi.costi / kpi.ricavi) * 100)}% dei ricavi` : "—"} Icona={IconaRicevutaErp} coloreIcona="#C0392B" coloreBgIcona="#FBE4E1" />
+          <CardKpiErp titolo="Utile netto" valore={fmtEuroErp(kpi.utile)} variazione={varUtile} sub={`Margine netto ${marginePct.toFixed(1).replace(".", ",")}%`} Icona={IconaBustaErp} coloreIcona="#fff" coloreBgIcona="rgba(255,255,255,0.15)" scuro />
           <CardKpiErp titolo="Allievi iscritti" valore={String(kpi.nAllievi)} variazione={varAllievi} sub={`Riempimento medio classi ${kpi.riempimentoMedio.toFixed(0)}%`} Icona={IconaLaureaErp} coloreIcona="#2563EB" coloreBgIcona="#E1EAF9" />
         </div>
 
@@ -16224,15 +16224,15 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Totale incassato</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.totale)}</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.totale)}</div>
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Imponibile</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.imponibile)}</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.imponibile)}</div>
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>IVA</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.iva)}</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.iva)}</div>
           </div>
         </div>
 
@@ -16266,9 +16266,9 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
                         </td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp(v.totale_imponibile) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp(v.totale_iva) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                       </tr>
                     );
                   })}
@@ -16312,8 +16312,8 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
                     </td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.nOrdini}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.ricavo)}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{fmtEuroErp(p.prezzoMedio)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.prezzoMedio)}</td>
                   </tr>
                 ))}
                 {prodottiAggregati.length === 0 && (
@@ -17044,7 +17044,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica, on
       </td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.fatturato)}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.fatturato)}</td>
     </tr>
   );
 }
@@ -17374,8 +17374,8 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore stimato totale</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreStimatoTotale)}</div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{costoMedio != null ? `Costo medio: ${fmtEuroErp(costoMedio)}` : "Costo medio non disponibile"}</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(valoreStimatoTotale)}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{costoMedio != null ? `Costo medio: ${fmtEuroErp2(costoMedio)}` : "Costo medio non disponibile"}</div>
           </div>
         </div>
 
@@ -17699,7 +17699,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
                     <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{r.nome} {r.quantita > 1 ? `×${r.quantita}` : ""} — {r.dataOrdine ? fmtData(r.dataOrdine.slice(0, 10)) : "—"}</div>
                     <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{r.operatoreTipo === "master" ? "Master" : r.operatoreTipo === "venditore" ? "Venditore" : "Utente"} {r.operatoreNome ? toTitleCase(r.operatoreNome) : "—"}</div>
                   </div>
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(r.totaleRiga)}</div>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(r.totaleRiga)}</div>
                 </div>
               ))}
             </div>
@@ -17710,7 +17710,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Vendita selezionata</div>
               <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{rigaSelezionata.nome} {rigaSelezionata.quantita > 1 ? `×${rigaSelezionata.quantita}` : ""}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{rigaSelezionata.dataOrdine ? fmtData(rigaSelezionata.dataOrdine.slice(0, 10)) : "—"} · {rigaSelezionata.operatoreTipo === "master" ? "Master" : rigaSelezionata.operatoreTipo === "venditore" ? "Venditore" : "Utente"} {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "—"} · #{rigaSelezionata.numeroOrdine}</div>
-              <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 4 }}>{fmtEuroErp(rigaSelezionata.prezzoUnitario)} cad. — totale riga {fmtEuroErp(rigaSelezionata.totaleRiga)}</div>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 4 }}>{fmtEuroErp2(rigaSelezionata.prezzoUnitario)} cad. — totale riga {fmtEuroErp2(rigaSelezionata.totaleRiga)}</div>
             </div>
             <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 10, marginTop: 16 }}>
               <Button onClick={() => setVistaAzione("reso")} style={{ flex: 1 }}>Reso</Button>
@@ -17724,7 +17724,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
             <Field label={`Quantità resa (max ${rigaSelezionata.quantita})`}>
               <input type="number" min="1" max={rigaSelezionata.quantita} style={inputStyle} value={quantitaResa} onChange={(e) => setQuantitaResa(e.target.value)} />
             </Field>
-            <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>Il pezzo rientra in magazzino; verranno scalati {fmtEuroErp(round2(rigaSelezionata.prezzoUnitario * (Number(quantitaResa) || 0)))} dall'incasso e dall'avanzamento target di {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "chi ha venduto"}.</div>
+            <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>Il pezzo rientra in magazzino; verranno scalati {fmtEuroErp2(round2(rigaSelezionata.prezzoUnitario * (Number(quantitaResa) || 0)))} dall'incasso e dall'avanzamento target di {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "chi ha venduto"}.</div>
             {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Reso registrato." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
             <div style={{ display: "flex", gap: 8 }}>
               <Button onClick={eseguiReso} disabled={salvando}>{salvando ? "Registro…" : "Conferma reso"}</Button>
@@ -17735,9 +17735,9 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
           <div style={{ ...cardStyle, marginTop: 8 }}>
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Annulla l'intera vendita #{rigaSelezionata.numeroOrdine}</div>
             {(Array.isArray(rigaSelezionata.vendita.prodotti) ? rigaSelezionata.vendita.prodotti : []).map((r, i) => (
-              <div key={i} style={{ ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>{r.quantita}× {r.nome} — {fmtEuroErp(r.totale_riga)}</div>
+              <div key={i} style={{ ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>{r.quantita}× {r.nome} — {fmtEuroErp2(r.totale_riga)}</div>
             ))}
-            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginTop: 8, marginBottom: 14 }}>Totale da stornare: {fmtEuroErp(rigaSelezionata.vendita.totale)}</div>
+            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginTop: 8, marginBottom: 14 }}>Totale da stornare: {fmtEuroErp2(rigaSelezionata.vendita.totale)}</div>
             <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 14 }}>Tutti i prodotti di questa vendita rientrano in magazzino e l'intero importo si scala dall'incasso e dall'avanzamento target di {rigaSelezionata.operatoreNome ? toTitleCase(rigaSelezionata.operatoreNome) : "chi ha venduto"}. Operazione non reversibile.</div>
             {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Vendita annullata." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
             <div style={{ display: "flex", gap: 8 }}>
@@ -17753,7 +17753,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Rientrano</div>
             {prodottiRientranti.map((r) => (
               <div key={r.chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{r.nome} <span style={{ color: MUTED }}>({fmtEuroErp(r.prezzoUnitario)} cad.)</span></div>
+                <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{r.nome} <span style={{ color: MUTED }}>({fmtEuroErp2(r.prezzoUnitario)} cad.)</span></div>
                 <input type="number" min="1" max={r.quantita} style={{ ...inputStyle, width: 60, padding: "6px 8px" }} value={r.quantitaResa} onChange={(e) => cambiaQuantitaRientro(r.chiave, e.target.value)} />
                 <button onClick={() => rimuoviRientro(r.chiave)} disabled={prodottiRientranti.length <= 1} title={prodottiRientranti.length <= 1 ? "Deve rimanerne almeno uno" : "Rimuovi"} style={{ background: "none", border: "none", color: prodottiRientranti.length <= 1 ? "#C9C4B8" : "#C0392B", cursor: prodottiRientranti.length <= 1 ? "default" : "pointer", fontSize: 15 }}>✕</button>
               </div>
@@ -17764,7 +17764,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10 }}>
                   {risultatiRicercaRientro.map((r) => (
                     <div key={r.chiave} onClick={() => aggiungiRientro(r)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", justifyContent: "space-between" }}>
-                      <span>{r.nome} — {r.dataOrdine ? fmtData(r.dataOrdine.slice(0, 10)) : "—"}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp(r.prezzoUnitario)}</span>
+                      <span>{r.nome} — {r.dataOrdine ? fmtData(r.dataOrdine.slice(0, 10)) : "—"}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp2(r.prezzoUnitario)}</span>
                     </div>
                   ))}
                 </div>
@@ -17774,7 +17774,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Escono</div>
             {prodottiUscenti.map((u) => (
               <div key={u.prodotto.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{u.prodotto.nome} <span style={{ color: MUTED }}>({fmtEuroErp(u.prodotto.prezzo_vendita)} cad.)</span></div>
+                <div style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{u.prodotto.nome} <span style={{ color: MUTED }}>({fmtEuroErp2(u.prodotto.prezzo_vendita)} cad.)</span></div>
                 <button onClick={() => cambiaQuantitaUscita(u.prodotto.id, -1)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
                 <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, minWidth: 16, textAlign: "center" }}>{u.quantita}</span>
                 <button onClick={() => cambiaQuantitaUscita(u.prodotto.id, 1)} style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>+</button>
@@ -17787,7 +17787,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
                 <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10 }}>
                   {risultatiNuovoProdotto.map((p) => (
                     <div key={p.id} onClick={() => aggiungiUscita(p)} style={{ padding: "8px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}`, display: "flex", justifyContent: "space-between" }}>
-                      <span>{p.nome}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp(p.prezzo_vendita)}</span>
+                      <span>{p.nome}</span><span style={{ fontWeight: 700 }}>{fmtEuroErp2(p.prezzo_vendita)}</span>
                     </div>
                   ))}
                 </div>
@@ -17798,7 +17798,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
               <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
                 {differenzaCambio > 0 ? "Da incassare" : differenzaCambio < 0 ? "Da rimborsare" : "Nessuna differenza"}
               </div>
-              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(Math.abs(differenzaCambio))}</div>
+              <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(Math.abs(differenzaCambio))}</div>
             </div>
             {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg === "Cambio registrato." ? "#2E7D32" : "#C0392B", marginBottom: 10 }}>{msg}</div>}
             <div style={{ display: "flex", gap: 8 }}>
@@ -17884,7 +17884,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 28 }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(kpi.incasso)}</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
           </div>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
@@ -17926,7 +17926,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
                   <tr key={`${o.tipo}:${o.id}`}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{o.nome ? toTitleCase(o.nome) : "—"}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{o.tipo === "master" ? "Master" : o.tipo === "venditore" ? "Venditore" : "Utente"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: o.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(o.incasso)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: o.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(o.incasso)}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{o.pezzi}</td>
                   </tr>
                 ))}
@@ -17954,7 +17954,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
                   <tr key={p.nome}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(p.ricavo)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
                   </tr>
                 ))}
                 {righeProdotti.length === 0 && (
@@ -18058,7 +18058,7 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
                 {righeMaster.map((m) => (
                   <tr key={m.id}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{m.nome ? toTitleCase(m.nome) : "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: m.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(m.incasso)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: m.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(m.incasso)}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{m.pezzi}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{m.vendite}</td>
                   </tr>
@@ -18383,7 +18383,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.quantita}× ${p.nome}`).join(", ")}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.metodo_pagamento === "contanti" ? "Contanti" : "POS/Carta"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(v.totale)}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: v.totale < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(v.totale)}</td>
                       </tr>
                     );
                   })}
@@ -18419,14 +18419,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</div>
-                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: MUTED }}>{fmtEuroErp(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 11, color: MUTED }}>{fmtEuroErp2(r.prezzo)}{r.sku ? ` · Cod. ${r.sku}` : ""}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 6 }}>
                 <button onClick={() => decrementaRiga(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer" }}>−</button>
                 <span style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, minWidth: 16, textAlign: "center" }}>{r.quantita}</span>
                 <button onClick={() => incrementaRiga(r.prodottoId)} disabled={r.quantita >= disponibiliDi(r.prodottoId)} style={{ width: isMobile ? 21 : 24, height: isMobile ? 21 : 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: r.quantita >= disponibiliDi(r.prodottoId) ? "default" : "pointer", opacity: r.quantita >= disponibiliDi(r.prodottoId) ? 0.4 : 1 }}>+</button>
               </div>
-              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp(round2(r.prezzo * r.quantita))}</div>
+              <div style={{ ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY, width: isMobile ? 52 : 62, textAlign: "right" }}>{fmtEuroErp2(round2(r.prezzo * r.quantita))}</div>
               <button onClick={() => rimuoviRiga(r.prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: isMobile ? 13 : 15, padding: 2 }}>✕</button>
             </div>
           ))}
@@ -18450,22 +18450,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       </div>
       {scontoApplicato > 0 && (
         <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
-          <span>Sconto applicato</span><span>− {fmtEuroErp(scontoApplicato)}</span>
+          <span>Sconto applicato</span><span>− {fmtEuroErp2(scontoApplicato)}</span>
         </div>
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 2 : 4 }}>
-        <span>Subtotale (IVA incl.)</span><span>{fmtEuroErp(subtotale)}</span>
+        <span>Subtotale (IVA incl.)</span><span>{fmtEuroErp2(subtotale)}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 2 : 4 }}>
-        <span>Imponibile</span><span>{fmtEuroErp(imponibile)}</span>
+        <span>Imponibile</span><span>{fmtEuroErp2(imponibile)}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>
-        <span>IVA 22%</span><span>{fmtEuroErp(iva)}</span>
+        <span>IVA 22%</span><span>{fmtEuroErp2(iva)}</span>
       </div>
       <div style={{ background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 10, padding: isMobile ? "8px 12px" : "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 10 : 16 }}>
         <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
-        <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleDaIncassare)}</span>
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isMobile ? 8 : 14 }}>
@@ -18546,7 +18546,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: (msg.startsWith("Vendita registrata") || msg.startsWith("Omaggio registrato")) ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
       <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim())} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
-        {salvando ? "Registro…" : omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp(totaleDaIncassare)}`}
+        {salvando ? "Registro…" : omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp2(totaleDaIncassare)}`}
       </Button>
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
     </>
@@ -18569,7 +18569,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(p.prezzo_vendita)}</div>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(p.prezzo_vendita)}</div>
               <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>IVA incl.</div>
             </div>
             <button
@@ -18598,7 +18598,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>{nomiCategorie || "—"}{p.sku ? ` · Cod. ${p.sku}` : ""}</div>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
               <div>
-                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(p.prezzo_vendita)}</div>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(p.prezzo_vendita)}</div>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>IVA incl.</div>
               </div>
               <div style={{ textAlign: "right" }}>
@@ -18718,7 +18718,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
               <div style={{ textAlign: "right" }}>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>Totale da incassare</div>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleNetto)}</div>
+                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleNetto)}</div>
               </div>
               <div style={{ width: 32, height: 32, borderRadius: "50%", background: NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>›</div>
             </div>
@@ -19067,8 +19067,8 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 14 }}>
         <div style={{ ...cardStyle, marginBottom: 0 }}>
           <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore potenziale</div>
-          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(valoreGiacenzaVendita)}</div>
-          <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>a prezzo di vendita — {fmtEuroErp(valoreGiacenzaCosto)} a costo</div>
+          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(valoreGiacenzaVendita)}</div>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>a prezzo di vendita — {fmtEuroErp2(valoreGiacenzaCosto)} a costo</div>
         </div>
         <div style={{ ...cardStyle, marginBottom: 0 }}>
           <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Rotazione magazzino</div>
@@ -19085,7 +19085,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
         <div style={{ ...cardStyle, marginBottom: 0 }}>
           <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Maggior fatturato</div>
           <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, lineHeight: 1.3 }}>{maggiorFatturato ? maggiorFatturato.nome : "—"}</div>
-          {maggiorFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp(maggiorFatturato.fatturato)}</div>}
+          {maggiorFatturato && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtEuroErp2(maggiorFatturato.fatturato)}</div>}
         </div>
       </div>
 
@@ -19142,7 +19142,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
             <div>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Fatturato</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totFatturatoSelezionato)}</div>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totFatturatoSelezionato)}</div>
                 {varFatturato != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varFatturato >= 0 ? "#2E7D32" : "#C0392B" }}>{varFatturato >= 0 ? "+" : ""}{fmtPctErp(varFatturato)}</span>}
               </div>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
@@ -19150,7 +19150,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
             <div>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Carrello medio</div>
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
+                <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp2(carrelloMedio) : "N/D"}</div>
                 {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)}</span>}
               </div>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
@@ -19167,7 +19167,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Carrello medio</div>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10 }}>
-              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp(carrelloMedio) : "N/D"}</div>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{carrelloMedio != null ? fmtEuroErp2(carrelloMedio) : "N/D"}</div>
               {varCarrello != null && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: varCarrello >= 0 ? "#2E7D32" : "#C0392B" }}>{varCarrello >= 0 ? "+" : ""}{fmtPctErp(varCarrello)} {etichettaConfronto}</span>}
             </div>
             <GraficoLineaSemplice punti={puntiCarrelloMedio} />
@@ -19657,7 +19657,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp(p.prezzo_vendita) : "—"}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}</div>
               </div>
               <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: p.stato === "draft" ? "#F4EEDB" : "#E6F2E8", color: p.stato === "draft" ? "#8A6D1D" : "#2E7D32", flexShrink: 0 }}>{p.stato === "draft" ? "Bozza" : "Online"}</span>
             </div>
@@ -21026,7 +21026,7 @@ function GraficoAndamentoCosti({ punti }) {
         return (
           <g key={i}>
             <line x1={padSx} y1={y} x2={larghezza - padDx} y2={y} stroke={CREAM_BORDER} strokeWidth="1" />
-            <text x={0} y={y + 4} fontSize="10" fill={MUTED} fontFamily="'Roboto',sans-serif">{fmtEuroKErp(valore)}</text>
+            <text x={0} y={y + 4} fontSize="10" fill={MUTED} fontFamily="'Roboto',sans-serif">{fmtEuroErp(valore)}</text>
           </g>
         );
       })}
