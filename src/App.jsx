@@ -16851,14 +16851,23 @@ function bucketsAnnoScolasticoGruppi(anno, nGruppi) {
 
 // grafico a barre affiancate (periodo selezionato vs periodo di
 // confronto) per bucket — usato per "Andamento" quantità/fatturato
-function GraficoBarreVendite({ punti }) {
+// due linee (nera = periodo selezionato, gialla = periodo precedente),
+// stesso linguaggio grafico di GraficoLineaSemplice ("Carrello medio")
+// invece delle barre affiancate di prima — meno confusionario da leggere
+// a colpo d'occhio col confronto fra due periodi
+function GraficoLineaVendite({ punti }) {
   if (!punti.length) return <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dato nel periodo.</div>;
   const larghezza = 640, altezza = 220, padSx = 46, padDx = 12, padAlto = 14, padBasso = 30;
   const massimo = Math.max(1, ...punti.flatMap((p) => [p.selezionato || 0, p.precedente || 0]));
-  const n = punti.length;
-  const stepX = (larghezza - padSx - padDx) / n;
-  const yBar = (v) => altezza - padBasso - (v / massimo) * (altezza - padAlto - padBasso);
-  const saltoEtichette = n <= 12 ? 1 : Math.ceil(n / 10);
+  const scalaX = (i) => padSx + (i / Math.max(1, punti.length - 1)) * (larghezza - padSx - padDx);
+  const scalaY = (v) => padAlto + (1 - v / massimo) * (altezza - padAlto - padBasso);
+  function pathDi(campo) {
+    const pts = punti.map((p, i) => [scalaX(i), p[campo] != null ? scalaY(p[campo]) : null]).filter(([, y]) => y != null);
+    return { pts, d: pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ") };
+  }
+  const selezionato = pathDi("selezionato");
+  const precedente = pathDi("precedente");
+  const saltoEtichette = punti.length <= 12 ? 1 : Math.ceil(punti.length / 10);
   return (
     <svg width="100%" height={altezza} viewBox={`0 0 ${larghezza} ${altezza}`} preserveAspectRatio="none" style={{ overflow: "visible" }}>
       {Array.from({ length: 5 }).map((_, i) => {
@@ -16871,17 +16880,11 @@ function GraficoBarreVendite({ punti }) {
           </g>
         );
       })}
-      {punti.map((p, i) => {
-        const xCentro = padSx + stepX * i + stepX / 2;
-        const largBarra = Math.min(16, stepX * 0.32);
-        return (
-          <g key={i}>
-            <rect x={xCentro - largBarra - 2} y={yBar(p.selezionato || 0)} width={largBarra} height={Math.max(1, altezza - padBasso - yBar(p.selezionato || 0))} fill={NAVY} rx="2" />
-            {p.precedente != null && <rect x={xCentro + 2} y={yBar(p.precedente)} width={largBarra} height={Math.max(1, altezza - padBasso - yBar(p.precedente))} fill={GOLD} rx="2" />}
-            {i % saltoEtichette === 0 && <text x={xCentro} y={altezza - 8} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text>}
-          </g>
-        );
-      })}
+      {precedente.pts.length > 1 && <path d={precedente.d} fill="none" stroke={GOLD} strokeWidth="2.5" />}
+      {precedente.pts.map(([x, y], i) => <circle key={`p${i}`} cx={x} cy={y} r="2.5" fill={GOLD} />)}
+      {selezionato.pts.length > 1 && <path d={selezionato.d} fill="none" stroke={NAVY} strokeWidth="2.5" />}
+      {selezionato.pts.map(([x, y], i) => <circle key={`s${i}`} cx={x} cy={y} r="2.5" fill={NAVY} />)}
+      {punti.map((p, i) => (i % saltoEtichette === 0 ? <text key={i} x={scalaX(i)} y={altezza - 8} fontSize="10" fill={MUTED} textAnchor="middle" fontFamily="'Roboto',sans-serif">{p.etichetta}</text> : null))}
     </svg>
   );
 }
@@ -19102,7 +19105,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>{etichettaConfronto}</div>
             </div>
           </div>
-          <GraficoBarreVendite punti={puntiAndamento} />
+          <GraficoLineaVendite punti={puntiAndamento} />
           <div style={{ display: "flex", gap: 14, marginTop: 8, ...fontBody, fontSize: 11.5, color: MUTED }}>
             <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY, display: "inline-block" }} />{etichettaPeriodoSelezionato}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: GOLD, display: "inline-block" }} />{etichettaPeriodoPrecedente}</span>
