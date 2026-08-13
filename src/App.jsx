@@ -16105,10 +16105,27 @@ function etichettaStatoVenditaShop(stato) {
   return STATI_VENDITA_SHOP[stato]?.etichetta || stato || "—";
 }
 
-function PaginaVenditeShop({ venditeShop, onBack }) {
+function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
   const [statoSel, setStatoSel] = useState("");
+  const [recuperando, setRecuperando] = useState(false);
+  const [msgRecupero, setMsgRecupero] = useState("");
+
+  // "Recupera ordini mancanti": rilancia l'importazione storica da
+  // WooCommerce (idempotente, upsert su woo_order_id) — serve per quando
+  // il webhook che normalmente registra gli ordini in tempo reale si è
+  // fermato per un po' (sito irraggiungibile, webhook disattivato per
+  // errore...) e le vendite più recenti non compaiono più da sole
+  async function recuperaOrdiniMancanti() {
+    setRecuperando(true);
+    setMsgRecupero("");
+    const { data, error } = await supabase.functions.invoke("woo-import-storico");
+    setRecuperando(false);
+    if (error || data?.errore) { setMsgRecupero("Errore: " + (data?.errore || error.message)); return; }
+    setMsgRecupero(`Controllati ${data.ordiniImportati} ordini su WooCommerce.`);
+    ricarica();
+  }
 
   // "tutto" non esiste in rangePeriodoErp (pensato per l'ERP, senza
   // storico pluriennale): qui serve perché l'import storico può
@@ -16159,7 +16176,13 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Vendite shop</div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Vendite shop</div>
+          <div style={{ textAlign: "right" }}>
+            <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
+            {msgRecupero && <div style={{ ...fontBody, fontSize: 11.5, color: msgRecupero.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgRecupero}</div>}
+          </div>
+        </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Ordini dallo shop WooCommerce e vendite al banco dal POS.</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
@@ -23549,7 +23572,7 @@ export default function App() {
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} onBack={() => setView("magazzinoshop")} />
+        <PaginaVenditeShop venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
       )}
 
       {view === "magazzino" && (
