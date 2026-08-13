@@ -22769,10 +22769,13 @@ export default function App() {
   // sessione di chi ha finito prima. esciRef tiene sempre l'ultima
   // versione di esci() senza dover rimontare i listener ad ogni render
   // (stesso schema già usato per vaiIndietroRef più sotto)
+  // — non vale per la modalità programmatore: chi lavora sul codice resta
+  // spesso fermo a leggere/testare senza interagire, e non è comunque un
+  // dispositivo condiviso da proteggere con un logout automatico
   const esciRef = React.useRef(null);
   esciRef.current = esci;
   useEffect(() => {
-    if (!ok) return;
+    if (!ok || ruoloUtente === "programmatore") return;
     const TIMEOUT_INATTIVITA_MS = 15 * 60 * 1000;
     let timer = setTimeout(() => esciRef.current(), TIMEOUT_INATTIVITA_MS);
     function resetTimer() {
@@ -22785,7 +22788,7 @@ export default function App() {
       clearTimeout(timer);
       eventi.forEach((ev) => window.removeEventListener(ev, resetTimer));
     };
-  }, [ok]);
+  }, [ok, ruoloUtente]);
 
   // cronologia di navigazione tra le schermate (view + eventuale corsoDataAperta
   // per "scheda"): senza, tornare indietro (swipe o pulsante) riportava sempre
