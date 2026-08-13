@@ -18112,27 +18112,15 @@ function EditorFasceCompenso({ fasce, onCambia }) {
               </tr>
             </thead>
             <tbody>
-              {righe.map((r, i) => {
-                const ultima = i === righe.length - 1;
-                return (
+              {righe.map((r, i) => (
                   <tr key={i}>
                     <td style={{ padding: "5px 10px 5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                        {ultima ? (
-                          <>
-                            <span>Oltre</span>
-                            <input type="number" min="1" style={cellaNumero} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
-                            <span>allievi</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Da</span>
-                            <input type="number" min="1" style={cellaNumero} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
-                            <span>a</span>
-                            <input type="number" min="1" style={cellaNumero} value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
-                            <span>allievi</span>
-                          </>
-                        )}
+                        <span>Da</span>
+                        <input type="number" min="1" style={cellaNumero} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
+                        <span>a</span>
+                        <input type="number" min="1" style={cellaNumero} placeholder="in su" value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
+                        <span>allievi</span>
                       </div>
                     </td>
                     <td style={{ padding: "5px 10px 5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -18144,8 +18132,7 @@ function EditorFasceCompenso({ fasce, onCambia }) {
                       </button>
                     </td>
                   </tr>
-                );
-              })}
+              ))}
             </tbody>
           </table>
         </div>
