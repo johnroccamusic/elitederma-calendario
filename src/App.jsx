@@ -1078,7 +1078,7 @@ function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
 // mostra, sopra ogni singolo giorno che attraversa in questa riga, il
 // numero di frazione "giorno/totale" (es. 3/6); il nome del corso resta
 // visibile solo all'inizio del segmento
-function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun, isMobile }) {
+function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun, isMobile, fontScaleBarre = 1 }) {
   if (giorniTotali <= 1) {
     if (isMobile) {
       // da cellulare la colonna del giorno è troppo stretta perché il nome
@@ -1091,7 +1091,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
               ...fontCondensato,
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-              fontSize: 10, lineHeight: 1.05,
+              fontSize: 10 * fontScaleBarre, lineHeight: 1.05,
             }}
           >
             {etichetta}
@@ -1145,7 +1145,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
                   ...fontCondensato,
                   display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
-                  flex: "1 1 auto", minWidth: 0, fontSize: 10, lineHeight: 1.05,
+                  flex: "1 1 auto", minWidth: 0, fontSize: 10 * fontScaleBarre, lineHeight: 1.05,
                 }}
               >
                 {etichetta}
@@ -3857,9 +3857,10 @@ function SezioneDateCorsi({
     registraInterceptaIndietro(null);
   }, [vistaDateModo, vistaDateTab, nascondiControlli, registraInterceptaIndietro]);
   const [ricercaDate, setRicercaDate] = useState("");
-  // dimensione del testo di questa sezione (elenco e calendario incorporato),
-  // regolabile coi tasti +/- vicino a "Elenco": resta memorizzata in locale,
-  // così l'ultima misura scelta vale anche alle aperture successive
+  // dimensione del testo SOLO nelle barre-evento del calendario incorporato
+  // (nome corso + sigla città), regolabile coi tasti +/- vicino a "Elenco":
+  // resta memorizzata in locale, così l'ultima misura scelta vale anche
+  // alle aperture successive
   const [fontScale, setFontScale] = useState(() => {
     const salvato = parseFloat(localStorage.getItem("corsiDateFontScale"));
     return Number.isFinite(salvato) ? salvato : 1;
@@ -3897,7 +3898,7 @@ function SezioneDateCorsi({
   });
 
   return (
-    <div style={{ zoom: fontScale }}>
+    <div>
       <div style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: 40, marginBottom: -4 } : undefined}>
       {intestazioneSticky}
       {!nascondiControlli && (
@@ -3914,9 +3915,9 @@ function SezioneDateCorsi({
               <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
               <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
               <div style={{ display: "flex", alignItems: "center", marginLeft: 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff" }}>
-                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci dimensione testo" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
+                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
                 <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci dimensione testo" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
+                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
               </div>
             </div>
           </div>
@@ -3972,7 +3973,7 @@ function SezioneDateCorsi({
           onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
         />
       ) : (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} />
       )}
     </div>
   );
@@ -11156,7 +11157,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
 // in CalendarioModifica, non da questa barra: se lo spostamento la fa
 // comparire in una settimana diversa, React distrugge e ricrea il suo nodo
 // DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
-function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento }) {
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento, fontScaleBarre = 1 }) {
   // su schermi stretti (cellulare) le barre dei corsi diventano illeggibili
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
   // corsia, intestazione del giorno e i relativi font
@@ -11292,7 +11293,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       overflow: "hidden",
                       color: "#000",
-                      fontSize: isMobile ? 9 : 8,
+                      fontSize: (isMobile ? 9 : 8) * fontScaleBarre,
                       fontWeight: 500,
                       ...fontBody,
                       cursor: evidenziata ? "grab" : "pointer",
@@ -11315,8 +11316,8 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                     <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                       {contenutoBarraCalendario({
                         etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
-                        giorniTotali, indiciGiorno, fontSizeBadge: isMobile ? 8 : 7, gap: GAP_GIORNO, inset: 6,
-                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 4), isMobile,
+                        giorniTotali, indiciGiorno, fontSizeBadge: (isMobile ? 8 : 7) * fontScaleBarre, gap: GAP_GIORNO, inset: 6,
+                        continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 4), isMobile, fontScaleBarre,
                       })}
                     </div>
                     {evidenziata && onDragBarra && (
@@ -11426,7 +11427,7 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
   );
 }
 
-function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData }) {
+function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1 }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -11502,6 +11503,7 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
             onApriData={onApriData} corsoById={corsoById} locById={locById}
             onClickGiornoVuoto={setPopupNuovo}
             onDoppioClickEvento={setPopupElimina}
+            fontScaleBarre={fontScaleBarre}
           />
         </div>
       ))}
