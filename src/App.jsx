@@ -545,6 +545,15 @@ function IconaTileMaster({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+function IconaTileUltimeIscrizioni({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
+      <path d="M20.5 4.5V9h-4.5" />
+      <path d="M12 8v4.3l3 1.9" stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileLogistica({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1158,67 +1167,6 @@ function BadgeFileCaricato() {
       </svg>
       File caricato
     </span>
-  );
-}
-
-// senza "icona": riga singola titolo+freccia (usato in Statistiche).
-// con "icona": card più alta, icona in alto a sinistra e freccia in
-// alto a destra sulla stessa riga, titolo e sottotitolo sotto (usato
-// nella home, per le card affiancate in riga)
-function CardHome({ title, sub, onClick, icona }) {
-  if (icona) {
-    return (
-      <button
-        onClick={onClick}
-        style={{
-          ...fontBody,
-          textAlign: "left",
-          width: "100%",
-          height: "100%",
-          background: "#FFFFFF",
-          border: `1px solid ${CREAM_BORDER}`,
-          borderRadius: 14,
-          padding: 14,
-          cursor: "pointer",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 9, background: BG, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
-            {icona}
-          </div>
-          <div style={{ fontSize: 18, color: MUTED }}>&rsaquo;</div>
-        </div>
-        <div style={{ ...fontDisplay, fontSize: 15, color: NAVY }}>{title}</div>
-        {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{sub}</div>}
-      </button>
-    );
-  }
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        ...fontBody,
-        textAlign: "left",
-        width: "100%",
-        background: "#FFFFFF",
-        border: `1px solid ${CREAM_BORDER}`,
-        borderRadius: 12,
-        padding: "12px 16px",
-        marginBottom: 8,
-        cursor: "pointer",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
-      <div>
-        <div style={{ ...fontDisplay, fontSize: 16, color: NAVY }}>{title}</div>
-        {sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{sub}</div>}
-      </div>
-      <div style={{ fontSize: 18, color: NAVY }}>&rsaquo;</div>
-    </button>
   );
 }
 
@@ -2466,12 +2414,41 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 }
 
 // ---------- Statistiche ----------
-function Statistiche({ onBack, onApriVenditori, onApriUltimeIscrizioni }) {
+// hub d'ingresso di "Statistiche": stesso stile a griglia di Contabilità e
+// Gestione magazzino e shop, per uniformità — raccoglie qui anche le due
+// aree che prima stavano nell'hub ERP (Performance Aziendale, ex
+// "Dashboard analisi", e Statistiche Vendite Prodotti), essendo entrambe
+// analisi/numeri più che gestione operativa
+function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriUltimeIscrizioni, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Statistiche" onBack={onBack} />
-      <CardHome title="Statistica venditori" sub="Iscrizioni fatte da ciascun venditore, per corso" onClick={onApriVenditori} />
-      <CardHome title="Ultime iscrizioni" sub="Elenco delle iscrizioni più recenti, per giorno di inserimento" onClick={onApriUltimeIscrizioni} />
+    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+      <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
+          </button>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>STATISTICHE</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
+            <IconaIngranaggioErp color="#fff" />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Statistiche</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Analisi, report e KPI della tua Academy.</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
+          <TileHome title="Statistiche venditori" descrizione="Iscrizioni fatte da ciascun venditore, per corso." Icona={IconaTileVenditori} onClick={onApriVenditori} />
+          <TileHome title="Ultime iscrizioni" descrizione="Elenco delle iscrizioni più recenti, per giorno di inserimento." Icona={IconaTileUltimeIscrizioni} onClick={onApriUltimeIscrizioni} />
+          <TileHome title="Statistiche Master" descrizione="Vendite prodotti conseguite da ogni master, per mese, trimestre e oltre." Icona={IconaTileMaster} onClick={onApriStatisticheMaster} />
+          <TileHome title="Performance Aziendale" descrizione="Analizza performance, trend e KPI dell'Academy." Icona={IconaTileDashboardAnalisi} onClick={onApriPerformanceAziendale} />
+          <TileHome title="Statistiche Vendite Prodotti" descrizione="Vendite al POS per master/venditore, separate dalle vendite corsi." Icona={IconaGruppoVenditeProdotti} onClick={onApriStatisticheVenditeProdotti} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -11856,7 +11833,8 @@ const TASTI_HOME = [
   { chiave: "gestionedate", etichetta: "Gestione corsi" },
   { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
   { chiave: "dashboardmaster", etichetta: "Dashboard master" },
-  { chiave: "erp", etichetta: "ERP / Magazzino" },
+  { chiave: "erp", etichetta: "Contabilità" },
+  { chiave: "magazzinoshop", etichetta: "Gestione magazzino e shop" },
   { chiave: "pos", etichetta: "POS Vendita diretta" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
   { chiave: "generazioneloghi", etichetta: "Assegna logo" },
@@ -15506,10 +15484,11 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-// hub d'ingresso di "ERP / Magazzino": griglia di tasti stile Home (stesso
-// TileHome usato lì), ciascuno dedicato a una sola area — sostituisce la
-// vecchia dashboard con barra di navigazione orizzontale in cima
-function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriDashboardAnalisi, onApriStatisticheVenditeProdotti }) {
+// hub d'ingresso di "Contabilità": griglia di tasti stile Home (stesso
+// TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
+// spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
+// restano solo le due aree propriamente di contabilità
+function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -15519,7 +15498,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
           </button>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>ERP</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>CONTABILITÀ</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
           <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
@@ -15529,16 +15508,45 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
       </div>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>ERP / Magazzino</div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Gestisci costi, prodotti, scorte e vendite del magazzino.</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Contabilità</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi e le categorie di spesa usate per classificarli.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Inserimento costi e ricavi" descrizione="Registra e gestisci costi, ricavi e altri movimenti contabili." Icona={IconaTileCostiRicavi} onClick={onApriInserimentoCostiRicavi} />
           <TileHome title="Gestisci categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Costi e ricavi." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
+// online e le vendite che ne derivano — stesso stile di Contabilità
+function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+      <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+          <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
+            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
+          </button>
+          <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>MAGAZZINO / SHOP</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
+          <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
+            <IconaIngranaggioErp color="#fff" />
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestione magazzino e shop</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Gestione magazzino" descrizione="Controlla giacenze, movimenti e disponibilità dei prodotti." Icona={IconaTileGestioneMagazzino} onClick={onApriMagazzino} />
           <TileHome title="Gestione shop" descrizione="Gestisci prodotti, ordini, clienti e impostazioni dello shop." Icona={IconaTileGestioneShop} onClick={onApriGestioneShop} />
           <TileHome title="Vendite shop" descrizione="Monitora le vendite, ordini e performance dello shop." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
-          <TileHome title="Dashboard analisi" descrizione="Analizza performance, trend e KPI del magazzino." Icona={IconaTileDashboardAnalisi} onClick={onApriDashboardAnalisi} />
-          <TileHome title="Statistiche Vendite Prodotti" descrizione="Vendite al POS per master/venditore, separate dalle vendite corsi." Icona={IconaGruppoVenditeProdotti} onClick={onApriStatisticheVenditeProdotti} />
         </div>
       </div>
     </div>
@@ -17702,6 +17710,110 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
                 ))}
                 {righeProdotti.length === 0 && (
                   <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// range per "Statistiche Master": finestre mobili che arrivano fino a
+// oggi (non mesi/trimestri di calendario fissi), coerenti col resto
+// dell'app dove "trimestre"/"semestre" sono sempre ultimi-N-mesi
+function rangeStatisticheMaster(periodo) {
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (periodo === "mese") return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 1, oggi.getDate() + 1)), fine: fmt(oggi) };
+  if (periodo === "trimestre") return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1)), fine: fmt(oggi) };
+  if (periodo === "semestre") return { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 6, oggi.getDate() + 1)), fine: fmt(oggi) };
+  if (periodo === "annoscolastico") return { inizio: `${stagioneCorrente()}-09-01`, fine: fmt(oggi) };
+  if (periodo === "anno") return { inizio: `${oggi.getFullYear()}-01-01`, fine: fmt(oggi) };
+  return { inizio: "0000-01-01", fine: fmt(oggi) };
+}
+// "Statistiche Master": quanto ha venduto al POS ciascuna master, fino a
+// oggi, con la stessa scelta di periodo delle altre pagine ERP — solo
+// operatore_tipo "master" (i venditori hanno la propria pagina già in
+// Statistiche Vendite Prodotti, qui si guarda solo il lato master)
+function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVenditeProdotti, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("mese");
+  const range = rangeStatisticheMaster(periodo);
+
+  const righePos = (venditeShop || []).filter((v) => v.origine === "pos" && v.operatore_tipo === "master").filter((v) => {
+    const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    return d && d >= range.inizio && d <= range.fine;
+  });
+
+  const perMaster = {};
+  (master || []).forEach((m) => { perMaster[m.id] = { id: m.id, nome: m.nome, incasso: 0, pezzi: 0, vendite: 0 }; });
+  righePos.forEach((v) => {
+    if (!v.operatore_id) return;
+    if (!perMaster[v.operatore_id]) perMaster[v.operatore_id] = { id: v.operatore_id, nome: v.operatore_nome, incasso: 0, pezzi: 0, vendite: 0 };
+    perMaster[v.operatore_id].incasso += (v.totale || 0);
+    perMaster[v.operatore_id].pezzi += (Array.isArray(v.prodotti) ? v.prodotti.reduce((s, p) => s + (p.quantita || 0), 0) : 0);
+    if (v.tipo_movimento === "vendita") perMaster[v.operatore_id].vendite += 1;
+  });
+  const righeMaster = Object.values(perMaster).map((m) => ({ ...m, incasso: round2(m.incasso) })).sort((a, b) => b.incasso - a.incasso);
+
+  const oggiStr = dataOggiStr();
+  const targetAttivi = (targetVenditeProdotti || [])
+    .filter((t) => t.soggetto_tipo === "master" && t.data_inizio <= oggiStr && t.data_fine >= oggiStr)
+    .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop), nome: (master || []).find((m) => m.id === t.soggetto_id)?.nome }));
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Master</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Vendite al POS di ogni master, fino a oggi.</div>
+
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content", flexWrap: "wrap" }}>
+          {[{ v: "mese", l: "Ultimo mese" }, { v: "trimestre", l: "Ultimo trimestre" }, { v: "semestre", l: "Ultimo semestre" }, { v: "annoscolastico", l: "Anno scolastico" }, { v: "anno", l: "Anno solare" }, { v: "tutto", l: "Tutto" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+        </div>
+
+        {targetAttivi.length > 0 && (
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Target in corso</div>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 12 }}>
+              {targetAttivi.map(({ t, avanzamento, nome }) => (
+                <div key={t.id}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 4 }}>{nome ? toTitleCase(nome) : "?"}</div>
+                  <SchedaAvanzamentoTarget t={t} avanzamento={avanzamento} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+              <thead>
+                <tr>
+                  {["Master", "Incasso netto", "Pezzi netti", "Vendite"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righeMaster.map((m) => (
+                  <tr key={m.id}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{m.nome ? toTitleCase(m.nome) : "—"}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: m.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp(m.incasso)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{m.pezzi}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{m.vendite}</td>
+                  </tr>
+                ))}
+                {righeMaster.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna master trovata.</td></tr>
                 )}
               </tbody>
             </table>
@@ -23065,10 +23177,12 @@ export default function App() {
   function apriImpostazioni() { apriViewProtetta("impostazioni"); }
   function apriGestioneDate() { apriViewProtetta("gestionedate"); }
   function apriErp() { apriViewProtetta("erp"); }
+  function apriMagazzinoShop() { apriViewProtetta("magazzinoshop"); }
   function apriInserimentoCostiRicavi() { apriViewProtetta("inserimentocostiricavi"); }
   function apriDashboardAnalisi() { apriViewProtetta("dashboardanalisi"); }
   function apriVenditeShop() { apriViewProtetta("venditeshop"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
+  function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -23309,7 +23423,8 @@ export default function App() {
             <TileHome title="Dashboard venditori" descrizione="Monitora vendite, performance e obiettivi del team" Icona={IconaTileVenditori} attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
             <TileHome title="Dashboard master" descrizione="Gestisci master, specializzazioni e valutazioni" Icona={IconaTileMaster} attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
             <TileHome title="Agenda" descrizione="Visualizza calendario, impegni e promemoria" Icona={IconaCalendarioCard} attivo={haAccessoAgenda()} onClick={apriAgenda} />
-            <TileHome title="ERP / Magazzino" descrizione="Gestisci prodotti, stock e fornitori" Icona={IconaScatolaErp} attivo={tastoAbilitato("erp")} onClick={apriErp} />
+            <TileHome title="Contabilità" descrizione="Costi, ricavi e categorie di spesa" Icona={IconaTileCostiRicavi} attivo={tastoAbilitato("erp")} onClick={apriErp} />
+            <TileHome title="Gestione magazzino e shop" descrizione="Prodotti, scorte, shop online e relative vendite" Icona={IconaTileGestioneMagazzino} attivo={tastoAbilitato("magazzinoshop")} onClick={apriMagazzinoShop} />
             <TileHome title="POS Vendita diretta" descrizione="Vendita al banco con scarico automatico dal magazzino" Icona={IconaTilePos} attivo={tastoAbilitato("pos")} onClick={apriPos} />
             <TileHome title="Logistica prodotti" descrizione="Spedizioni, tracciamenti e documenti" Icona={IconaTileLogistica} attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
             <TileHome title="Assegna logo" descrizione="Personalizza loghi, watermark e materiali ufficiali" Icona={IconaLoghiCard} attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
@@ -23393,18 +23508,23 @@ export default function App() {
           onApriImpostazioni={apriImpostazioni}
           onApriInserimentoCostiRicavi={apriInserimentoCostiRicavi}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
+        />
+      )}
+
+      {view === "magazzinoshop" && (
+        <PaginaMagazzinoShop
+          onBack={() => setView("home")}
+          onApriImpostazioni={apriImpostazioni}
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
           onApriVenditeShop={apriVenditeShop}
-          onApriDashboardAnalisi={apriDashboardAnalisi}
-          onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
         />
       )}
 
       {view === "statistichevenditeprodotti" && (
         <PaginaStatisticheVenditeProdotti
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
-          targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("erp")}
+          targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
         />
       )}
 
@@ -23423,18 +23543,18 @@ export default function App() {
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
           eventi={eventi} fornitori={fornitori} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
-          onApriModificaSpesa={apriModificaSpesa} ricarica={fetchDati} onBack={() => setView("erp")}
+          onApriModificaSpesa={apriModificaSpesa} ricarica={fetchDati} onBack={() => setView("statistiche")}
         />
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} onBack={() => setView("erp")} />
+        <PaginaVenditeShop venditeShop={venditeShop} onBack={() => setView("magazzinoshop")} />
       )}
 
       {view === "magazzino" && (
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("erp")}
+          venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
         />
       )}
 
@@ -23450,7 +23570,7 @@ export default function App() {
       {view === "gestioneshop" && (
         <PaginaGestioneShop
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("erp")}
+          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
         />
       )}
 
@@ -23597,8 +23717,19 @@ export default function App() {
       {view === "statistiche" && (
         <Statistiche
           onBack={() => setView("home")}
+          onApriImpostazioni={apriImpostazioni}
           onApriVenditori={() => setView("statisticavenditori")}
           onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
+          onApriStatisticheMaster={apriStatisticheMaster}
+          onApriPerformanceAziendale={apriDashboardAnalisi}
+          onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
+        />
+      )}
+
+      {view === "statisticamaster" && (
+        <PaginaStatisticheMaster
+          venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} targetVenditeProdotti={targetVenditeProdotti}
+          onBack={() => setView("statistiche")}
         />
       )}
 
