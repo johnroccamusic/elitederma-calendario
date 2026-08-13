@@ -16287,24 +16287,11 @@ function PaginaVenditeShop({ venditeShop, onBack }) {
 // (fisica, in sede — dato solo dell'app, WooCommerce non lo conosce) e
 // "giacenza" (pubblicata sullo shop online, sincronizzata davvero su
 // WooCommerce). Lo stock totale è la somma delle due. Spostare un pezzo
-// da una all'altra è un solo movimento: si scrive PRIMA su WooCommerce
-// (Edge Function woo-aggiorna-prodotto, valore assoluto) e solo se
-// riesce si applica anche la differenza sul magazzino locale — se la
-// sincronizzazione fallisce non si sposta nulla, niente stock "fantasma"
-async function spostaUnitaStock(prodotto, verso) {
-  const magazzino = prodotto.giacenza_magazzino || 0;
-  const shop = prodotto.giacenza || 0;
-  if (verso === "magazzino" && shop <= 0) return { errore: null };
-  if (verso === "shop" && magazzino <= 0) return { errore: null };
-  const nuovoShop = verso === "magazzino" ? shop - 1 : shop + 1;
-  const nuovoMagazzino = verso === "magazzino" ? magazzino + 1 : magazzino - 1;
-  // giacenza (shop) e giacenza_magazzino nello stesso giro: la funzione
-  // scrive entrambe in un solo aggiornamento locale dopo la conferma di
-  // WooCommerce, un giro di rete in meno rispetto a due chiamate separate
-  const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, giacenza: nuovoShop, giacenzaMagazzino: nuovoMagazzino } });
-  if (error || data?.errore) return { errore: data?.errore || error.message };
-  return { errore: null };
-}
+// da una all'altra è solo locale (vedi modifichePendenti/spostaLocale in
+// PaginaMagazzino) finché non si preme "Sincronizza magazzini", che scrive
+// PRIMA su WooCommerce e solo se riesce anche in locale — se la
+// sincronizzazione fallisce quel prodotto resta pendente, niente stock
+// "fantasma"
 
 // "Riassortimento": l'unico modo per far crescere lo STOCK TOTALE di un
 // prodotto (arrivo merce fisica) — il quantitativo aggiunto va sempre in
@@ -16714,13 +16701,14 @@ function GraficoTrendBarre({ voci }) {
 // una riga della tabella "Dettaglio prodotti": Prezzo vendita/Costo
 // acquisto/Scorta minima sono campi editabili sul posto (si salvano da
 // soli quando si esce dalla casella, come le tabelle di Password menù);
-// i tastini "+" di Magazzino/Shop spostano un pezzo alla volta,
-// scrivendo PRIMA su WooCommerce e solo se riesce anche in locale
-function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica }) {
+// i tastini "+" di Magazzino/Shop spostano un pezzo alla volta SOLO in
+// locale (istantaneo, nessuna chiamata) — il numero mostrato include già
+// gli spostamenti non ancora sincronizzati, evidenziati in oro finché non
+// si preme "Sincronizza magazzini"
+function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica, onSpostaLocale, sincronizzandoMagazzini }) {
   const [prezzo, setPrezzo] = useState(p.prezzo_vendita != null ? String(p.prezzo_vendita) : "");
   const [costo, setCosto] = useState(p.costo_acquisto != null ? String(p.costo_acquisto) : "");
   const [scortaMin, setScortaMin] = useState(p.scorta_minima != null ? String(p.scorta_minima) : "");
-  const [spostando, setSpostando] = useState(false);
 
   async function salvaPrezzo() {
     const nuovo = prezzo.trim() === "" ? null : parseNum(prezzo);
@@ -16750,16 +16738,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica }) 
     if (error) { window.alert("Errore: " + error.message); setScortaMin(p.scorta_minima != null ? String(p.scorta_minima) : ""); return; }
     ricarica();
   }
-  async function sposta(verso) {
-    setSpostando(true);
-    const { errore } = await spostaUnitaStock(p, verso);
-    if (errore) { setSpostando(false); window.alert("Spostamento NON riuscito: " + errore); return; }
-    // resta disabilitato finché non arrivano i dati freschi: altrimenti un
-    // doppio click rapido ricalcolerebbe il prossimo spostamento sui
-    // valori vecchi (ricarica() non ha ancora aggiornato p.giacenza)
-    await ricarica();
-    setSpostando(false);
-  }
   async function salvaFlagRientro(checked) {
     const { error } = await supabase.from("prodotti_shop").update({ rientro_obbligatorio_se_aperto: checked }).eq("id", p.id);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -16784,15 +16762,15 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica }) 
       <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{p.stockTotale}</td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
-          {bottoneSposta(spostando || (p.giacenza || 0) <= 0, "#3B6FA0", () => sposta("magazzino"), "Sposta un pezzo dallo Shop al Magazzino")}
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
+          {bottoneSposta(sincronizzandoMagazzini || (p.giacenza || 0) <= 0, "#3B6FA0", () => onSpostaLocale(p.id, "magazzino"), "Sposta un pezzo dallo Shop al Magazzino (in locale, da sincronizzare)")}
         </div>
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         {p.woo_product_id ? (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza || 0}</span>
-            {bottoneSposta(spostando || (p.giacenza_magazzino || 0) <= 0, GOLD, () => sposta("shop"), "Sposta un pezzo dal Magazzino allo Shop")}
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza || 0}</span>
+            {bottoneSposta(sincronizzandoMagazzini || (p.giacenza_magazzino || 0) <= 0, GOLD, () => onSpostaLocale(p.id, "shop"), "Sposta un pezzo dal Magazzino allo Shop (in locale, da sincronizzare)")}
           </div>
         ) : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
       </td>
@@ -16840,6 +16818,62 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
+
+  // spostamenti magazzino<->shop: SOLO locali finché non si preme
+  // "Sincronizza magazzini" — ogni "+" prima chiamava subito WooCommerce,
+  // con latenza pesante soprattutto su reti lente, specie a spostamenti
+  // ripetuti. Ora si accumula un delta per prodotto (positivo = unità
+  // spostate verso il magazzino, negativo = verso lo shop) e si manda
+  // tutto in un colpo solo, un prodotto alla volta, quando si sincronizza.
+  // Se un prodotto torna al valore di partenza (spostato e poi
+  // riportato indietro) il delta torna a 0 e sparisce dalle modifiche
+  // pendenti — niente da segnalare, perché non è cambiato nulla davvero.
+  const [modifichePendenti, setModifichePendenti] = useState({});
+  const [sincronizzandoMagazzini, setSincronizzandoMagazzini] = useState(false);
+  const [progressoSyncMagazzini, setProgressoSyncMagazzini] = useState(null); // { fatti, totale }
+  const [msgSyncMagazzini, setMsgSyncMagazzini] = useState("");
+  const vociPendenti = Object.entries(modifichePendenti).filter(([, d]) => d !== 0);
+
+  function spostaLocale(prodottoId, verso) {
+    setMsgSyncMagazzini("");
+    setModifichePendenti((prev) => {
+      const attuale = prev[prodottoId] || 0;
+      const nuovo = attuale + (verso === "magazzino" ? 1 : -1);
+      if (nuovo === 0) { const { [prodottoId]: _tolto, ...resto } = prev; return resto; }
+      return { ...prev, [prodottoId]: nuovo };
+    });
+  }
+
+  async function sincronizzaMagazzini() {
+    if (vociPendenti.length === 0) return;
+    setSincronizzandoMagazzini(true);
+    setMsgSyncMagazzini("");
+    setProgressoSyncMagazzini({ fatti: 0, totale: vociPendenti.length });
+    const falliti = [];
+    for (const [prodottoId, delta] of vociPendenti) {
+      const p = (prodottiShop || []).find((pp) => pp.id === prodottoId);
+      if (p) {
+        const nuovoMagazzino = (p.giacenza_magazzino || 0) + delta;
+        const nuovoShop = (p.giacenza || 0) - delta;
+        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId, giacenza: nuovoShop, giacenzaMagazzino: nuovoMagazzino } });
+        if (error || data?.errore) {
+          falliti.push(p.nome);
+        } else {
+          setModifichePendenti((prev) => { const { [prodottoId]: _tolto, ...resto } = prev; return resto; });
+        }
+      }
+      setProgressoSyncMagazzini((prev) => ({ fatti: (prev?.fatti || 0) + 1, totale: vociPendenti.length }));
+    }
+    setSincronizzandoMagazzini(false);
+    setProgressoSyncMagazzini(null);
+    setMsgSyncMagazzini(falliti.length > 0 ? `Non sincronizzati: ${falliti.join(", ")}. Riprova.` : "Magazzini sincronizzati.");
+    ricarica();
+  }
+
+  function tornaIndietro() {
+    if (vociPendenti.length > 0 && !window.confirm("Ci sono spostamenti magazzino/shop non ancora sincronizzati: uscendo andranno persi. Continuare senza sincronizzare?")) return;
+    onBack();
+  }
 
   function ordinaPer(campo) {
     if (!campo) return;
@@ -16916,12 +16950,22 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
     const margine = p.costo_acquisto != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - p.costo_acquisto) / p.prezzo_vendita) * 100) : null;
     const categorieIds = categorieIdPerProdottoId[p.id] || [];
+    // gli spostamenti magazzino<->shop non ancora sincronizzati si vedono
+    // già qui (tabella e riquadri in alto), pur restando solo locali: il
+    // resto dell'app (POS compreso) continua a vedere i valori veri finché
+    // non si sincronizza davvero
+    const deltaPendente = modifichePendenti[p.id] || 0;
+    const giacenzaMagazzinoVis = (p.giacenza_magazzino || 0) + deltaPendente;
+    const giacenzaVis = (p.giacenza || 0) - deltaPendente;
     // stock totale = magazzino fisico + shop online: è questo il numero su
     // cui ragionano scorta minima/esaurito ora che il magazzino è gestito
     // nella sua interezza, non solo la quota pubblicata online
-    const stockTotale = (p.giacenza || 0) + (p.giacenza_magazzino || 0);
+    const stockTotale = giacenzaVis + giacenzaMagazzinoVis;
     return {
       ...p,
+      giacenza: giacenzaVis,
+      giacenza_magazzino: giacenzaMagazzinoVis,
+      deltaPendente,
       quantitaVenduta: venduto.quantita,
       fatturato: round2(venduto.fatturato),
       margine,
@@ -16972,17 +17016,33 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <button onClick={tornaIndietro} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>ERP / Magazzino</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione magazzino</div>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
             <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
             <div style={{ textAlign: "right" }}>
               <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
               {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <Button onClick={sincronizzaMagazzini} disabled={sincronizzandoMagazzini || vociPendenti.length === 0}>
+                {sincronizzandoMagazzini ? `Sincronizzo ${progressoSyncMagazzini?.fatti || 0}/${progressoSyncMagazzini?.totale || 0}…` : "Sincronizza magazzini"}
+              </Button>
+              {vociPendenti.length > 0 && !sincronizzandoMagazzini && (
+                <>
+                  <style>{`@keyframes lampeggiaMagazzini { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }`}</style>
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 4, animation: "lampeggiaMagazzini 1.1s ease-in-out infinite" }}>
+                    {vociPendenti.length} da sincronizzare
+                  </div>
+                </>
+              )}
+              {msgSyncMagazzini && !sincronizzandoMagazzini && (
+                <div style={{ ...fontBody, fontSize: 11.5, color: msgSyncMagazzini.startsWith("Non") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSyncMagazzini}</div>
+              )}
             </div>
           </div>
         </div>
@@ -17096,7 +17156,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               </thead>
               <tbody>
                 {prodottiOrdinati.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriRiassortimento={setProdottoRiassortimento} ricarica={ricarica} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriRiassortimento={setProdottoRiassortimento} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
