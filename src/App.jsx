@@ -858,6 +858,16 @@ function IconaPersonaAggiungi({ size = 18, color = "currentColor" }) {
     </svg>
   );
 }
+// omino generico: placeholder dell'avatar master finché non si carica
+// una foto vera (foto_url)
+function IconaAvatarGenerico({ size = 64, color = "#9AA0AC" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4.4 3.6-7 8-7s8 2.6 8 7v1H4v-1Z" />
+    </svg>
+  );
+}
 function IconaRiepilogoCircolare({ size = 20, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -7612,7 +7622,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSchedaMaster }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8185,6 +8195,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
             mostraFirmaCheckbox
+            onApriScheda={(el) => { setShowMasterModal(false); onApriSchedaMaster(el.id); }}
           />
         </Modal>
       )}
@@ -10332,7 +10343,7 @@ function RigaTelefonoVenditore({ valoreDiDefault, onSalva }) {
     </div>
   );
 }
-function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraFirmaCheckbox, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono }) {
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraFirmaCheckbox, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono, onApriScheda }) {
   const [nome, setNome] = useState("");
   const [inModifica, setInModifica] = useState(null);
   const [modNome, setModNome] = useState("");
@@ -10398,6 +10409,7 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
             label={el.nome.toUpperCase()}
             onModifica={() => apriModifica(el)}
             onDelete={() => elimina(el.id)}
+            onScheda={onApriScheda ? () => onApriScheda(el) : undefined}
           />
           {mostraFirmaCheckbox && (
             <div
@@ -10725,7 +10737,7 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
   );
 }
 
-function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
+function RigaEliminabile({ label, dettaglio, onModifica, onDelete, onScheda }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div>
@@ -10733,6 +10745,18 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
         {dettaglio && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{dettaglio}</div>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {onScheda && (
+          <button
+            onClick={onScheda}
+            title="Apri scheda"
+            style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex", alignItems: "center" }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2" />
+              <path d="M7 9h10M7 13h6" />
+            </svg>
+          </button>
+        )}
         {onModifica && (
           <button
             onClick={onModifica}
@@ -18075,6 +18099,235 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
   );
 }
 
+// tabella delle fasce di compenso di un corso associato a una master
+// (es. "1-2 allievi: 300€", "3-5: 350€", "6 in su: 400€") — righe
+// tenute in locale mentre si scrive, salvate sul blur di ogni campo o
+// subito quando si aggiunge/rimuove una fascia
+function FasceCompensoEditor({ fasce, onCambia }) {
+  const [righe, setRighe] = useState(fasce || []);
+  useEffect(() => { setRighe(fasce || []); }, [fasce]);
+
+  function aggiornaLocale(idx, campo, valore) {
+    setRighe((prev) => prev.map((r, i) => (i === idx ? { ...r, [campo]: valore } : r)));
+  }
+  function salva(righeDaSalvare) {
+    onCambia(righeDaSalvare.map((r) => ({ da: r.da === "" ? null : Number(r.da), a: r.a === "" ? null : Number(r.a), compenso: r.compenso === "" ? null : Number(r.compenso) })));
+  }
+  function aggiungiRiga() {
+    const ultima = righe[righe.length - 1];
+    const nuovoDa = ultima?.a != null && ultima.a !== "" ? Number(ultima.a) + 1 : ultima?.da != null && ultima.da !== "" ? Number(ultima.da) + 1 : 1;
+    const nuove = [...righe, { da: nuovoDa, a: "", compenso: "" }];
+    setRighe(nuove);
+    salva(nuove);
+  }
+  function rimuoviRiga(idx) {
+    const nuove = righe.filter((_, i) => i !== idx);
+    setRighe(nuove);
+    salva(nuove);
+  }
+
+  const celStyle = { ...inputStyle, padding: "6px 8px", fontSize: 12.5 };
+  return (
+    <div>
+      {righe.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 8 }}>Nessuna fascia impostata — il compenso sarà da concordare a parte.</div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 8, marginBottom: 4, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <div style={{ width: 70 }}>Da allievi</div>
+            <div style={{ width: 70 }}>A allievi</div>
+            <div style={{ flex: 1 }}>Compenso</div>
+            <div style={{ width: 28 }} />
+          </div>
+          {righe.map((r, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <input type="number" min="1" style={{ ...celStyle, width: 70 }} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
+              <input type="number" min="1" style={{ ...celStyle, width: 70 }} placeholder="in su" value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
+              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
+                <input type="number" min="0" style={{ ...celStyle, flex: 1 }} value={r.compenso ?? ""} onChange={(e) => aggiornaLocale(i, "compenso", e.target.value)} onBlur={() => salva(righe)} />
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
+              </div>
+              <button onClick={() => rimuoviRiga(i)} title="Rimuovi fascia" style={{ width: 28, background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+            </div>
+          ))}
+        </>
+      )}
+      <button onClick={aggiungiRiga} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>+ Aggiungi fascia</button>
+    </div>
+  );
+}
+
+// scheda dettagliata di una master: foto (omino finché non c'è una foto
+// vera), corsi associati con le rispettive fasce di compenso per numero
+// di allievi, i corsi a lei assegnati in calendario, note e contratto
+function PaginaSchedaMaster({ master, masterId, corsi, corsiDate, masterCorsi, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const m = (master || []).find((x) => x.id === masterId);
+  const [note, setNote] = useState(m?.note || "");
+  const [caricandoContratto, setCaricandoContratto] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [ricercaCorso, setRicercaCorso] = useState("");
+
+  useEffect(() => { setNote(m?.note || ""); }, [m?.id]);
+
+  if (!m) {
+    return (
+      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+        <div style={{ maxWidth: 900, margin: "0 auto" }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Master non trovata.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const assegnazioni = (masterCorsi || []).filter((mc) => mc.master_id === masterId);
+  const idsCorsiAssegnati = new Set(assegnazioni.map((a) => a.corso_id));
+  const risultatiCorso = ricercaCorso.trim()
+    ? (corsi || []).filter((c) => !idsCorsiAssegnati.has(c.id) && c.nome.toLowerCase().includes(ricercaCorso.trim().toLowerCase()))
+    : [];
+
+  async function aggiungiCorso(corso) {
+    setRicercaCorso("");
+    const { error } = await supabase.from("master_corsi").insert({ master_id: masterId, corso_id: corso.id, fasce_compenso: [] });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function rimuoviCorso(assegnazioneId) {
+    if (!window.confirm("Rimuovere questo corso dalla master? Si perdono anche le fasce di compenso impostate.")) return;
+    const { error } = await supabase.from("master_corsi").delete().eq("id", assegnazioneId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function salvaFasce(assegnazioneId, fasce) {
+    const { error } = await supabase.from("master_corsi").update({ fasce_compenso: fasce }).eq("id", assegnazioneId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function salvaNote() {
+    if ((m.note || "") === note.trim()) return;
+    const { error } = await supabase.from("master").update({ note: note.trim() || null }).eq("id", masterId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function toggleFirmato(checked) {
+    const { error } = await supabase.from("master").update({ diploma_gia_firmato: checked }).eq("id", masterId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function caricaContratto(file) {
+    if (!file) return;
+    setCaricandoContratto(true); setMsg("");
+    const percorso = `${masterId}/contratto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from("master-documenti").upload(percorso, file);
+    if (erroreUpload) { setCaricandoContratto(false); setMsg("Errore: " + erroreUpload.message); return; }
+    const { error } = await supabase.from("master").update({ contratto_file_path: percorso }).eq("id", masterId);
+    setCaricandoContratto(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  const oggiStr = dataOggiStr();
+  const corsiDateAssegnate = (corsiDate || []).filter((cd) => cd.master_id === masterId);
+  const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
+  const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
+  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+
+  function rigaCorsoData(cd) {
+    return (
+      <div key={cd.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{corsoById[cd.corso_id]?.nome || "—"}</span>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 24, flexWrap: "wrap" }}>
+          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+            {m.foto_url ? <img src={m.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={40} />}
+          </div>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{toTitleCase(m.nome)}</div>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!m.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 16, height: 16 }} />
+              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
+            </label>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: 20, alignItems: "flex-start" }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Corsi e compensi</div>
+            <div style={{ ...cardStyle, marginBottom: 20 }}>
+              <div style={{ position: "relative", marginBottom: 10 }}>
+                <CampoRicerca value={ricercaCorso} onChange={(e) => setRicercaCorso(e.target.value)} placeholder="Cerca un corso da associare…" />
+                {risultatiCorso.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+                    {risultatiCorso.map((c) => (
+                      <div key={c.id} onClick={() => aggiungiCorso(c)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{c.nome}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {assegnazioni.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso associato ancora.</div>
+              ) : assegnazioni.map((a) => (
+                <div key={a.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12, marginTop: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{corsoById[a.corso_id]?.nome || "—"}</div>
+                    <button onClick={() => rimuoviCorso(a.id)} title="Rimuovi corso" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
+                  </div>
+                  <FasceCompensoEditor fasce={a.fasce_compenso} onCambia={(fasce) => salvaFasce(a.id, fasce)} />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Calendario</div>
+            <div style={{ ...cardStyle }}>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
+              {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
+              {passate.length > 0 && (
+                <>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
+                  {passate.map(rigaCorsoData)}
+                </>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Note e documenti</div>
+            <div style={{ ...cardStyle }}>
+              <Field label="Note">
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={salvaNote} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="Note libere su questa master…" />
+              </Field>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 6 }}>Contratto</div>
+              {m.contratto_file_path ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <AllegatoLink percorso={m.contratto_file_path} etichetta="Apri il contratto caricato" bucket="master-documenti" />
+                  <label style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", cursor: "pointer" }}>
+                    Sostituisci
+                    <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
+                  </label>
+                </div>
+              ) : (
+                <input type="file" accept="image/*,application/pdf" style={inputStyle} disabled={caricandoContratto} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
+              )}
+              {caricandoContratto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
+              {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- POS Vendita diretta ----------
 // vendita al banco: scarica lo stock da giacenza_magazzino (fisico, come
 // la Logistica prodotti — non tocca mai WooCommerce) e registra la
@@ -23095,6 +23348,8 @@ export default function App() {
   // congruità dell'Inventario Post Corso
   const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [spedizioniPos, setSpedizioniPos] = useState([]);
+  const [masterCorsi, setMasterCorsi] = useState([]);
+  const [masterSchedaId, setMasterSchedaId] = useState(null);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -23128,7 +23383,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -23179,6 +23434,7 @@ export default function App() {
       supabase.from("magazzino_locale_consumabili").select("*"),
       supabase.from("inventario_ammanchi").select("*"),
       supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false }),
+      supabase.from("master_corsi").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -23226,6 +23482,7 @@ export default function App() {
     setMagazzinoLocaleConsumabili(mlc.data || []);
     setInventarioAmmanchi(iam.data || []);
     setSpedizioniPos(sped.data || []);
+    setMasterCorsi(mc.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -23577,6 +23834,7 @@ export default function App() {
   function apriOmaggi() { apriViewProtetta("omaggi"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
+  function apriSchedaMaster(masterId) { setMasterSchedaId(masterId); setView("schedamaster"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -23853,7 +24111,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriSchedaMaster={apriSchedaMaster} />
       )}
 
       {view === "gestionedate" && (
@@ -24142,6 +24400,13 @@ export default function App() {
         <PaginaStatisticheMaster
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} targetVenditeProdotti={targetVenditeProdotti}
           onBack={() => setView("statistiche")}
+        />
+      )}
+
+      {view === "schedamaster" && (
+        <PaginaSchedaMaster
+          master={master} masterId={masterSchedaId} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi}
+          ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
 

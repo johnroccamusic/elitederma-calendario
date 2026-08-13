@@ -1968,3 +1968,32 @@ alter table public.categorie_prodotti alter column woo_category_id drop not null
 alter table public.location add column if not exists magazzino_locale boolean not null default false;
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- 70) Scheda Master: foto/note/contratto, corsi associati con fasce di
+-- compenso per numero di allievi. Vedi supabase-scheda-master-setup.sql
+-- per i commenti completi.
+-- ---------------------------------------------------------
+alter table public.master add column if not exists foto_url text;
+alter table public.master add column if not exists note text;
+alter table public.master add column if not exists contratto_file_path text;
+
+create table if not exists public.master_corsi (
+  id uuid primary key default gen_random_uuid(),
+  master_id uuid not null references public.master(id) on delete cascade,
+  corso_id uuid not null references public.corsi(id) on delete cascade,
+  fasce_compenso jsonb not null default '[]',
+  ts timestamptz not null default now(),
+  unique (master_id, corso_id)
+);
+alter table public.master_corsi enable row level security;
+drop policy if exists "accesso interno master_corsi" on public.master_corsi;
+create policy "accesso interno master_corsi" on public.master_corsi for all to anon using (true) with check (true);
+create index if not exists master_corsi_master_idx on public.master_corsi (master_id);
+
+insert into storage.buckets (id, name, public) values ('master-documenti', 'master-documenti', true) on conflict (id) do nothing;
+drop policy if exists "accesso interno master-documenti" on storage.objects;
+create policy "accesso interno master-documenti" on storage.objects for all to anon
+  using (bucket_id = 'master-documenti') with check (bucket_id = 'master-documenti');
+
+notify pgrst, 'reload schema';
