@@ -12149,12 +12149,11 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
   return (
     <select
       value={nomiOpzioni.includes(value) ? value : ""}
-      onChange={(e) => { if (e.target.value === "__libero__") setModoLibero(true); else onChange(e.target.value); }}
+      onChange={(e) => onChange(e.target.value)}
       style={inputStyle}
     >
       <option value="">— scegli pacchetto —</option>
       {opzioni.map((o) => <option key={o.id} value={o.nome}>{o.nome}</option>)}
-      <option value="__libero__">✎ Scrivi il kit manualmente</option>
     </select>
   );
 }
