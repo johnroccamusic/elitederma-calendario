@@ -3837,6 +3837,12 @@ function SezioneDateCorsi({
   // sì che l'header "Indietro" disfi prima queste sotto-viste locali
   // invece di uscire subito dalla pagina
   registraInterceptaIndietro,
+  // opzionale: tiene fisso in cima tutto il blocco di controlli (titolo
+  // extra passato in intestazioneSticky, tab, tasti +/-, ricerca, filtri,
+  // conteggio) mentre solo l'elenco/calendario sotto scorre. Solo
+  // "Gestione corsi" lo passa: le altre pagine che riusano questo
+  // componente restano invariate.
+  stickyControlli, intestazioneSticky,
 }) {
   const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
@@ -3892,6 +3898,8 @@ function SezioneDateCorsi({
 
   return (
     <div style={{ zoom: fontScale }}>
+      <div style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: 40, marginBottom: -4 } : undefined}>
+      {intestazioneSticky}
       {!nascondiControlli && (
         <>
           {!nascondiTitolo && (
@@ -3954,6 +3962,7 @@ function SezioneDateCorsi({
         </button>
       </div>
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>{corsiDateFiltrate.length} cors{corsiDateFiltrate.length === 1 ? "o trovato" : "i trovati"}</div>
+      </div>
 
       {vistaDateModo === "elenco" ? (
         <DateRaggruppatePerCitta
@@ -8363,8 +8372,8 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     );
   }
 
-  return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
+  const intestazioneGestioneCorsi = (
+    <>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
       <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
         <Button onClick={() => setMostraAggiungiCorso(true)}>Aggiungi Corso</Button>
@@ -8383,11 +8392,16 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
           <Button variant="ghost" onClick={onApriVerificaAcconti}>Niente da verificare</Button>
         )}
       </div>
+    </>
+  );
 
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 20px 40px" }}>
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
         ricarica={ricarica} onApriData={onApriData}
         nascondiTitolo
+        stickyControlli intestazioneSticky={intestazioneGestioneCorsi}
         filtroCorsoHome={filtroCorsoDate} setFiltroCorsoHome={setFiltroCorsoDate}
         filtroCittaHome={filtroCittaDate} setFiltroCittaHome={setFiltroCittaDate}
         filtroMasterHome={filtroMasterDate} setFiltroMasterHome={setFiltroMasterDate}
