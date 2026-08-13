@@ -18119,7 +18119,7 @@ function EditorFasceCompenso({ fasce, onCambia }) {
                         <span>Da</span>
                         <input type="number" min="1" style={cellaNumero} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
                         <span>a</span>
-                        <input type="number" min="1" style={cellaNumero} placeholder="in su" value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
+                        <input type="number" min="1" style={{ ...cellaNumero, fontSize: r.a ? cellaNumero.fontSize : 15 }} placeholder="∞" value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
                         <span>allievi</span>
                       </div>
                     </td>
@@ -18499,7 +18499,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica,
                             <div style={{ marginLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
                               {fasce.map((f, i) => (
                                 <div key={i} style={{ display: "flex", justifyContent: "space-between", maxWidth: 320, ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                                  <span>{f.a == null ? `Oltre ${f.da ?? "—"} allievi` : `Da ${f.da ?? "—"} a ${f.a} allievi`}</span>
+                                  <span>Da {f.da ?? "—"} a {f.a == null ? "∞" : f.a} allievi</span>
                                   <span style={{ fontWeight: 700 }}>{f.compenso != null ? fmtEuroErp2(f.compenso) : "—"}</span>
                                 </div>
                               ))}
