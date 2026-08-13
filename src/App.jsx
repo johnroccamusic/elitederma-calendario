@@ -697,6 +697,17 @@ function IconaTileVenditeShop({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+function IconaTileOmaggio({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="9" width="18" height="4" rx="1" />
+      <rect x="4.5" y="13" width="15" height="8" rx="1" />
+      <path d="M12 9v12" />
+      <path d="M12 9c-1.2-3.2-3.4-4.5-4.8-3.6C5.8 6.3 6.5 9 12 9Z" stroke={GOLD} />
+      <path d="M12 9c1.2-3.2 3.4-4.5 4.8-3.6 1.4.9.7 3.6-4.8 3.6Z" stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileDashboardAnalisi({ size = 44, color = NAVY }) {
   const torta = spicchioTorta(9.3, 12.3, 2.6, -25, 270);
   return (
@@ -1305,8 +1316,11 @@ function parseNum(v) {
 // perché è una somma semplice dei "totale"/quantità già registrati.
 // tipo_target "combinato" richiede AND rigido: nessun premio parziale
 function calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) {
+  // gli omaggi non contano per un target di vendita: regalare un
+  // prodotto non è venderlo, altrimenti basterebbe regalare per
+  // "raggiungere" l'obiettivo senza incassare nulla
   const righe = (venditeShop || []).filter((v) =>
-    v.origine === "pos" && v.operatore_tipo === t.soggetto_tipo && v.operatore_id === t.soggetto_id &&
+    v.origine === "pos" && v.tipo_movimento !== "omaggio" && v.operatore_tipo === t.soggetto_tipo && v.operatore_id === t.soggetto_id &&
     v.data_ordine && v.data_ordine.slice(0, 10) >= t.data_inizio && v.data_ordine.slice(0, 10) <= t.data_fine
   );
   const incassoRaggiunto = round2(righe.reduce((s, v) => s + (v.totale || 0), 0));
@@ -4599,11 +4613,13 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
     .filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= range.inizio && d <= range.fine; })
     .sort((a, b) => ordineCronologico ? (a.data_ordine || "").localeCompare(b.data_ordine || "") : (b.data_ordine || "").localeCompare(a.data_ordine || ""));
 
+  // gli omaggi restano visibili nell'elenco (trasparenza), ma non contano
+  // come pezzi venduti nel KPI personale — regalare non è vendere
   const kpi = {
     incasso: round2(righe.reduce((s, v) => s + (v.totale || 0), 0)),
-    pezzi: righe.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
+    pezzi: righe.filter((v) => v.tipo_movimento !== "omaggio").reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
   };
-  const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" } };
+  const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } };
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -15521,7 +15537,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop }) {
+function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -15546,7 +15562,10 @@ function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onAp
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Gestione magazzino" descrizione="Controlla giacenze, movimenti e disponibilità dei prodotti." Icona={IconaTileGestioneMagazzino} onClick={onApriMagazzino} />
           <TileHome title="Gestione shop" descrizione="Gestisci prodotti, ordini, clienti e impostazioni dello shop." Icona={IconaTileGestioneShop} onClick={onApriGestioneShop} />
-          <TileHome title="Vendite shop" descrizione="Monitora le vendite, ordini e performance dello shop." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
+          <TileHome title="Vendite Shop Online" descrizione="Ordini e performance dello shop online WooCommerce." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
+          <TileHome title="Vendite al banco" descrizione="Tutte le vendite fatte con il POS interno." Icona={IconaTilePos} onClick={onApriVenditeAlBanco} />
+          <TileHome title="Prodotti usati per i kit" descrizione="Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit." Icona={IconaPacchettoRiga} onClick={onApriProdottiUsatiKit} />
+          <TileHome title="Omaggi" descrizione="Prodotti usciti dal POS senza essere venduti, regalati." Icona={IconaTileOmaggio} onClick={onApriOmaggi} />
         </div>
       </div>
     </div>
@@ -16105,7 +16124,11 @@ function etichettaStatoVenditaShop(stato) {
   return STATI_VENDITA_SHOP[stato]?.etichetta || stato || "—";
 }
 
-function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
+// origine: "woocommerce" → "Vendite Shop Online" (solo ordini dal sito),
+// "pos" → "Vendite al banco" (solo vendite fatte dal POS interno) — stessa
+// struttura di pagina, filtrate a monte così le due non si mescolano mai
+// e ciascuna ha il proprio contesto/KPI puliti
+function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
   const [statoSel, setStatoSel] = useState("");
@@ -16116,7 +16139,8 @@ function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
   // WooCommerce (idempotente, upsert su woo_order_id) — serve per quando
   // il webhook che normalmente registra gli ordini in tempo reale si è
   // fermato per un po' (sito irraggiungibile, webhook disattivato per
-  // errore...) e le vendite più recenti non compaiono più da sole
+  // errore...) e le vendite più recenti non compaiono più da sole. Ha
+  // senso solo lato shop online: le vendite al banco non passano da lì
   async function recuperaOrdiniMancanti() {
     setRecuperando(true);
     setMsgRecupero("");
@@ -16127,13 +16151,15 @@ function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
     ricarica();
   }
 
+  const venditeOrigine = (venditeShop || []).filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio");
+
   // "tutto" non esiste in rangePeriodoErp (pensato per l'ERP, senza
   // storico pluriennale): qui serve perché l'import storico può
   // risalire ad anni fa, e di default si vuole vedere l'intera storia
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
-  const statiPresenti = [...new Set((venditeShop || []).map((v) => v.stato).filter(Boolean))].sort();
+  const statiPresenti = [...new Set(venditeOrigine.map((v) => v.stato).filter(Boolean))].sort();
 
-  const venditeFiltrate = (venditeShop || []).filter((v) => {
+  const venditeFiltrate = venditeOrigine.filter((v) => {
     const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     if (data && (data < range.inizio || data > range.fine)) return false;
     if (statoSel && v.stato !== statoSel) return false;
@@ -16177,13 +16203,15 @@ function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Vendite shop</div>
-          <div style={{ textAlign: "right" }}>
-            <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
-            {msgRecupero && <div style={{ ...fontBody, fontSize: 11.5, color: msgRecupero.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgRecupero}</div>}
-          </div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Vendite al banco" : "Vendite Shop Online"}</div>
+          {origine === "woocommerce" && (
+            <div style={{ textAlign: "right" }}>
+              <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
+              {msgRecupero && <div style={{ ...fontBody, fontSize: 11.5, color: msgRecupero.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgRecupero}</div>}
+            </div>
+          )}
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Ordini dallo shop WooCommerce e vendite al banco dal POS.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Vendite fatte al banco con il POS interno." : "Ordini arrivati dallo shop online WooCommerce."}</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -16223,7 +16251,7 @@ function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {["Ordine", "Origine", "Data", "Cliente", "Stato", "Imponibile", "IVA", "Totale"].map((th) => (
+                  {["Ordine", "Tipo", "Data", "Cliente", "Stato", "Imponibile", "IVA", "Totale"].map((th) => (
                     <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
                   ))}
                 </tr>
@@ -16234,16 +16262,17 @@ function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
                   .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""))
                   .map((v) => {
                     const st = STATI_VENDITA_SHOP[v.stato];
+                    const etichettaMovimento = { vendita: "Vendita", reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || "Vendita";
                     return (
                       <tr key={v.id}>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>#{v.numero_ordine || v.woo_order_id}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.origine === "pos" ? "#3B6FA0" : MUTED, background: v.origine === "pos" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
-                            {v.origine === "pos" ? "POS" : "WooCommerce"}{v.tipo_movimento && v.tipo_movimento !== "vendita" ? ` · ${{ reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || v.tipo_movimento}` : ""}
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#3B6FA0" : MUTED, background: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
+                            {etichettaMovimento}
                           </span>
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (v.origine === "pos" ? "Vendita al banco" : "—")}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (origine === "pos" ? "Vendita al banco" : "—")}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
                           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
                         </td>
@@ -16308,6 +16337,200 @@ function PaginaVenditeShop({ venditeShop, ricarica, onBack }) {
               Mostrati i primi 20 di {prodottiAggregati.length} prodotti diversi.
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Omaggi": prodotti usciti dal POS senza essere venduti (tipo_movimento
+// "omaggio", totale sempre zero) — qui interessa solo cosa e quanto è
+// stato regalato, non un incasso che non esiste
+function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("tutto");
+
+  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+  const omaggiFiltrati = (venditeShop || [])
+    .filter((v) => v.tipo_movimento === "omaggio")
+    .filter((v) => {
+      const data = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+      return !data || (data >= range.inizio && data <= range.fine);
+    });
+
+  const pezziTotali = omaggiFiltrati.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0);
+
+  const perProdotto = {};
+  omaggiFiltrati.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+    const nome = (p.nome || "").trim() || "—";
+    perProdotto[nome] = (perProdotto[nome] || 0) + (p.quantita || 0);
+  }));
+  const righeProdotti = Object.entries(perProdotto).map(([nome, quantita]) => ({ nome, quantita })).sort((a, b) => b.quantita - a.quantita);
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Omaggi</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti usciti dal POS senza essere venduti — regalati, con nota obbligatoria sul motivo.</div>
+
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
+          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(2, minmax(0,1fr))", gap: 14, marginBottom: 22, maxWidth: 500 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Omaggi</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{omaggiFiltrati.length}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi regalati</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{pezziTotali}</div>
+          </div>
+        </div>
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Per prodotto</div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginBottom: 28 }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Pezzi regalati"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righeProdotti.map((p) => (
+                  <tr key={p.nome}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
+                  </tr>
+                ))}
+                {righeProdotti.length === 0 && (
+                  <tr><td colSpan={2} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun omaggio nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Registro omaggi</div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+              <thead>
+                <tr>
+                  {["Data", "Operatore", "Prodotti", "Nota"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {omaggiFiltrati
+                  .slice()
+                  .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""))
+                  .map((v) => (
+                    <tr key={v.id}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.operatore_nome ? toTitleCase(v.operatore_nome) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{(Array.isArray(v.prodotti) ? v.prodotti : []).map((p) => `${p.nome} ×${p.quantita}`).join(", ")}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: MUTED }}>{v.note || "—"}</td>
+                    </tr>
+                  ))}
+                {omaggiFiltrati.length === 0 && (
+                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun omaggio nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Prodotti usati per i kit": quanto di ogni prodotto è uscito verso i
+// corsi come contenuto dei kit (mai venduto, mai un omaggio del POS —
+// semplicemente materiale didattico/consumo distribuito) — somma
+// quantitaInviataPerProdotto su tutte le edizioni del periodo scelto
+function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("annoscolastico");
+  const oggi = new Date();
+  const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const range = periodo === "tutto"
+    ? { inizio: "0000-01-01", fine: "9999-12-31" }
+    : periodo === "annoscolastico"
+    ? { inizio: `${stagioneCorrente()}-09-01`, fine: fmt(oggi) }
+    : { inizio: fmt(new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1)), fine: fmt(oggi) };
+
+  const edizioniPeriodo = (corsiDate || []).filter((cd) => (cd.data_fine || cd.data_inizio) >= range.inizio && (cd.data_inizio || cd.data_fine) <= range.fine);
+
+  const perProdottoId = {};
+  edizioniPeriodo.forEach((cd) => {
+    const corso = (corsi || []).find((c) => c.id === cd.corso_id);
+    const quantitaPerProdotto = quantitaInviataPerProdotto(cd, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni);
+    Object.entries(quantitaPerProdotto).forEach(([prodottoId, qta]) => {
+      if (!qta) return;
+      perProdottoId[prodottoId] = (perProdottoId[prodottoId] || 0) + qta;
+    });
+  });
+  const righe = Object.entries(perProdottoId)
+    .map(([prodottoId, quantita]) => ({ nome: (prodottiShop || []).find((p) => p.id === prodottoId)?.nome || "—", quantita }))
+    .filter((r) => r.quantita > 0)
+    .sort((a, b) => b.quantita - a.quantita);
+  const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 800, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prodotti usati per i kit</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
+
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
+          {[{ v: "trimestre", l: "Ultimo trimestre" }, { v: "annoscolastico", l: "Anno scolastico" }, { v: "tutto", l: "Tutto" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+        </div>
+
+        <div style={{ ...cardStyle, marginBottom: 22, maxWidth: 260 }}>
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi usati nei kit</div>
+          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{pezziTotali}</div>
+        </div>
+
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Pezzi usati nei kit"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {righe.map((r) => (
+                  <tr key={r.nome}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{r.nome}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.quantita}</td>
+                  </tr>
+                ))}
+                {righe.length === 0 && (
+                  <tr><td colSpan={2} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun corso nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -16946,6 +17169,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   function aggregaVenditePerNome(inizio, fine) {
     const mappa = {};
     (venditeShop || []).forEach((v) => {
+      if (v.tipo_movimento === "omaggio") return; // regalato, non venduto
       const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
       if (!d || d < inizio || d > fine) return;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
@@ -16960,9 +17184,12 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   }
   const venditePerNome = aggregaVenditePerNome(range.inizio, range.fine);
 
-  // "fermi da oltre 90 giorni": guarda TUTTO lo storico vendite, non solo il periodo selezionato
+  // "fermi da oltre 90 giorni": guarda TUTTO lo storico vendite, non solo il
+  // periodo selezionato — un omaggio non è un movimento commerciale, non
+  // deve far sembrare "vivo" un prodotto che in realtà nessuno compra più
   const mappaUltimaVendita = {};
   (venditeShop || []).forEach((v) => {
+    if (v.tipo_movimento === "omaggio") return;
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     if (!d || !Array.isArray(v.prodotti)) return;
     v.prodotti.forEach((p) => {
@@ -17600,7 +17827,9 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
 
-  const righePos = (venditeShop || []).filter((v) => v.origine === "pos").filter((v) => {
+  // gli omaggi hanno una pagina propria ("Omaggi"): qui contano solo le
+  // vendite vere, altrimenti i pezzi regalati gonfierebbero le statistiche
+  const righePos = (venditeShop || []).filter((v) => v.origine === "pos" && v.tipo_movimento !== "omaggio").filter((v) => {
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     return d && d >= range.inizio && d <= range.fine;
   });
@@ -17766,7 +17995,9 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
   const [periodo, setPeriodo] = useState("mese");
   const range = rangeStatisticheMaster(periodo);
 
-  const righePos = (venditeShop || []).filter((v) => v.origine === "pos" && v.operatore_tipo === "master").filter((v) => {
+  // gli omaggi hanno una pagina propria ("Omaggi"): qui contano solo le
+  // vendite vere, altrimenti i pezzi regalati gonfierebbero le statistiche
+  const righePos = (venditeShop || []).filter((v) => v.origine === "pos" && v.tipo_movimento !== "omaggio" && v.operatore_tipo === "master").filter((v) => {
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     return d && d >= range.inizio && d <= range.fine;
   });
@@ -17912,6 +18143,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
+  // omaggio: azzera l'incasso ma scarica comunque il magazzino — la nota
+  // diventa obbligatoria (motivo del regalo), niente da nascondere su
+  // perché un prodotto è uscito senza essere venduto
+  const [omaggioAttivo, setOmaggioAttivo] = useState(false);
+
   // spedizione a domicilio: quando il prodotto venduto non è
   // fisicamente con l'operatore al corso, la vendita resta comunque
   // registrata ma genera un ordine per la sede (spedizioni_pos)
@@ -18013,6 +18249,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
     setSpedizioneAttiva(false); setSpedIscrittoId(""); setSpedDestinatario(""); setSpedIndirizzo(""); setSpedCitta(""); setSpedCap("");
+    setOmaggioAttivo(false);
   }
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
@@ -18021,10 +18258,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const totaleNetto = round2(subtotale - scontoApplicato);
   const imponibile = round2(totaleNetto / 1.22);
   const iva = round2(totaleNetto - imponibile);
+  // omaggio: il magazzino si scarica lo stesso, ma non entra un euro —
+  // il totale "da incassare" e le sue componenti diventano sempre zero
+  const totaleDaIncassare = omaggioAttivo ? 0 : totaleNetto;
+  const imponibileDaRegistrare = omaggioAttivo ? 0 : imponibile;
+  const ivaDaRegistrare = omaggioAttivo ? 0 : iva;
 
   async function confermaVendita() {
     if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
     if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
+    if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return; }
     if (spedizioneAttiva && !spedDestinatario.trim()) { setMsg("Indica il destinatario della spedizione."); return; }
     for (const r of carrello) {
       if (r.quantita > disponibiliDi(r.prodottoId)) { setMsg(`"${r.nome}" non ha più abbastanza disponibilità.`); return; }
@@ -18056,23 +18299,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
     // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
     // righe, così il fatturato per prodotto in Magazzino/Analisi resta
-    // coerente col totale davvero incassato
+    // coerente col totale davvero incassato — negli omaggi ogni riga vale
+    // zero, non solo il totale, altrimenti risulterebbe un ricavo fantasma
+    // per prodotto in report che sommano "prodotti.totale_riga"
     const fattoreSconto = subtotale > 0 ? totaleNetto / subtotale : 1;
-    const prodottiRiga = carrello.map((r) => ({ nome: r.nome, quantita: r.quantita, totale_riga: round2(r.prezzo * r.quantita * fattoreSconto) }));
+    const prodottiRiga = carrello.map((r) => ({ nome: r.nome, quantita: r.quantita, totale_riga: omaggioAttivo ? 0 : round2(r.prezzo * r.quantita * fattoreSconto) }));
 
     const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert({
       woo_order_id: null,
       numero_ordine: `POS-${Date.now()}`,
       data_ordine: new Date().toISOString(),
       stato: "completed",
-      totale: totaleNetto,
-      totale_imponibile: imponibile,
-      totale_iva: iva,
+      totale: totaleDaIncassare,
+      totale_imponibile: imponibileDaRegistrare,
+      totale_iva: ivaDaRegistrare,
       prodotti: prodottiRiga,
       origine: "pos",
-      metodo_pagamento: metodoPagamento,
+      metodo_pagamento: omaggioAttivo ? null : metodoPagamento,
       note: note.trim() || null,
-      tipo_movimento: "vendita",
+      tipo_movimento: omaggioAttivo ? "omaggio" : "vendita",
       operatore_tipo: operatore.tipo,
       operatore_id: operatore.id,
       operatore_nome: operatore.nome,
@@ -18095,7 +18340,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     }
     setSalvando(false);
     nuovaVendita();
-    setMsg(spedizioneAttiva ? "Vendita registrata e spedizione inviata a Raf." : "Vendita registrata.");
+    const etichettaEsito = omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
+    setMsg(spedizioneAttiva ? `${etichettaEsito} e spedizione inviata a Raf.` : `${etichettaEsito}.`);
     ricarica();
   }
 
@@ -18130,7 +18376,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 </thead>
                 <tbody>
                   {venditePos.map((v) => {
-                    const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" } }[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
+                    const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } }[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
                     return (
                       <tr key={v.id}>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{v.numero_ordine}</td>
@@ -18221,9 +18467,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>
         <span>IVA 22%</span><span>{fmtEuroErp(iva)}</span>
       </div>
-      <div style={{ background: BG, borderRadius: 10, padding: isMobile ? "8px 12px" : "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 10 : 16 }}>
-        <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale da incassare</span>
-        <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleNetto)}</span>
+      <div style={{ background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 10, padding: isMobile ? "8px 12px" : "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 10 : 16 }}>
+        <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
+        <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totaleDaIncassare)}</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isMobile ? 8 : 14 }}>
+        <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 16, height: 16 }} />
+        <label htmlFor="pos-omaggio" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Omaggio — azzera l'incasso</label>
       </div>
 
       {corsiEleggibiliPos.length > 0 && (
@@ -18269,29 +18520,37 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 6 : 8 }}>Modalità di pagamento</div>
-      <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 8 : 14 }}>
-        {[{ v: "pos", l: "POS / Carta" }, { v: "contanti", l: "Contanti" }].map((m) => (
-          <button key={m.v} onClick={() => setMetodoPagamento(m.v)} style={{ flex: 1, padding: isMobile ? "8px 8px" : "12px 10px", borderRadius: 10, border: metodoPagamento === m.v ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY }}>
-            {m.l}
-          </button>
-        ))}
-      </div>
+      {!omaggioAttivo && (
+        <>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 6 : 8 }}>Modalità di pagamento</div>
+          <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 8 : 14 }}>
+            {[{ v: "pos", l: "POS / Carta" }, { v: "contanti", l: "Contanti" }].map((m) => (
+              <button key={m.v} onClick={() => setMetodoPagamento(m.v)} style={{ flex: 1, padding: isMobile ? "8px 8px" : "12px 10px", borderRadius: 10, border: metodoPagamento === m.v ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY }}>
+                {m.l}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
       {!isMobile && (
-        <Field label="Note (opzionale)">
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Aggiungi note sulla vendita…" />
+        <Field label={omaggioAttivo ? "Nota (obbligatoria per l'omaggio)" : "Note (opzionale)"}>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }} placeholder={omaggioAttivo ? "Perché questo prodotto viene regalato?" : "Aggiungi note sulla vendita…"} />
         </Field>
       )}
       {isMobile && (
         <div style={{ marginBottom: 4 }}>
-          <input value={note} onChange={(e) => setNote(e.target.value)} style={{ ...inputStyle, padding: "8px 10px", fontSize: 12.5 }} placeholder="Note (opzionale)" />
+          <input
+            value={note} onChange={(e) => setNote(e.target.value)}
+            style={{ ...inputStyle, padding: "8px 10px", fontSize: 12.5, ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }}
+            placeholder={omaggioAttivo ? "Perché questo prodotto viene regalato? (obbligatorio)" : "Note (opzionale)"}
+          />
         </div>
       )}
 
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Vendita registrata") ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
-      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0 || !operatore} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
-        {salvando ? "Registro…" : `Conferma vendita e incassa ${fmtEuroErp(totaleNetto)}`}
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: (msg.startsWith("Vendita registrata") || msg.startsWith("Omaggio registrato")) ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
+      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim())} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
+        {salvando ? "Registro…" : omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp(totaleDaIncassare)}`}
       </Button>
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
     </>
@@ -18597,6 +18856,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   function aggregaVenditePerNome(inizio, fine) {
     const mappa = {};
     (venditeShop || []).forEach((v) => {
+      if (v.tipo_movimento === "omaggio") return; // regalato, non venduto
       const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
       if (!d || d < inizio || d > fine) return;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
@@ -18642,7 +18902,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   const varFatturato = totFatturatoPrecedente > 0 ? round1Erp(((totFatturatoSelezionato - totFatturatoPrecedente) / totFatturatoPrecedente) * 100) : null;
 
   function carrelloMedioPeriodo(inizio, fine) {
-    const ordini = (venditeShop || []).filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= inizio && d <= fine; });
+    const ordini = (venditeShop || []).filter((v) => v.tipo_movimento !== "omaggio").filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= inizio && d <= fine; });
     if (!ordini.length) return null;
     return round2(ordini.reduce((s, v) => s + (v.totale || 0), 0) / ordini.length);
   }
@@ -18662,6 +18922,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   function sommaBucketVendite(inizio, fine) {
     let quantita = 0, fatturato = 0;
     (venditeShop || []).forEach((v) => {
+      if (v.tipo_movimento === "omaggio") return;
       const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
       if (!d || d < inizio || d > fine) return;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => { quantita += Number(p.quantita) || 0; fatturato += Number(p.totale_riga) || 0; });
@@ -23205,6 +23466,9 @@ export default function App() {
   function apriInserimentoCostiRicavi() { apriViewProtetta("inserimentocostiricavi"); }
   function apriDashboardAnalisi() { apriViewProtetta("dashboardanalisi"); }
   function apriVenditeShop() { apriViewProtetta("venditeshop"); }
+  function apriVenditeAlBanco() { apriViewProtetta("venditealbanco"); }
+  function apriProdottiUsatiKit() { apriViewProtetta("prodottiusatikit"); }
+  function apriOmaggi() { apriViewProtetta("omaggi"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
@@ -23542,6 +23806,9 @@ export default function App() {
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
           onApriVenditeShop={apriVenditeShop}
+          onApriVenditeAlBanco={apriVenditeAlBanco}
+          onApriProdottiUsatiKit={apriProdottiUsatiKit}
+          onApriOmaggi={apriOmaggi}
         />
       )}
 
@@ -23572,7 +23839,23 @@ export default function App() {
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+        <PaginaVenditeShop venditeShop={venditeShop} origine="woocommerce" ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+      )}
+
+      {view === "venditealbanco" && (
+        <PaginaVenditeShop venditeShop={venditeShop} origine="pos" ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+      )}
+
+      {view === "omaggi" && (
+        <PaginaOmaggi venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+      )}
+
+      {view === "prodottiusatikit" && (
+        <PaginaProdottiUsatiKit
+          corsi={corsi} corsiDate={corsiDate} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
+          logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
+          onBack={() => setView("magazzinoshop")}
+        />
       )}
 
       {view === "magazzino" && (
