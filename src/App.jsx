@@ -19976,7 +19976,7 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
 // aggiungi prodotti (con quantità per kit) e "altri accessori" (senza
 // quantità: la scrive chi prepara la spedizione, edizione per edizione)
 // — il "+" per aggiungere prodotti sta sulla riga del nome del pacchetto
-function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, trascinando }) {
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
@@ -20028,12 +20028,21 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     <div
       onDragOver={(e) => { e.preventDefault(); onDragOver && onDragOver(); }}
       onDrop={() => onDrop && onDrop(kit.id)}
-      style={{ ...cardStyle, marginBottom: 10, padding: 14, opacity: trascinando ? 0.4 : 1, border: `1px solid ${trascinando ? GOLD : CREAM_BORDER}` }}
+      style={{
+        ...cardStyle, marginBottom: 10, padding: 14,
+        opacity: trascinando ? 0.4 : 1,
+        border: `2px solid ${trascinando ? GOLD : evidenziatoBersaglio ? NAVY : CREAM_BORDER}`,
+        // il bersaglio si sposta un po' per far vedere fisicamente dove
+        // si inserirebbe il pacchetto trascinato, non solo un bordo
+        transform: evidenziatoBersaglio ? "translateY(4px)" : "none",
+        transition: "transform 0.1s ease, border-color 0.1s ease",
+      }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (aperto && (mostraRicercaKit || prodottiKit.length > 0)) ? 10 : 0 }}>
         <span
           draggable
           onDragStart={() => onDragStart && onDragStart(kit.id)}
+          onDragEnd={() => onDragEnd && onDragEnd()}
           title="Trascina per riordinare"
           style={{ cursor: "grab", color: MUTED, fontSize: 15, lineHeight: 1, padding: "0 2px", flexShrink: 0, userSelect: "none" }}
         >
@@ -20194,13 +20203,14 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 // pacchetti speciali senza corso) con i suoi pacchetti sotto e il tasto
 // per crearne uno nuovo — sempre visibile, senza bisogno di "creare" un
 // contenitore prima di poter vedere l'elenco dei corsi
-function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica }) {
+function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni }) {
   const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [mostraAccessori, setMostraAccessori] = useState(false);
   const trascinamentoRef = useRef(null);
   const [trascinatoId, setTrascinatoId] = useState(null);
+  const [trascinatoSuId, setTrascinatoSuId] = useState(null); // kit sotto il cursore mentre si trascina: evidenziato come bersaglio
   const accessoriCorso = corsiKitProdotti.filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null));
 
   async function creaPacchetto() {
@@ -20224,6 +20234,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
     const idOrigine = trascinamentoRef.current;
     trascinamentoRef.current = null;
     setTrascinatoId(null);
+    setTrascinatoSuId(null);
     if (!idOrigine || idOrigine === idDestinazione) return;
     const nuovi = [...pacchetti];
     const idxOrigine = nuovi.findIndex((k) => k.id === idOrigine);
@@ -20231,8 +20242,13 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
     if (idxOrigine < 0 || idxDestinazione < 0) return;
     const [spostato] = nuovi.splice(idxOrigine, 1);
     nuovi.splice(idxDestinazione, 0, spostato);
-    await Promise.all(nuovi.map((k, i) => supabase.from("kit_definizioni").update({ ordine: i }).eq("id", k.id)));
-    ricarica();
+    // ordine nuovo subito in locale, invece di aspettare un ricarica()
+    // completo di tutti i dati dell'app: il riordino si vede all'istante,
+    // le scritture su Supabase vanno avanti dietro, in background
+    const ordinePerId = Object.fromEntries(nuovi.map((k, i) => [k.id, i]));
+    setKitDefinizioni((prev) => prev.map((k) => (ordinePerId[k.id] != null ? { ...k, ordine: ordinePerId[k.id] } : k)));
+    const risultati = await Promise.all(nuovi.map((k, i) => supabase.from("kit_definizioni").update({ ordine: i }).eq("id", k.id)));
+    if (risultati.some((r) => r.error)) { window.alert("Errore nel salvare il nuovo ordine, ricarico."); ricarica(); }
   }
 
   return (
@@ -20276,7 +20292,12 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
       ) : pacchetti.map((k) => (
         <SchedaPacchetto
           key={k.id} kit={k} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica}
-          onDragStart={iniziaTrascinamento} onDragOver={() => {}} onDrop={rilascia} trascinando={trascinatoId === k.id}
+          onDragStart={iniziaTrascinamento}
+          onDragOver={() => setTrascinatoSuId(k.id)}
+          onDrop={rilascia}
+          onDragEnd={() => { setTrascinatoId(null); setTrascinatoSuId(null); }}
+          trascinando={trascinatoId === k.id}
+          evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
         />
       ))}
       <SchedaAccessoriCorso corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica} aperto={mostraAccessori} onChiudi={() => setMostraAccessori(false)} />
@@ -20287,7 +20308,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
 // da Setting > Documenti e brand): tutti i corsi sono sempre visibili,
 // con i loro pacchetti sotto — ogni pacchetto è anche ciò che compare
 // nella tendina "Pacchetto/Kit" del modulo di iscrizione per quel corso
-function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
+function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKitProdotti, prodottiShop, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const corsiOrdinati = corsi.slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const ordinaPacchetti = (arr) => arr.slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
@@ -20311,12 +20332,14 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, corsiKitProdotti, prodottiS
             key={c.id} corso={c}
             pacchetti={ordinaPacchetti(kitDefinizioni.filter((k) => k.corso_id === c.id))}
             corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
+            setKitDefinizioni={setKitDefinizioni}
           />
         ))}
 
         <SezioneCorsoPacchetti
           corso={null} pacchetti={pacchettiSpeciali}
           corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
+          setKitDefinizioni={setKitDefinizioni}
         />
       </div>
     </div>
@@ -23500,7 +23523,7 @@ export default function App() {
 
       {view === "contenutokit" && (
         <PaginaContenutoKit
-          corsi={corsi} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
+          corsi={corsi} kitDefinizioni={kitDefinizioni} setKitDefinizioni={setKitDefinizioni} corsiKitProdotti={corsiKitProdotti} prodottiShop={prodottiShop}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
