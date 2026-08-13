@@ -16806,8 +16806,11 @@ function rangeMagazzino(periodo, anno, meseSel) {
 // trimestrale/semestrale/settimanale non c'è scelta perché le due
 // opzioni coinciderebbero (l'intero range dura già ~1 anno/settimana):
 // resta l'anno scolastico precedente / la settimana precedente
-function rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo) {
+function rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo, meseCustom, annoCustom) {
   if (periodo === "mensile") {
+    if (confrontoTipo === "personalizzato" && meseCustom != null && annoCustom != null) {
+      return { inizio: `${annoCustom}-${String(meseCustom + 1).padStart(2, "0")}-01`, fine: fmtDataIso(new Date(annoCustom, meseCustom + 1, 0)) };
+    }
     const [a, m] = range.inizio.split("-").map(Number);
     if (confrontoTipo === "annoprecedente") {
       return { inizio: `${a - 1}-${String(m).padStart(2, "0")}-01`, fine: fmtDataIso(new Date(a - 1, m, 0)) };
@@ -18814,6 +18817,15 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   const [anno, setAnno] = useState(oggi.getFullYear());
   const [meseSel, setMeseSel] = useState(oggi.getMonth());
   const [confrontoTipo, setConfrontoTipo] = useState("periodoprecedente");
+  // confronto "personalizzato" (solo Mensile): qualunque mese/anno a
+  // scelta come termine di paragone, non solo mese prec./anno prec.
+  const [confrontoMeseCustom, setConfrontoMeseCustom] = useState((oggi.getMonth() + 11) % 12);
+  const [confrontoAnnoCustom, setConfrontoAnnoCustom] = useState(oggi.getMonth() === 0 ? oggi.getFullYear() - 1 : oggi.getFullYear());
+  // periodo principale "Personalizzato": due tendine mese/anno, da...a...
+  const [daMeseCustom, setDaMeseCustom] = useState(oggi.getMonth());
+  const [daAnnoCustom, setDaAnnoCustom] = useState(oggi.getFullYear());
+  const [aMeseCustom, setAMeseCustom] = useState(oggi.getMonth());
+  const [aAnnoCustom, setAAnnoCustom] = useState(oggi.getFullYear());
   const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
   const [categoriaSel, setCategoriaSel] = useState("");
   const [vistaTrend, setVistaTrend] = useState("categoria");
@@ -18828,17 +18840,21 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
     else if (nuovoPeriodo === "mensile") { setAnno(oggi.getFullYear()); setMeseSel(oggi.getMonth()); }
   }
 
-  const range = rangeMagazzino(periodo, anno, meseSel);
-  const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo);
+  const range = periodo === "personalizzato"
+    ? { inizio: `${daAnnoCustom}-${String(daMeseCustom + 1).padStart(2, "0")}-01`, fine: fmtDataIso(new Date(aAnnoCustom, aMeseCustom + 1, 0)) }
+    : rangeMagazzino(periodo, anno, meseSel);
+  const rangePrecedente = rangePrecedenteMagazzino(periodo, range, anno, confrontoTipo, confrontoMeseCustom, confrontoAnnoCustom);
   const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
   const etichettaPeriodoSelezionato = periodo === "annuale" ? `${anno}`
     : periodo === "mensile" ? `${MESI[meseSel]} ${anno}`
     : periodo === "settimanale" ? "questa settimana"
+    : periodo === "personalizzato" ? (daMeseCustom === aMeseCustom && daAnnoCustom === aAnnoCustom ? `${MESI[daMeseCustom]} ${daAnnoCustom}` : `${MESI[daMeseCustom]} ${daAnnoCustom} – ${MESI[aMeseCustom]} ${aAnnoCustom}`)
     : `${anno}/${String((anno + 1) % 100).padStart(2, "0")}`;
   const [annoMesePrecedente, numMesePrecedente] = rangePrecedente.inizio.split("-").map(Number);
   const etichettaPeriodoPrecedente = periodo === "annuale" ? `${anno - 1}`
     : periodo === "mensile" ? `${MESI[numMesePrecedente - 1]} ${annoMesePrecedente}`
     : periodo === "settimanale" ? "settimana precedente"
+    : periodo === "personalizzato" ? `${fmtData(rangePrecedente.inizio)} – ${fmtData(rangePrecedente.fine)}`
     : `${anno - 1}/${String(anno % 100).padStart(2, "0")}`;
   const etichettaConfronto = `vs ${etichettaPeriodoPrecedente}`;
 
@@ -19004,7 +19020,7 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-          {[{ v: "annuale", l: "Annuale" }, { v: "semestrale", l: "Semestrale" }, { v: "trimestrale", l: "Trimestrale" }, { v: "mensile", l: "Mensile" }, { v: "settimanale", l: "Settimanale" }].map((p) => (
+          {[{ v: "annuale", l: "Annuale" }, { v: "semestrale", l: "Semestrale" }, { v: "trimestrale", l: "Trimestrale" }, { v: "mensile", l: "Mensile" }, { v: "settimanale", l: "Settimanale" }, { v: "personalizzato", l: "Personalizzato" }].map((p) => (
             <button key={p.v} onClick={() => selezionaPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>
               {p.l}
             </button>
@@ -19019,6 +19035,28 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
           <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
             {anniDisponibili.map((a) => <option key={a} value={a}>{periodo === "annuale" || periodo === "mensile" ? a : `${a}/${String((a + 1) % 100).padStart(2, "0")}`}</option>)}
           </select>
+        )}
+        {periodo === "personalizzato" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Da</span>
+              <select style={{ ...inputStyle, width: "auto" }} value={daMeseCustom} onChange={(e) => setDaMeseCustom(Number(e.target.value))}>
+                {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <select style={{ ...inputStyle, width: "auto" }} value={daAnnoCustom} onChange={(e) => setDaAnnoCustom(Number(e.target.value))}>
+                {anniDisponibili.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>A</span>
+              <select style={{ ...inputStyle, width: "auto" }} value={aMeseCustom} onChange={(e) => setAMeseCustom(Number(e.target.value))}>
+                {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
+              </select>
+              <select style={{ ...inputStyle, width: "auto" }} value={aAnnoCustom} onChange={(e) => setAAnnoCustom(Number(e.target.value))}>
+                {anniDisponibili.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </div>
+          </>
         )}
         <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
           <option value="">Tutte le categorie</option>
@@ -19065,10 +19103,23 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
             <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Analisi vendite</div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {periodo === "annuale" || periodo === "mensile" ? (
-                <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
-                  <option value="periodoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? "periodo prec." : MESI[(meseSel + 11) % 12]}</option>
-                  <option value="annoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? anno - 1 : `${MESI[meseSel]} ${anno - 1}`}</option>
-                </select>
+                <>
+                  <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoTipo} onChange={(e) => setConfrontoTipo(e.target.value)}>
+                    <option value="periodoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? "periodo prec." : MESI[(meseSel + 11) % 12]}</option>
+                    <option value="annoprecedente">{etichettaPeriodoSelezionato} vs {periodo === "annuale" ? anno - 1 : `${MESI[meseSel]} ${anno - 1}`}</option>
+                    {periodo === "mensile" && <option value="personalizzato">{etichettaPeriodoSelezionato} vs un mese a scelta</option>}
+                  </select>
+                  {periodo === "mensile" && confrontoTipo === "personalizzato" && (
+                    <>
+                      <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoMeseCustom} onChange={(e) => setConfrontoMeseCustom(Number(e.target.value))}>
+                        {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                      </select>
+                      <select style={{ ...inputStyle, width: "auto", fontSize: 12.5 }} value={confrontoAnnoCustom} onChange={(e) => setConfrontoAnnoCustom(Number(e.target.value))}>
+                        {anniDisponibili.map((a) => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </>
+                  )}
+                </>
               ) : (
                 <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{etichettaConfronto}</div>
               )}
