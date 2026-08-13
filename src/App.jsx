@@ -545,15 +545,6 @@ function IconaTileMaster({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-function IconaTileUltimeIscrizioni({ size = 44, color = NAVY }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
-      <path d="M20.5 4.5V9h-4.5" />
-      <path d="M12 8v4.3l3 1.9" stroke={GOLD} />
-    </svg>
-  );
-}
 function IconaTileLogistica({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -2433,7 +2424,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
 // aree che prima stavano nell'hub ERP (Performance Aziendale, ex
 // "Dashboard analisi", e Statistiche Vendite Prodotti), essendo entrambe
 // analisi/numeri più che gestione operativa
-function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriUltimeIscrizioni, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti }) {
+function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -2457,7 +2448,6 @@ function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriUltime
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Analisi, report e KPI della tua Academy.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Statistiche venditori" descrizione="Iscrizioni fatte da ciascun venditore, per corso." Icona={IconaTileVenditori} onClick={onApriVenditori} />
-          <TileHome title="Ultime iscrizioni" descrizione="Elenco delle iscrizioni più recenti, per giorno di inserimento." Icona={IconaTileUltimeIscrizioni} onClick={onApriUltimeIscrizioni} />
           <TileHome title="Statistiche Master" descrizione="Vendite prodotti conseguite da ogni master, per mese, trimestre e oltre." Icona={IconaTileMaster} onClick={onApriStatisticheMaster} />
           <TileHome title="Performance Aziendale" descrizione="Analizza performance, trend e KPI dell'Academy." Icona={IconaTileDashboardAnalisi} onClick={onApriPerformanceAziendale} />
           <TileHome title="Statistiche Vendite Prodotti" descrizione="Vendite al POS per master/venditore, separate dalle vendite corsi." Icona={IconaGruppoVenditeProdotti} onClick={onApriStatisticheVenditeProdotti} />
@@ -24026,7 +24016,6 @@ export default function App() {
           onBack={() => setView("home")}
           onApriImpostazioni={apriImpostazioni}
           onApriVenditori={() => setView("statisticavenditori")}
-          onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
           onApriStatisticheMaster={apriStatisticheMaster}
           onApriPerformanceAziendale={apriDashboardAnalisi}
           onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
