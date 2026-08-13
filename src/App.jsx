@@ -19980,6 +19980,9 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
+  // contenuto ripiegato di default: con molti prodotti nel kit la pagina
+  // diventava una lista lunghissima da scorrere per ogni pacchetto
+  const [aperto, setAperto] = useState(false);
 
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
   const idsUsati = new Set(prodottiKit.map((r) => r.prodotto_id));
@@ -20027,7 +20030,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
       onDrop={() => onDrop && onDrop(kit.id)}
       style={{ ...cardStyle, marginBottom: 10, padding: 14, opacity: trascinando ? 0.4 : 1, border: `1px solid ${trascinando ? GOLD : CREAM_BORDER}` }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (mostraRicercaKit || prodottiKit.length > 0) ? 10 : 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: (aperto && (mostraRicercaKit || prodottiKit.length > 0)) ? 10 : 0 }}>
         <span
           draggable
           onDragStart={() => onDragStart && onDragStart(kit.id)}
@@ -20040,11 +20043,17 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           value={nome} onChange={(e) => setNome(e.target.value)} onBlur={salvaNome}
           style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120 }}
         />
-        <button onClick={() => setMostraRicercaKit((v) => !v)} style={pillBtn}>+ Prodotto</button>
+        <button
+          onClick={() => setAperto((v) => !v)}
+          style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "4px 2px", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
+        >
+          {prodottiKit.length} prodott{prodottiKit.length === 1 ? "o" : "i"} <span style={{ display: "inline-block", transform: aperto ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+        </button>
+        <button onClick={() => { setMostraRicercaKit((v) => !v); setAperto(true); }} style={pillBtn}>+ Prodotto</button>
         <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
 
-      {mostraRicercaKit && (
+      {aperto && mostraRicercaKit && (
         <div style={{ marginBottom: 10 }}>
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
           {risultatiKit.map((p) => (
@@ -20054,7 +20063,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           ))}
         </div>
       )}
-      {prodottiKit.map((r) => {
+      {aperto && prodottiKit.map((r) => {
         const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
         return (
           <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0" }}>
