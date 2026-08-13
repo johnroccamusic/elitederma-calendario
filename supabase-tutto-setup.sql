@@ -1977,6 +1977,8 @@ notify pgrst, 'reload schema';
 alter table public.master add column if not exists foto_url text;
 alter table public.master add column if not exists note text;
 alter table public.master add column if not exists contratto_file_path text;
+alter table public.master add column if not exists email text;
+alter table public.master add column if not exists telefono text;
 
 create table if not exists public.master_corsi (
   id uuid primary key default gen_random_uuid(),
@@ -1995,5 +1997,10 @@ insert into storage.buckets (id, name, public) values ('master-documenti', 'mast
 drop policy if exists "accesso interno master-documenti" on storage.objects;
 create policy "accesso interno master-documenti" on storage.objects for all to anon
   using (bucket_id = 'master-documenti') with check (bucket_id = 'master-documenti');
+
+insert into storage.buckets (id, name, public) values ('master-foto', 'master-foto', true) on conflict (id) do nothing;
+drop policy if exists "accesso interno master-foto" on storage.objects;
+create policy "accesso interno master-foto" on storage.objects for all to anon
+  using (bucket_id = 'master-foto') with check (bucket_id = 'master-foto');
 
 notify pgrst, 'reload schema';

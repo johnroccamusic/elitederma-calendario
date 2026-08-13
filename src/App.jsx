@@ -7622,7 +7622,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriSchedaMaster }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -7644,7 +7644,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
-  const [showMasterModal, setShowMasterModal] = useState(false);
   const [showHotelModal, setShowHotelModal] = useState(false);
   const [showAssistenteModal, setShowAssistenteModal] = useState(false);
   const [showLevaModal, setShowLevaModal] = useState(false);
@@ -7902,7 +7901,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       voci: [
         { etichetta: "Definisci Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
         { etichetta: "Definisci Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
-        { etichetta: "Definisci Master", Icona: IconaMasterRiga, onClick: () => setShowMasterModal(true) },
+        { etichetta: "Definisci Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
         { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
       ],
     },
@@ -8184,19 +8183,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
               <span style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>{toTitleCase(l.nome)}</span>
             </label>
           ))}
-        </Modal>
-      )}
-
-      {showMasterModal && (
-        <Modal title="Master" onClose={() => setShowMasterModal(false)}>
-          <div style={{ ...subStyle, marginTop: -4 }}>Nomi assegnabili a una specifica data/edizione di un corso.</div>
-          <GestioneListaSemplice
-            nomeSingolare="Master" nomeArticolo="una" tabella="master"
-            elementi={master} ricarica={ricarica} msg={msg} setMsg={setMsg}
-            placeholder="es. MARIA ROSSI"
-            mostraFirmaCheckbox
-            onApriScheda={(el) => { setShowMasterModal(false); onApriSchedaMaster(el.id); }}
-          />
         </Modal>
       )}
 
@@ -10343,16 +10329,10 @@ function RigaTelefonoVenditore({ valoreDiDefault, onSalva }) {
     </div>
   );
 }
-function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraFirmaCheckbox, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono, onApriScheda }) {
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono }) {
   const [nome, setNome] = useState("");
   const [inModifica, setInModifica] = useState(null);
   const [modNome, setModNome] = useState("");
-
-  async function toggleFirmato(el) {
-    const { error } = await supabase.from(tabella).update({ diploma_gia_firmato: !el.diploma_gia_firmato }).eq("id", el.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica();
-  }
 
   async function aggiungi() {
     if (!nome.trim()) return;
@@ -10409,17 +10389,7 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
             label={el.nome.toUpperCase()}
             onModifica={() => apriModifica(el)}
             onDelete={() => elimina(el.id)}
-            onScheda={onApriScheda ? () => onApriScheda(el) : undefined}
           />
-          {mostraFirmaCheckbox && (
-            <div
-              onClick={() => toggleFirmato(el)}
-              style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, cursor: "pointer" }}
-            >
-              <input type="checkbox" checked={!!el.diploma_gia_firmato} readOnly style={{ width: 18, height: 18, pointerEvents: "none" }} />
-              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
-            </div>
-          )}
           {mostraPassword && (
             <RigaPasswordVenditore key={el.password} valoreDiDefault={el.password || passwordDiDefault || "0000"} onImposta={(pwd) => onImpostaPassword(el.id, pwd)} />
           )}
@@ -10737,7 +10707,7 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
   );
 }
 
-function RigaEliminabile({ label, dettaglio, onModifica, onDelete, onScheda }) {
+function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div>
@@ -10745,18 +10715,6 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete, onScheda }) {
         {dettaglio && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{dettaglio}</div>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-        {onScheda && (
-          <button
-            onClick={onScheda}
-            title="Apri scheda"
-            style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex", alignItems: "center" }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="2" />
-              <path d="M7 9h10M7 13h6" />
-            </svg>
-          </button>
-        )}
         {onModifica && (
           <button
             onClick={onModifica}
@@ -18099,11 +18057,22 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
   );
 }
 
-// tabella delle fasce di compenso di un corso associato a una master
-// (es. "1-2 allievi: 300€", "3-5: 350€", "6 in su: 400€") — righe
-// tenute in locale mentre si scrive, salvate sul blur di ogni campo o
-// subito quando si aggiunge/rimuove una fascia
-function FasceCompensoEditor({ fasce, onCambia }) {
+// sigla di 2-3 lettere da mostrare nel pallino colorato di un corso
+// nella lista "Corsi associati" (es. "PMU Base" -> "PB")
+function abbreviazioneCorso(nome) {
+  const parole = (nome || "").trim().split(/\s+/).filter(Boolean);
+  if (parole.length === 0) return "?";
+  if (parole.length === 1) return parole[0].slice(0, 3).toUpperCase();
+  return parole.slice(0, 3).map((p) => p[0]).join("").toUpperCase();
+}
+
+// tabella "Struttura compensi" di un corso associato a una master
+// (es. "1-2 allievi: 300€", "3-5: 350€", "6 in su: 400€") — solo
+// l'ultima fascia può restare aperta ("a" vuoto = "oltre N allievi"),
+// le altre hanno sempre un "da" e un "a". Righe tenute in locale mentre
+// si scrive, salvate sul blur di ogni campo o subito quando si
+// aggiunge/rimuove una fascia.
+function EditorFasceCompenso({ fasce, onCambia }) {
   const [righe, setRighe] = useState(fasce || []);
   useEffect(() => { setRighe(fasce || []); }, [fasce]);
 
@@ -18111,7 +18080,7 @@ function FasceCompensoEditor({ fasce, onCambia }) {
     setRighe((prev) => prev.map((r, i) => (i === idx ? { ...r, [campo]: valore } : r)));
   }
   function salva(righeDaSalvare) {
-    onCambia(righeDaSalvare.map((r) => ({ da: r.da === "" ? null : Number(r.da), a: r.a === "" ? null : Number(r.a), compenso: r.compenso === "" ? null : Number(r.compenso) })));
+    onCambia(righeDaSalvare.map((r) => ({ da: r.da === "" ? null : Number(r.da), a: r.a === "" || r.a == null ? null : Number(r.a), compenso: r.compenso === "" ? null : Number(r.compenso) })));
   }
   function aggiungiRiga() {
     const ultima = righe[righe.length - 1];
@@ -18126,71 +18095,173 @@ function FasceCompensoEditor({ fasce, onCambia }) {
     salva(nuove);
   }
 
-  const celStyle = { ...inputStyle, padding: "6px 8px", fontSize: 12.5 };
+  const cellaNumero = { ...inputStyle, width: 52, padding: "5px 6px", fontSize: 12.5, textAlign: "center" };
   return (
     <div>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Struttura compensi</div>
       {righe.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 8 }}>Nessuna fascia impostata — il compenso sarà da concordare a parte.</div>
       ) : (
-        <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 4, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
-            <div style={{ width: 70 }}>Da allievi</div>
-            <div style={{ width: 70 }}>A allievi</div>
-            <div style={{ flex: 1 }}>Compenso</div>
-            <div style={{ width: 28 }} />
-          </div>
-          {righe.map((r, i) => (
-            <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-              <input type="number" min="1" style={{ ...celStyle, width: 70 }} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
-              <input type="number" min="1" style={{ ...celStyle, width: 70 }} placeholder="in su" value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
-              <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 4 }}>
-                <input type="number" min="0" style={{ ...celStyle, flex: 1 }} value={r.compenso ?? ""} onChange={(e) => aggiornaLocale(i, "compenso", e.target.value)} onBlur={() => salva(righe)} />
-                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>€</span>
-              </div>
-              <button onClick={() => rimuoviRiga(i)} title="Rimuovi fascia" style={{ width: 28, background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-            </div>
-          ))}
-        </>
+        <div style={{ overflowX: "auto", marginBottom: 10 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 380 }}>
+            <thead>
+              <tr>
+                <th style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "0 0 6px" }}>Fascia allievi</th>
+                <th style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "0 0 6px" }}>Compenso (€)</th>
+                <th style={{ width: 40 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {righe.map((r, i) => {
+                const ultima = i === righe.length - 1;
+                return (
+                  <tr key={i}>
+                    <td style={{ padding: "5px 10px 5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        {ultima ? (
+                          <>
+                            <span>Oltre</span>
+                            <input type="number" min="1" style={cellaNumero} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
+                            <span>allievi</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Da</span>
+                            <input type="number" min="1" style={cellaNumero} value={r.da ?? ""} onChange={(e) => aggiornaLocale(i, "da", e.target.value)} onBlur={() => salva(righe)} />
+                            <span>a</span>
+                            <input type="number" min="1" style={cellaNumero} value={r.a ?? ""} onChange={(e) => aggiornaLocale(i, "a", e.target.value)} onBlur={() => salva(righe)} />
+                            <span>allievi</span>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: "5px 10px 5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <input type="number" min="0" style={{ ...inputStyle, width: 90, padding: "6px 8px", fontSize: 12.5 }} value={r.compenso ?? ""} onChange={(e) => aggiornaLocale(i, "compenso", e.target.value)} onBlur={() => salva(righe)} />
+                    </td>
+                    <td style={{ padding: "5px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <button onClick={() => rimuoviRiga(i)} title="Rimuovi fascia" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 4, display: "flex" }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
       <button onClick={aggiungiRiga} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>+ Aggiungi fascia</button>
     </div>
   );
 }
 
-// scheda dettagliata di una master: foto (omino finché non c'è una foto
-// vera), corsi associati con le rispettive fasce di compenso per numero
-// di allievi, i corsi a lei assegnati in calendario, note e contratto
-function PaginaSchedaMaster({ master, masterId, corsi, corsiDate, masterCorsi, ricarica, onBack }) {
+// "Gestione Master": elenco master a sinistra (ricerca, filtro,
+// paginazione) + scheda dettagliata a destra con tab Corsi
+// associati/Compensi/Calendario/Note e documenti. Sostituisce il vecchio
+// modale "Master" — è la pagina che si apre da Impostazioni > Definisci
+// Master.
+function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica, onBack }) {
   const isMobile = useIsMobile();
-  const m = (master || []).find((x) => x.id === masterId);
-  const [note, setNote] = useState(m?.note || "");
-  const [caricandoContratto, setCaricandoContratto] = useState(false);
+  const [ricerca, setRicerca] = useState("");
+  const [filtro, setFiltro] = useState("tutti");
+  const [pagina, setPagina] = useState(0);
+  const PER_PAGINA = 10;
+  const [selezionatoId, setSelezionatoId] = useState(null);
+  const [tab, setTab] = useState("corsi");
+  const [corsoScelto, setCorsoScelto] = useState("");
+  const [corsoEspansoId, setCorsoEspansoId] = useState(null);
+  const [mostraForm, setMostraForm] = useState(false);
+  const [nomeNuovo, setNomeNuovo] = useState("");
+  const [menuAzioni, setMenuAzioni] = useState(false);
+  const [modificaContatti, setModificaContatti] = useState(false);
+  const [emailMod, setEmailMod] = useState("");
+  const [telefonoMod, setTelefonoMod] = useState("");
+  const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
-  const [ricercaCorso, setRicercaCorso] = useState("");
+  const [caricandoFoto, setCaricandoFoto] = useState(false);
+  const [caricandoContratto, setCaricandoContratto] = useState(false);
 
-  useEffect(() => { setNote(m?.note || ""); }, [m?.id]);
+  const conteggioCorsi = useMemo(() => {
+    const mappa = {};
+    (masterCorsi || []).forEach((mc) => { mappa[mc.master_id] = (mappa[mc.master_id] || 0) + 1; });
+    return mappa;
+  }, [masterCorsi]);
 
-  if (!m) {
-    return (
-      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Master non trovata.</div>
-        </div>
-      </div>
-    );
-  }
+  const listaFiltrata = useMemo(() => {
+    let l = [...(master || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (ricerca.trim()) l = l.filter((m) => m.nome.toLowerCase().includes(ricerca.trim().toLowerCase()));
+    if (filtro === "con_corsi") l = l.filter((m) => (conteggioCorsi[m.id] || 0) > 0);
+    if (filtro === "senza_corsi") l = l.filter((m) => !(conteggioCorsi[m.id] || 0));
+    return l;
+  }, [master, conteggioCorsi, ricerca, filtro]);
 
-  const assegnazioni = (masterCorsi || []).filter((mc) => mc.master_id === masterId);
-  const idsCorsiAssegnati = new Set(assegnazioni.map((a) => a.corso_id));
-  const risultatiCorso = ricercaCorso.trim()
-    ? (corsi || []).filter((c) => !idsCorsiAssegnati.has(c.id) && c.nome.toLowerCase().includes(ricercaCorso.trim().toLowerCase()))
-    : [];
+  useEffect(() => {
+    if ((!selezionatoId || !listaFiltrata.some((m) => m.id === selezionatoId)) && listaFiltrata.length > 0) {
+      setSelezionatoId(listaFiltrata[0].id);
+    }
+  }, [listaFiltrata, selezionatoId]);
 
-  async function aggiungiCorso(corso) {
-    setRicercaCorso("");
-    const { error } = await supabase.from("master_corsi").insert({ master_id: masterId, corso_id: corso.id, fasce_compenso: [] });
+  const totalePagine = Math.max(1, Math.ceil(listaFiltrata.length / PER_PAGINA));
+  const paginaClamp = Math.min(pagina, totalePagine - 1);
+  const listaPagina = listaFiltrata.slice(paginaClamp * PER_PAGINA, paginaClamp * PER_PAGINA + PER_PAGINA);
+
+  const selezionato = (master || []).find((m) => m.id === selezionatoId);
+
+  useEffect(() => {
+    setNote(selezionato?.note || "");
+    setEmailMod(selezionato?.email || "");
+    setTelefonoMod(selezionato?.telefono || "");
+    setTab("corsi");
+    setCorsoEspansoId(null);
+    setModificaContatti(false);
+    setMenuAzioni(false);
+    setMsg("");
+  }, [selezionatoId]);
+
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const assegnazioni = (masterCorsi || []).filter((mc) => mc.master_id === selezionatoId);
+  const idsAssegnati = new Set(assegnazioni.map((a) => a.corso_id));
+  const corsiDisponibili = (corsi || []).filter((c) => !idsAssegnati.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  async function aggiungiMaster() {
+    if (!nomeNuovo.trim()) return;
+    const { error } = await supabase.from("master").insert({ nome: nomeNuovo.trim().toUpperCase() });
     if (error) { window.alert("Errore: " + error.message); return; }
+    setNomeNuovo(""); setMostraForm(false); ricarica();
+  }
+  async function eliminaMaster() {
+    if (!selezionatoId || !window.confirm("Eliminare questa master? L'operazione è irreversibile.")) return;
+    const { error } = await supabase.from("master").delete().eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setSelezionatoId(null); setMenuAzioni(false); ricarica();
+  }
+  async function toggleFirmato(checked) {
+    const { error } = await supabase.from("master").update({ diploma_gia_firmato: checked }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function salvaContatti() {
+    const { error } = await supabase.from("master").update({ email: emailMod.trim() || null, telefono: telefonoMod.trim() || null }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setModificaContatti(false); ricarica();
+  }
+  async function caricaFoto(file) {
+    if (!file || !selezionatoId) return;
+    setCaricandoFoto(true);
+    const percorso = `${selezionatoId}/foto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from("master-foto").upload(percorso, file, { upsert: true });
+    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + erroreUpload.message); return; }
+    const { data: urlData } = supabase.storage.from("master-foto").getPublicUrl(percorso);
+    const { error } = await supabase.from("master").update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
+    setCaricandoFoto(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function aggiungiCorso() {
+    if (!corsoScelto || !selezionatoId) return;
+    const { error } = await supabase.from("master_corsi").insert({ master_id: selezionatoId, corso_id: corsoScelto, fasce_compenso: [] });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setCorsoScelto("");
     ricarica();
   }
   async function rimuoviCorso(assegnazioneId) {
@@ -18205,33 +18276,27 @@ function PaginaSchedaMaster({ master, masterId, corsi, corsiDate, masterCorsi, r
     ricarica();
   }
   async function salvaNote() {
-    if ((m.note || "") === note.trim()) return;
-    const { error } = await supabase.from("master").update({ note: note.trim() || null }).eq("id", masterId);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  async function toggleFirmato(checked) {
-    const { error } = await supabase.from("master").update({ diploma_gia_firmato: checked }).eq("id", masterId);
+    if ((selezionato?.note || "") === note.trim()) return;
+    const { error } = await supabase.from("master").update({ note: note.trim() || null }).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
   async function caricaContratto(file) {
-    if (!file) return;
+    if (!file || !selezionatoId) return;
     setCaricandoContratto(true); setMsg("");
-    const percorso = `${masterId}/contratto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const percorso = `${selezionatoId}/contratto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
     const { error: erroreUpload } = await supabase.storage.from("master-documenti").upload(percorso, file);
     if (erroreUpload) { setCaricandoContratto(false); setMsg("Errore: " + erroreUpload.message); return; }
-    const { error } = await supabase.from("master").update({ contratto_file_path: percorso }).eq("id", masterId);
+    const { error } = await supabase.from("master").update({ contratto_file_path: percorso }).eq("id", selezionatoId);
     setCaricandoContratto(false);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
 
   const oggiStr = dataOggiStr();
-  const corsiDateAssegnate = (corsiDate || []).filter((cd) => cd.master_id === masterId);
+  const corsiDateAssegnate = (corsiDate || []).filter((cd) => cd.master_id === selezionatoId);
   const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
   const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
-  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
 
   function rigaCorsoData(cd) {
     return (
@@ -18242,85 +18307,259 @@ function PaginaSchedaMaster({ master, masterId, corsi, corsiDate, masterCorsi, r
     );
   }
 
-  return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+  const tabStyle = (attivo) => ({
+    ...fontBody, fontSize: 13.5, fontWeight: 700, color: attivo ? NAVY : MUTED,
+    background: "none", border: "none", borderBottom: attivo ? `2px solid ${GOLD}` : "2px solid transparent",
+    padding: "10px 4px", marginRight: 22, cursor: "pointer",
+  });
+  const pillAttivo = { ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 20, padding: "3px 10px", whiteSpace: "nowrap" };
 
-        <div style={{ display: "flex", alignItems: "center", gap: 18, marginBottom: 24, flexWrap: "wrap" }}>
-          <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-            {m.foto_url ? <img src={m.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={40} />}
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1220, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Master</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Associa i master ai corsi e definisci i compensi in base al numero di allievi.</div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi Master</button>
+          <div style={{ flex: 1, minWidth: isMobile ? "100%" : 220, maxWidth: 320 }}>
+            <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); setPagina(0); }} placeholder="Cerca master…" />
           </div>
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{toTitleCase(m.nome)}</div>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6, cursor: "pointer" }}>
-              <input type="checkbox" checked={!!m.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 16, height: 16 }} />
-              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
-            </label>
-          </div>
+          <select value={filtro} onChange={(e) => { setFiltro(e.target.value); setPagina(0); }} style={{ ...inputStyle, width: "auto", padding: "10px 12px" }}>
+            <option value="tutti">Tutti i master</option>
+            <option value="con_corsi">Con corsi associati</option>
+            <option value="senza_corsi">Senza corsi associati</option>
+          </select>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: 20, alignItems: "flex-start" }}>
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Corsi e compensi</div>
-            <div style={{ ...cardStyle, marginBottom: 20 }}>
-              <div style={{ position: "relative", marginBottom: 10 }}>
-                <CampoRicerca value={ricercaCorso} onChange={(e) => setRicercaCorso(e.target.value)} placeholder="Cerca un corso da associare…" />
-                {risultatiCorso.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
-                    {risultatiCorso.map((c) => (
-                      <div key={c.id} onClick={() => aggiungiCorso(c)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{c.nome}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {assegnazioni.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso associato ancora.</div>
-              ) : assegnazioni.map((a) => (
-                <div key={a.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12, marginTop: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                    <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{corsoById[a.corso_id]?.nome || "—"}</div>
-                    <button onClick={() => rimuoviCorso(a.id)} title="Rimuovi corso" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-                  </div>
-                  <FasceCompensoEditor fasce={a.fasce_compenso} onCambia={(fasce) => salvaFasce(a.id, fasce)} />
-                </div>
-              ))}
-            </div>
+        {mostraForm && (
+          <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input autoFocus value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungiMaster()} placeholder="ES. MARIA ROSSI" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+            <button onClick={aggiungiMaster} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer" }}>Salva</button>
+            <button onClick={() => { setMostraForm(false); setNomeNuovo(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+          </div>
+        )}
 
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Calendario</div>
-            <div style={{ ...cardStyle }}>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
-              {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
-              {passate.length > 0 && (
-                <>
-                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
-                  {passate.map(rigaCorsoData)}
-                </>
-              )}
-            </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "300px 1fr", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ ...cardStyle, padding: 16 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, padding: "0 4px 10px" }}>Master ({listaFiltrata.length})</div>
+            {listaPagina.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 4px" }}>Nessuna master trovata.</div>}
+            {listaPagina.map((m) => {
+              const attivo = m.id === selezionatoId;
+              return (
+                <div key={m.id} onClick={() => setSelezionatoId(m.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "9px 8px", borderRadius: 10, cursor: "pointer", marginBottom: 4,
+                    background: attivo ? "#FBF1D9" : "transparent", border: attivo ? `1px solid ${GOLD}` : "1px solid transparent",
+                  }}
+                >
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {m.foto_url ? <img src={m.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={18} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(m.nome)}</div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{conteggioCorsi[m.id] || 0} cors{conteggioCorsi[m.id] === 1 ? "o" : "i"} associat{conteggioCorsi[m.id] === 1 ? "o" : "i"}</div>
+                  </div>
+                  <IconaChevronDestra size={14} color={MUTED} />
+                </div>
+              );
+            })}
+            {totalePagine > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={paginaClamp === 0} style={{ background: "none", border: "none", cursor: paginaClamp === 0 ? "default" : "pointer", opacity: paginaClamp === 0 ? 0.35 : 1, display: "flex", color: NAVY, transform: "rotate(180deg)" }}><IconaChevronDestra size={14} color="currentColor" /></button>
+                {Array.from({ length: totalePagine }).map((_, i) => (
+                  <button key={i} onClick={() => setPagina(i)} style={{ width: 24, height: 24, borderRadius: "50%", border: "none", cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, background: i === paginaClamp ? NAVY : "transparent", color: i === paginaClamp ? "#fff" : MUTED }}>{i + 1}</button>
+                ))}
+                <button onClick={() => setPagina((p) => Math.min(totalePagine - 1, p + 1))} disabled={paginaClamp === totalePagine - 1} style={{ background: "none", border: "none", cursor: paginaClamp === totalePagine - 1 ? "default" : "pointer", opacity: paginaClamp === totalePagine - 1 ? 0.35 : 1, display: "flex", color: NAVY }}><IconaChevronDestra size={14} /></button>
+              </div>
+            )}
           </div>
 
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Note e documenti</div>
-            <div style={{ ...cardStyle }}>
-              <Field label="Note">
-                <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={salvaNote} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="Note libere su questa master…" />
-              </Field>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 6 }}>Contratto</div>
-              {m.contratto_file_path ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <AllegatoLink percorso={m.contratto_file_path} etichetta="Apri il contratto caricato" bucket="master-documenti" />
-                  <label style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", cursor: "pointer" }}>
-                    Sostituisci
-                    <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
-                  </label>
+          <div style={{ ...cardStyle }}>
+            {!selezionato ? (
+              <div style={{ textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna master selezionata.</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {selezionato.foto_url ? <img src={selezionato.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={38} />}
+                    </div>
+                    <label title="Carica foto" style={{ position: "absolute", bottom: -2, right: -2, width: 26, height: 26, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: "2px solid #fff" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                      <input type="file" accept="image/*" style={{ display: "none" }} disabled={caricandoFoto} onChange={(e) => caricaFoto(e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>MASTER</span>
+                    </div>
+                    {!modificaContatti ? (
+                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+                        {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
+                        {" · "}
+                        {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                        <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                        <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                        <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
+                      </div>
+                    )}
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
+                      <input type="checkbox" checked={!!selezionato.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 15, height: 15 }} />
+                      <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
+                    </label>
+                  </div>
+
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <button onClick={() => setMenuAzioni((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                      Azioni <IconaChevronGiuErp size={11} />
+                    </button>
+                    {menuAzioni && (
+                      <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 10, minWidth: 180, overflow: "hidden" }}>
+                        <div onClick={() => { setModificaContatti(true); setMenuAzioni(false); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>Modifica contatti</div>
+                        <div onClick={eliminaMaster} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B" }}>Elimina master</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ) : (
-                <input type="file" accept="image/*,application/pdf" style={inputStyle} disabled={caricandoContratto} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
-              )}
-              {caricandoContratto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
-              {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
-            </div>
+
+                <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 18, overflowX: "auto" }}>
+                  <button onClick={() => setTab("corsi")} style={tabStyle(tab === "corsi")}>Corsi associati</button>
+                  <button onClick={() => setTab("compensi")} style={tabStyle(tab === "compensi")}>Compensi</button>
+                  <button onClick={() => setTab("calendario")} style={tabStyle(tab === "calendario")}>Calendario</button>
+                  <button onClick={() => setTab("note")} style={tabStyle(tab === "note")}>Note e documenti</button>
+                </div>
+
+                {tab === "corsi" && (
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Associa corsi al master</div>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                      <select value={corsoScelto} onChange={(e) => setCorsoScelto(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 200 }}>
+                        <option value="">Seleziona un corso…</option>
+                        {corsiDisponibili.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      </select>
+                      <button onClick={aggiungiCorso} disabled={!corsoScelto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 9, padding: "10px 18px", cursor: corsoScelto ? "pointer" : "default", opacity: corsoScelto ? 1 : 0.5 }}>Aggiungi corso</button>
+                    </div>
+
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Corsi associati ({assegnazioni.length})</div>
+                    {assegnazioni.length === 0 ? (
+                      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Nessun corso associato ancora.</div>
+                    ) : assegnazioni.map((a) => {
+                      const c = corsoById[a.corso_id];
+                      const espanso = corsoEspansoId === a.id;
+                      return (
+                        <div key={a.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <span style={{ color: "#C7C2B3", flexShrink: 0, cursor: "grab" }} title="Trascina per riordinare">
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="8" cy="6" r="1.6" /><circle cx="8" cy="12" r="1.6" /><circle cx="8" cy="18" r="1.6" /><circle cx="16" cy="6" r="1.6" /><circle cx="16" cy="12" r="1.6" /><circle cx="16" cy="18" r="1.6" /></svg>
+                            </span>
+                            <div style={{ width: 34, height: 34, borderRadius: "50%", background: c?.colore || NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 11, fontWeight: 700 }}>{abbreviazioneCorso(c?.nome)}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c?.nome || "—"}</div>
+                              {c?.categoria && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{c.categoria}</div>}
+                            </div>
+                            <span style={pillAttivo}>Attivo</span>
+                            <button onClick={() => setCorsoEspansoId(espanso ? null : a.id)} title={espanso ? "Chiudi" : "Modifica compensi"} style={{ background: "none", border: "none", color: NAVY, cursor: "pointer", padding: 4, display: "flex", transform: espanso ? "rotate(180deg)" : "none" }}>
+                              {espanso ? <IconaChevronGiuErp size={14} /> : (
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                              )}
+                            </button>
+                            <button onClick={() => rimuoviCorso(a.id)} title="Rimuovi corso" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 4, display: "flex" }}>
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                            </button>
+                          </div>
+                          {espanso && (
+                            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                              <EditorFasceCompenso fasce={a.fasce_compenso} onCambia={(fasce) => salvaFasce(a.id, fasce)} />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "#FBF1D9", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                      <span style={{ flexShrink: 0, color: GOLD, marginTop: 1 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                      </span>
+                      <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>Il compenso del master sarà calcolato automaticamente in base al numero di allievi per ciascun corso.</div>
+                    </div>
+                  </div>
+                )}
+
+                {tab === "compensi" && (
+                  <div>
+                    {assegnazioni.length === 0 ? (
+                      <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso associato — le fasce di compenso compariranno qui una volta aggiunto un corso.</div>
+                    ) : assegnazioni.map((a) => {
+                      const c = corsoById[a.corso_id];
+                      const fasce = a.fasce_compenso || [];
+                      return (
+                        <div key={a.id} style={{ marginBottom: 18 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: "50%", background: c?.colore || NAVY, flexShrink: 0 }} />
+                            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{c?.nome || "—"}</div>
+                          </div>
+                          {fasce.length === 0 ? (
+                            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginLeft: 16 }}>Nessuna fascia impostata.</div>
+                          ) : (
+                            <div style={{ marginLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
+                              {fasce.map((f, i) => (
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", maxWidth: 320, ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                                  <span>{f.a == null ? `Oltre ${f.da ?? "—"} allievi` : `Da ${f.da ?? "—"} a ${f.a} allievi`}</span>
+                                  <span style={{ fontWeight: 700 }}>{f.compenso != null ? fmtEuroErp2(f.compenso) : "—"}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {tab === "calendario" && (
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
+                    {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
+                    {passate.length > 0 && (
+                      <>
+                        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
+                        {passate.map(rigaCorsoData)}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {tab === "note" && (
+                  <div>
+                    <Field label="Note">
+                      <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={salvaNote} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="Note libere su questa master…" />
+                    </Field>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 6 }}>Contratto</div>
+                    {selezionato.contratto_file_path ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <AllegatoLink percorso={selezionato.contratto_file_path} etichetta="Apri il contratto caricato" bucket="master-documenti" />
+                        <label style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", cursor: "pointer" }}>
+                          Sostituisci
+                          <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
+                        </label>
+                      </div>
+                    ) : (
+                      <input type="file" accept="image/*,application/pdf" style={inputStyle} disabled={caricandoContratto} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
+                    )}
+                    {caricandoContratto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
+                    {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -23349,7 +23588,6 @@ export default function App() {
   const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
-  const [masterSchedaId, setMasterSchedaId] = useState(null);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -23834,7 +24072,7 @@ export default function App() {
   function apriOmaggi() { apriViewProtetta("omaggi"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
-  function apriSchedaMaster(masterId) { setMasterSchedaId(masterId); setView("schedamaster"); }
+  function apriGestioneMaster() { setView("gestionemaster"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -24111,7 +24349,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriSchedaMaster={apriSchedaMaster} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} />
       )}
 
       {view === "gestionedate" && (
@@ -24403,9 +24641,9 @@ export default function App() {
         />
       )}
 
-      {view === "schedamaster" && (
-        <PaginaSchedaMaster
-          master={master} masterId={masterSchedaId} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi}
+      {view === "gestionemaster" && (
+        <PaginaGestioneMaster
+          master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
