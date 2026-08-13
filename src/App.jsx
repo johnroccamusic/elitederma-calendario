@@ -3872,6 +3872,14 @@ function SezioneDateCorsi({
       return nuovo;
     });
   }
+  // quando i controlli sono sticky (solo "Gestione corsi"), il Calendario
+  // incorporato deve sapere quanto è alta questa barra fissa per far
+  // scorrere il mese corrente esattamente sotto di essa, non dietro
+  const controlliStickyRef = React.useRef(null);
+  const [altezzaControlliSticky, setAltezzaControlliSticky] = useState(150);
+  useLayoutEffect(() => {
+    if (stickyControlli && controlliStickyRef.current) setAltezzaControlliSticky(controlliStickyRef.current.offsetHeight);
+  }, [stickyControlli, vistaDateModo]);
   const oggiStr = dataOggiStr();
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -3899,7 +3907,7 @@ function SezioneDateCorsi({
 
   return (
     <div>
-      <div style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: 40, marginBottom: -4 } : undefined}>
+      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: 70, marginBottom: -4 } : undefined}>
       {intestazioneSticky}
       {!nascondiControlli && (
         <>
@@ -3973,7 +3981,7 @@ function SezioneDateCorsi({
           onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
         />
       ) : (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} />
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} />
       )}
     </div>
   );
@@ -11427,7 +11435,7 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
   );
 }
 
-function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1 }) {
+function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1, scrollMarginTop = 54 }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -11465,39 +11473,27 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
   }, []);
 
   const refOggi = React.useRef(null);
-  const stickyRef = React.useRef(null);
-  // parte da una stima ragionevole e si corregge da sola non appena la
-  // barra sticky (titolo + tasto Oggi + istruzioni) è realmente disegnata:
-  // serve per lo scrollMarginTop dei mesi, altrimenti quello corrente si
-  // aprirebbe parzialmente nascosto dietro di essa
-  const [altezzaSticky, setAltezzaSticky] = useState(90);
-  useLayoutEffect(() => {
-    if (stickyRef.current) setAltezzaSticky(stickyRef.current.offsetHeight);
-  }, []);
-  // riscorre al mese corrente ogni volta che la vera altezza della barra
-  // sticky viene misurata, così l'apertura mostra sempre il mese corrente
-  // per intero, non parzialmente coperto dalla barra
   useEffect(() => {
     refOggi.current?.scrollIntoView({ block: "start" });
-  }, [altezzaSticky]);
+  }, []);
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 20px 40px" }}>
-      <div ref={stickyRef} style={{ position: "sticky", top: 0, zIndex: 20, background: BG, paddingTop: 40, marginBottom: 6 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <TopBar title="Calendario" onBack={onBack} />
-          <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
-        </div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
-          Scorri su o giù per vedere gli altri mesi. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
-        </div>
+    <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <TopBar title="Calendario" onBack={onBack} />
+        <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
+      </div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
+        Scorri su o giù per vedere gli altri mesi. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
       </div>
 
       {mesi.map(({ anno, mese }) => (
         // scrollMarginTop: lo scroll automatico al mese corrente (block:"start")
-        // allineerebbe altrimenti il mese proprio sotto la barra sticky
-        // locale (titolo/Oggi/istruzioni), nascondendolo parzialmente dietro di essa
-        <div key={`${anno}-${mese}`} style={{ scrollMarginTop: altezzaSticky }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
+        // allineerebbe altrimenti il mese proprio sotto la barra fissa
+        // (quella passata dal chiamante, es. i controlli sticky di
+        // "Gestione corsi", oppure quella globale Indietro/Avanti),
+        // nascondendolo parzialmente dietro di essa
+        <div key={`${anno}-${mese}`} style={{ scrollMarginTop }} ref={anno === oggi.getFullYear() && mese === oggi.getMonth() ? refOggi : null}>
           <MeseGriglia
             anno={anno} mese={mese} corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
             onApriData={onApriData} corsoById={corsoById} locById={locById}
