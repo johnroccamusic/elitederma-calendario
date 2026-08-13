@@ -13897,7 +13897,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             }
             pagato={pagAccontoPagato}
             onPagato={setPagAccontoPagato}
-            onBonificoFile={(f) => setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f }))}
+            onBonificoFile={(f) => { setPagAcconto((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) setPagAccontoPagato(true); }}
             mostraSaltaFile={adminSbloccato}
             onBonificoSkip={(v) => setPagAcconto((prev) => ({ ...prev, bonificoSkip: v }))}
           />
@@ -13915,7 +13915,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               pagato={riga.pagato}
               onPagato={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
               onRimuovi={() => rimuoviRigaExtra("acconto", idx)}
-              onBonificoFile={(f) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
+              onBonificoFile={(f) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f, pagato: f ? true : r.pagato } : r)))}
               mostraSaltaFile={adminSbloccato}
               onBonificoSkip={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
             />
@@ -13938,7 +13938,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
             pagato={pagPrecorsoPagato}
             onPagato={setPagPrecorsoPagato}
-            onBonificoFile={(f) => setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f }))}
+            onBonificoFile={(f) => { setPagPrecorso((prev) => ({ ...prev, bonificoFileNuovo: f })); if (f) setPagPrecorsoPagato(true); }}
             mostraSaltaFile={adminSbloccato}
             onBonificoSkip={(v) => setPagPrecorso((prev) => ({ ...prev, bonificoSkip: v }))}
           />
@@ -13955,7 +13955,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               pagato={riga.pagato}
               onPagato={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
               onRimuovi={() => rimuoviRigaExtra("precorso", idx)}
-              onBonificoFile={(f) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f } : r)))}
+              onBonificoFile={(f) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoFileNuovo: f, pagato: f ? true : r.pagato } : r)))}
               mostraSaltaFile={adminSbloccato}
               onBonificoSkip={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, bonificoSkip: v } : r)))}
             />
