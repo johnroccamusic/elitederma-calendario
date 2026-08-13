@@ -18814,6 +18814,9 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
   const [vistaAnalisi, setVistaAnalisi] = useState("quantita");
   const [categoriaSel, setCategoriaSel] = useState("");
   const [vistaTrend, setVistaTrend] = useState("categoria");
+  const [espansoOnline, setEspansoOnline] = useState(false);
+  const [espansoBanco, setEspansoBanco] = useState(false);
+  const [espansoAssoluto, setEspansoAssoluto] = useState(false);
 
   function selezionaPeriodo(nuovoPeriodo) {
     setPeriodo(nuovoPeriodo);
@@ -18969,9 +18972,31 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
     .sort(ordinaPerCaloTrend)
     .slice(0, 10);
 
+  // tre classifiche dei più venduti nel periodo selezionato — shop
+  // online, banco (POS) e le due sommate insieme — sempre per quantità,
+  // ordine dal più venduto in giù, stessi omaggi esclusi di sopra
+  function classificaPiuVenduti(origineFiltro) {
+    const mappa = {};
+    (venditeShop || []).forEach((v) => {
+      if (v.tipo_movimento === "omaggio") return;
+      if (origineFiltro && v.origine !== origineFiltro) return;
+      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+      if (!d || d < range.inizio || d > range.fine) return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+        const nome = (p.nome || "").trim();
+        if (!nome) return;
+        mappa[nome] = (mappa[nome] || 0) + (Number(p.quantita) || 0);
+      });
+    });
+    return Object.entries(mappa).map(([nome, quantita]) => ({ nome, quantita })).sort((a, b) => b.quantita - a.quantita);
+  }
+  const piuVendutiOnline = classificaPiuVenduti("woocommerce");
+  const piuVendutiBanco = classificaPiuVenduti("pos");
+  const piuVendutiAssoluto = classificaPiuVenduti(null);
+
   return (
     <div>
-      <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi Magazzino</div>
+      <div style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Analisi vendita prodotti</div>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>Valore delle scorte, rotazione, prodotti migliori e andamento vendite.</div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
@@ -19109,6 +19134,43 @@ function SezioneAnalisiMagazzino({ categorieProdotti, prodottiShop, prodottiCate
           </div>
         </div>
       </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0,1fr))", gap: 14 }}>
+        <ListaProdottiPiuVenduti titolo="Più venduti — Shop online" righe={piuVendutiOnline} espanso={espansoOnline} onToggleEspanso={() => setEspansoOnline((v) => !v)} />
+        <ListaProdottiPiuVenduti titolo="Più venduti — Al banco" righe={piuVendutiBanco} espanso={espansoBanco} onToggleEspanso={() => setEspansoBanco((v) => !v)} />
+        <ListaProdottiPiuVenduti titolo="Più venduti — In assoluto" righe={piuVendutiAssoluto} espanso={espansoAssoluto} onToggleEspanso={() => setEspansoAssoluto((v) => !v)} />
+      </div>
+    </div>
+  );
+}
+
+// classifica dei prodotti più venduti (shop online / banco / in
+// assoluto): primi 10 sempre visibili, il resto dietro "Mostra tutti" —
+// stessa card ripetuta 3 volte in SezioneAnalisiMagazzino, solo la lista
+// cambia
+function ListaProdottiPiuVenduti({ titolo, righe, espanso, onToggleEspanso }) {
+  const visibili = espanso ? righe : righe.slice(0, 10);
+  return (
+    <div style={{ ...cardStyle, marginBottom: 0 }}>
+      <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{titolo}</div>
+      {righe.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessuna vendita nel periodo.</div>
+      ) : (
+        <>
+          {visibili.map((r, i) => (
+            <div key={r.nome} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 11, color: MUTED, width: 16, flexShrink: 0 }}>{i + 1}</span>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{r.quantita} pz</span>
+            </div>
+          ))}
+          {righe.length > 10 && (
+            <button onClick={onToggleEspanso} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "10px 0 0", textDecoration: "underline" }}>
+              {espanso ? "Mostra solo i primi 10" : `Mostra tutti (${righe.length})`}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
