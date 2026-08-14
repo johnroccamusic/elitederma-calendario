@@ -6606,26 +6606,27 @@ function etichettaSlot(s) {
 
 // card statistica in cima alla Dashboard modelle: cliccabile quando passa
 // onClick (le due centrali aprono le liste di slot corrispondenti)
-function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo, icona, onClick }) {
+function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo, icona, onClick, compatto }) {
   return (
     <button
       onClick={onClick}
       disabled={!onClick}
       style={{
-        ...fontBody, textAlign: "left", flex: "1 1 200px", display: "flex", alignItems: "center", gap: 14,
+        ...fontBody, textAlign: compatto ? "center" : "left", flex: compatto ? "1 1 0" : "1 1 200px", minWidth: 0,
+        display: "flex", flexDirection: compatto ? "column" : "row", alignItems: "center", gap: compatto ? 5 : 14,
         background: sfondo || "#fff", border: `1px solid ${sfondo ? "transparent" : CREAM_BORDER}`, borderRadius: 14,
-        padding: 18, cursor: onClick ? "pointer" : "default",
+        padding: compatto ? "12px 5px" : 18, cursor: onClick ? "pointer" : "default",
       }}
     >
       {icona && (
-        <span style={{ width: 42, height: 42, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ width: compatto ? 32 : 42, height: compatto ? 32 : 42, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           {icona}
         </span>
       )}
-      <span>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 2 }}>{etichetta}</div>
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
-        {sottotitolo && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>{sottotitolo}</div>}
+      <span style={{ minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: compatto ? 10 : 13, color: MUTED, marginBottom: 2, lineHeight: compatto ? 1.15 : undefined }}>{etichetta}</div>
+        <div style={{ ...fontDisplay, fontSize: compatto ? 22 : 26, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
+        {sottotitolo && <div style={{ ...fontBody, fontSize: compatto ? 9.5 : 12, color: MUTED, marginTop: 3, lineHeight: compatto ? 1.1 : undefined }}>{sottotitolo}</div>}
       </span>
     </button>
   );
@@ -6921,6 +6922,7 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
 // dashboard "Fabbisogno, scadenze e assegnazioni": card riepilogo, filtri,
 // priorità prossimi 15 giorni, riepilogo per città, tabella completa
 function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, apriDataModelle }) {
+  const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const [ricerca, setRicerca] = useState("");
   const [filtroCitta, setFiltroCitta] = useState("");
@@ -7028,22 +7030,22 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
     <div>
       <AlertScadenzeModelle numeroSlot={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)} numeroCorsi={edizioniPrioritarie.length} giorni={scadenzaGiorni} />
 
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
-        <CardStatisticaModelle
+      <div style={{ display: "flex", gap: isMobile ? 6 : 14, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 18 }}>
+        <CardStatisticaModelle compatto={isMobile}
           etichetta="Modelle richieste" valore={totaleRichieste} sottotitolo={`su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>}
         />
-        <CardStatisticaModelle
+        <CardStatisticaModelle compatto={isMobile}
           etichetta={`In scadenza entro ${scadenzaGiorni} gg`} valore={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)}
           sottotitolo={`${edizioniPrioritarie.length} cors${edizioniPrioritarie.length === 1 ? "o prioritario" : "i prioritari"}`}
           colore="#C0392B" sfondo="#FDF3D9"
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
         />
-        <CardStatisticaModelle
+        <CardStatisticaModelle compatto={isMobile}
           etichetta="Già assegnate" valore={totaleAssegnate} colore="#2E7D32" onClick={() => setModaleAssegnate(true)}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
         />
-        <CardStatisticaModelle
+        <CardStatisticaModelle compatto={isMobile}
           etichetta="Ancora da trovare" valore={totaleDaTrovare} colore="#C0392B" onClick={() => setModaleDaTrovare(true)}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>}
         />
