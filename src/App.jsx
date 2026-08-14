@@ -237,6 +237,21 @@ function useIsMobile(breakpoint = 700) {
   return isMobile;
 }
 
+// vero quando lo schermo è in verticale (portrait): usato per decidere se
+// una tabella molto larga va spezzata in schede a due colonne (telefono in
+// verticale, tutto leggibile) oppure può restare su una riga sola (telefono
+// in orizzontale, dove c'è più larghezza)
+function useIsPortrait() {
+  const [portrait, setPortrait] = useState(() => (typeof window === "undefined" ? true : window.innerHeight >= window.innerWidth));
+  useEffect(() => {
+    function aggiorna() { setPortrait(window.innerHeight >= window.innerWidth); }
+    window.addEventListener("resize", aggiorna);
+    window.addEventListener("orientationchange", aggiorna);
+    return () => { window.removeEventListener("resize", aggiorna); window.removeEventListener("orientationchange", aggiorna); };
+  }, []);
+  return portrait;
+}
+
 function fmtData(d) {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
@@ -3219,6 +3234,11 @@ function trovaIscrittoStessaPersona(iscritti, personaRif, corsoDataId) {
 // riga per riga: non serve più aprire la scheda dell'iscritto
 function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, onApriSchedeAffiancate, ricarica, onBack }) {
   const isMobile = useIsMobile();
+  const isPortrait = useIsPortrait();
+  // telefono in verticale: la tabella (tante colonne) diventa illeggibile,
+  // quindi ogni pagamento si mostra come scheda con i campi disposti su due
+  // colonne. In orizzontale (o su desktop) resta la tabella su una riga.
+  const schedaVerticale = isMobile && isPortrait;
   const [tab, setTab] = useState("attesa"); // attesa | verificati
   const [approvandoId, setApprovandoId] = useState(null);
   const [modificaAcconto, setModificaAcconto] = useState(null); // riga acconti_da_verificare in modifica, o null
@@ -3277,10 +3297,79 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         const chiaviData = Array.from(new Set(righe.map((a) => (a.ts || "").slice(0, 10)).filter(Boolean))).sort((a, b) => b.localeCompare(a));
         const gruppoStyle = { ...fontDisplay, fontSize: 10, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.2 };
 
+        // la stessa persona può risultare iscritta a più date ("Associa altri
+        // corsi"): ogni corso associato si ritrova per nome+cognome
+        const calcolaCoinvolti = (a) => {
+          const iscrittoPrincipale = iscrittoById[a.iscritto_id];
+          return [
+            { iscritto: iscrittoPrincipale, corsoDataId: iscrittoPrincipale?.corso_data_id },
+            ...((a.corsi_extra_ids || []).map((cdId) => ({ iscritto: trovaIscrittoStessaPersona(iscritti, iscrittoPrincipale, cdId), corsoDataId: cdId }))),
+          ].map(({ iscritto, corsoDataId }) => {
+            const cd = corsoDataId ? cdById[corsoDataId] : null;
+            const corso = cd ? corsoById[cd.corso_id] : null;
+            const loc = cd ? locById[cd.location_id] : null;
+            return { iscritto, cd, corso, loc };
+          });
+        };
+
+        const azioniRiga = (a) => tab === "attesa" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+            <button onClick={() => approva(a)} disabled={approvandoId === a.id} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "7px 16px", cursor: approvandoId === a.id ? "default" : "pointer" }}>
+              {approvandoId === a.id ? "…" : "Approva"}
+            </button>
+            <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+            </button>
+            <button onClick={() => eliminaAcconto(a)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+            </button>
+          </div>
+        );
+
         const tabellaGiorno = (righeGiorno) => {
           const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
             .map((origine) => ({ origine, righe: righeGiorno.filter((a) => (a.origine || "manuale") === origine) }))
             .filter((g) => g.righe.length > 0);
+
+          // telefono in verticale: ogni pagamento diventa una scheda con i
+          // campi su due colonne, così niente resta tagliato
+          if (schedaVerticale) {
+            const campoCard = (label, valore, full) => (
+              <div style={{ gridColumn: full ? "1 / -1" : "auto", minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2 }}>{label}</div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, wordBreak: "break-word" }}>{valore}</div>
+              </div>
+            );
+            const valoreCoinvolti = (coinvolti, render) => coinvolti.map((co, i) => (
+              <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ cursor: co.iscritto ? "pointer" : undefined, marginTop: i === 0 ? 0 : 2 }}>{render(co)}</div>
+            ));
+            return (
+              <div>
+                {gruppi.map((g) => g.righe.map((a) => {
+                  const coinvolti = calcolaCoinvolti(a);
+                  return (
+                    <div key={a.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                      <div style={{ ...gruppoStyle, marginBottom: 8 }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "9px 12px" }}>
+                        {campoCard("Allievo", valoreCoinvolti(coinvolti, (co) => (co.iscritto ? <b>{co.iscritto.nome} {co.iscritto.cognome}</b> : "—")))}
+                        {campoCard("Venditore", a.venditore_nome || "—")}
+                        {campoCard("Città", valoreCoinvolti(coinvolti, (co) => co.loc?.nome?.toUpperCase() || "?"))}
+                        {campoCard("Corso", valoreCoinvolti(coinvolti, (co) => co.corso?.nome?.toUpperCase() || "?"))}
+                        {campoCard("Data corso", valoreCoinvolti(coinvolti, (co) => (co.cd ? fmtDataCompatta(co.cd.data_inizio, co.cd.data_fine) : "—")))}
+                        {campoCard("Data pag.", a.data_pagamento ? fmtData(a.data_pagamento) : "—")}
+                        {campoCard("Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
+                        {campoCard("Metodo", a.metodo || "—")}
+                        {campoCard("Nota", a.nota || "—", true)}
+                        {campoCard("File", a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri il file" /> : "—", true)}
+                      </div>
+                      {tab === "attesa" && <div style={{ marginTop: 12 }}>{azioniRiga(a)}</div>}
+                    </div>
+                  );
+                }))}
+              </div>
+            );
+          }
+
           return (
             <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
               <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
@@ -3302,19 +3391,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 </thead>
                 <tbody>
                   {gruppi.map((g) => g.righe.map((a, idx) => {
-                  const iscrittoPrincipale = iscrittoById[a.iscritto_id];
-                  // ogni corso associato ("Associa altri corsi") è la
-                  // stessa persona iscritta a un'altra data: si ritrova per
-                  // nome+cognome nell'elenco iscritti di quel corso
-                  const coinvolti = [
-                    { iscritto: iscrittoPrincipale, corsoDataId: iscrittoPrincipale?.corso_data_id },
-                    ...((a.corsi_extra_ids || []).map((cdId) => ({ iscritto: trovaIscrittoStessaPersona(iscritti, iscrittoPrincipale, cdId), corsoDataId: cdId }))),
-                  ].map(({ iscritto, corsoDataId }) => {
-                    const cd = corsoDataId ? cdById[corsoDataId] : null;
-                    const corso = cd ? corsoById[cd.corso_id] : null;
-                    const loc = cd ? locById[cd.location_id] : null;
-                    return { iscritto, cd, corso, loc };
-                  });
+                  const coinvolti = calcolaCoinvolti(a);
                   const celStackStyle = { ...celStyle, ...fontBody, fontSize: 10, color: NAVY };
                   return (
                     <tr key={a.id}>
