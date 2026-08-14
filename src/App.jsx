@@ -154,7 +154,11 @@ const fontBody = { fontFamily: "'Roboto',sans-serif" };
 // si usa questo font, per dargli un peso più "editoriale" rispetto al
 // sans-serif del resto dell'app
 const fontHero = { fontFamily: "'Playfair Display',serif", fontWeight: 700 };
-const fontCondensato = { fontFamily: "'Sofia Sans Condensed',sans-serif" }; // più stretto del normale a parità di dimensione: usato per i nomi dei corsi sulle barre del calendario, dove lo spazio orizzontale è poco
+// "Google Sans" non è distribuito su Google Fonts (è un font interno di
+// Google, non licenziato per il web pubblico): Inter è la sostituzione più
+// vicina, usata qui in grassetto bianco per i nomi dei corsi sulle barre
+// del calendario
+const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, color: "#fff" };
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
@@ -1044,7 +1048,7 @@ function coloreTenue(hex, intensita = 0.28) {
 // (usato da mobile sui corsi di un solo giorno, dove il nome può andare a
 // capo su due righe invece di essere tagliato)
 function etichettaBarra(corso, loc, maxChar = 10) {
-  const nomeIntero = (corso?.nome || "").toUpperCase();
+  const nomeIntero = toTitleCase(corso?.nome || "");
   const nome = maxChar != null ? nomeIntero.slice(0, maxChar) : nomeIntero;
   return `${nome} ${siglaCitta(loc?.nome)}`;
 }
@@ -1189,7 +1193,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             )
           )}
           {indice != null && !ultimoGiorno && !(isMobile && i === 0) && (
-            <span style={{ position: "relative", zIndex: 1, ...fontBody, fontSize: fontSizeBadge, color: MUTED, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <span style={{ position: "relative", zIndex: 1, fontFamily: "'Inter',sans-serif", fontWeight: 700, color: "#fff", fontSize: fontSizeBadge, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 2 }}>
               {indice}/{giorniTotali}
             </span>
           )}
