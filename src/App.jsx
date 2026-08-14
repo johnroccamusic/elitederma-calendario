@@ -7134,6 +7134,30 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         <div style={cardStyle}>
           <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
           <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
+          {isMobile ? (
+            <div style={{ marginTop: 8 }}>
+              {edizioniPerMese.map((gruppo) => (
+                <div key={gruppo.chiave} style={{ marginBottom: 6 }}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, background: BG, padding: "7px 10px", borderRadius: 6, marginBottom: 6 }}>{gruppo.etichetta}</div>
+                  {gruppo.edizioni.map((e) => (
+                    <div key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "10px 2px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+                        <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{e.cittaNome.toUpperCase()}</span>
+                        <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</span>
+                      </div>
+                      <div style={{ ...fontBody, fontSize: 14, color: NAVY, marginBottom: 6 }}>{toTitleCase(e.corsoNome)}</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div>
+                      <div style={{ display: "flex", gap: 20, ...fontBody, fontSize: 12 }}>
+                        <span style={{ color: MUTED }}>Richieste <b style={{ color: NAVY, fontSize: 14 }}>{e.richieste}</b></span>
+                        <span style={{ color: MUTED }}>Da trovare <b style={{ color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32", fontSize: 14 }}>{e.daTrovare}</b></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
+            </div>
+          ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
               <thead>
@@ -7170,6 +7194,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
             </table>
             {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
           </div>
+          )}
         </div>
 
         <div style={cardStyle}>
