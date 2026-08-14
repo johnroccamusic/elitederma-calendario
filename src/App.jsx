@@ -7659,7 +7659,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -7687,6 +7687,30 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [showVenditoriModal, setShowVenditoriModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
+  // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
+  // modali (compreso un gesto di swipe-per-tornare-indietro del trackpad,
+  // o il tasto "indietro" del mouse) salta oltre e riporta alla schermata
+  // prima di Impostazioni, invece di chiudere prima solo il modale/passo
+  // interno su cui ci si trova — stesso principio già usato in
+  // SezioneDateCorsi per il toggle Elenco/Calendario
+  useEffect(() => {
+    if (!registraInterceptaIndietro) return;
+    if (vistaCorsiModal !== "griglia") { registraInterceptaIndietro(() => setVistaCorsiModal("griglia")); return () => registraInterceptaIndietro(null); }
+    const modaliAperti = [
+      [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
+      [showLocModal, setShowLocModal], [showMagazziniModal, setShowMagazziniModal],
+      [showHotelModal, setShowHotelModal], [showAssistenteModal, setShowAssistenteModal],
+      [showLevaModal, setShowLevaModal], [showVenditoriModal, setShowVenditoriModal],
+      [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
+    ];
+    const aperto = modaliAperti.find(([attivo]) => attivo);
+    if (aperto) { registraInterceptaIndietro(() => aperto[1](false)); return () => registraInterceptaIndietro(null); }
+    registraInterceptaIndietro(null);
+  }, [
+    registraInterceptaIndietro, vistaCorsiModal,
+    showCorsoModal, showTipiModellaModal, showLocModal, showMagazziniModal, showHotelModal,
+    showAssistenteModal, showLevaModal, showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
+  ]);
   // il cellulare vive in una colonna a sé, interrogata solo qui (non nel
   // caricamento generale): così, se in futuro dovesse mai mancare o dare
   // errore, non rischia di svuotare l'elenco venditori usato ovunque
@@ -24381,7 +24405,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
