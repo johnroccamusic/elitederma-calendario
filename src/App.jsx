@@ -1393,8 +1393,9 @@ function calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) {
 // stessa definizione di "chiusura" già in uso nella dashboard venditori
 // (iscrizione con questo tutor, non una vecchia iscrizione recuperata,
 // data di inserimento dentro il periodo del target) — il valore è la
-// somma di totale_pattuito, convertito in punti (÷100) se il tipo lo
-// richiede
+// somma di totale_pattuito, convertito in punti se il tipo lo richiede:
+// 1 punto ogni 50€, arrotondato per difetto e senza decimali (550€ e
+// 590€ valgono entrambi 11 punti, 600€ ne vale 12)
 function calcolaAvanzamentoTargetCorsi(t, iscritti, nomeVenditore) {
   const nomeNorm = (nomeVenditore || "").trim().toUpperCase();
   const righe = (iscritti || []).filter((i) =>
@@ -1402,7 +1403,7 @@ function calcolaAvanzamentoTargetCorsi(t, iscritti, nomeVenditore) {
     (i.ts || "").slice(0, 10) >= t.data_inizio && (i.ts || "").slice(0, 10) <= t.data_fine
   );
   const valoreVenduto = round2(righe.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
-  const raggiunto = t.tipo_target === "corsi_punti" ? round2(valoreVenduto / 100) : valoreVenduto;
+  const raggiunto = t.tipo_target === "corsi_punti" ? Math.floor(valoreVenduto / 50) : valoreVenduto;
   const soglia = t.soglia_incasso || 0;
   const percentuale = soglia > 0 ? Math.min(100, Math.round((raggiunto / soglia) * 100)) : null;
   const completato = t.soglia_incasso == null || raggiunto >= t.soglia_incasso;
@@ -1472,7 +1473,7 @@ function PannelloTarget({ t, avanzamento }) {
   const formatta = (n) => {
     if (n == null) return "—";
     if (d.unita === "€") return fmtEuroErp2(n);
-    if (d.unita === "punti") return `${n.toLocaleString("it-IT", { maximumFractionDigits: 1 })} pt`;
+    if (d.unita === "punti") return `${Math.round(n)} pt`;
     if (d.unita === "pz") return `${n} pz`;
     return `${n}`;
   };
@@ -8433,7 +8434,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
       {showTargetVenditoriModal && (
         <Modal title="Target Venditori" onClose={() => setShowTargetVenditoriModal(false)} maxWidth={720}>
-          <div style={{ ...subStyle, marginTop: -4 }}>Obiettivi individuali sulle vendite prodotti al POS (incasso, quantità di prodotto, o entrambi), oppure sui corsi venduti (in euro o in punti, dove 1 punto = 100€ di valore del corso). Solo segnalazione dell'avanzamento — l'erogazione del premio resta un processo manuale.</div>
+          <div style={{ ...subStyle, marginTop: -4 }}>Obiettivi individuali sulle vendite prodotti al POS (incasso, quantità di prodotto, o entrambi), oppure sui corsi venduti (in euro o in punti, dove 1 punto = 50€ di valore del corso). Solo segnalazione dell'avanzamento — l'erogazione del premio resta un processo manuale.</div>
           <GestioneTarget soggettoTipo="venditore" soggetti={venditori} prodottiShop={prodottiShop} target={targetVenditeProdotti} ricarica={ricarica} />
         </Modal>
       )}
@@ -10666,7 +10667,7 @@ const TIPI_TARGET = [
   // iscrizioni chiuse nel periodo, non le vendite prodotti POS — vedi
   // calcolaAvanzamentoTargetCorsi
   { v: "corsi_denaro", l: "Corsi venduti (in euro)" },
-  { v: "corsi_punti", l: "Corsi venduti (in punti: 1pt = 100€)" },
+  { v: "corsi_punti", l: "Corsi venduti (in punti: 1pt = 50€)" },
 ];
 // solo questi due valgono per i target dei venditori sui CORSI (silo
 // separato dalla vendita prodotti): usati per capire quando la soglia va
@@ -10749,7 +10750,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
     // come unica soglia numerica, solo interpretata diversamente
     const serveSoglia = tipoTarget === "incasso" || tipoTarget === "combinato" || TIPI_TARGET_CORSI.includes(tipoTarget);
     const serveProdotti = tipoTarget === "prodotto" || tipoTarget === "combinato";
-    const sogliaNum = sogliaIncasso === "" ? null : parseNum(sogliaIncasso);
+    const sogliaNum = sogliaIncasso === "" ? null : (tipoTarget === "corsi_punti" ? Math.round(parseNum(sogliaIncasso)) : parseNum(sogliaIncasso));
     if (serveSoglia && !(sogliaNum > 0)) { setMsg(tipoTarget === "corsi_punti" ? "Scrivi una soglia in punti maggiore di zero." : "Scrivi una soglia maggiore di zero."); return; }
     if (serveProdotti && prodottiObiettivo.length === 0) { setMsg("Aggiungi almeno un prodotto obiettivo."); return; }
     if (serveProdotti && prodottiObiettivo.some((p) => !(Number(p.quantita_minima) > 0))) { setMsg("Ogni prodotto obiettivo deve avere una quantità minima maggiore di zero."); return; }
@@ -10818,8 +10819,8 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
         </div>
       </div>
       {(tipoTarget === "incasso" || tipoTarget === "combinato" || TIPI_TARGET_CORSI.includes(tipoTarget)) && (
-        <Field label={tipoTarget === "corsi_punti" ? "Soglia (punti — 1pt = 100€)" : tipoTarget === "corsi_denaro" ? "Soglia (€ di corsi venduti)" : "Soglia di incasso (€)"}>
-          <input style={inputStyle} inputMode="decimal" value={sogliaIncasso} onChange={(e) => setSogliaIncasso(e.target.value)} placeholder="0" />
+        <Field label={tipoTarget === "corsi_punti" ? "Soglia (punti — 1pt = 50€, senza decimali)" : tipoTarget === "corsi_denaro" ? "Soglia (€ di corsi venduti)" : "Soglia di incasso (€)"}>
+          <input style={inputStyle} inputMode={tipoTarget === "corsi_punti" ? "numeric" : "decimal"} value={sogliaIncasso} onChange={(e) => setSogliaIncasso(e.target.value)} placeholder="0" />
         </Field>
       )}
       {(tipoTarget === "prodotto" || tipoTarget === "combinato") && (
@@ -10860,7 +10861,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
             <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtData(t.data_inizio)} → {fmtData(t.data_fine)}</div>
             {t.soglia_incasso != null && (
               <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
-                Soglia: {t.tipo_target === "corsi_punti" ? `${t.soglia_incasso.toLocaleString("it-IT", { maximumFractionDigits: 1 })} punti` : fmtEuroErp2(t.soglia_incasso)}
+                Soglia: {t.tipo_target === "corsi_punti" ? `${Math.round(t.soglia_incasso)} punti` : fmtEuroErp2(t.soglia_incasso)}
               </div>
             )}
             {(t.prodotti_obiettivo || []).length > 0 && (
