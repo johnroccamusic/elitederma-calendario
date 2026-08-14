@@ -8049,7 +8049,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           return c.nome.toLowerCase().includes(q) || (c.categoria || "").toLowerCase().includes(q);
         });
         return (
-        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)} maxWidth={vistaCorsiModal === "griglia" ? 1080 : 560}>
+        <Modal title="Corsi" onClose={() => setShowCorsoModal(false)} maxWidth={1080}>
           {vistaCorsiModal === "griglia" && (
             <>
               <div style={hStyle}>Aggiungi corso</div>
@@ -8070,7 +8070,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           )}
 
           {vistaCorsiModal === "nuovo" && (
-            <>
+            <div style={{ maxWidth: 560, margin: "0 auto" }}>
               <button onClick={() => setVistaCorsiModal("griglia")} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 0, marginBottom: 14, ...fontBody, fontSize: 13, fontWeight: 600 }}>
                 <IconaFrecciaSinistra size={15} /> Tutti i corsi
               </button>
@@ -8124,14 +8124,14 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
               )}
               <Button onClick={aggiungiCorso}>Aggiungi corso</Button>
               {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
-            </>
+            </div>
           )}
 
           {vistaCorsiModal === "modifica" && corsoInModifica && (() => {
             const c = corsi.find((x) => x.id === corsoInModifica);
             if (!c) return null;
             return (
-              <>
+              <div style={{ maxWidth: 560, margin: "0 auto" }}>
                 <button onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); setVistaCorsiModal("griglia"); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 0, marginBottom: 14, ...fontBody, fontSize: 13, fontWeight: 600 }}>
                   <IconaFrecciaSinistra size={15} /> Tutti i corsi
                 </button>
@@ -8191,7 +8191,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                   <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); setVistaCorsiModal("griglia"); }}>Annulla</Button>
                 </div>
                 {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
-              </>
+              </div>
             );
           })()}
         </Modal>
