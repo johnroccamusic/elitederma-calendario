@@ -10676,10 +10676,10 @@ function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
   }, [testo, fontSizeBase, fontSizeMin]);
   return { ref, fontSize };
 }
-function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
+function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 8 }) {
   const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
   return (
-    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.25, wordBreak: "keep-all", overflowWrap: "normal" }}>
+    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
       {testo}
     </span>
   );
