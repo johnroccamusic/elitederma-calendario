@@ -4464,44 +4464,44 @@ function PaginaDashboardVenditori({
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli un venditore per vedere le sue chiusure e commissioni.</div>
         ) : (
           <>
-            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
+            <div style={{ display: "flex", flexDirection: "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
               <button
                 onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaFrecciaTrend size={24} color={GOLD} />
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaFrecciaTrend size={isMobile ? 20 : 24} color={GOLD} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>}
                 </div>
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("corsi")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaPersonaAggiungi size={24} color={GOLD} />
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaPersonaAggiungi size={isMobile ? 20 : 24} color={GOLD} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
-                    <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 8 }}>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
                   </div>
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>}
                 </div>
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("iscrizioni")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaLaureaErp size={24} color={GOLD} />
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaLaureaErp size={isMobile ? 20 : 24} color={GOLD} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>}
                 </div>
               </button>
             </div>
