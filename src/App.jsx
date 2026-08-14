@@ -10499,7 +10499,11 @@ const TIPI_TARGET = [
 // resta condivisa, filtrata per soggettoTipo — l'avanzamento vero e
 // proprio si calcola altrove (dashboard/POS), qui solo si definiscono
 function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica }) {
-  const [soggettoId, setSoggettoId] = useState("");
+  // uno stesso target può andare a un gruppo qualsiasi (anche uno solo, o
+  // tutti): si spuntano le persone a cui assegnarlo, e alla conferma
+  // diventa una riga separata per ciascuna — così si possono creare target
+  // diversi per gruppi diversi, ripetendo l'operazione con spunte diverse
+  const [soggettiSelezionati, setSoggettiSelezionati] = useState([]);
   const [tipoTarget, setTipoTarget] = useState("incasso");
   const [sogliaIncasso, setSogliaIncasso] = useState("");
   const [prodottiObiettivo, setProdottiObiettivo] = useState([]); // { prodotto_id, nome, quantita_minima }
@@ -10531,12 +10535,12 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
   }
   function resetForm() {
     setTargetInModifica(null);
-    setSoggettoId(""); setTipoTarget("incasso"); setSogliaIncasso("");
+    setSoggettiSelezionati([]); setTipoTarget("incasso"); setSogliaIncasso("");
     setProdottiObiettivo([]); setRicercaProdotto(""); setDataInizio(""); setDataFine(""); setMsg("");
   }
   function modificaTarget(t) {
     setTargetInModifica(t.id);
-    setSoggettoId(t.soggetto_id);
+    setSoggettiSelezionati([t.soggetto_id]);
     setTipoTarget(t.tipo_target);
     setSogliaIncasso(t.soglia_incasso != null ? String(t.soglia_incasso) : "");
     setProdottiObiettivo((t.prodotti_obiettivo || []).map((p) => ({ ...p, nome: (prodottiShop || []).find((ps) => ps.id === p.prodotto_id)?.nome || "?" })));
@@ -10550,9 +10554,15 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
     ricarica();
   }
 
+  function toggleSoggetto(id) {
+    setSoggettiSelezionati((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+  function selezionaTutti() {
+    setSoggettiSelezionati(soggettiOrdinati.map((s) => s.id));
+  }
+
   async function salvaTarget() {
-    if (!soggettoId) { setMsg("Scegli a chi assegnare il target."); return; }
-    if (soggettoId === "__tutti__" && soggettiOrdinati.length === 0) { setMsg("Non c'è ancora nessun " + (soggettoTipo === "master" ? "master" : "venditore") + " a cui assegnarlo."); return; }
+    if (soggettiSelezionati.length === 0) { setMsg("Scegli almeno a chi assegnare il target."); return; }
     if (!dataInizio || !dataFine) { setMsg("Scegli il periodo (data inizio e fine)."); return; }
     if (dataFine < dataInizio) { setMsg("La data fine non può precedere la data inizio."); return; }
     const serveIncasso = tipoTarget === "incasso" || tipoTarget === "combinato";
@@ -10571,15 +10581,13 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
       data_inizio: dataInizio,
       data_fine: dataFine,
     };
-    // "Tutti" non è un soggetto vero: crea lo stesso target, con lo stesso
-    // periodo/soglia/prodotti, come riga separata per ciascun master o
-    // venditore — da qui in poi ognuno resta un target indipendente,
-    // modificabile/eliminabile singolarmente come tutti gli altri
-    const { error } = soggettoId === "__tutti__"
-      ? await supabase.from("target_vendite_prodotti").insert(soggettiOrdinati.map((s) => ({ ...basaRiga, soggetto_id: s.id })))
-      : targetInModifica
-      ? await supabase.from("target_vendite_prodotti").update({ ...basaRiga, soggetto_id: soggettoId }).eq("id", targetInModifica)
-      : await supabase.from("target_vendite_prodotti").insert({ ...basaRiga, soggetto_id: soggettoId });
+    // ogni persona spuntata diventa una riga separata con lo stesso
+    // periodo/soglia/prodotti: da qui in poi ognuna resta un target
+    // indipendente, modificabile/eliminabile singolarmente come tutti gli
+    // altri — così si possono creare target diversi per gruppi diversi
+    const { error } = targetInModifica
+      ? await supabase.from("target_vendite_prodotti").update(basaRiga).eq("id", targetInModifica)
+      : await supabase.from("target_vendite_prodotti").insert(soggettiSelezionati.map((id) => ({ ...basaRiga, soggetto_id: id })));
     setSalvando(false);
     if (error) { setMsg("Errore: " + error.message); return; }
     resetForm();
@@ -10589,24 +10597,32 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
   return (
     <div>
       <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{targetInModifica ? "Modifica target" : "Nuovo target"}</div>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label={soggettoTipo === "master" ? "Master" : "Venditore"}>
-            <select style={inputStyle} value={soggettoId} onChange={(e) => setSoggettoId(e.target.value)}>
-              <option value="">— scegli —</option>
-              {!targetInModifica && <option value="__tutti__">Tutti</option>}
-              {soggettiOrdinati.map((s) => <option key={s.id} value={s.id}>{s.nome.toUpperCase()}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Tipo di target">
-            <select style={inputStyle} value={tipoTarget} onChange={(e) => setTipoTarget(e.target.value)}>
-              {TIPI_TARGET.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
-            </select>
-          </Field>
-        </div>
-      </div>
+      <Field label={(soggettoTipo === "master" ? "Master" : "Venditori") + " a cui assegnarlo" + (targetInModifica ? "" : " (puoi sceglierne uno, un gruppo, o tutti)")}>
+        {targetInModifica ? (
+          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, padding: "8px 0" }}>{nomeSoggetto(soggettiSelezionati[0]).toUpperCase()}</div>
+        ) : (
+          <>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 10, maxHeight: 160, overflow: "auto", marginBottom: 6 }}>
+              {soggettiOrdinati.length === 0 && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun{soggettoTipo === "master" ? " master" : " venditore"} definito ancora.</span>}
+              {soggettiOrdinati.map((s) => (
+                <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                  <input type="checkbox" checked={soggettiSelezionati.includes(s.id)} onChange={() => toggleSoggetto(s.id)} />
+                  {s.nome.toUpperCase()}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 14 }}>
+              <button type="button" onClick={selezionaTutti} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>Seleziona tutti</button>
+              <button type="button" onClick={() => setSoggettiSelezionati([])} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>Deseleziona tutti</button>
+            </div>
+          </>
+        )}
+      </Field>
+      <Field label="Tipo di target">
+        <select style={inputStyle} value={tipoTarget} onChange={(e) => setTipoTarget(e.target.value)}>
+          {TIPI_TARGET.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+        </select>
+      </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Data inizio">
