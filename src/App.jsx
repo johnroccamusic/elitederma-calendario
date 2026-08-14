@@ -13573,7 +13573,18 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         // "Contabilità classe" stessa resta sempre visibile: è lei il
         // tasto che chiede la password la prima volta
         const secondari = [
-          { chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra, onClick: () => { if (vista === "form") { annullaForm(); return; } setMostraGestione(false); setCostiAperto(false); setVista("lista"); } },
+          {
+            chiave: "esci", etichetta: "Esci", Icona: IconaFrecciaSinistra,
+            onClick: () => {
+              if (vista === "form") { annullaForm(); return; }
+              // se non c'è più niente da disfare qui dentro (già sulla
+              // lista, nessun pannello aperto), "Esci" si comporta come il
+              // tasto Indietro e torna alla pagina precedente, invece di
+              // restare fermo senza fare nulla
+              if (vista === "lista" && !mostraGestione && !costiAperto) { onBack(); return; }
+              setMostraGestione(false); setCostiAperto(false); setVista("lista");
+            },
+          },
           ...(adminSbloccato ? [
             { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
             { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
