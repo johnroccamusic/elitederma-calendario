@@ -1200,7 +1200,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             )
           )}
           {indice != null && !ultimoGiorno && !(isMobile && i === 0) && (
-            <span style={{ position: "relative", zIndex: 1, fontFamily: "'Inter',sans-serif", fontWeight: 400, fontStyle: "italic", color: MUTED, fontSize: fontSizeBadge, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <span style={{ position: "relative", zIndex: 1, fontFamily: "'Inter',sans-serif", fontWeight: 400, fontStyle: "italic", color: "#F2F2F2", fontSize: fontSizeBadge, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 2 }}>
               {indice}/{giorniTotali}
             </span>
           )}
