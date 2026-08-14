@@ -12403,6 +12403,41 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   const [generandoDiplomi, setGenerandoDiplomi] = useState(false);
   const [generandoSegnaposti, setGenerandoSegnaposti] = useState(false);
 
+  // "Modifica date": stesso principio della modifica inline già presente
+  // in Gestione corsi (date/master/posti di questa singola edizione), ma
+  // raggiungibile direttamente da qui, senza dover uscire e cercarla altrove
+  const [modificaDateAperta, setModificaDateAperta] = useState(false);
+  const [modDataInizioScheda, setModDataInizioScheda] = useState("");
+  const [modDataFineScheda, setModDataFineScheda] = useState("");
+  const [modMasterSelScheda, setModMasterSelScheda] = useState("");
+  const [modPostiDataScheda, setModPostiDataScheda] = useState("");
+  const [salvandoDateScheda, setSalvandoDateScheda] = useState(false);
+  const [msgDateScheda, setMsgDateScheda] = useState("");
+  function apriModificaDateScheda() {
+    setModDataInizioScheda(corsoData.data_inizio);
+    setModDataFineScheda(corsoData.data_fine);
+    setModMasterSelScheda(corsoData.master_id || "");
+    const corsoCd = corsi.find((c) => c.id === corsoData.corso_id);
+    const locCd = location.find((l) => l.id === corsoData.location_id);
+    setModPostiDataScheda(String(postiMaxEffettivi(corsoData, corsoCd, locCd)));
+    setMsgDateScheda("");
+    setModificaDateAperta(true);
+  }
+  async function salvaModificaDateScheda() {
+    if (!modDataInizioScheda) { setMsgDateScheda("Seleziona almeno una data d'inizio."); return; }
+    setSalvandoDateScheda(true);
+    const { error } = await supabase.from("corsi_date").update({
+      data_inizio: modDataInizioScheda,
+      data_fine: modDataFineScheda || modDataInizioScheda,
+      posti_max: modPostiDataScheda ? Number(modPostiDataScheda) : null,
+      master_id: modMasterSelScheda || null,
+    }).eq("id", corsoData.id);
+    setSalvandoDateScheda(false);
+    if (error) { setMsgDateScheda("Errore: " + error.message); return; }
+    setModificaDateAperta(false);
+    ricarica();
+  }
+
   // pannello "Riepilogo amministrativo" (costi della classe): parte
   // chiuso perché, se sempre aperto, intralcia la normale gestione
   // contabilità (spuntare incassato, aprire schede...)
@@ -13585,6 +13620,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               setMostraGestione(false); setCostiAperto(false); setVista("lista");
             },
           },
+          { chiave: "modificadate", etichetta: "Modifica date", Icona: IconaCalendarioCard, onClick: apriModificaDateScheda },
           ...(adminSbloccato ? [
             { chiave: "diplomi", etichetta: generandoDiplomi ? "Genero i diplomi…" : "Stampa diplomi", Icona: IconaStampante, onClick: stampaDiplomi, disabled: generandoDiplomi },
             { chiave: "segnaposti", etichetta: generandoSegnaposti ? "Genero i segnaposti…" : "Stampa Segnaposto", Icona: IconaBigliettoSegnaposto, onClick: stampaSegnaposti, disabled: generandoSegnaposti },
@@ -13610,6 +13646,37 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </div>
         );
       })()}
+
+      {modificaDateAperta && (
+        <Modal title="Modifica date" onClose={() => setModificaDateAperta(false)}>
+          <div style={{ display: "flex", gap: 14 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Data inizio">
+                <input type="date" style={inputStyle} value={modDataInizioScheda} onChange={(e) => setModDataInizioScheda(e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Data fine">
+                <input type="date" style={inputStyle} value={modDataFineScheda} min={modDataInizioScheda || undefined} onChange={(e) => setModDataFineScheda(e.target.value)} />
+              </Field>
+            </div>
+          </div>
+          <Field label="Master">
+            <select style={inputStyle} value={modMasterSelScheda} onChange={(e) => setModMasterSelScheda(e.target.value)}>
+              <option value="">La assegno in seguito</option>
+              {(master || []).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+            </select>
+          </Field>
+          <Field label="Posti massimi">
+            <input type="number" min={iscritti.filter((i) => i.corso_data_id === corsoData.id).length} style={inputStyle} value={modPostiDataScheda} onChange={(e) => setModPostiDataScheda(e.target.value)} />
+          </Field>
+          {msgDateScheda && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 10 }}>{msgDateScheda}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={salvaModificaDateScheda} disabled={salvandoDateScheda}>{salvandoDateScheda ? "Salvataggio…" : "Salva"}</Button>
+            <Button variant="ghost" disabled={salvandoDateScheda} onClick={() => setModificaDateAperta(false)}>Annulla</Button>
+          </div>
+        </Modal>
+      )}
 
       {vista === "lista" && costiAperto && (
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", boxShadow: "0 16px 30px -16px rgba(14,27,51,0.25)" }}>
