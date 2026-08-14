@@ -10552,6 +10552,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
 
   async function salvaTarget() {
     if (!soggettoId) { setMsg("Scegli a chi assegnare il target."); return; }
+    if (soggettoId === "__tutti__" && soggettiOrdinati.length === 0) { setMsg("Non c'è ancora nessun " + (soggettoTipo === "master" ? "master" : "venditore") + " a cui assegnarlo."); return; }
     if (!dataInizio || !dataFine) { setMsg("Scegli il periodo (data inizio e fine)."); return; }
     if (dataFine < dataInizio) { setMsg("La data fine non può precedere la data inizio."); return; }
     const serveIncasso = tipoTarget === "incasso" || tipoTarget === "combinato";
@@ -10562,18 +10563,23 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
     if (serveProdotti && prodottiObiettivo.some((p) => !(Number(p.quantita_minima) > 0))) { setMsg("Ogni prodotto obiettivo deve avere una quantità minima maggiore di zero."); return; }
 
     setSalvando(true); setMsg("");
-    const riga = {
+    const basaRiga = {
       soggetto_tipo: soggettoTipo,
-      soggetto_id: soggettoId,
       tipo_target: tipoTarget,
       soglia_incasso: serveIncasso ? sogliaNum : null,
       prodotti_obiettivo: serveProdotti ? prodottiObiettivo.map((p) => ({ prodotto_id: p.prodotto_id, quantita_minima: Number(p.quantita_minima) })) : [],
       data_inizio: dataInizio,
       data_fine: dataFine,
     };
-    const { error } = targetInModifica
-      ? await supabase.from("target_vendite_prodotti").update(riga).eq("id", targetInModifica)
-      : await supabase.from("target_vendite_prodotti").insert(riga);
+    // "Tutti" non è un soggetto vero: crea lo stesso target, con lo stesso
+    // periodo/soglia/prodotti, come riga separata per ciascun master o
+    // venditore — da qui in poi ognuno resta un target indipendente,
+    // modificabile/eliminabile singolarmente come tutti gli altri
+    const { error } = soggettoId === "__tutti__"
+      ? await supabase.from("target_vendite_prodotti").insert(soggettiOrdinati.map((s) => ({ ...basaRiga, soggetto_id: s.id })))
+      : targetInModifica
+      ? await supabase.from("target_vendite_prodotti").update({ ...basaRiga, soggetto_id: soggettoId }).eq("id", targetInModifica)
+      : await supabase.from("target_vendite_prodotti").insert({ ...basaRiga, soggetto_id: soggettoId });
     setSalvando(false);
     if (error) { setMsg("Errore: " + error.message); return; }
     resetForm();
@@ -10588,6 +10594,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
           <Field label={soggettoTipo === "master" ? "Master" : "Venditore"}>
             <select style={inputStyle} value={soggettoId} onChange={(e) => setSoggettoId(e.target.value)}>
               <option value="">— scegli —</option>
+              {!targetInModifica && <option value="__tutti__">Tutti</option>}
               {soggettiOrdinati.map((s) => <option key={s.id} value={s.id}>{s.nome.toUpperCase()}</option>)}
             </select>
           </Field>
