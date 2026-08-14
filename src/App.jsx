@@ -3769,11 +3769,11 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) 
 
 // ---------- Dashboard venditori ----------
 // tasto "pillola" per le tab (In programmazione/Archivio, Elenco/Calendario)
-function TabPillola({ attivo, onClick, children }) {
+function TabPillola({ attivo, onClick, children, compatto }) {
   return (
     <button
       onClick={onClick}
-      style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "9px 14px", borderRadius: 16, border: attivo ? "none" : `1px solid ${CREAM_BORDER}`, background: attivo ? NAVY : "#fff", color: attivo ? "#fff" : NAVY, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+      style={{ ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 600, padding: compatto ? "7px 8px" : "9px 14px", borderRadius: 16, border: attivo ? "none" : `1px solid ${CREAM_BORDER}`, background: attivo ? NAVY : "#fff", color: attivo ? "#fff" : NAVY, cursor: "pointer", display: "flex", alignItems: "center", gap: compatto ? 3 : 6, whiteSpace: "nowrap", flexShrink: 0 }}
     >
       {children}
     </button>
@@ -3850,6 +3850,13 @@ function SezioneDateCorsi({
   const vistaDateModo = modoForzato || vistaDateModoInterno;
   const setVistaDateTab = setVistaDateTabInterna;
   const setVistaDateModo = setVistaDateModoInterno;
+  const isMobile = useIsMobile();
+  // riga filtri su mobile: un unico font per tutti i pulsanti, ridotto
+  // quel tanto che basta perché stiano tutti su una sola riga senza
+  // troncare (vedi useFontRigaAdattato). Il "segnale" fa ricalcolare
+  // quando cambiano le etichette (filtro attivo o numero di opzioni).
+  const segnaleFiltri = `${isMobile}|${filtroCorsoHome}|${filtroCittaHome}|${filtroMasterHome}|${corsi.length}|${location.length}|${(master || []).length}`;
+  const { ref: rigaFiltriRef, fontSize: fontFiltri } = useFontRigaAdattato(isMobile, segnaleFiltri, 13, 7);
   useEffect(() => {
     if (!registraInterceptaIndietro || nascondiControlli) return;
     if (vistaDateModo === "calendario") { registraInterceptaIndietro(() => setVistaDateModo("elenco")); return () => registraInterceptaIndietro(null); }
@@ -3907,33 +3914,33 @@ function SezioneDateCorsi({
 
   return (
     <div>
-      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: 70, marginBottom: -4 } : undefined}>
+      <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
       {intestazioneSticky}
       {!nascondiControlli && (
         <>
           {!nascondiTitolo && (
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 12, textAlign: "center", textTransform: "uppercase" }}>{titolo || "Corsi in programmazione"}</div>
           )}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <div style={{ display: "flex", gap: 6 }}>
-              <TabPillola attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>In programmazione ({numeroInProgrammazione})</TabPillola>
-              <TabPillola attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Archivio date</TabPillola>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: isMobile ? 4 : 10, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 12, ...(isMobile ? { overflowX: "auto" } : {}) }}>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, flexShrink: 0 }}>
+              <TabPillola compatto={isMobile} attivo={vistaDateTab === "programmazione"} onClick={() => setVistaDateTab("programmazione")}>Programmati ({numeroInProgrammazione})</TabPillola>
+              <TabPillola compatto={isMobile} attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Passati</TabPillola>
             </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <TabPillola attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
-              <TabPillola attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
-              <div style={{ display: "flex", alignItems: "center", marginLeft: 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff" }}>
-                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center", flexShrink: 0 }}>
+              <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
+              <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+              <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
+                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
                 <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: 30, height: 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
+                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
               </div>
             </div>
           </div>
         </>
       )}
       <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        <FiltroPill
+      <div ref={rigaFiltriRef} style={{ display: "flex", gap: isMobile ? 5 : 6, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { fontSize: fontFiltri } : {}) }}>
+        <FiltroPill compatto={isMobile}
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
           valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
           aperto={apriFiltroCorsoHome} selectRef={selectFiltroCorsoHomeRef}
@@ -3941,7 +3948,7 @@ function SezioneDateCorsi({
           onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
           onBlur={() => setApriFiltroCorsoHome(false)}
         />
-        <FiltroPill
+        <FiltroPill compatto={isMobile}
           etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
           valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
           aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
@@ -3949,7 +3956,7 @@ function SezioneDateCorsi({
           onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
           onBlur={() => setApriFiltroCittaHome(false)}
         />
-        <FiltroPill
+        <FiltroPill compatto={isMobile}
           etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
           valore={filtroMasterHome} etichettaAttiva={master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase()}
           aperto={apriFiltroMasterHome} selectRef={selectFiltroMasterHomeRef}
@@ -3959,13 +3966,13 @@ function SezioneDateCorsi({
         />
         <button
           onClick={() => setCronologicoHome((v) => !v)}
-          style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer" }}
+          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
         >
           Cronologico
         </button>
         <button
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-          style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}
+          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
         >
           Reset filtri
         </button>
@@ -8328,6 +8335,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // sua pagina separata (stesso sblocco amministratore condiviso)
 function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro }) {
   const [msg, setMsg] = useState("");
+  const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
   // il popup "Nuova data" già pronto su oggi, invece di dover passare
   // dalla vista Calendario e cliccare un giorno vuoto
@@ -8408,21 +8416,21 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   const intestazioneGestioneCorsi = (
     <>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
-      <div style={{ display: "flex", justifyContent: "center", gap: 10, marginBottom: 22, flexWrap: "wrap" }}>
-        <Button onClick={() => setMostraAggiungiCorso(true)}>Aggiungi Corso</Button>
-        <Button variant="ghost" onClick={onApriUltimeIscrizioni}>Ultime iscrizioni</Button>
+      <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
+        <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
+        <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
         {numeroAccontiInAttesa > 0 ? (
           <>
             <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
             <button
               onClick={onApriVerificaAcconti}
-              style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: "10px 18px", cursor: "pointer", animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
+              style={{ ...fontBody, fontSize: isMobile ? 11 : 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: isMobile ? "7px 8px" : "10px 18px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
             >
               Verifica Pagamenti ({numeroAccontiInAttesa})
             </button>
           </>
         ) : (
-          <Button variant="ghost" onClick={onApriVerificaAcconti}>Niente da verificare</Button>
+          <Button variant="ghost" onClick={onApriVerificaAcconti} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Niente da verificare</Button>
         )}
       </div>
     </>
@@ -10698,10 +10706,40 @@ function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
   }, [testo, fontSizeBase, fontSizeMin]);
   return { ref, fontSize };
 }
-function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 9 }) {
+// come useFontAdattato ma per un'INTERA RIGA di pulsanti: riduce un unico
+// font (ereditato da tutti i figli) finché la riga sta su una sola linea,
+// così tutti i pulsanti restano della stessa dimensione e nessun testo va
+// a capo o viene troncato. Usato dalla riga filtri di "Gestione corsi" su
+// mobile; su desktop (attivo=false) non fa nulla e i pulsanti restano alla
+// loro dimensione normale.
+function useFontRigaAdattato(attivo, segnale, fontSizeBase = 13, fontSizeMin = 7) {
+  const ref = React.useRef(null);
+  const [fontSize, setFontSize] = useState(fontSizeBase);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !attivo) { setFontSize(fontSizeBase); return; }
+    function adatta() {
+      let dim = fontSizeBase;
+      el.style.fontSize = `${dim}px`;
+      while (el.scrollWidth > el.clientWidth + 0.5 && dim > fontSizeMin) {
+        dim -= 0.5;
+        el.style.fontSize = `${dim}px`;
+      }
+      setFontSize(dim);
+    }
+    adatta();
+    const osservatore = new ResizeObserver(adatta);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attivo, segnale, fontSizeBase, fontSizeMin]);
+  return { ref, fontSize };
+}
+
+function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 8 }) {
   const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
   return (
-    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "pre-line", textAlign: "center", lineHeight: 1.25, wordBreak: "keep-all", overflowWrap: "normal" }}>
+    <span ref={ref} style={{ display: "block", fontSize, whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>
       {testo}
     </span>
   );
@@ -10742,19 +10780,21 @@ function CampoRicerca({ value, onChange, placeholder, style }) {
 // altrimenti contornato; al click apre sotto di sé un <select> nativo
 // con l'elenco delle opzioni. Usato per i filtri corso/città/master
 // sia in Home che in Gestione date
-function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota }) {
+function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota, compatto }) {
   return (
-    <div style={{ position: "relative", flex: "1 1 0", minWidth: 0, display: "flex" }}>
+    <div style={{ position: "relative", flex: compatto ? "0 0 auto" : "1 1 0", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
         style={{
-          ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20,
+          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : undefined, padding: compatto ? "7px 10px" : "10px 10px", borderRadius: 20,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", width: compatto ? "auto" : "100%", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />
+        {compatto
+          ? <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{valore ? etichettaAttiva : etichetta}</span>
+          : <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />}
       </button>
       {aperto && (
         <select
@@ -23760,7 +23800,21 @@ export default function App() {
     setCorsiGiorni(cg.data || []);
     setTipiModella(tm.data || []);
     setCorsiTipiModella(ctm.data || []);
-    setVenditori(ve.data || []);
+    // L'elenco venditori è usato ovunque (login alla Dashboard venditori,
+    // selezione "Tutor" in iscrizione, classifiche): se la select con le
+    // colonne opzionali "permessi"/"password" fallisce perché una di quelle
+    // colonne non è ancora stata creata su questo database (ultimi file SQL
+    // non ancora eseguiti), NON deve sparire tutto l'elenco. In quel caso
+    // ricarico con le sole colonne sempre presenti e riempio le opzionali
+    // con i valori di default, così i venditori restano visibili e
+    // utilizzabili — esattamente come già facciamo per "telefono".
+    let venditoriData = ve.data;
+    if (ve.error) {
+      let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
+      if (alt.error) alt = await supabase.from("venditori").select("id, nome, ts").order("nome");
+      venditoriData = (alt.data || []).map((v) => ({ permessi: [], password: "0000", ...v }));
+    }
+    setVenditori(venditoriData || []);
     setPasswordMenu(pm.data || []);
     setUtentiApp(ua.data || []);
     setCorsiKitProdotti(ckp.data || []);
