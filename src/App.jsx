@@ -1487,7 +1487,8 @@ function PannelloTarget({ t, avanzamento }) {
   const d = datiPrincipaliTarget(t, avanzamento);
   const formatta = (n) => {
     if (n == null) return "—";
-    if (d.unita === "€") return fmtEuroErp2(n);
+    // importi target sempre a numero intero, senza decimali dopo la virgola
+    if (d.unita === "€") return fmtEuroErp(n);
     if (d.unita === "punti") return `${Math.round(n)} pt`;
     if (d.unita === "pz") return `${n} pz`;
     return `${n}`;
