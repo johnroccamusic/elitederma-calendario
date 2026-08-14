@@ -3313,15 +3313,15 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         };
 
         const azioniRiga = (a) => tab === "attesa" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <button onClick={() => approva(a)} disabled={approvandoId === a.id} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 20, padding: "7px 16px", cursor: approvandoId === a.id ? "default" : "pointer" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button onClick={() => approva(a)} disabled={approvandoId === a.id} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 24, padding: "12px 28px", cursor: approvandoId === a.id ? "default" : "pointer" }}>
               {approvandoId === a.id ? "…" : "Approva"}
             </button>
-            <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+            <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", color: NAVY, padding: 10, borderRadius: 12, display: "flex", alignItems: "center" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
             </button>
-            <button onClick={() => eliminaAcconto(a)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+            <button onClick={() => eliminaAcconto(a)} title="Elimina" style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", color: "#C0392B", padding: 10, borderRadius: 12, display: "flex", alignItems: "center" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
             </button>
           </div>
         );
@@ -3360,7 +3360,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                         {campoCard("Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
                         {campoCard("Metodo", a.metodo || "—")}
                         {campoCard("Nota", a.nota || "—", true)}
-                        {campoCard("File", a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri il file" /> : "—", true)}
+                        {campoCard("File", a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri il file" style={{ fontSize: 15, fontWeight: 600, display: "inline-block", padding: "4px 0" }} /> : "—", true)}
                       </div>
                       {tab === "attesa" && <div style={{ marginTop: 12 }}>{azioniRiga(a)}</div>}
                     </div>
@@ -12258,14 +12258,14 @@ const RIGHE_SISTEMA_DEFAULT = [
 ];
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
-function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
+function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti", style }) {
   const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
   return (
     <a
       href={data.publicUrl}
       target="_blank"
       rel="noreferrer"
-      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline" }}
+      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", ...style }}
     >
       {etichetta}
     </a>
