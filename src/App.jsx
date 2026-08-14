@@ -3851,6 +3851,12 @@ function SezioneDateCorsi({
   const setVistaDateTab = setVistaDateTabInterna;
   const setVistaDateModo = setVistaDateModoInterno;
   const isMobile = useIsMobile();
+  // riga filtri su mobile: un unico font per tutti i pulsanti, ridotto
+  // quel tanto che basta perché stiano tutti su una sola riga senza
+  // troncare (vedi useFontRigaAdattato). Il "segnale" fa ricalcolare
+  // quando cambiano le etichette (filtro attivo o numero di opzioni).
+  const segnaleFiltri = `${isMobile}|${filtroCorsoHome}|${filtroCittaHome}|${filtroMasterHome}|${corsi.length}|${location.length}|${(master || []).length}`;
+  const { ref: rigaFiltriRef, fontSize: fontFiltri } = useFontRigaAdattato(isMobile, segnaleFiltri, 13, 7);
   useEffect(() => {
     if (!registraInterceptaIndietro || nascondiControlli) return;
     if (vistaDateModo === "calendario") { registraInterceptaIndietro(() => setVistaDateModo("elenco")); return () => registraInterceptaIndietro(null); }
@@ -3933,8 +3939,8 @@ function SezioneDateCorsi({
         </>
       )}
       <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-        <FiltroPill
+      <div ref={rigaFiltriRef} style={{ display: "flex", gap: isMobile ? 5 : 6, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { fontSize: fontFiltri } : {}) }}>
+        <FiltroPill compatto={isMobile}
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
           valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
           aperto={apriFiltroCorsoHome} selectRef={selectFiltroCorsoHomeRef}
@@ -3942,7 +3948,7 @@ function SezioneDateCorsi({
           onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
           onBlur={() => setApriFiltroCorsoHome(false)}
         />
-        <FiltroPill
+        <FiltroPill compatto={isMobile}
           etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
           valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
           aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
@@ -3950,7 +3956,7 @@ function SezioneDateCorsi({
           onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
           onBlur={() => setApriFiltroCittaHome(false)}
         />
-        <FiltroPill
+        <FiltroPill compatto={isMobile}
           etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
           valore={filtroMasterHome} etichettaAttiva={master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase()}
           aperto={apriFiltroMasterHome} selectRef={selectFiltroMasterHomeRef}
@@ -3960,13 +3966,13 @@ function SezioneDateCorsi({
         />
         <button
           onClick={() => setCronologicoHome((v) => !v)}
-          style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer" }}
+          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
         >
           Cronologico
         </button>
         <button
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-          style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}
+          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
         >
           Reset filtri
         </button>
@@ -10676,6 +10682,36 @@ function useFontAdattato(testo, fontSizeBase, fontSizeMin = 9) {
   }, [testo, fontSizeBase, fontSizeMin]);
   return { ref, fontSize };
 }
+// come useFontAdattato ma per un'INTERA RIGA di pulsanti: riduce un unico
+// font (ereditato da tutti i figli) finché la riga sta su una sola linea,
+// così tutti i pulsanti restano della stessa dimensione e nessun testo va
+// a capo o viene troncato. Usato dalla riga filtri di "Gestione corsi" su
+// mobile; su desktop (attivo=false) non fa nulla e i pulsanti restano alla
+// loro dimensione normale.
+function useFontRigaAdattato(attivo, segnale, fontSizeBase = 13, fontSizeMin = 7) {
+  const ref = React.useRef(null);
+  const [fontSize, setFontSize] = useState(fontSizeBase);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || !attivo) { setFontSize(fontSizeBase); return; }
+    function adatta() {
+      let dim = fontSizeBase;
+      el.style.fontSize = `${dim}px`;
+      while (el.scrollWidth > el.clientWidth + 0.5 && dim > fontSizeMin) {
+        dim -= 0.5;
+        el.style.fontSize = `${dim}px`;
+      }
+      setFontSize(dim);
+    }
+    adatta();
+    const osservatore = new ResizeObserver(adatta);
+    osservatore.observe(el);
+    return () => osservatore.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attivo, segnale, fontSizeBase, fontSizeMin]);
+  return { ref, fontSize };
+}
+
 function EtichettaAdattiva({ testo, fontSizeBase = 13, fontSizeMin = 8 }) {
   const { ref, fontSize } = useFontAdattato(testo, fontSizeBase, fontSizeMin);
   return (
@@ -10720,19 +10756,21 @@ function CampoRicerca({ value, onChange, placeholder, style }) {
 // altrimenti contornato; al click apre sotto di sé un <select> nativo
 // con l'elenco delle opzioni. Usato per i filtri corso/città/master
 // sia in Home che in Gestione date
-function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota }) {
+function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota, compatto }) {
   return (
-    <div style={{ position: "relative", flex: "1 1 0", minWidth: 0, display: "flex" }}>
+    <div style={{ position: "relative", flex: compatto ? "0 0 auto" : "1 1 0", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
         style={{
-          ...fontBody, fontWeight: 600, padding: "10px 10px", borderRadius: 20,
+          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : undefined, padding: compatto ? "7px 10px" : "10px 10px", borderRadius: 20,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          overflow: "hidden", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", width: compatto ? "auto" : "100%", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />
+        {compatto
+          ? <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{valore ? etichettaAttiva : etichetta}</span>
+          : <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />}
       </button>
       {aperto && (
         <select
