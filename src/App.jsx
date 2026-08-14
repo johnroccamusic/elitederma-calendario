@@ -1074,17 +1074,20 @@ function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
   return `polygon(${punti.join(", ")})`;
 }
 
-// riempimento proporzionale (sinistra→destra) di quanto un corso è pieno,
-// mostrato SOLO nella cella dell'ultimo giorno (o su tutta la barra, se il
-// corso dura un giorno solo): sostituisce la vecchia stellina dorata con
-// l'ultimo numero di frazione
+// niente tinte tenui né riempimenti orizzontali: il resto della barra è
+// SEMPRE a tinta piena. Solo nel riquadro dell'ultimo giorno, un pezzetto
+// largo 1/5 della cella (ancorato in basso a destra) cresce in verticale
+// via via che si iscrivono allievi — a corso vuoto (0 iscritti) quel
+// pezzetto ha altezza zero e semplicemente non si vede, a corso pieno
+// arriva alla stessa altezza del resto della barra e si fonde con essa.
+// Sostituisce la vecchia stellina dorata con l'ultimo numero di frazione.
 function riempimentoOccupancy(occupancy, coloreCorso) {
   if (occupancy == null) return null;
   return (
     <div
       style={{
-        position: "absolute", left: 0, top: 0, bottom: 0, width: `${occupancy}%`,
-        background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "width 250ms ease",
+        position: "absolute", right: 0, bottom: 0, width: "20%", height: `${occupancy}%`,
+        background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
       }}
     />
   );
@@ -11410,11 +11413,12 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       marginLeft: continuaPrima ? 0 : 3,
                       marginRight: continuaDopo ? 0 : 3,
                       height: LANE_H - 4,
-                      // niente bordo/contorno: solo il colore tenue di
-                      // sfondo. Il riempimento proporzionale (quanto il
-                      // corso è pieno) si vede nella cella dell'ultimo
-                      // giorno, vedi contenutoBarraCalendario/riempimentoOccupancy
-                      background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
+                      // niente bordo/contorno, niente tinte tenui: la barra
+                      // resta sempre a tinta piena. Il riempimento
+                      // progressivo (quanto il corso è pieno) è un pezzetto
+                      // verticale confinato alla cella dell'ultimo giorno,
+                      // vedi contenutoBarraCalendario/riempimentoOccupancy
+                      background: coloreCorso,
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       overflow: "hidden",
