@@ -237,6 +237,21 @@ function useIsMobile(breakpoint = 700) {
   return isMobile;
 }
 
+// vero quando lo schermo è in verticale (portrait): usato per decidere se
+// una tabella molto larga va spezzata in schede a due colonne (telefono in
+// verticale, tutto leggibile) oppure può restare su una riga sola (telefono
+// in orizzontale, dove c'è più larghezza)
+function useIsPortrait() {
+  const [portrait, setPortrait] = useState(() => (typeof window === "undefined" ? true : window.innerHeight >= window.innerWidth));
+  useEffect(() => {
+    function aggiorna() { setPortrait(window.innerHeight >= window.innerWidth); }
+    window.addEventListener("resize", aggiorna);
+    window.addEventListener("orientationchange", aggiorna);
+    return () => { window.removeEventListener("resize", aggiorna); window.removeEventListener("orientationchange", aggiorna); };
+  }, []);
+  return portrait;
+}
+
 function fmtData(d) {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
@@ -1472,7 +1487,8 @@ function PannelloTarget({ t, avanzamento }) {
   const d = datiPrincipaliTarget(t, avanzamento);
   const formatta = (n) => {
     if (n == null) return "—";
-    if (d.unita === "€") return fmtEuroErp2(n);
+    // importi target sempre a numero intero, senza decimali dopo la virgola
+    if (d.unita === "€") return fmtEuroErp(n);
     if (d.unita === "punti") return `${Math.round(n)} pt`;
     if (d.unita === "pz") return `${n} pz`;
     return `${n}`;
@@ -3219,6 +3235,11 @@ function trovaIscrittoStessaPersona(iscritti, personaRif, corsoDataId) {
 // riga per riga: non serve più aprire la scheda dell'iscritto
 function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, onApriSchedeAffiancate, ricarica, onBack }) {
   const isMobile = useIsMobile();
+  const isPortrait = useIsPortrait();
+  // telefono in verticale: la tabella (tante colonne) diventa illeggibile,
+  // quindi ogni pagamento si mostra come scheda con i campi disposti su due
+  // colonne. In orizzontale (o su desktop) resta la tabella su una riga.
+  const schedaVerticale = isMobile && isPortrait;
   const [tab, setTab] = useState("attesa"); // attesa | verificati
   const [approvandoId, setApprovandoId] = useState(null);
   const [modificaAcconto, setModificaAcconto] = useState(null); // riga acconti_da_verificare in modifica, o null
@@ -3277,10 +3298,79 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
         const chiaviData = Array.from(new Set(righe.map((a) => (a.ts || "").slice(0, 10)).filter(Boolean))).sort((a, b) => b.localeCompare(a));
         const gruppoStyle = { ...fontDisplay, fontSize: 10, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.2 };
 
+        // la stessa persona può risultare iscritta a più date ("Associa altri
+        // corsi"): ogni corso associato si ritrova per nome+cognome
+        const calcolaCoinvolti = (a) => {
+          const iscrittoPrincipale = iscrittoById[a.iscritto_id];
+          return [
+            { iscritto: iscrittoPrincipale, corsoDataId: iscrittoPrincipale?.corso_data_id },
+            ...((a.corsi_extra_ids || []).map((cdId) => ({ iscritto: trovaIscrittoStessaPersona(iscritti, iscrittoPrincipale, cdId), corsoDataId: cdId }))),
+          ].map(({ iscritto, corsoDataId }) => {
+            const cd = corsoDataId ? cdById[corsoDataId] : null;
+            const corso = cd ? corsoById[cd.corso_id] : null;
+            const loc = cd ? locById[cd.location_id] : null;
+            return { iscritto, cd, corso, loc };
+          });
+        };
+
+        const azioniRiga = (a) => tab === "attesa" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <button onClick={() => approva(a)} disabled={approvandoId === a.id} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 24, padding: "12px 28px", cursor: approvandoId === a.id ? "default" : "pointer" }}>
+              {approvandoId === a.id ? "…" : "Approva"}
+            </button>
+            <button onClick={() => setModificaAcconto(a)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", color: NAVY, padding: 10, borderRadius: 12, display: "flex", alignItems: "center" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
+            </button>
+            <button onClick={() => eliminaAcconto(a)} title="Elimina" style={{ border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", color: "#C0392B", padding: 10, borderRadius: 12, display: "flex", alignItems: "center" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+            </button>
+          </div>
+        );
+
         const tabellaGiorno = (righeGiorno) => {
           const gruppi = Object.keys(TITOLO_GRUPPO_ORIGINE)
             .map((origine) => ({ origine, righe: righeGiorno.filter((a) => (a.origine || "manuale") === origine) }))
             .filter((g) => g.righe.length > 0);
+
+          // telefono in verticale: ogni pagamento diventa una scheda con i
+          // campi su due colonne, così niente resta tagliato
+          if (schedaVerticale) {
+            const campoCard = (label, valore, full) => (
+              <div style={{ gridColumn: full ? "1 / -1" : "auto", minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 2 }}>{label}</div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, wordBreak: "break-word" }}>{valore}</div>
+              </div>
+            );
+            const valoreCoinvolti = (coinvolti, render) => coinvolti.map((co, i) => (
+              <div key={i} onClick={() => co.iscritto && onApriIscritto?.(co.iscritto)} style={{ cursor: co.iscritto ? "pointer" : undefined, marginTop: i === 0 ? 0 : 2 }}>{render(co)}</div>
+            ));
+            return (
+              <div>
+                {gruppi.map((g) => g.righe.map((a) => {
+                  const coinvolti = calcolaCoinvolti(a);
+                  return (
+                    <div key={a.id} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10 }}>
+                      <div style={{ ...gruppoStyle, marginBottom: 8 }}>{TITOLO_GRUPPO_ORIGINE[g.origine]}</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "9px 12px" }}>
+                        {campoCard("Allievo", valoreCoinvolti(coinvolti, (co) => (co.iscritto ? <b>{co.iscritto.nome} {co.iscritto.cognome}</b> : "—")))}
+                        {campoCard("Venditore", a.venditore_nome || "—")}
+                        {campoCard("Città", valoreCoinvolti(coinvolti, (co) => co.loc?.nome?.toUpperCase() || "?"))}
+                        {campoCard("Corso", valoreCoinvolti(coinvolti, (co) => co.corso?.nome?.toUpperCase() || "?"))}
+                        {campoCard("Data corso", valoreCoinvolti(coinvolti, (co) => (co.cd ? fmtDataCompatta(co.cd.data_inizio, co.cd.data_fine) : "—")))}
+                        {campoCard("Data pag.", a.data_pagamento ? fmtData(a.data_pagamento) : "—")}
+                        {campoCard("Importo", a.importo != null ? fmtEuroErp(a.importo) : "—")}
+                        {campoCard("Metodo", a.metodo || "—")}
+                        {campoCard("Nota", a.nota || "—", true)}
+                        {campoCard("File", a.file_path ? <AllegatoLink percorso={a.file_path} etichetta="apri il file" style={{ fontSize: 15, fontWeight: 600, display: "inline-block", padding: "4px 0" }} /> : "—", true)}
+                      </div>
+                      {tab === "attesa" && <div style={{ marginTop: 12 }}>{azioniRiga(a)}</div>}
+                    </div>
+                  );
+                }))}
+              </div>
+            );
+          }
+
           return (
             <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
               <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
@@ -3302,19 +3392,7 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 </thead>
                 <tbody>
                   {gruppi.map((g) => g.righe.map((a, idx) => {
-                  const iscrittoPrincipale = iscrittoById[a.iscritto_id];
-                  // ogni corso associato ("Associa altri corsi") è la
-                  // stessa persona iscritta a un'altra data: si ritrova per
-                  // nome+cognome nell'elenco iscritti di quel corso
-                  const coinvolti = [
-                    { iscritto: iscrittoPrincipale, corsoDataId: iscrittoPrincipale?.corso_data_id },
-                    ...((a.corsi_extra_ids || []).map((cdId) => ({ iscritto: trovaIscrittoStessaPersona(iscritti, iscrittoPrincipale, cdId), corsoDataId: cdId }))),
-                  ].map(({ iscritto, corsoDataId }) => {
-                    const cd = corsoDataId ? cdById[corsoDataId] : null;
-                    const corso = cd ? corsoById[cd.corso_id] : null;
-                    const loc = cd ? locById[cd.location_id] : null;
-                    return { iscritto, cd, corso, loc };
-                  });
+                  const coinvolti = calcolaCoinvolti(a);
                   const celStackStyle = { ...celStyle, ...fontBody, fontSize: 10, color: NAVY };
                   return (
                     <tr key={a.id}>
@@ -4464,44 +4542,44 @@ function PaginaDashboardVenditori({
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Scegli un venditore per vedere le sue chiusure e commissioni.</div>
         ) : (
           <>
-            <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
+            <div style={{ display: "flex", flexDirection: "row", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, marginBottom: 20, overflow: "hidden" }}>
               <button
                 onClick={() => setTabDashboardVenditore("performance")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaFrecciaTrend size={24} color={GOLD} />
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaFrecciaTrend size={isMobile ? 20 : 24} color={GOLD} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "performance" ? NAVY : MUTED }}>Performance di vendita</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Chiusure e commissioni</div>}
                 </div>
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("corsi")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", borderRight: isMobile ? "none" : `1px solid ${CREAM_BORDER}`, borderBottom: isMobile ? `1px solid ${CREAM_BORDER}` : "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", borderRight: `1px solid ${CREAM_BORDER}`, cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaPersonaAggiungi size={24} color={GOLD} />
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaPersonaAggiungi size={isMobile ? 20 : 24} color={GOLD} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
-                    <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: isMobile ? "center" : "flex-start", flexDirection: isMobile ? "column" : "row", gap: isMobile ? 4 : 8 }}>
+                    <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "corsi" ? NAVY : MUTED }}>Iscrivi Allievo</div>
+                    <span style={{ ...fontBody, fontSize: isMobile ? 11 : 12, fontWeight: 600, color: NAVY, background: BG, borderRadius: 20, padding: "2px 10px", whiteSpace: "nowrap" }}>{numeroDateProgrammazione} date</span>
                   </div>
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2, fontStyle: "italic" }}>Tutti i corsi in programmazione</div>}
                 </div>
               </button>
               <button
                 onClick={() => setTabDashboardVenditore("iscrizioni")}
-                style={{ flex: 1, textAlign: "left", background: "none", border: "none", cursor: "pointer", padding: "20px 22px", display: "flex", alignItems: "center", gap: 16 }}
+                style={{ flex: 1, minWidth: 0, textAlign: isMobile ? "center" : "left", background: "none", border: "none", cursor: "pointer", padding: isMobile ? "14px 6px" : "20px 22px", display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: "center", gap: isMobile ? 8 : 16 }}
               >
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <IconaLaureaErp size={24} color={GOLD} />
+                <div style={{ width: isMobile ? 44 : 52, height: isMobile ? 44 : 52, borderRadius: "50%", background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaLaureaErp size={isMobile ? 20 : 24} color={GOLD} />
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
-                  <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>
+                  <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 16, fontWeight: 700, lineHeight: isMobile ? 1.15 : undefined, color: tabDashboardVenditore === "iscrizioni" ? NAVY : MUTED }}>Le tue iscrizioni</div>
+                  {!isMobile && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Gli allievi che hai iscritto</div>}
                 </div>
               </button>
             </div>
@@ -6528,26 +6606,27 @@ function etichettaSlot(s) {
 
 // card statistica in cima alla Dashboard modelle: cliccabile quando passa
 // onClick (le due centrali aprono le liste di slot corrispondenti)
-function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo, icona, onClick }) {
+function CardStatisticaModelle({ etichetta, valore, sottotitolo, colore, sfondo, icona, onClick, compatto }) {
   return (
     <button
       onClick={onClick}
       disabled={!onClick}
       style={{
-        ...fontBody, textAlign: "left", flex: "1 1 200px", display: "flex", alignItems: "center", gap: 14,
+        ...fontBody, textAlign: compatto ? "center" : "left", flex: compatto ? "1 1 0" : "1 1 200px", minWidth: 0,
+        display: "flex", flexDirection: compatto ? "column" : "row", alignItems: "center", gap: compatto ? 5 : 14,
         background: sfondo || "#fff", border: `1px solid ${sfondo ? "transparent" : CREAM_BORDER}`, borderRadius: 14,
-        padding: 18, cursor: onClick ? "pointer" : "default",
+        padding: compatto ? "12px 5px" : 18, cursor: onClick ? "pointer" : "default",
       }}
     >
       {icona && (
-        <span style={{ width: 42, height: 42, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <span style={{ width: compatto ? 32 : 42, height: compatto ? 32 : 42, borderRadius: "50%", background: colore ? `${colore}22` : "#F1ECDF", color: colore || NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           {icona}
         </span>
       )}
-      <span>
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 2 }}>{etichetta}</div>
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
-        {sottotitolo && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>{sottotitolo}</div>}
+      <span style={{ minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: compatto ? 10 : 13, color: MUTED, marginBottom: 2, lineHeight: compatto ? 1.15 : undefined }}>{etichetta}</div>
+        <div style={{ ...fontDisplay, fontSize: compatto ? 22 : 26, fontWeight: 700, color: colore || NAVY, lineHeight: 1 }}>{valore}</div>
+        {sottotitolo && <div style={{ ...fontBody, fontSize: compatto ? 9.5 : 12, color: MUTED, marginTop: 3, lineHeight: compatto ? 1.1 : undefined }}>{sottotitolo}</div>}
       </span>
     </button>
   );
@@ -6584,27 +6663,52 @@ function AlertScadenzeModelle({ numeroSlot, numeroCorsi, giorni }) {
 // (colore in base all'urgenza), città+data, corso, master, tipologie
 // richieste e i tre numeri richieste/assegnate/da trovare
 function RigaPrioritaModelle({ edizione, onApri }) {
+  const isMobile = useIsMobile();
   const g = edizione.giorniAOggi;
   const urgenza = g <= 3 ? { bg: "#FDECEC", fg: "#C0392B" } : g <= 7 ? { bg: "#FFF3E0", fg: "#B9770E" } : { bg: "#F1ECDF", fg: NAVY };
   const testoGiorni = g < 0 ? "IN CORSO" : g === 0 ? "OGGI" : g === 1 ? "DOMANI" : `TRA ${g} GIORNI`;
+  const badgeGiorni = <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", whiteSpace: "nowrap" }}>{testoGiorni}</span>;
+  const badgesTipologie = Object.entries(edizione.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />);
+  const numero = (v, c, lab) => <div><div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c }}>{v}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{lab}</div></div>;
+
+  // su mobile la riga (troppo larga per stare in orizzontale) si impagina in
+  // verticale, così niente resta tagliato e i badge vanno a capo da soli
+  if (isMobile) {
+    return (
+      <div onClick={onApri} style={{ padding: "14px 2px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+          {badgeGiorni}
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</span>
+          <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</span>
+        </div>
+        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
+        {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{badgesTipologie}</div>
+        <div style={{ display: "flex", gap: 24, marginTop: 12, textAlign: "center" }}>
+          {numero(edizione.richieste, NAVY, "richieste")}
+          {numero(edizione.assegnate, "#2E7D32", "assegnate")}
+          {numero(edizione.daTrovare, "#C0392B", "da trovare")}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div onClick={onApri} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
       <div style={{ width: 100, flexShrink: 0 }}>
-        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", marginBottom: 6 }}>{testoGiorni}</span>
+        <span style={{ marginBottom: 6, display: "inline-block" }}>{badgeGiorni}</span>
         <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</div>
         <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</div>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
         {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {Object.entries(edizione.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}
-        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{badgesTipologie}</div>
       </div>
       <div style={{ display: "flex", gap: 18, flexShrink: 0, textAlign: "center" }}>
-        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{edizione.richieste}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>richieste</div></div>
-        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#2E7D32" }}>{edizione.assegnate}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>assegnate</div></div>
-        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#C0392B" }}>{edizione.daTrovare}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>da trovare</div></div>
+        {numero(edizione.richieste, NAVY, "richieste")}
+        {numero(edizione.assegnate, "#2E7D32", "assegnate")}
+        {numero(edizione.daTrovare, "#C0392B", "da trovare")}
       </div>
       <IconaFrecciaSinistra size={16} color={MUTED} />
     </div>
@@ -6843,6 +6947,7 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
 // dashboard "Fabbisogno, scadenze e assegnazioni": card riepilogo, filtri,
 // priorità prossimi 15 giorni, riepilogo per città, tabella completa
 function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, apriDataModelle }) {
+  const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const [ricerca, setRicerca] = useState("");
   const [filtroCitta, setFiltroCitta] = useState("");
@@ -6950,22 +7055,22 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
     <div>
       <AlertScadenzeModelle numeroSlot={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)} numeroCorsi={edizioniPrioritarie.length} giorni={scadenzaGiorni} />
 
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
-        <CardStatisticaModelle
+      <div style={{ display: "flex", gap: isMobile ? 6 : 14, flexWrap: isMobile ? "nowrap" : "wrap", marginBottom: 18 }}>
+        <CardStatisticaModelle compatto={isMobile}
           etichetta="Modelle richieste" valore={totaleRichieste} sottotitolo={`su ${corsiDistinti} cors${corsiDistinti === 1 ? "o" : "i"}`}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>}
         />
-        <CardStatisticaModelle
+        <CardStatisticaModelle compatto={isMobile}
           etichetta={`In scadenza entro ${scadenzaGiorni} gg`} valore={edizioniPrioritarie.reduce((s, e) => s + e.daTrovare, 0)}
           sottotitolo={`${edizioniPrioritarie.length} cors${edizioniPrioritarie.length === 1 ? "o prioritario" : "i prioritari"}`}
           colore="#C0392B" sfondo="#FDF3D9"
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>}
         />
-        <CardStatisticaModelle
+        <CardStatisticaModelle compatto={isMobile}
           etichetta="Già assegnate" valore={totaleAssegnate} colore="#2E7D32" onClick={() => setModaleAssegnate(true)}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
         />
-        <CardStatisticaModelle
+        <CardStatisticaModelle compatto={isMobile}
           etichetta="Ancora da trovare" valore={totaleDaTrovare} colore="#C0392B" onClick={() => setModaleDaTrovare(true)}
           icona={<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /></svg>}
         />
@@ -6993,9 +7098,9 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </select>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
             <div>
               <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
               <div style={subStyle}>In ordine di urgenza</div>
@@ -7010,7 +7115,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </div>
 
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
             <div>
               <div style={{ ...hStyle, marginBottom: 0 }}>Priorità prossimi 60 giorni</div>
               <div style={subStyle}>In ordine di urgenza</div>
@@ -7025,10 +7130,34 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
         <div style={cardStyle}>
           <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
           <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
+          {isMobile ? (
+            <div style={{ marginTop: 8 }}>
+              {edizioniPerMese.map((gruppo) => (
+                <div key={gruppo.chiave} style={{ marginBottom: 6 }}>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, background: BG, padding: "7px 10px", borderRadius: 6, marginBottom: 6 }}>{gruppo.etichetta}</div>
+                  {gruppo.edizioni.map((e) => (
+                    <div key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "10px 2px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 2 }}>
+                        <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{e.cittaNome.toUpperCase()}</span>
+                        <span style={{ ...fontBody, fontSize: 12, color: MUTED, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</span>
+                      </div>
+                      <div style={{ ...fontBody, fontSize: 14, color: NAVY, marginBottom: 6 }}>{toTitleCase(e.corsoNome)}</div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>{Object.entries(e.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}</div>
+                      <div style={{ display: "flex", gap: 20, ...fontBody, fontSize: 12 }}>
+                        <span style={{ color: MUTED }}>Richieste <b style={{ color: NAVY, fontSize: 14 }}>{e.richieste}</b></span>
+                        <span style={{ color: MUTED }}>Da trovare <b style={{ color: e.daTrovare > 0 ? "#C0392B" : "#2E7D32", fontSize: 14 }}>{e.daTrovare}</b></span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
+            </div>
+          ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
               <thead>
@@ -7065,6 +7194,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
             </table>
             {edizioniFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessun corso trovato con questi filtri.</div>}
           </div>
+          )}
         </div>
 
         <div style={cardStyle}>
@@ -12182,14 +12312,14 @@ const RIGHE_SISTEMA_DEFAULT = [
 ];
 
 // link cliccabile a un allegato caricato nello storage "allegati-iscritti"
-function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti" }) {
+function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti", style }) {
   const { data } = supabase.storage.from(bucket).getPublicUrl(percorso);
   return (
     <a
       href={data.publicUrl}
       target="_blank"
       rel="noreferrer"
-      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline" }}
+      style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", ...style }}
     >
       {etichetta}
     </a>
