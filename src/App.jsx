@@ -1078,22 +1078,29 @@ function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
   return `polygon(${punti.join(", ")})`;
 }
 
-// niente tinte tenui né riempimenti orizzontali: il resto della barra è
-// SEMPRE a tinta piena. Solo nel riquadro dell'ultimo giorno, un pezzetto
-// largo 1/5 della cella (ancorato in basso a destra) cresce in verticale
-// via via che si iscrivono allievi — a corso vuoto (0 iscritti) quel
-// pezzetto ha altezza zero e semplicemente non si vede, a corso pieno
-// arriva alla stessa altezza del resto della barra e si fonde con essa.
-// Sostituisce la vecchia stellina dorata con l'ultimo numero di frazione.
-function riempimentoOccupancy(occupancy, coloreCorso) {
-  if (occupancy == null) return null;
+// sfondo di una cella della barra calendario. Le celle normali sono a
+// tinta piena su tutto lo spazio. La cella dell'ultimo giorno, quando si
+// conosce l'occupancy, si spezza in due: l'80% di sinistra resta a tinta
+// piena fissa, il 20% di destra è il "misuratore" — ancorato in basso,
+// alto quanto l'occupancy (0% = non si vede proprio, il pezzo sopra resta
+// scoperto e lascia intravedere la casella del giorno sotto; 100% = si
+// fonde con l'80% e la cella torna a sembrare piena). Niente tinte tenui
+// né riempimenti orizzontali: sostituisce la vecchia stellina dorata con
+// l'ultimo numero di frazione.
+function sfondoCella(occupancy, coloreCorso, ultimoGiorno) {
+  if (!ultimoGiorno || occupancy == null) {
+    return <div style={{ position: "absolute", inset: 0, background: coloreCorso, pointerEvents: "none", zIndex: 0 }} />;
+  }
   return (
-    <div
-      style={{
-        position: "absolute", right: 0, bottom: 0, width: "20%", height: `${occupancy}%`,
-        background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
-      }}
-    />
+    <>
+      <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: "80%", background: coloreCorso, pointerEvents: "none", zIndex: 0 }} />
+      <div
+        style={{
+          position: "absolute", right: 0, bottom: 0, width: "20%", height: `${occupancy}%`,
+          background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
+        }}
+      />
+    </>
   );
 }
 
@@ -1110,7 +1117,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
       // su due righe (il nome intero, non troncato) che tagliarlo con "..."
       return (
         <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
-          {riempimentoOccupancy(occupancy, coloreCorso)}
+          {sfondoCella(occupancy, coloreCorso, true)}
           <span
             style={{
               position: "relative", zIndex: 1,
@@ -1127,7 +1134,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
     }
     return (
       <div style={{ position: "relative", height: "100%", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
-        {riempimentoOccupancy(occupancy, coloreCorso)}
+        {sfondoCella(occupancy, coloreCorso, true)}
         <span style={{ position: "relative", zIndex: 1, ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", height: "100%", display: "flex", alignItems: "center" }}>
           {etichetta}
         </span>
@@ -1174,7 +1181,7 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             boxSizing: "border-box",
           }}
         >
-          {ultimoGiorno && riempimentoOccupancy(occupancy, coloreCorso)}
+          {sfondoCella(occupancy, coloreCorso, ultimoGiorno)}
           {i === 0 && (
             isMobile ? (
               <span
@@ -11417,12 +11424,12 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       marginLeft: continuaPrima ? 0 : 3,
                       marginRight: continuaDopo ? 0 : 3,
                       height: LANE_H - 4,
-                      // niente bordo/contorno, niente tinte tenui: la barra
-                      // resta sempre a tinta piena. Il riempimento
-                      // progressivo (quanto il corso è pieno) è un pezzetto
-                      // verticale confinato alla cella dell'ultimo giorno,
-                      // vedi contenutoBarraCalendario/riempimentoOccupancy
-                      background: coloreCorso,
+                      // niente bordo/contorno: lo sfondo (tinta piena, e il
+                      // pezzetto verticale che cresce nella cella
+                      // dell'ultimo giorno) è disegnato cella per cella da
+                      // contenutoBarraCalendario/sfondoCella, non qui —
+                      // altrimenti la cella dell'ultimo giorno non potrebbe
+                      // mai restare "scoperta" sopra il pezzetto
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
                       overflow: "hidden",
