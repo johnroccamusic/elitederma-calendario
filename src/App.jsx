@@ -3924,9 +3924,9 @@ function SezioneDateCorsi({
               <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
               <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
               <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
-                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 22 : 30, height: isMobile ? 26 : 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
+                <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
                 <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
-                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: isMobile ? 13 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 22 : 30, height: isMobile ? 26 : 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
+                <button onClick={() => cambiaFontScale(0.1)} title="Ingrandisci il testo nelle barre del calendario" disabled={fontScale >= 1.4} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale >= 1.4 ? "default" : "pointer", opacity: fontScale >= 1.4 ? 0.4 : 1 }}>+</button>
               </div>
             </div>
           </div>
