@@ -1074,20 +1074,39 @@ function clipPathBarra(continuaPrima, continuaDopo, altezzaPx) {
   return `polygon(${punti.join(", ")})`;
 }
 
+// riempimento proporzionale (sinistra→destra) di quanto un corso è pieno,
+// mostrato SOLO nella cella dell'ultimo giorno (o su tutta la barra, se il
+// corso dura un giorno solo): sostituisce la vecchia stellina dorata con
+// l'ultimo numero di frazione
+function riempimentoOccupancy(occupancy, coloreCorso) {
+  if (occupancy == null) return null;
+  return (
+    <div
+      style={{
+        position: "absolute", left: 0, top: 0, bottom: 0, width: `${occupancy}%`,
+        background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "width 250ms ease",
+      }}
+    />
+  );
+}
+
 // contenuto di una barra evento nel calendario: per un corso di più giorni
 // mostra, sopra ogni singolo giorno che attraversa in questa riga, il
-// numero di frazione "giorno/totale" (es. 3/6); il nome del corso resta
-// visibile solo all'inizio del segmento
-function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun, isMobile, fontScaleBarre = 1 }) {
+// numero di frazione "giorno/totale" (es. 3/6, tranne l'ultimo giorno, dove
+// il riempimento sostituisce il numero); il nome del corso resta visibile
+// solo all'inizio del segmento
+function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontSizeBadge, gap, inset, continuaPrima, continuaDopo, coneRun, isMobile, fontScaleBarre = 1, occupancy, coloreCorso }) {
   if (giorniTotali <= 1) {
     if (isMobile) {
       // da cellulare la colonna del giorno è troppo stretta perché il nome
       // stia su una riga sola anche riducendo il font: meglio andare a capo
       // su due righe (il nome intero, non troncato) che tagliarlo con "..."
       return (
-        <div style={{ height: "100%", display: "flex", alignItems: "center", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
+        <div style={{ position: "relative", height: "100%", display: "flex", alignItems: "center", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
+          {riempimentoOccupancy(occupancy, coloreCorso)}
           <span
             style={{
+              position: "relative", zIndex: 1,
               ...fontCondensato,
               display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
@@ -1100,12 +1119,19 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
       );
     }
     return (
-      <span style={{ ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: `0 ${inset}px`, height: "100%", display: "flex", alignItems: "center", boxSizing: "border-box" }}>
-        {etichetta}
-      </span>
+      <div style={{ position: "relative", height: "100%", padding: `0 ${inset}px`, boxSizing: "border-box" }}>
+        {riempimentoOccupancy(occupancy, coloreCorso)}
+        <span style={{ position: "relative", zIndex: 1, ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", height: "100%", display: "flex", alignItems: "center" }}>
+          {etichetta}
+        </span>
+      </div>
     );
   }
   const ultimo = indiciGiorno.length - 1;
+  // questa riga contiene davvero l'ultimo giorno del corso solo se non
+  // prosegue oltre (continuaDopo): se il corso continua nella settimana
+  // successiva, questa non è la cella giusta per il riempimento
+  const ultimaCellaEUltimoGiorno = !continuaDopo;
   return (
     // stesso numero di colonne E STESSO gap della griglia dei giorni sotto:
     // solo così ogni numero di frazione combacia esattamente con il giorno
@@ -1122,10 +1148,13 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
     // clip-path per tagliare l'angolo): così testo e numero restano nella
     // parte dritta della barra, senza entrare nel cono della freccia.
     <div style={{ display: "grid", gridTemplateColumns: `repeat(${indiciGiorno.length},1fr)`, gap, width: "100%", height: "100%", boxSizing: "border-box" }}>
-      {indiciGiorno.map((indice, i) => (
+      {indiciGiorno.map((indice, i) => {
+        const ultimoGiorno = i === ultimo && ultimaCellaEUltimoGiorno;
+        return (
         <div
           key={i}
           style={{
+            position: "relative",
             display: "flex", alignItems: "center", justifyContent: i === 0 ? "space-between" : "center", gap: 3, minWidth: 0, overflow: "hidden",
             // il rientro riservato al cono della freccia è sempre lo stesso,
             // sia che questo segmento prosegua davvero da/verso un'altra
@@ -1138,10 +1167,12 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
             boxSizing: "border-box",
           }}
         >
+          {ultimoGiorno && riempimentoOccupancy(occupancy, coloreCorso)}
           {i === 0 && (
             isMobile ? (
               <span
                 style={{
+                  position: "relative", zIndex: 1,
                   ...fontCondensato,
                   display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "normal", wordBreak: "break-word",
@@ -1151,17 +1182,17 @@ function contenutoBarraCalendario({ etichetta, giorniTotali, indiciGiorno, fontS
                 {etichetta}
               </span>
             ) : (
-              <span style={{ ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
+              <span style={{ position: "relative", zIndex: 1, ...fontCondensato, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{etichetta}</span>
             )
           )}
-          {indice != null && !(isMobile && i === 0) && (
-            <span style={{ ...fontBody, fontSize: fontSizeBadge, color: indice === giorniTotali ? GOLD : MUTED, flexShrink: 0, fontWeight: indice === giorniTotali ? 700 : 400, display: "inline-flex", alignItems: "center", gap: 2 }}>
-              {indice === giorniTotali && "★"}
+          {indice != null && !ultimoGiorno && !(isMobile && i === 0) && (
+            <span style={{ position: "relative", zIndex: 1, ...fontBody, fontSize: fontSizeBadge, color: MUTED, flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 2 }}>
               {indice}/{giorniTotali}
             </span>
           )}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -11380,9 +11411,9 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       marginRight: continuaDopo ? 0 : 3,
                       height: LANE_H - 4,
                       // niente bordo/contorno: solo il colore tenue di
-                      // sfondo, riempito dal basso col colore pieno via via
-                      // che si iscrivono allievi (vedi il div dell'occupancy
-                      // qui sotto)
+                      // sfondo. Il riempimento proporzionale (quanto il
+                      // corso è pieno) si vede nella cella dell'ultimo
+                      // giorno, vedi contenutoBarraCalendario/riempimentoOccupancy
                       background: occupancy != null ? coloreTenue(coloreCorso) : coloreCorso,
                       borderRadius: 4,
                       clipPath: clipPathBarra(continuaPrima, continuaDopo, LANE_H - 4),
@@ -11400,19 +11431,12 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       textOverflow: "ellipsis",
                     }}
                   >
-                    {occupancy != null && (
-                      <div
-                        style={{
-                          position: "absolute", left: 0, right: 0, bottom: 0, height: `${occupancy}%`,
-                          background: coloreCorso, pointerEvents: "none", zIndex: 0, transition: "height 250ms ease",
-                        }}
-                      />
-                    )}
                     <div style={{ position: "relative", zIndex: 1, height: "100%" }}>
                       {contenutoBarraCalendario({
                         etichetta: etichettaBarra(corso, loc, isMobile ? null : 10),
                         giorniTotali, indiciGiorno, fontSizeBadge: (isMobile ? 8 : 7) * fontScaleBarre, gap: GAP_GIORNO, inset: 6,
                         continuaPrima, continuaDopo, coneRun: runPuntaFreccia(LANE_H - 4), isMobile, fontScaleBarre,
+                        occupancy, coloreCorso,
                       })}
                     </div>
                     {evidenziata && onDragBarra && (
