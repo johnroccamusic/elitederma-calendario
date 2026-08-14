@@ -12141,6 +12141,7 @@ const TASTI_HOME = [
   { chiave: "generazioneloghi", etichetta: "Assegna logo" },
   { chiave: "gestionemodelle", etichetta: "Gestione modelle" },
   { chiave: "statistiche", etichetta: "Statistiche" },
+  { chiave: "crmallievi", etichetta: "CRM Allievi" },
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
 // Logistica prodotti: le 5 fasi di spedizione di un'edizione (in ordine)
@@ -18948,6 +18949,597 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica,
   );
 }
 
+// ---------- CRM Allievi ----------
+// "iscritti" è "una riga per ogni corso comprato", non un'anagrafica
+// persona (niente id stabile, niente email/città): questa chiave
+// normalizzata nome+cognome+telefono è il modo in cui il CRM riconosce
+// "stessa persona" per raggruppare più acquisti nella stessa riga, e per
+// abbinare/salvare l'arricchimento extra (email/città/regione) in
+// allievi_crm senza toccare iscritti né il modulo di iscrizione
+function chiaveAllievo(nome, cognome, telefono) {
+  const n = (nome || "").trim().toUpperCase();
+  const c = (cognome || "").trim().toUpperCase();
+  const t = (telefono || "").replace(/\D/g, "");
+  return `${n}|${c}|${t}`;
+}
+// raggruppa TUTTI gli iscritti (comprese le vecchie iscrizioni recuperate
+// a posteriori: qui contano come acquisto reale della persona, a
+// differenza delle "chiusure" venditore che le escludono per non
+// falsare l'attribuzione del periodo) per allievo, unendo i campi extra
+// da allievi_crm abbinati per la stessa chiave
+function costruisciAllieviCrm(iscritti, allieviCrm, corsi, corsiDate, location) {
+  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  const cdById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const crmByChiave = Object.fromEntries((allieviCrm || []).map((a) => [a.chiave, a]));
+
+  const gruppi = {};
+  (iscritti || []).forEach((i) => {
+    const chiave = chiaveAllievo(i.nome, i.cognome, i.telefono);
+    (gruppi[chiave] || (gruppi[chiave] = [])).push(i);
+  });
+
+  return Object.entries(gruppi).map(([chiave, righe]) => {
+    const ordinate = righe.slice().sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+    const ultima = ordinate[0];
+    const corsiMap = {};
+    const cittaCorsoSet = new Set();
+    let totaleSpeso = 0;
+    righe.forEach((r) => {
+      const cd = cdById[r.corso_data_id];
+      const corso = cd ? corsoById[cd.corso_id] : null;
+      const loc = cd ? locById[cd.location_id] : null;
+      if (corso && !corsiMap[corso.id]) corsiMap[corso.id] = corso;
+      if (loc?.nome) cittaCorsoSet.add(loc.nome);
+      totaleSpeso += r.totale_pattuito || 0;
+    });
+    const crm = crmByChiave[chiave];
+    const date = righe.map((r) => r.ts).filter(Boolean).sort();
+    return {
+      chiave,
+      nome: ultima.nome, cognome: ultima.cognome, telefono: ultima.telefono || "",
+      email: crm?.email || "", cittaProvenienza: crm?.citta_provenienza || "", regioneProvenienza: crm?.regione_provenienza || "", note: crm?.note || "",
+      corsi: Object.values(corsiMap),
+      cittaCorso: Array.from(cittaCorsoSet),
+      dataAcquisto: date.length ? date[date.length - 1] : null,
+      dataPrimoAcquisto: date.length ? date[0] : null,
+      totaleSpeso: round2(totaleSpeso),
+      righeIscritti: righe,
+    };
+  });
+}
+function esportaCsvCrmAllievi(righe) {
+  const intestazione = ["Allievo", "Email", "Telefono", "Città provenienza", "Regione provenienza", "Città corso frequentato", "Corsi acquistati", "Data acquisto"];
+  const righeCsv = righe.map((a) => [
+    `${a.nome} ${a.cognome}`, a.email, a.telefono, a.cittaProvenienza, a.regioneProvenienza,
+    a.cittaCorso.join("; "), a.corsi.map((c) => c.nome).join("; "), a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "",
+  ]);
+  const csv = [intestazione, ...righeCsv].map((r) => r.map((v) => `"${String(v || "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `crm-allievi-${dataOggiStr()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// scheda di dettaglio di un allievo CRM: sola lettura sui corsi
+// acquistati (vengono da iscritti, non si toccano da qui), editabile per
+// email/città-regione di provenienza/note (upsert su allievi_crm), con
+// link ai moduli di iscrizione originali per recuperare i dati mancanti
+// sui vecchi allievi
+function DettaglioAllievoCrm({ allievo, corsoById, locById, cdById, onClose, ricarica }) {
+  const [email, setEmail] = useState(allievo.email);
+  const [citta, setCitta] = useState(allievo.cittaProvenienza);
+  const [regione, setRegione] = useState(allievo.regioneProvenienza);
+  const [note, setNote] = useState(allievo.note);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function salva() {
+    setSalvando(true); setMsg("");
+    const { error } = await supabase.from("allievi_crm").upsert({
+      chiave: allievo.chiave,
+      email: email.trim() || null,
+      citta_provenienza: citta.trim() || null,
+      regione_provenienza: regione.trim() || null,
+      note: note.trim() || null,
+    }, { onConflict: "chiave" });
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Salvato.");
+    ricarica();
+  }
+
+  return (
+    <Modal title={`${toTitleCase(allievo.nome)} ${toTitleCase(allievo.cognome)}`} onClose={onClose} maxWidth={640}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>
+        {allievo.telefono || "telefono non registrato"} · {allievo.corsi.length} cors{allievo.corsi.length === 1 ? "o" : "i"} acquistat{allievo.corsi.length === 1 ? "o" : "i"} · {fmtEuroErp2(allievo.totaleSpeso)} spesi in totale
+      </div>
+
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Email">
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@esempio.it" style={inputStyle} />
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Città di provenienza">
+            <input value={citta} onChange={(e) => setCitta(e.target.value.toUpperCase())} placeholder="es. MILANO" style={{ ...inputStyle, textTransform: "uppercase" }} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Regione di provenienza">
+            <input value={regione} onChange={(e) => setRegione(e.target.value.toUpperCase())} placeholder="es. LOMBARDIA" style={{ ...inputStyle, textTransform: "uppercase" }} />
+          </Field>
+        </div>
+      </div>
+      <Field label="Note">
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} />
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginBottom: 10 }}>{msg}</div>}
+      <div style={{ display: "flex", gap: 8, marginBottom: 22 }}>
+        <Button onClick={salva} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.4 }}>Corsi acquistati</div>
+      {allievo.righeIscritti
+        .slice()
+        .sort((a, b) => (b.ts || "").localeCompare(a.ts || ""))
+        .map((r) => {
+          const cd = cdById[r.corso_data_id];
+          const corso = cd ? corsoById[cd.corso_id] : null;
+          const loc = cd ? locById[cd.location_id] : null;
+          return (
+            <div key={r.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13.5, color: NAVY, fontWeight: 700 }}>
+                <span>{corso?.nome ? toTitleCase(corso.nome) : "?"}</span>
+                <span>{r.totale_pattuito != null ? fmtEuroErp2(r.totale_pattuito) : "—"}</span>
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>
+                {loc?.nome ? toTitleCase(loc.nome) : "?"} · {cd ? fmtDataCompatta(cd.data_inizio, cd.data_fine) : "—"} · acquistato il {r.ts ? fmtData(r.ts.slice(0, 10)) : "—"}
+              </div>
+              {r.file_iscrizione && (
+                <div style={{ marginTop: 4 }}>
+                  <AllegatoLink percorso={r.file_iscrizione} etichetta="Apri il modulo di iscrizione originale" />
+                </div>
+              )}
+            </div>
+          );
+        })}
+    </Modal>
+  );
+}
+
+// "Nuovo allievo": crea direttamente una riga iscritti essenziale (non
+// passa dal modulo SchedaData, che resta intatto) + i campi extra su
+// allievi_crm — la persona compare subito in questa pagina e nella
+// scheda del corso scelto
+function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const corsiDateOrdinate = useMemo(
+    () => corsiDate.slice().sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || "")),
+    [corsiDate]
+  );
+  const [corsoDataId, setCorsoDataId] = useState("");
+  const [nome, setNome] = useState("");
+  const [cognome, setCognome] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [email, setEmail] = useState("");
+  const [citta, setCitta] = useState("");
+  const [regione, setRegione] = useState("");
+  const [totale, setTotale] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  async function salva() {
+    if (!corsoDataId) { setMsg("Scegli il corso acquistato."); return; }
+    if (!nome.trim() || !cognome.trim()) { setMsg("Nome e cognome sono obbligatori."); return; }
+    setSalvando(true); setMsg("");
+    const { error: erroreIscritto } = await supabase.from("iscritti").insert({
+      corso_data_id: corsoDataId,
+      nome: nome.trim().toUpperCase(),
+      cognome: cognome.trim().toUpperCase(),
+      telefono: telefono.trim() || null,
+      totale_pattuito: totale === "" ? null : parseNum(totale),
+    });
+    if (erroreIscritto) { setSalvando(false); setMsg("Errore: " + erroreIscritto.message); return; }
+    if (email.trim() || citta.trim() || regione.trim()) {
+      const { error: erroreCrm } = await supabase.from("allievi_crm").upsert({
+        chiave: chiaveAllievo(nome, cognome, telefono),
+        email: email.trim() || null,
+        citta_provenienza: citta.trim() || null,
+        regione_provenienza: regione.trim() || null,
+      }, { onConflict: "chiave" });
+      if (erroreCrm) { setSalvando(false); setMsg("Iscritto creato, ma errore nel salvare email/città: " + erroreCrm.message); return; }
+    }
+    setSalvando(false);
+    ricarica();
+    onClose();
+  }
+
+  return (
+    <Modal title="Nuovo allievo" onClose={onClose} maxWidth={520}>
+      <Field label="Corso acquistato">
+        <select style={inputStyle} value={corsoDataId} onChange={(e) => setCorsoDataId(e.target.value)}>
+          <option value="">— scegli l'edizione del corso —</option>
+          {corsiDateOrdinate.map((cd) => (
+            <option key={cd.id} value={cd.id}>
+              {corsoById[cd.corso_id]?.nome?.toUpperCase() || "?"} — {locById[cd.location_id]?.nome?.toUpperCase() || "?"} — {fmtDataCompatta(cd.data_inizio, cd.data_fine)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Nome">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nome} onChange={(e) => setNome(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Cognome">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={cognome} onChange={(e) => setCognome(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Telefono">
+            <input style={inputStyle} value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Email">
+            <input style={inputStyle} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@esempio.it" />
+          </Field>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Città di provenienza">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={citta} onChange={(e) => setCitta(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Regione di provenienza">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={regione} onChange={(e) => setRegione(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <Field label="Totale pattuito (€, opzionale)">
+        <input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} placeholder="0" />
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={salva} disabled={salvando}>{salvando ? "Salvo…" : "Crea allievo"}</Button>
+    </Modal>
+  );
+}
+
+// pagina "CRM / Allievi": anagrafica di tutte le persone che hanno
+// acquistato almeno un corso, costruita raggruppando "iscritti" (vedi
+// costruisciAllieviCrm) — nessuna query server-side, nessuna
+// paginazione: stesso stile del resto dell'app, tutto già in memoria e
+// filtrato/ordinato nel browser
+function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+  const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
+
+  const allievi = useMemo(() => costruisciAllieviCrm(iscritti, allieviCrm, corsi, corsiDate, location), [iscritti, allieviCrm, corsi, corsiDate, location]);
+
+  const [ricerca, setRicerca] = useState("");
+  const [filtroCittaProv, setFiltroCittaProv] = useState("");
+  const [filtroRegioneProv, setFiltroRegioneProv] = useState("");
+  const [filtroCittaCorso, setFiltroCittaCorso] = useState("");
+  const [filtroCorso, setFiltroCorso] = useState("");
+  const [dataDa, setDataDa] = useState("");
+  const [dataA, setDataA] = useState("");
+  const [selezionati, setSelezionati] = useState(new Set());
+  const [hintSvuotata, setHintSvuotata] = useState(false);
+  const [dettaglioChiave, setDettaglioChiave] = useState(null);
+  const [mostraNuovoAllievo, setMostraNuovoAllievo] = useState(false);
+  const [mostraComunicazione, setMostraComunicazione] = useState(false);
+  const [menuAzioniAperto, setMenuAzioniAperto] = useState(false);
+  const [menuRigaAperto, setMenuRigaAperto] = useState(null);
+
+  // cambiare un filtro o la ricerca svuota la selezione: altrimenti si
+  // rischierebbe di mandare un'azione di massa su persone che non fanno
+  // più parte del risultato appena filtrato
+  function svuotaSelezionePerFiltro() {
+    setSelezionati((prev) => {
+      if (prev.size === 0) return prev;
+      setHintSvuotata(true);
+      return new Set();
+    });
+  }
+  function cambiaRicerca(v) { setRicerca(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroCittaProv(v) { setFiltroCittaProv(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroRegioneProv(v) { setFiltroRegioneProv(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroCittaCorso(v) { setFiltroCittaCorso(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroCorso(v) { setFiltroCorso(v); svuotaSelezionePerFiltro(); }
+  function cambiaDataDa(v) { setDataDa(v); svuotaSelezionePerFiltro(); }
+  function cambiaDataA(v) { setDataA(v); svuotaSelezionePerFiltro(); }
+  function resetFiltri() {
+    setRicerca(""); setFiltroCittaProv(""); setFiltroRegioneProv(""); setFiltroCittaCorso(""); setFiltroCorso(""); setDataDa(""); setDataA("");
+    svuotaSelezionePerFiltro();
+  }
+
+  const opzioniCittaProv = useMemo(() => Array.from(new Set(allievi.map((a) => a.cittaProvenienza).filter(Boolean))).sort(), [allievi]);
+  const opzioniRegioneProv = useMemo(() => Array.from(new Set(allievi.map((a) => a.regioneProvenienza).filter(Boolean))).sort(), [allievi]);
+  const opzioniCittaCorso = useMemo(() => Array.from(new Set(allievi.flatMap((a) => a.cittaCorso))).sort(), [allievi]);
+  const opzioniCorso = useMemo(() => {
+    const ids = new Set();
+    allievi.forEach((a) => a.corsi.forEach((c) => ids.add(c.id)));
+    return corsi.filter((c) => ids.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [allievi, corsi]);
+
+  const risultati = useMemo(() => {
+    const q = ricerca.trim().toLowerCase();
+    return allievi
+      .filter((a) => {
+        if (q) {
+          const testo = `${a.nome} ${a.cognome} ${a.email} ${a.telefono}`.toLowerCase();
+          if (!testo.includes(q)) return false;
+        }
+        if (filtroCittaProv && a.cittaProvenienza !== filtroCittaProv) return false;
+        if (filtroRegioneProv && a.regioneProvenienza !== filtroRegioneProv) return false;
+        if (filtroCittaCorso && !a.cittaCorso.includes(filtroCittaCorso)) return false;
+        if (filtroCorso && !a.corsi.some((c) => c.id === filtroCorso)) return false;
+        if (dataDa && (!a.dataAcquisto || a.dataAcquisto.slice(0, 10) < dataDa)) return false;
+        if (dataA && (!a.dataAcquisto || a.dataAcquisto.slice(0, 10) > dataA)) return false;
+        return true;
+      })
+      .sort((a, b) => `${a.nome} ${a.cognome}`.localeCompare(`${b.nome} ${b.cognome}`));
+  }, [allievi, ricerca, filtroCittaProv, filtroRegioneProv, filtroCittaCorso, filtroCorso, dataDa, dataA]);
+
+  // statistiche del mese corrente vs il precedente: "nuovo allievo" = il
+  // suo primo acquisto è caduto in quel mese; "corsi acquistati" = ogni
+  // singola riga iscritti (un allievo con 2 corsi ne conta 2)
+  const { variazioneAllievi, variazioneCorsi } = useMemo(() => {
+    const oggi = new Date();
+    const chiaveMese = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const meseCorrente = chiaveMese(oggi);
+    const mesePrecedente = chiaveMese(new Date(oggi.getFullYear(), oggi.getMonth() - 1, 1));
+    const nuoviCorrente = allievi.filter((a) => (a.dataPrimoAcquisto || "").slice(0, 7) === meseCorrente).length;
+    const nuoviPrecedente = allievi.filter((a) => (a.dataPrimoAcquisto || "").slice(0, 7) === mesePrecedente).length;
+    const corsiCorrente = iscritti.filter((i) => (i.ts || "").slice(0, 7) === meseCorrente).length;
+    const corsiPrecedente = iscritti.filter((i) => (i.ts || "").slice(0, 7) === mesePrecedente).length;
+    const perc = (attuale, precedente) => (precedente > 0 ? Math.round(((attuale - precedente) / precedente) * 100) : attuale > 0 ? 100 : 0);
+    return { variazioneAllievi: perc(nuoviCorrente, nuoviPrecedente), variazioneCorsi: perc(corsiCorrente, corsiPrecedente) };
+  }, [allievi, iscritti]);
+
+  const tuttiVisibiliSelezionati = risultati.length > 0 && risultati.every((a) => selezionati.has(a.chiave));
+  function toggleTutti() {
+    setSelezionati((prev) => {
+      if (tuttiVisibiliSelezionati) return new Set();
+      return new Set(risultati.map((a) => a.chiave));
+    });
+  }
+  function toggleRiga(chiave) {
+    setSelezionati((prev) => {
+      const next = new Set(prev);
+      if (next.has(chiave)) next.delete(chiave); else next.add(chiave);
+      return next;
+    });
+  }
+  function selezionaTuttiFiltrati() {
+    setSelezionati(new Set(risultati.map((a) => a.chiave)));
+  }
+
+  const dettaglio = dettaglioChiave ? allievi.find((a) => a.chiave === dettaglioChiave) : null;
+  const allieviSelezionati = allievi.filter((a) => selezionati.has(a.chiave));
+
+  const cardStat = (icona, etichetta, valore, sub) => (
+    <div style={{ ...cardStyle, flex: "1 1 200px", display: "flex", alignItems: "center", gap: 14, padding: 18, marginBottom: 0 }}>
+      <div style={{ width: 46, height: 46, borderRadius: "50%", background: "#FBF1D9", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {icona}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>{etichetta}</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{valore}</div>
+          {sub}
+        </div>
+      </div>
+    </div>
+  );
+  const badgeVariazione = (perc) => (
+    <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: perc >= 0 ? "#2E7D32" : "#C0392B" }}>{perc >= 0 ? "+" : ""}{perc}%</span>
+  );
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>CRM / Allievi</div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>Tutti gli allievi che hanno acquistato almeno un corso.</div>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <Button onClick={() => setMostraNuovoAllievo(true)}>+ Nuovo allievo</Button>
+            <Button variant="ghost" onClick={() => esportaCsvCrmAllievi(risultati)}>⭱ Esporta</Button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
+          {cardStat(<IconaGruppoTeam size={22} />, "Totale allievi", allievi.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneAllievi)}</>)}
+          {cardStat(<IconaTileVenditori size={22} color={GOLD} />, "Corsi acquistati", iscritti.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneCorsi)}</>)}
+          {cardStat(<IconaPin size={22} />, "Città di provenienza", opzioniCittaProv.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
+          {cardStat(<IconaPin size={22} />, "Città corso frequentato", opzioniCittaCorso.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => cambiaRicerca(e.target.value)} placeholder="Cerca per nome, email, telefono…" />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Field label="Città provenienza">
+              <select style={inputStyle} value={filtroCittaProv} onChange={(e) => cambiaFiltroCittaProv(e.target.value)}>
+                <option value="">Tutte</option>
+                {opzioniCittaProv.map((c) => <option key={c} value={c}>{toTitleCase(c)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Field label="Regione provenienza">
+              <select style={inputStyle} value={filtroRegioneProv} onChange={(e) => cambiaFiltroRegioneProv(e.target.value)}>
+                <option value="">Tutte</option>
+                {opzioniRegioneProv.map((r) => <option key={r} value={r}>{toTitleCase(r)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Field label="Città corso frequentato">
+              <select style={inputStyle} value={filtroCittaCorso} onChange={(e) => cambiaFiltroCittaCorso(e.target.value)}>
+                <option value="">Tutte</option>
+                {opzioniCittaCorso.map((c) => <option key={c} value={c}>{toTitleCase(c)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Field label="Corso acquistato">
+              <select style={inputStyle} value={filtroCorso} onChange={(e) => cambiaFiltroCorso(e.target.value)}>
+                <option value="">Tutti</option>
+                {opzioniCorso.map((c) => <option key={c.id} value={c.id}>{toTitleCase(c.nome)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ width: 130 }}>
+              <Field label="Data acquisto da">
+                <input type="date" style={inputStyle} value={dataDa} onChange={(e) => cambiaDataDa(e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ width: 130 }}>
+              <Field label="a">
+                <input type="date" style={inputStyle} value={dataA} min={dataDa || undefined} onChange={(e) => cambiaDataA(e.target.value)} />
+              </Field>
+            </div>
+          </div>
+          <Button variant="ghost" onClick={resetFiltri}>Reset filtri</Button>
+        </div>
+
+        <div style={{ background: "#FBF1D9", border: `1px solid ${CREAM_BORDER}`, borderRadius: "14px 14px 0 0", padding: "12px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={tuttiVisibiliSelezionati} onChange={toggleTutti} style={{ width: 16, height: 16 }} />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{selezionati.size} selezionati</span>
+          </label>
+          {risultati.length > 0 && (
+            <button onClick={selezionaTuttiFiltrati} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px dashed ${GOLD}`, borderRadius: 20, padding: "6px 12px", cursor: "pointer" }}>
+              Seleziona tutti ({risultati.length})
+            </button>
+          )}
+          <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Risultati filtrati: {risultati.length} allievi</span>
+          <div style={{ flex: 1 }} />
+          <Button variant="ghost" disabled={selezionati.size === 0} onClick={() => esportaCsvCrmAllievi(allieviSelezionati)}>⭱ Esporta selezionati</Button>
+          <Button variant="ghost" disabled={selezionati.size === 0} onClick={() => setMostraComunicazione(true)}>✈ Invia comunicazione</Button>
+          <div style={{ position: "relative" }}>
+            <Button variant="ghost" onClick={() => setMenuAzioniAperto((v) => !v)}>Altre azioni ▾</Button>
+            {menuAzioniAperto && (
+              <>
+                <div onClick={() => setMenuAzioniAperto(false)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
+                <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 10, minWidth: 200, overflow: "hidden" }}>
+                  <div onClick={() => { setMenuAzioniAperto(false); esportaCsvCrmAllievi(allieviSelezionati.length ? allieviSelezionati : risultati); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                    Esporta {allieviSelezionati.length ? "selezionati" : "risultati filtrati"}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        {hintSvuotata && (
+          <div style={{ background: "#FBF1D9", borderLeft: `1px solid ${CREAM_BORDER}`, borderRight: `1px solid ${CREAM_BORDER}`, padding: "6px 16px", ...fontBody, fontSize: 11.5, color: MUTED, fontStyle: "italic" }}>
+            La selezione è stata svuotata perché hai cambiato un filtro.
+          </div>
+        )}
+
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "0 0 14px 14px", marginBottom: 30 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
+            <thead>
+              <tr>
+                {["", "Allievo", "Email", "Telefono", "Città provenienza", "Regione provenienza", "Città corso frequentato", "Corsi acquistati", "Data acquisto", "Azioni"].map((h, i) => (
+                  <th key={i} style={{ padding: "10px 12px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, textAlign: "left", background: BG, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {risultati.length === 0 && (
+                <tr><td colSpan={10} style={{ padding: "24px 14px", textAlign: "center", ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo trovato con questi filtri.</td></tr>
+              )}
+              {risultati.map((a) => (
+                <tr key={a.chiave} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                  <td style={{ padding: "10px 12px" }}>
+                    <input type="checkbox" checked={selezionati.has(a.chiave)} onChange={() => toggleRiga(a.chiave)} style={{ width: 16, height: 16 }} />
+                  </td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => setDettaglioChiave(a.chiave)}>
+                    {toTitleCase(a.nome)} {toTitleCase(a.cognome)}
+                  </td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: a.email ? NAVY : MUTED }}>{a.email || "—"}</td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.telefono || "—"}</td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: a.cittaProvenienza ? NAVY : MUTED, whiteSpace: "nowrap" }}>{a.cittaProvenienza ? toTitleCase(a.cittaProvenienza) : "—"}</td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: a.regioneProvenienza ? NAVY : MUTED, whiteSpace: "nowrap" }}>{a.regioneProvenienza ? toTitleCase(a.regioneProvenienza) : "—"}</td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.cittaCorso.map(toTitleCase).join(", ") || "—"}</td>
+                  <td style={{ padding: "10px 12px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                      {a.corsi.map((c) => (
+                        <span key={c.id} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.32), borderRadius: 20, padding: "3px 10px", whiteSpace: "nowrap" }}>{toTitleCase(c.nome)}</span>
+                      ))}
+                    </div>
+                  </td>
+                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "—"}</td>
+                  <td style={{ padding: "10px 12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <button onClick={() => setDettaglioChiave(a.chiave)} title="Apri dettaglio" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+                      </button>
+                      <div style={{ position: "relative" }}>
+                        <button onClick={() => setMenuRigaAperto((v) => (v === a.chiave ? null : a.chiave))} title="Altre azioni" style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, padding: 4, fontSize: 18, lineHeight: 1 }}>⋮</button>
+                        {menuRigaAperto === a.chiave && (
+                          <>
+                            <div onClick={() => setMenuRigaAperto(null)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
+                            <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 14px rgba(0,0,0,0.14)", zIndex: 10, minWidth: 160, overflow: "hidden" }}>
+                              <div onClick={() => { setMenuRigaAperto(null); setDettaglioChiave(a.chiave); }} style={{ padding: "9px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>Apri e modifica</div>
+                              <div onClick={() => { setMenuRigaAperto(null); esportaCsvCrmAllievi([a]); }} style={{ padding: "9px 12px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>Esporta questa riga</div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {dettaglio && (
+        <DettaglioAllievoCrm allievo={dettaglio} corsoById={corsoById} locById={locById} cdById={cdById} onClose={() => setDettaglioChiave(null)} ricarica={ricarica} />
+      )}
+      {mostraNuovoAllievo && (
+        <NuovoAllievoCrm corsi={corsi} corsiDate={corsiDate} location={location} onClose={() => setMostraNuovoAllievo(false)} ricarica={ricarica} />
+      )}
+      {mostraComunicazione && (
+        <Modal title="Invia comunicazione" onClose={() => setMostraComunicazione(false)}>
+          <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, lineHeight: 1.6, marginBottom: 4 }}>
+            Stai per scrivere a <b>{selezionati.size}</b> allie{selezionati.size === 1 ? "vo" : "vi"} selezionat{selezionati.size === 1 ? "o" : "i"}.
+          </div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, lineHeight: 1.6 }}>
+            L'invio vero e proprio non è ancora collegato: in futuro si aggancerà al Centro Avvisi (notifiche/WhatsApp). Per ora questo è solo il punto da cui partirà.
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 // ---------- POS Vendita diretta ----------
 // vendita al banco: scarica lo stock da giacenza_magazzino (fisico, come
 // la Logistica prodotti — non tocca mai WooCommerce) e registra la
@@ -23971,6 +24563,7 @@ export default function App() {
   const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
+  const [allieviCrm, setAllieviCrm] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -24004,7 +24597,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -24056,6 +24649,7 @@ export default function App() {
       supabase.from("inventario_ammanchi").select("*"),
       supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false }),
       supabase.from("master_corsi").select("*"),
+      supabase.from("allievi_crm").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -24118,6 +24712,7 @@ export default function App() {
     setInventarioAmmanchi(iam.data || []);
     setSpedizioniPos(sped.data || []);
     setMasterCorsi(mc.data || []);
+    setAllieviCrm(acrm.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -24470,6 +25065,7 @@ export default function App() {
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
+  function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -24717,6 +25313,7 @@ export default function App() {
             <TileHome title="Assegna logo" descrizione="Personalizza loghi, watermark e materiali ufficiali" Icona={IconaLoghiCard} attivo={tastoAbilitato("generazioneloghi")} onClick={apriGenerazioneLoghi} />
             <TileHome title="Gestione modelle" descrizione="Organizza modelle, disponibilità e assegnazioni" Icona={IconaTileModelle} attivo={tastoAbilitato("gestionemodelle")} onClick={apriGestioneModelle} />
             <TileHome title="Statistiche" descrizione="Analisi, report e KPI della tua Academy" Icona={IconaTileStatistiche} attivo={tastoAbilitato("statistiche")} onClick={apriStatistiche} />
+            <TileHome title="CRM / Allievi" descrizione="Anagrafica di tutti gli allievi che hanno acquistato un corso" Icona={IconaGruppoTeam} attivo={tastoAbilitato("crmallievi")} onClick={apriCrmAllievi} />
             <TileHome title="Impostazioni" descrizione="Configura preferenze, utenti e permessi" Icona={IconaTileImpostazioni} attivo={tastoAbilitato("impostazioni")} onClick={apriImpostazioni} />
             <TileProgettiInCorso />
           </div>
@@ -25042,6 +25639,13 @@ export default function App() {
         <PaginaGestioneMaster
           master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
+        />
+      )}
+
+      {view === "crmallievi" && (
+        <PaginaCrmAllievi
+          iscritti={iscritti} allieviCrm={allieviCrm} corsi={corsi} corsiDate={corsiDate} location={location}
+          ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
 
