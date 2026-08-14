@@ -1612,6 +1612,7 @@ const ETICHETTE_MODULO_PDF = {
   indirizzoResidenza: "indirizzo di residenza",
   capResidenza: "cap",
   cittaResidenza: "città di residenza",
+  email: "email",
   accontoMetodo: "acconto pagato a mezzo",
   accontoImporto: "di euro",
   tagliaDivisa: "taglia divisa",
@@ -12662,6 +12663,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   const [cittaResidenza, setCittaResidenza] = useState("");
   const [indirizzoResidenza, setIndirizzoResidenza] = useState("");
   const [capResidenza, setCapResidenza] = useState("");
+  const [emailIscritto, setEmailIscritto] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
@@ -13207,7 +13209,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTipoOfferta(""); setTagliaDivisa("");
-    setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza("");
+    setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto("");
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -13222,7 +13224,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   function apriModificaCompleta(i) {
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
-    setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || "");
+    setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || ""); setEmailIscritto(i.email || "");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
@@ -13555,11 +13557,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       // residenza (dal modulo, pagina 6) salvata a parte e "best-effort": se
       // le colonne non esistono ancora sul database (migrazione non eseguita),
       // l'errore viene ignorato e NON blocca il salvataggio dell'iscrizione
-      if (idIscritto && (cittaResidenza.trim() || indirizzoResidenza.trim() || capResidenza.trim())) {
+      if (idIscritto && (cittaResidenza.trim() || indirizzoResidenza.trim() || capResidenza.trim() || emailIscritto.trim())) {
         await supabase.from("iscritti").update({
           citta_residenza: cittaResidenza.trim() || null,
           indirizzo_residenza: indirizzoResidenza.trim() || null,
           cap_residenza: capResidenza.trim() || null,
+          email: emailIscritto.trim().toLowerCase() || null,
         }).eq("id", idIscritto);
       }
 
@@ -13622,6 +13625,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (dati.cittaResidenza && !salta(cittaResidenza.trim())) setCittaResidenza(dati.cittaResidenza.toUpperCase());
     if (dati.indirizzoResidenza && !salta(indirizzoResidenza.trim())) setIndirizzoResidenza(dati.indirizzoResidenza.toUpperCase());
     if (dati.capResidenza && !salta(capResidenza.trim())) setCapResidenza(dati.capResidenza.replace(/[^0-9]/g, "").slice(0, 5));
+    if (dati.email && !salta(emailIscritto.trim())) setEmailIscritto(dati.email.toLowerCase());
 
     if (dati.tagliaDivisa && !salta(tagliaDivisa)) {
       const taglia = ["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
@@ -19160,10 +19164,13 @@ function costruisciAllieviCrm(iscritti, allieviCrm, corsi, corsiDate, location) 
     const capModulo = (rigaResidenza?.cap_residenza || "").trim();
     const cittaResidenza = (crm?.citta_provenienza || "").trim() || cittaModulo;
     const regioneResidenza = (crm?.regione_provenienza || "").trim() || regioneDaCitta(cittaResidenza, capModulo);
+    // email: presa dal modulo (iscritto più recente che ce l'ha); un valore
+    // inserito a mano nel CRM ha comunque la priorità
+    const emailModulo = (ordinate.find((r) => (r.email || "").trim())?.email || "").trim();
     return {
       chiave,
       nome: ultima.nome, cognome: ultima.cognome, telefono: ultima.telefono || "",
-      email: crm?.email || "", cittaProvenienza: cittaResidenza, regioneProvenienza: regioneResidenza, note: crm?.note || "",
+      email: (crm?.email || "").trim() || emailModulo, cittaProvenienza: cittaResidenza, regioneProvenienza: regioneResidenza, note: crm?.note || "",
       corsi: Object.values(corsiMap),
       cittaCorso: Array.from(cittaCorsoSet),
       dataAcquisto: date.length ? date[date.length - 1] : null,
@@ -19420,10 +19427,11 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   // queste etichette del modulo non venivano lette
   async function recuperaResidenzeDaiModuli() {
     setMenuAzioniAperto(false);
-    const daFare = (iscritti || []).filter((i) => i.file_iscrizione && !(i.citta_residenza || "").trim());
-    if (daFare.length === 0) { window.alert("Tutti gli allievi con un modulo caricato hanno già la città di residenza."); return; }
-    if (!window.confirm(`Rileggo ${daFare.length} modul${daFare.length === 1 ? "o" : "i"} PDF per recuperare la città di residenza. Può richiedere qualche minuto: non chiudere la pagina. Procedo?`)) return;
-    let ok = 0, falliti = 0;
+    // da rifare: chi ha un modulo caricato ma non ha ancora né città né email
+    const daFare = (iscritti || []).filter((i) => i.file_iscrizione && !((i.citta_residenza || "").trim() && (i.email || "").trim()));
+    if (daFare.length === 0) { window.alert("Tutti gli allievi con un modulo caricato hanno già città di residenza ed email."); return; }
+    if (!window.confirm(`Rileggo ${daFare.length} modul${daFare.length === 1 ? "o" : "i"} PDF per recuperare città di residenza ed email. Può richiedere qualche minuto: non chiudere la pagina. Procedo?`)) return;
+    let ok = 0, senzaDati = 0, erroriSalvataggio = 0, primoErrore = "";
     for (let idx = 0; idx < daFare.length; idx++) {
       const i = daFare[idx];
       setBackfillStato({ fatti: idx, totali: daFare.length });
@@ -19431,19 +19439,25 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         const bytes = await scaricaBytesStorage("allegati-iscritti", i.file_iscrizione);
         const dati = await estraiDatiModuloPdf(new Blob([bytes], { type: "application/pdf" }));
         const citta = (dati?.cittaResidenza || "").trim();
-        if (citta) {
-          await supabase.from("iscritti").update({
-            citta_residenza: citta.toUpperCase(),
-            indirizzo_residenza: (dati.indirizzoResidenza || "").trim().toUpperCase() || null,
-            cap_residenza: (dati.capResidenza || "").replace(/[^0-9]/g, "").slice(0, 5) || null,
-          }).eq("id", i.id);
-          ok++;
-        } else falliti++;
-      } catch { falliti++; }
+        const email = (dati?.email || "").trim();
+        if (!citta && !email && !(dati?.indirizzoResidenza || "").trim()) { senzaDati++; continue; }
+        const { error } = await supabase.from("iscritti").update({
+          citta_residenza: citta.toUpperCase() || null,
+          indirizzo_residenza: (dati.indirizzoResidenza || "").trim().toUpperCase() || null,
+          cap_residenza: (dati.capResidenza || "").replace(/[^0-9]/g, "").slice(0, 5) || null,
+          email: email.toLowerCase() || null,
+        }).eq("id", i.id);
+        if (error) { erroriSalvataggio++; if (!primoErrore) primoErrore = error.message; }
+        else ok++;
+      } catch { senzaDati++; }
     }
     setBackfillStato(null);
     await ricarica();
-    window.alert(`Recupero completato: ${ok} aggiornat${ok === 1 ? "o" : "i"}${falliti ? `, ${falliti} senza città leggibile nel modulo` : ""}.`);
+    if (erroriSalvataggio > 0 && /column|colonna|schema|residenza|email/i.test(primoErrore)) {
+      window.alert(`Attenzione: il database non ha ancora le colonne per residenza/email (migrazione non eseguita). Esegui il file supabase-iscritti-residenza-setup.sql su Supabase, poi riprova.\n\nDettaglio: ${primoErrore}`);
+      return;
+    }
+    window.alert(`Recupero completato: ${ok} aggiornat${ok === 1 ? "o" : "i"}${senzaDati ? `, ${senzaDati} senza dati leggibili nel modulo` : ""}${erroriSalvataggio ? `, ${erroriSalvataggio} con errore di salvataggio` : ""}.`);
   }
 
   // cambiare un filtro o la ricerca svuota la selezione: altrimenti si

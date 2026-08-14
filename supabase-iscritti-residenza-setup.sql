@@ -11,5 +11,6 @@
 alter table public.iscritti add column if not exists citta_residenza text;
 alter table public.iscritti add column if not exists indirizzo_residenza text;
 alter table public.iscritti add column if not exists cap_residenza text;
+alter table public.iscritti add column if not exists email text;
 
 notify pgrst, 'reload schema';
