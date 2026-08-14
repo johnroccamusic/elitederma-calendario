@@ -6663,27 +6663,52 @@ function AlertScadenzeModelle({ numeroSlot, numeroCorsi, giorni }) {
 // (colore in base all'urgenza), città+data, corso, master, tipologie
 // richieste e i tre numeri richieste/assegnate/da trovare
 function RigaPrioritaModelle({ edizione, onApri }) {
+  const isMobile = useIsMobile();
   const g = edizione.giorniAOggi;
   const urgenza = g <= 3 ? { bg: "#FDECEC", fg: "#C0392B" } : g <= 7 ? { bg: "#FFF3E0", fg: "#B9770E" } : { bg: "#F1ECDF", fg: NAVY };
   const testoGiorni = g < 0 ? "IN CORSO" : g === 0 ? "OGGI" : g === 1 ? "DOMANI" : `TRA ${g} GIORNI`;
+  const badgeGiorni = <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", whiteSpace: "nowrap" }}>{testoGiorni}</span>;
+  const badgesTipologie = Object.entries(edizione.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />);
+  const numero = (v, c, lab) => <div><div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c }}>{v}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{lab}</div></div>;
+
+  // su mobile la riga (troppo larga per stare in orizzontale) si impagina in
+  // verticale, così niente resta tagliato e i badge vanno a capo da soli
+  if (isMobile) {
+    return (
+      <div onClick={onApri} style={{ padding: "14px 2px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+          {badgeGiorni}
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</span>
+          <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</span>
+        </div>
+        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
+        {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{badgesTipologie}</div>
+        <div style={{ display: "flex", gap: 24, marginTop: 12, textAlign: "center" }}>
+          {numero(edizione.richieste, NAVY, "richieste")}
+          {numero(edizione.assegnate, "#2E7D32", "assegnate")}
+          {numero(edizione.daTrovare, "#C0392B", "da trovare")}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div onClick={onApri} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
       <div style={{ width: 100, flexShrink: 0 }}>
-        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", marginBottom: 6 }}>{testoGiorni}</span>
+        <span style={{ marginBottom: 6, display: "inline-block" }}>{badgeGiorni}</span>
         <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</div>
         <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</div>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
         {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {Object.entries(edizione.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />)}
-        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{badgesTipologie}</div>
       </div>
       <div style={{ display: "flex", gap: 18, flexShrink: 0, textAlign: "center" }}>
-        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>{edizione.richieste}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>richieste</div></div>
-        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#2E7D32" }}>{edizione.assegnate}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>assegnate</div></div>
-        <div><div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#C0392B" }}>{edizione.daTrovare}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>da trovare</div></div>
+        {numero(edizione.richieste, NAVY, "richieste")}
+        {numero(edizione.assegnate, "#2E7D32", "assegnate")}
+        {numero(edizione.daTrovare, "#C0392B", "da trovare")}
       </div>
       <IconaFrecciaSinistra size={16} color={MUTED} />
     </div>
@@ -7073,9 +7098,9 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </select>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
             <div>
               <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
               <div style={subStyle}>In ordine di urgenza</div>
@@ -7090,7 +7115,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </div>
 
         <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
             <div>
               <div style={{ ...hStyle, marginBottom: 0 }}>Priorità prossimi 60 giorni</div>
               <div style={subStyle}>In ordine di urgenza</div>
@@ -7105,7 +7130,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
         <div style={cardStyle}>
           <div style={{ ...hStyle, marginBottom: 0 }}>Tutti i corsi con modelle richieste</div>
           <div style={subStyle}>Solo corsi con fabbisogno attivo · ordinati per {ordine === "richieste" ? "quante ne mancano" : "urgenza"}</div>
