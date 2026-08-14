@@ -1388,42 +1388,160 @@ function calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) {
   const percentualeIncasso = t.soglia_incasso ? Math.min(100, Math.round((incassoRaggiunto / t.soglia_incasso) * 100)) : null;
   return { incassoRaggiunto, prodottiConProgresso, completato, percentualeIncasso };
 }
-// card compatta con l'avanzamento di un target — riusata da POS e dalle
-// dashboard di master/venditore
-function SchedaAvanzamentoTarget({ t, avanzamento }) {
+// avanzamento di un target VENDITORE sui corsi venduti (tipo_target
+// 'corsi_denaro'/'corsi_punti'): silo separato dalla vendita prodotti,
+// stessa definizione di "chiusura" già in uso nella dashboard venditori
+// (iscrizione con questo tutor, non una vecchia iscrizione recuperata,
+// data di inserimento dentro il periodo del target) — il valore è la
+// somma di totale_pattuito, convertito in punti (÷100) se il tipo lo
+// richiede
+function calcolaAvanzamentoTargetCorsi(t, iscritti, nomeVenditore) {
+  const nomeNorm = (nomeVenditore || "").trim().toUpperCase();
+  const righe = (iscritti || []).filter((i) =>
+    (i.tutor || "").trim().toUpperCase() === nomeNorm && !i.vecchia_iscrizione &&
+    (i.ts || "").slice(0, 10) >= t.data_inizio && (i.ts || "").slice(0, 10) <= t.data_fine
+  );
+  const valoreVenduto = round2(righe.reduce((s, i) => s + (i.totale_pattuito || 0), 0));
+  const raggiunto = t.tipo_target === "corsi_punti" ? round2(valoreVenduto / 100) : valoreVenduto;
+  const soglia = t.soglia_incasso || 0;
+  const percentuale = soglia > 0 ? Math.min(100, Math.round((raggiunto / soglia) * 100)) : null;
+  const completato = t.soglia_incasso == null || raggiunto >= t.soglia_incasso;
+  return { raggiunto, soglia, percentuale, completato, numeroChiusure: righe.length };
+}
+// anello percentuale (SVG), usato nel pannello grande del target
+function AnelloPercentuale({ percentuale, size = 92, spessore = 9, colore = GOLD }) {
+  const raggio = (size - spessore) / 2;
+  const circonferenza = 2 * Math.PI * raggio;
+  const clamp = Math.min(100, Math.max(0, percentuale || 0));
+  const offset = circonferenza * (1 - clamp / 100);
   return (
-    <div style={{ ...cardStyle, marginBottom: 10, padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6 }}>
-        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4 }}>
-          {t.tipo_target === "incasso" ? "Target incasso" : t.tipo_target === "prodotto" ? "Target prodotto" : "Target combinato"}
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={raggio} fill="none" stroke="#EFE9DC" strokeWidth={spessore} />
+      <circle
+        cx={size / 2} cy={size / 2} r={raggio} fill="none" stroke={colore} strokeWidth={spessore} strokeLinecap="round"
+        strokeDasharray={circonferenza} strokeDashoffset={offset} transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: "stroke-dashoffset 400ms ease" }}
+      />
+      <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" style={{ ...fontDisplay, fontSize: size * 0.24, fontWeight: 700 }} fill={NAVY}>{Math.round(clamp)}%</text>
+      <text x="50%" y="67%" textAnchor="middle" dominantBaseline="middle" style={{ ...fontBody, fontSize: size * 0.1 }} fill={MUTED}>completato</text>
+    </svg>
+  );
+}
+// normalizza le due forme diverse di "avanzamento" (quella dei target
+// vendita prodotti/incasso di calcolaAvanzamentoTarget, e quella dei
+// target corsi venduti di calcolaAvanzamentoTargetCorsi) in un'unica
+// struttura {obiettivo, raggiunto, percentuale, unita, completato,
+// secondari}, così il pannello grande le mostra tutte allo stesso modo
+function datiPrincipaliTarget(t, avanzamento) {
+  if (TIPI_TARGET_CORSI.includes(t.tipo_target)) {
+    return {
+      obiettivo: avanzamento.soglia || null, raggiunto: avanzamento.raggiunto,
+      percentuale: avanzamento.percentuale ?? 0, unita: t.tipo_target === "corsi_punti" ? "punti" : "€",
+      completato: avanzamento.completato, secondari: [],
+    };
+  }
+  if (t.soglia_incasso != null) {
+    return {
+      obiettivo: t.soglia_incasso, raggiunto: avanzamento.incassoRaggiunto,
+      percentuale: avanzamento.percentualeIncasso ?? 0, unita: "€",
+      completato: avanzamento.completato, secondari: avanzamento.prodottiConProgresso || [],
+    };
+  }
+  const prods = avanzamento.prodottiConProgresso || [];
+  if (prods.length === 1) {
+    const p = prods[0];
+    return {
+      obiettivo: p.obiettivo, raggiunto: p.raggiunto,
+      percentuale: Math.min(100, Math.round((p.raggiunto / p.obiettivo) * 100)), unita: "pz",
+      completato: p.completato, secondari: [],
+    };
+  }
+  const percentualeMedia = prods.length > 0
+    ? Math.round(prods.reduce((s, p) => s + Math.min(100, (p.raggiunto / p.obiettivo) * 100), 0) / prods.length)
+    : 0;
+  return { obiettivo: null, raggiunto: null, percentuale: percentualeMedia, unita: null, completato: avanzamento.completato, secondari: prods };
+}
+const ETICHETTA_TIPO_TARGET = {
+  incasso: "Target incasso", prodotto: "Target prodotto", combinato: "Target combinato",
+  corsi_denaro: "Target corsi venduti", corsi_punti: "Target corsi venduti",
+};
+// pannello grande dell'avanzamento di un target — riusato da POS e dalle
+// dashboard di master/venditore, sostituisce la vecchia card compatta
+function PannelloTarget({ t, avanzamento }) {
+  const d = datiPrincipaliTarget(t, avanzamento);
+  const formatta = (n) => {
+    if (n == null) return "—";
+    if (d.unita === "€") return fmtEuroErp2(n);
+    if (d.unita === "punti") return `${n.toLocaleString("it-IT", { maximumFractionDigits: 1 })} pt`;
+    if (d.unita === "pz") return `${n} pz`;
+    return `${n}`;
+  };
+  const mancante = d.obiettivo != null && d.raggiunto != null ? Math.max(0, round2(d.obiettivo - d.raggiunto)) : null;
+  const coloreAccento = d.completato ? "#2E7D32" : GOLD;
+  return (
+    <div style={{ ...cardStyle, padding: 22, marginBottom: 14 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ width: 46, height: 46, borderRadius: "50%", background: "#FBF1D9", display: "flex", alignItems: "center", justifyContent: "center", color: GOLD, flexShrink: 0 }}>
+          <IconaTargetRiga size={22} />
         </div>
-        {avanzamento.completato && (
-          <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>Obiettivo raggiunto</span>
-        )}
+        <div style={{ flex: "1 1 160px", minWidth: 160 }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 4 }}>
+            {d.completato ? "Obiettivo raggiunto" : "Il tuo prossimo target"}
+          </div>
+          {d.obiettivo != null ? (
+            <>
+              <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{formatta(d.obiettivo)}</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>entro il <span style={{ color: NAVY, fontWeight: 700 }}>{fmtDataLunga(t.data_fine).toUpperCase()}</span></div>
+            </>
+          ) : (
+            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{ETICHETTA_TIPO_TARGET[t.tipo_target] || "Target"}</div>
+          )}
+        </div>
+        {d.obiettivo != null && <AnelloPercentuale percentuale={d.percentuale} colore={coloreAccento} />}
       </div>
-      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 10 }}>{fmtData(t.data_inizio)} → {fmtData(t.data_fine)}</div>
-      {t.soglia_incasso != null && (
-        <div style={{ marginBottom: (avanzamento.prodottiConProgresso || []).length > 0 ? 10 : 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 4 }}>
-            <span>{fmtEuroErp2(avanzamento.incassoRaggiunto)} di {fmtEuroErp2(t.soglia_incasso)}</span>
-            <span style={{ fontWeight: 700 }}>{avanzamento.percentualeIncasso}%</span>
+
+      {d.obiettivo != null && (
+        <>
+          <div style={{ display: "flex", alignItems: "stretch", gap: 22, margin: "18px 0 12px" }}>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{formatta(d.raggiunto)}</div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>raggiunti</div>
+            </div>
+            <div style={{ width: 1, background: CREAM_BORDER }} />
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{formatta(mancante)}</div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>mancanti</div>
+            </div>
           </div>
-          <div style={{ height: 6, borderRadius: 3, background: "#EFE9DC", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${avanzamento.percentualeIncasso}%`, background: avanzamento.incassoRaggiunto >= t.soglia_incasso ? "#2E7D32" : NAVY, borderRadius: 3 }} />
+          <div style={{ position: "relative", height: 22, borderRadius: 11, background: "#EFE9DC", overflow: "hidden", marginBottom: 6 }}>
+            <div style={{ height: "100%", width: `${d.percentuale}%`, background: coloreAccento, borderRadius: 11, transition: "width 400ms ease" }} />
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY }}>{d.percentuale}%</div>
           </div>
+          <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 11, color: MUTED, marginBottom: 12 }}>
+            <span>{d.unita === "€" ? "0 €" : formatta(0)}</span>
+            <span>{formatta(d.obiettivo)}</span>
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>
+            {d.completato ? "🎉 Complimenti, obiettivo raggiunto!" : `🎉 Sei sulla strada giusta! Ti manca${d.unita === "punti" ? "no" : ""} ${formatta(mancante)} al target.`}
+          </div>
+        </>
+      )}
+
+      {d.secondari.length > 0 && (
+        <div style={{ marginTop: d.obiettivo != null ? 16 : 8, paddingTop: d.obiettivo != null ? 14 : 0, borderTop: d.obiettivo != null ? `1px solid ${CREAM_BORDER}` : "none" }}>
+          {d.secondari.map((p) => (
+            <div key={p.nome} style={{ marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 3 }}>
+                <span>{p.nome}</span>
+                <span style={{ fontWeight: 700, color: p.completato ? "#2E7D32" : NAVY }}>{p.raggiunto} / {p.obiettivo}</span>
+              </div>
+              <div style={{ height: 6, borderRadius: 3, background: "#EFE9DC", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${Math.min(100, Math.round((p.raggiunto / p.obiettivo) * 100))}%`, background: p.completato ? "#2E7D32" : GOLD, borderRadius: 3 }} />
+              </div>
+            </div>
+          ))}
         </div>
       )}
-      {(avanzamento.prodottiConProgresso || []).map((p) => (
-        <div key={p.nome} style={{ marginBottom: 6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 3 }}>
-            <span>{p.nome}</span>
-            <span style={{ fontWeight: 700, color: p.completato ? "#2E7D32" : NAVY }}>{p.raggiunto} / {p.obiettivo}</span>
-          </div>
-          <div style={{ height: 6, borderRadius: 3, background: "#EFE9DC", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.min(100, Math.round((p.raggiunto / p.obiettivo) * 100))}%`, background: p.completato ? "#2E7D32" : GOLD, borderRadius: 3 }} />
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -4116,13 +4234,20 @@ function PaginaDashboardVenditori({
     ? (venditori.find((v) => v.id === venditoreBloccato.id) || { id: venditoreBloccato.id, nome: venditoreBloccato.nome })
     : (venditori.find((v) => v.id === venditoreSelId) || null);
   const oggiStr = dataOggiStr();
-  // target vendite PRODOTTI (POS) del venditore selezionato: dato
-  // completamente separato dalle "Chiusure e commissioni" qui sotto, che
-  // restano sul silo vendite corsi — vedi Target Venditori in Impostazioni
+  // target del venditore selezionato, sia quelli vendita PRODOTTI (POS)
+  // sia quelli sui CORSI venduti (denaro o punti) — due silo diversi, ma
+  // uno stesso venditore può avere target attivi di entrambi i tipi
+  // contemporaneamente, mostrati come pannelli separati — vedi Target
+  // Venditori in Impostazioni
   const targetAttiviVenditore = venditoreSel
     ? (targetVenditeProdotti || [])
         .filter((t) => t.soggetto_tipo === "venditore" && t.soggetto_id === venditoreSel.id && t.data_inizio <= oggiStr && t.data_fine >= oggiStr)
-        .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
+        .map((t) => ({
+          t,
+          avanzamento: TIPI_TARGET_CORSI.includes(t.tipo_target)
+            ? calcolaAvanzamentoTargetCorsi(t, iscritti, venditoreSel.nome)
+            : calcolaAvanzamentoTarget(t, venditeShop, prodottiShop),
+        }))
     : [];
   const numeroDateProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
 
@@ -4386,7 +4511,7 @@ function PaginaDashboardVenditori({
               <div style={{ marginBottom: 24 }}>
                 <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Target vendite prodotti</div>
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Vendite al POS — dato separato dalle chiusure corsi qui sotto.</div>
-                {targetAttiviVenditore.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+                {targetAttiviVenditore.map(({ t, avanzamento }) => <PannelloTarget key={t.id} t={t} avanzamento={avanzamento} />)}
               </div>
             )}
             <div style={{ marginBottom: 20 }}>
@@ -4914,7 +5039,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Target vendite prodotti</div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Vendite al POS, separate dall'incasso corsi qui sopra.</div>
-            {targetAttiviMaster.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+            {targetAttiviMaster.map(({ t, avanzamento }) => <PannelloTarget key={t.id} t={t} avanzamento={avanzamento} />)}
           </div>
         )}
 
@@ -8308,7 +8433,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
       {showTargetVenditoriModal && (
         <Modal title="Target Venditori" onClose={() => setShowTargetVenditoriModal(false)} maxWidth={720}>
-          <div style={{ ...subStyle, marginTop: -4 }}>Obiettivi individuali sulle vendite prodotti al POS (incasso, quantità di prodotto, o entrambi). Solo segnalazione dell'avanzamento — l'erogazione del premio resta un processo manuale.</div>
+          <div style={{ ...subStyle, marginTop: -4 }}>Obiettivi individuali sulle vendite prodotti al POS (incasso, quantità di prodotto, o entrambi), oppure sui corsi venduti (in euro o in punti, dove 1 punto = 100€ di valore del corso). Solo segnalazione dell'avanzamento — l'erogazione del premio resta un processo manuale.</div>
           <GestioneTarget soggettoTipo="venditore" soggetti={venditori} prodottiShop={prodottiShop} target={targetVenditeProdotti} ricarica={ricarica} />
         </Modal>
       )}
@@ -10537,7 +10662,16 @@ const TIPI_TARGET = [
   { v: "incasso", l: "Per incasso" },
   { v: "prodotto", l: "Per prodotto" },
   { v: "combinato", l: "Combinato (incasso + prodotto)" },
+  // solo per i venditori (i master non vendono corsi): valutano le
+  // iscrizioni chiuse nel periodo, non le vendite prodotti POS — vedi
+  // calcolaAvanzamentoTargetCorsi
+  { v: "corsi_denaro", l: "Corsi venduti (in euro)" },
+  { v: "corsi_punti", l: "Corsi venduti (in punti: 1pt = 100€)" },
 ];
+// solo questi due valgono per i target dei venditori sui CORSI (silo
+// separato dalla vendita prodotti): usati per capire quando la soglia va
+// interpretata come "corsi_denaro"/"corsi_punti" invece che come incasso POS
+const TIPI_TARGET_CORSI = ["corsi_denaro", "corsi_punti"];
 // "Target Master"/"Target Venditori" (Impostazioni > Vendite prodotti):
 // stessa struttura per entrambe, cambia solo l'elenco di soggetti tra cui
 // scegliere (master o venditori) e la tabella target_vendite_prodotti
@@ -10610,10 +10744,13 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
     if (soggettiSelezionati.length === 0) { setMsg("Scegli almeno a chi assegnare il target."); return; }
     if (!dataInizio || !dataFine) { setMsg("Scegli il periodo (data inizio e fine)."); return; }
     if (dataFine < dataInizio) { setMsg("La data fine non può precedere la data inizio."); return; }
-    const serveIncasso = tipoTarget === "incasso" || tipoTarget === "combinato";
+    // sia il target incasso vendita prodotti sia i due target corsi
+    // venduti (denaro o punti) usano la stessa colonna soglia_incasso
+    // come unica soglia numerica, solo interpretata diversamente
+    const serveSoglia = tipoTarget === "incasso" || tipoTarget === "combinato" || TIPI_TARGET_CORSI.includes(tipoTarget);
     const serveProdotti = tipoTarget === "prodotto" || tipoTarget === "combinato";
     const sogliaNum = sogliaIncasso === "" ? null : parseNum(sogliaIncasso);
-    if (serveIncasso && !(sogliaNum > 0)) { setMsg("Scrivi una soglia di incasso maggiore di zero."); return; }
+    if (serveSoglia && !(sogliaNum > 0)) { setMsg(tipoTarget === "corsi_punti" ? "Scrivi una soglia in punti maggiore di zero." : "Scrivi una soglia maggiore di zero."); return; }
     if (serveProdotti && prodottiObiettivo.length === 0) { setMsg("Aggiungi almeno un prodotto obiettivo."); return; }
     if (serveProdotti && prodottiObiettivo.some((p) => !(Number(p.quantita_minima) > 0))) { setMsg("Ogni prodotto obiettivo deve avere una quantità minima maggiore di zero."); return; }
 
@@ -10621,7 +10758,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
     const basaRiga = {
       soggetto_tipo: soggettoTipo,
       tipo_target: tipoTarget,
-      soglia_incasso: serveIncasso ? sogliaNum : null,
+      soglia_incasso: serveSoglia ? sogliaNum : null,
       prodotti_obiettivo: serveProdotti ? prodottiObiettivo.map((p) => ({ prodotto_id: p.prodotto_id, quantita_minima: Number(p.quantita_minima) })) : [],
       data_inizio: dataInizio,
       data_fine: dataFine,
@@ -10665,7 +10802,7 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
       </Field>
       <Field label="Tipo di target">
         <select style={inputStyle} value={tipoTarget} onChange={(e) => setTipoTarget(e.target.value)}>
-          {TIPI_TARGET.map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
+          {TIPI_TARGET.filter((t) => soggettoTipo === "venditore" || !TIPI_TARGET_CORSI.includes(t.v)).map((t) => <option key={t.v} value={t.v}>{t.l}</option>)}
         </select>
       </Field>
       <div style={{ display: "flex", gap: 10 }}>
@@ -10680,8 +10817,8 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
           </Field>
         </div>
       </div>
-      {(tipoTarget === "incasso" || tipoTarget === "combinato") && (
-        <Field label="Soglia di incasso (€)">
+      {(tipoTarget === "incasso" || tipoTarget === "combinato" || TIPI_TARGET_CORSI.includes(tipoTarget)) && (
+        <Field label={tipoTarget === "corsi_punti" ? "Soglia (punti — 1pt = 100€)" : tipoTarget === "corsi_denaro" ? "Soglia (€ di corsi venduti)" : "Soglia di incasso (€)"}>
           <input style={inputStyle} inputMode="decimal" value={sogliaIncasso} onChange={(e) => setSogliaIncasso(e.target.value)} placeholder="0" />
         </Field>
       )}
@@ -10721,7 +10858,11 @@ function GestioneTarget({ soggettoTipo, soggetti, prodottiShop, target, ricarica
           <div>
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nomeSoggetto(t.soggetto_id).toUpperCase()} — {TIPI_TARGET.find((tt) => tt.v === t.tipo_target)?.l}</div>
             <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtData(t.data_inizio)} → {fmtData(t.data_fine)}</div>
-            {t.soglia_incasso != null && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Soglia: {fmtEuroErp2(t.soglia_incasso)}</div>}
+            {t.soglia_incasso != null && (
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                Soglia: {t.tipo_target === "corsi_punti" ? `${t.soglia_incasso.toLocaleString("it-IT", { maximumFractionDigits: 1 })} punti` : fmtEuroErp2(t.soglia_incasso)}
+              </div>
+            )}
             {(t.prodotti_obiettivo || []).length > 0 && (
               <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
                 {t.prodotti_obiettivo.map((p) => `${p.quantita_minima}× ${(prodottiShop || []).find((ps) => ps.id === p.prodotto_id)?.nome || "?"}`).join(", ")}
@@ -18088,8 +18229,11 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
   const righeProdotti = Object.values(perProdotto).map((p) => ({ ...p, ricavo: round2(p.ricavo) })).filter((p) => p.pezzi !== 0).sort((a, b) => b.ricavo - a.ricavo);
 
   const oggiStr = dataOggiStr();
+  // solo target vendita prodotti: quelli sui corsi venduti sono un silo
+  // diverso (vedi PaginaDashboardVenditori), non c'entrano con le
+  // statistiche vendita prodotti/POS di questa pagina
   const targetAttivi = (targetVenditeProdotti || [])
-    .filter((t) => t.data_inizio <= oggiStr && t.data_fine >= oggiStr)
+    .filter((t) => !TIPI_TARGET_CORSI.includes(t.tipo_target) && t.data_inizio <= oggiStr && t.data_fine >= oggiStr)
     .map((t) => ({
       t,
       avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop),
@@ -18134,7 +18278,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
               {targetAttivi.map(({ t, avanzamento, nome }) => (
                 <div key={t.id}>
                   <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 4 }}>{t.soggetto_tipo === "master" ? "Master" : "Venditore"} {nome ? toTitleCase(nome) : "?"}</div>
-                  <SchedaAvanzamentoTarget t={t} avanzamento={avanzamento} />
+                  <PannelloTarget t={t} avanzamento={avanzamento} />
                 </div>
               ))}
             </div>
@@ -18268,7 +18412,7 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
               {targetAttivi.map(({ t, avanzamento, nome }) => (
                 <div key={t.id}>
                   <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, marginBottom: 4 }}>{nome ? toTitleCase(nome) : "?"}</div>
-                  <SchedaAvanzamentoTarget t={t} avanzamento={avanzamento} />
+                  <PannelloTarget t={t} avanzamento={avanzamento} />
                 </div>
               ))}
             </div>
@@ -18845,9 +18989,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // target esistono solo per questi due soggetti, vedi Target
   // Master/Venditori in Impostazioni), con l'avanzamento già calcolato
   const oggiPosStr = dataOggiStr();
+  // solo target vendita prodotti: il POS è vendita prodotti, i target sui
+  // corsi venduti non c'entrano qui (vedi PaginaDashboardVenditori)
   const targetAttivi = operatore && (operatore.tipo === "master" || operatore.tipo === "venditore")
     ? (targetVenditeProdotti || [])
-        .filter((t) => t.soggetto_tipo === operatore.tipo && t.soggetto_id === operatore.id && t.data_inizio <= oggiPosStr && t.data_fine >= oggiPosStr)
+        .filter((t) => t.soggetto_tipo === operatore.tipo && t.soggetto_id === operatore.id && !TIPI_TARGET_CORSI.includes(t.tipo_target) && t.data_inizio <= oggiPosStr && t.data_fine >= oggiPosStr)
         .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
     : [];
 
@@ -19409,7 +19555,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
         {targetAttivi.length > 0 && (
           <div style={{ marginBottom: 14 }}>
-            {targetAttivi.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+            {targetAttivi.map(({ t, avanzamento }) => <PannelloTarget key={t.id} t={t} avanzamento={avanzamento} />)}
           </div>
         )}
 
@@ -19500,7 +19646,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
         {targetAttivi.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(3, targetAttivi.length)}, minmax(0,1fr))`, gap: 14, marginBottom: 20 }}>
-            {targetAttivi.map(({ t, avanzamento }) => <SchedaAvanzamentoTarget key={t.id} t={t} avanzamento={avanzamento} />)}
+            {targetAttivi.map(({ t, avanzamento }) => <PannelloTarget key={t.id} t={t} avanzamento={avanzamento} />)}
           </div>
         )}
 
