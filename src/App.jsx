@@ -182,7 +182,7 @@ const ORDINE_TIPO_DOCENTE = { master: 0, assistente: 1, leva: 2 };
 const VIAGGIO_STATI = {
   si: { colore: "#2E7D32", etichetta: "Viaggio prenotato" },
   no: { colore: "#C0392B", etichetta: "Viaggio da prenotare" },
-  non_occorre: { colore: "#8B8FA3", etichetta: "Non occorre" },
+  non_occorre: { colore: "#8B8FA3", etichetta: "In sede" },
 };
 const ORDINE_STATI_VIAGGIO = ["no", "si", "non_occorre"];
 function prossimoStatoViaggio(stato) {
@@ -25389,6 +25389,9 @@ export default function App() {
   }
 
   const [corsoDataAperta, setCorsoDataAperta] = useState(null);
+  // vista da cui si è aperta la scheda corso (Calendario, Gestione date,
+  // Cerca corso, Archivio…): "Esci" deve tornare lì, non sempre alla home
+  const [viewPrimaDiScheda, setViewPrimaDiScheda] = useState("home");
   const [schedeAffiancateIscritti, setSchedeAffiancateIscritti] = useState([]);
   const [corsi, setCorsi] = useState([]);
   const [location, setLocation] = useState([]);
@@ -25814,6 +25817,7 @@ export default function App() {
   }
 
   function apriData(cd) {
+    setViewPrimaDiScheda(view);
     setVieneDaGestioneModelle(false);
     setCorsoDataAperta(cd.id);
     setSottoVistaScheda({ vista: "lista", modificandoId: null, mostraGestione: false });
@@ -26625,7 +26629,7 @@ export default function App() {
           prodottiShop={prodottiShop}
           accontiDaVerificare={accontiDaVerificare}
           ricarica={fetchDati}
-          onBack={() => setView("home")}
+          onBack={() => setView(viewPrimaDiScheda)}
           sottoVistaIniziale={sottoVistaScheda}
           onCambiaSottoVista={setSottoVistaScheda}
           onApriNuovaSpesaPerClasse={apriNuovaSpesaPerClasse}
