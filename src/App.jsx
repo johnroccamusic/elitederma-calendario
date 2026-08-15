@@ -2500,7 +2500,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               const rowSpanGruppo = 1 + docenti.length;
               // corsi alternati bianco / grigio chiarissimo, per riconoscere
               // a colpo d'occhio dove finisce un corso e inizia il prossimo
-              const sfondoGruppo = indice % 2 === 1 ? "#FAFAF7" : "#fff";
+              const sfondoGruppo = indice % 2 === 1 ? "#EEEEEE" : "#fff";
               const cellaGruppo = { ...celStyle, background: sfondoGruppo };
               return (
                 <React.Fragment key={cd.id}>
