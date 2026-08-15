@@ -2490,15 +2490,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               return (
                 <React.Fragment key={cd.id}>
                   <tr>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top" }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top", borderLeft: `4px solid ${corso?.colore || NAVY}` }}>
                       <div>{sopra}</div>
                       <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
                     </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, fontWeight: 700, verticalAlign: "top" }}>
-                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                        <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                        {corso?.nome?.toUpperCase() || "?"}
-                      </span>
+                      {corso?.nome?.toUpperCase() || "?"}
                     </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                     <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center", verticalAlign: "top" }}>
