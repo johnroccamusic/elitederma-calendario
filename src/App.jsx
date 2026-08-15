@@ -8307,9 +8307,9 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     {
       chiave: "team", titolo: "Team", coloreBg: "#F5E6C8", Icona: IconaGruppoTeam,
       voci: [
-        { etichetta: "Definisci Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
-        { etichetta: "Definisci Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
-        { etichetta: "Definisci Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
+        { etichetta: "Gestione Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
+        { etichetta: "Gestione Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
+        { etichetta: "Gestione Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
         { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
       ],
     },
@@ -8630,7 +8630,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       )}
 
       {showAssistenteModal && (
-        <Modal title="Assistente" onClose={() => setShowAssistenteModal(false)}>
+        <Modal title="Gestione Assistenti" onClose={() => setShowAssistenteModal(false)}>
           <GestioneListaSemplice
             nomeSingolare="Assistente" nomeArticolo="un" tabella="assistente"
             elementi={assistente} ricarica={ricarica} msg={msg} setMsg={setMsg}
@@ -8642,7 +8642,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       )}
 
       {showLevaModal && (
-        <Modal title="Leva" onClose={() => setShowLevaModal(false)}>
+        <Modal title="Gestione Leve" onClose={() => setShowLevaModal(false)}>
           <GestioneListaSemplice
             nomeSingolare="Leva" nomeArticolo="una" tabella="leva"
             elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg}
