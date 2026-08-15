@@ -163,10 +163,10 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 100, 150, 110, 140, 80];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 90, 100, 150, 110, 140, 80];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Avvisata", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
 // (master/assistente/leva) da cui pesca le opzioni. L'ordine fisso con
@@ -2298,6 +2298,22 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     </button>
   );
 
+  // flag "Avvisata": verde quando quella persona (master, assistente o
+  // leva su questa riga) è stata avvisata del corso, clic per cambiare
+  const flagAvvisata = (attivo, onClick) => (
+    <button
+      onClick={onClick}
+      title={attivo ? "Avvisata" : "Non ancora avvisata"}
+      style={{
+        width: 22, height: 22, borderRadius: 6, border: `1px solid ${attivo ? "#2E7D32" : CREAM_BORDER}`,
+        background: attivo ? "#2E7D32" : "#fff", color: attivo ? "#fff" : "transparent",
+        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+      }}
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+    </button>
+  );
+
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
   // in Excel) afferrando la giunzione tra due colonne nell'intestazione;
   // resta salvata per sempre in questo browser (localStorage). Limitata
@@ -2481,6 +2497,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         </select>
                       </div>
                     </td>
+                    <td style={{ ...celStyle, textAlign: "center" }}>
+                      {flagAvvisata(!!cd.avvisata, () => salvaCampo(cd.id, "avvisata", !cd.avvisata))}
+                    </td>
                     <td style={celStyle}>
                       <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
                     </td>
@@ -2517,6 +2536,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
                           </button>
                         </div>
+                      </td>
+                      <td style={{ ...celStyle, textAlign: "center" }}>
+                        {flagAvvisata(!!riga.avvisata, () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !riga.avvisata))}
                       </td>
                       <td style={celStyle}>
                         {riga.tipo !== "leva" && (
