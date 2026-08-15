@@ -741,6 +741,32 @@ function IconaTileOmaggio({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+function IconaTileClassificazioneVoci({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11.5 3.5h6a1.5 1.5 0 0 1 1.5 1.5v6l-9.3 9.3a1.5 1.5 0 0 1-2.1 0l-5.4-5.4a1.5 1.5 0 0 1 0-2.1l9.3-9.3Z" />
+      <circle cx="15.3" cy="8.7" r="1.6" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileCrmShop({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8.2" r="3" />
+      <path d="M3.5 20v-1.2A5.3 5.3 0 0 1 9 13.5a5.3 5.3 0 0 1 5.5 5.3V20" />
+      <circle cx="17" cy="7.5" r="2.2" stroke={GOLD} />
+      <path d="M15.2 20v-1a3.9 3.9 0 0 1 5.3-3.6" stroke={GOLD} />
+    </svg>
+  );
+}
+function IconaTileCoupon({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 9.3a2 2 0 0 1 0-3.6V4.5a1.5 1.5 0 0 1 1.5-1.5h16a1.5 1.5 0 0 1 1.5 1.5v1.2a2 2 0 0 1 0 3.6v1.2a2 2 0 0 1 0 3.6v1.2a2 2 0 0 1 0 3.6v1.2a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-1.2a2 2 0 0 1 0-3.6v-1.2a2 2 0 0 1 0-3.6Z" />
+      <path d="M9 6.5v13" stroke={GOLD} strokeDasharray="2 2" />
+    </svg>
+  );
+}
 function IconaTileDashboardAnalisi({ size = 44, color = NAVY }) {
   const torta = spicchioTorta(9.3, 12.3, 2.6, -25, 270);
   return (
@@ -16278,7 +16304,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi }) {
+function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -16307,6 +16333,471 @@ function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onAp
           <TileHome title="Vendite al banco" descrizione="Tutte le vendite fatte con il POS interno." Icona={IconaTilePos} onClick={onApriVenditeAlBanco} />
           <TileHome title="Prodotti usati per i kit" descrizione="Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit." Icona={IconaPacchettoRiga} onClick={onApriProdottiUsatiKit} />
           <TileHome title="Omaggi" descrizione="Prodotti usciti dal POS senza essere venduti, regalati." Icona={IconaTileOmaggio} onClick={onApriOmaggi} />
+          <TileHome title="Classificazione voci di vendita" descrizione="Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop." Icona={IconaTileClassificazioneVoci} onClick={onApriClassificazioneVoci} />
+          <TileHome title="CRM Shop Online" descrizione="Clienti dello shop: ordini, spesa, carrello medio." Icona={IconaTileCrmShop} onClick={onApriCrmShop} />
+          <TileHome title="Genera Coupon" descrizione="Crea e gestisci codici sconto per lo shop online." Icona={IconaTileCoupon} onClick={onApriGeneraCoupon} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Classificazione voci di vendita (shop online) ----------
+// i corsi vengono venduti attraverso lo shop come se fossero articoli, e i
+// prodotti eliminati da WooCommerce negli ordini storici restano
+// identificabili solo dal nome: questa pagina è l'unica fonte di verità
+// per distinguere prodotto/corso/escluso, usata da "Classifica prodotti"
+// e dal CRM Shop Online. Precompilata una volta via SQL (regola per
+// parole chiave), poi editabile liberamente da qui — nessuna regola
+// resta scritta nel codice.
+const ETICHETTA_TIPO_VOCE_SHOP = { prodotto: "Prodotto", corso: "Corso", escluso: "Escluso" };
+function nomiVociVenduteDistinti(venditeShop) {
+  const set = new Set();
+  (venditeShop || []).forEach((v) => {
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
+      const nome = (riga?.nome || "").trim();
+      if (nome) set.add(nome);
+    });
+  });
+  return set;
+}
+function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const [filtroTipo, setFiltroTipo] = useState("tutti");
+  const [msg, setMsg] = useState("");
+
+  const mappaPerNome = useMemo(() => Object.fromEntries((vociShopClassificazione || []).map((v) => [v.nome, v])), [vociShopClassificazione]);
+
+  const nonClassificate = useMemo(() => {
+    const distinti = nomiVociVenduteDistinti(venditeShop);
+    return Array.from(distinti).filter((nome) => !mappaPerNome[nome]).sort((a, b) => a.localeCompare(b));
+  }, [venditeShop, mappaPerNome]);
+
+  const conteggiTipo = useMemo(() => {
+    const c = { prodotto: 0, corso: 0, escluso: 0 };
+    (vociShopClassificazione || []).forEach((v) => { c[v.tipo] = (c[v.tipo] || 0) + 1; });
+    return c;
+  }, [vociShopClassificazione]);
+
+  const elencoFiltrato = useMemo(() => {
+    let l = [...(vociShopClassificazione || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (filtroTipo !== "tutti") l = l.filter((v) => v.tipo === filtroTipo);
+    if (ricerca.trim()) l = l.filter((v) => v.nome.toLowerCase().includes(ricerca.trim().toLowerCase()));
+    return l;
+  }, [vociShopClassificazione, filtroTipo, ricerca]);
+
+  async function salvaCampo(id, campo, valore) {
+    const { error } = await supabase.from("voci_shop_classificazione").update({ [campo]: valore, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function classificaNuova(nome, tipo) {
+    const { error } = await supabase.from("voci_shop_classificazione").insert({ nome, tipo });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Classificazione voci di vendita</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Distingue corsi, prodotti ed esclusioni fra le righe vendute nello shop — usata per calcolare statistiche prodotto corrette.</div>
+
+        {nonClassificate.length > 0 && (
+          <div style={{ ...cardStyle, background: "#FBF1D9", border: `1px solid ${GOLD}` }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{nonClassificate.length} voce{nonClassificate.length === 1 ? "" : "i"} non ancora classificat{nonClassificate.length === 1 ? "a" : "e"}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {nonClassificate.map((nome) => (
+                <div key={nome} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 160 }}>{nome}</span>
+                  {Object.entries(ETICHETTA_TIPO_VOCE_SHOP).map(([chiave, etichetta]) => (
+                    <button key={chiave} onClick={() => classificaNuova(nome, chiave)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}>{etichetta}</button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ flex: "1 1 220px", minWidth: 200 }}>
+            <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca voce…" />
+          </div>
+          {["tutti", "prodotto", "corso", "escluso"].map((t) => (
+            <button
+              key={t}
+              onClick={() => setFiltroTipo(t)}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 14px", borderRadius: 20, border: "none", cursor: "pointer", background: filtroTipo === t ? NAVY : "#fff", color: filtroTipo === t ? "#fff" : NAVY, boxShadow: filtroTipo === t ? "none" : `inset 0 0 0 1px ${CREAM_BORDER}` }}
+            >
+              {t === "tutti" ? `Tutte (${(vociShopClassificazione || []).length})` : `${ETICHETTA_TIPO_VOCE_SHOP[t]} (${conteggiTipo[t] || 0})`}
+            </button>
+          ))}
+        </div>
+
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
+
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          {elencoFiltrato.length === 0 ? (
+            <div style={{ padding: 20, ...fontBody, fontSize: 13, color: MUTED }}>Nessuna voce trovata.</div>
+          ) : elencoFiltrato.map((v, i) => (
+            <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: i === elencoFiltrato.length - 1 ? "none" : `1px solid ${CREAM_BORDER}`, flexWrap: "wrap" }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "2 1 220px", minWidth: 160 }}>{v.nome}</span>
+              <select value={v.tipo} onChange={(e) => salvaCampo(v.id, "tipo", e.target.value)} style={{ ...inputStyle, width: "auto", flex: "0 0 150px" }}>
+                {Object.entries(ETICHETTA_TIPO_VOCE_SHOP).map(([chiave, etichetta]) => <option key={chiave} value={chiave}>{etichetta}</option>)}
+              </select>
+              <input
+                defaultValue={v.note || ""}
+                placeholder="Note…"
+                onBlur={(e) => { if (e.target.value !== (v.note || "")) salvaCampo(v.id, "note", e.target.value || null); }}
+                style={{ ...inputStyle, flex: "1 1 200px" }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- CRM Shop Online ----------
+// identità del cliente: per customer_id (account registrato, dentro
+// payload_raw — mai stato estratto in una colonna propria) quando c'è,
+// altrimenti per email normalizzata. "Unisci clienti" per i casi
+// residui non ancora costruito, si aggiungerà quando servirà davvero
+// (punti fedeltà legati all'account)
+function chiaveClienteShop(v) {
+  const customerId = v?.payload_raw?.customer_id;
+  if (customerId && Number(customerId) > 0) return `c:${customerId}`;
+  return `e:${(v?.cliente_email || "").trim().toLowerCase()}`;
+}
+function costruisciClientiShop(venditeShop) {
+  const gruppi = {};
+  (venditeShop || []).filter((v) => v.origine === "woocommerce").forEach((v) => {
+    const chiave = chiaveClienteShop(v);
+    (gruppi[chiave] ||= []).push(v);
+  });
+  return Object.entries(gruppi).map(([chiave, righe]) => {
+    const ordini = righe.slice().sort((a, b) => (a.data_ordine || "").localeCompare(b.data_ordine || ""));
+    const conNome = [...ordini].reverse().find((o) => o.cliente_nome);
+    const conEmail = [...ordini].reverse().find((o) => o.cliente_email);
+    const totali = ordini.map((o) => o.totale || 0);
+    const numeroOrdini = ordini.length;
+    const totaleSpeso = totali.reduce((a, b) => a + b, 0);
+    const primoOrdine = ordini[0]?.data_ordine || null;
+    const ultimoOrdine = ordini[ordini.length - 1]?.data_ordine || null;
+    let giorniMedi = null;
+    if (numeroOrdini > 1 && primoOrdine && ultimoOrdine) {
+      giorniMedi = (new Date(ultimoOrdine) - new Date(primoOrdine)) / (1000 * 60 * 60 * 24 * (numeroOrdini - 1));
+    }
+    return {
+      chiave,
+      nome: conNome?.cliente_nome || "",
+      email: conEmail?.cliente_email || "",
+      numeroOrdini,
+      totaleSpeso,
+      carrelloMedio: numeroOrdini > 0 ? totaleSpeso / numeroOrdini : 0,
+      spesaMaggiore: totali.length ? Math.max(...totali) : 0,
+      primoOrdine,
+      ultimoOrdine,
+      giorniMedi,
+      ordini,
+    };
+  });
+}
+
+// classifica prodotti + incasso corsi, filtrando le righe d'ordine con
+// voci_shop_classificazione: due elenchi separati (una voce "corso" non
+// entra mai nella classifica prodotti, e viceversa). Le voci non ancora
+// classificate contano come prodotto di default, ma sono segnalate.
+function costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione) {
+  const mappaTipo = Object.fromEntries((vociShopClassificazione || []).map((v) => [v.nome, v.tipo]));
+  const perNomeProdotto = {};
+  const perNomeCorso = {};
+  (venditeShop || []).filter((v) => v.origine === "woocommerce").forEach((v) => {
+    (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
+      const nome = (riga?.nome || "").trim();
+      if (!nome) return;
+      const tipo = mappaTipo[nome] || "prodotto";
+      if (tipo === "escluso") return;
+      const bucket = tipo === "corso" ? perNomeCorso : perNomeProdotto;
+      if (!bucket[nome]) bucket[nome] = { nome, quantita: 0, incasso: 0 };
+      bucket[nome].quantita += riga.quantita || 0;
+      bucket[nome].incasso += riga.totale_riga || 0;
+    });
+  });
+  const ordinaPerIncasso = (mappa) => Object.values(mappa).sort((a, b) => b.incasso - a.incasso);
+  return {
+    classificaProdotti: ordinaPerIncasso(perNomeProdotto),
+    classificaCorsi: ordinaPerIncasso(perNomeCorso),
+    vociNonClassificateDistinte: new Set(Object.keys({ ...perNomeProdotto, ...perNomeCorso }).filter((n) => !(n in mappaTipo))).size,
+  };
+}
+
+const COLONNE_CRM_SHOP = [
+  { chiave: "nome", etichetta: "Cliente" },
+  { chiave: "email", etichetta: "Email" },
+  { chiave: "numeroOrdini", etichetta: "Ordini" },
+  { chiave: "totaleSpeso", etichetta: "Totale speso" },
+  { chiave: "carrelloMedio", etichetta: "Carrello medio" },
+  { chiave: "spesaMaggiore", etichetta: "Spesa maggiore" },
+  { chiave: "primoOrdine", etichetta: "Primo ordine" },
+  { chiave: "ultimoOrdine", etichetta: "Ultimo ordine" },
+  { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
+];
+
+function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificazioneVoci, onBack }) {
+  const isMobile = useIsMobile();
+  const [vista, setVista] = useState("clienti"); // clienti | classifica
+  const [ricerca, setRicerca] = useState("");
+  const [colonnaOrdine, setColonnaOrdine] = useState("totaleSpeso");
+  const [direzioneOrdine, setDirezioneOrdine] = useState("desc");
+  const [chiaveAperta, setChiaveAperta] = useState(null);
+
+  const clienti = useMemo(() => costruisciClientiShop(venditeShop), [venditeShop]);
+  const classifica = useMemo(() => costruisciClassificaProdottiShop(venditeShop, vociShopClassificazione), [venditeShop, vociShopClassificazione]);
+
+  const kpi = useMemo(() => {
+    const totale = clienti.length;
+    const conPiuOrdini = clienti.filter((c) => c.numeroOrdini > 1).length;
+    const totaleOrdini = clienti.reduce((a, c) => a + c.numeroOrdini, 0);
+    const totaleSpeso = clienti.reduce((a, c) => a + c.totaleSpeso, 0);
+    return {
+      totale,
+      conPiuOrdini,
+      percentualeConPiuOrdini: totale > 0 ? (conPiuOrdini / totale) * 100 : 0,
+      carrelloMedio: totaleOrdini > 0 ? totaleSpeso / totaleOrdini : 0,
+      ordiniMediPerCliente: totale > 0 ? totaleOrdini / totale : 0,
+    };
+  }, [clienti]);
+
+  const elencoFiltrato = useMemo(() => {
+    const q = ricerca.trim().toLowerCase();
+    let l = q ? clienti.filter((c) => c.nome.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)) : clienti;
+    l = [...l].sort((a, b) => {
+      const va = a[colonnaOrdine], vb = b[colonnaOrdine];
+      let cmp;
+      if (typeof va === "string" || typeof vb === "string") cmp = (va || "").localeCompare(vb || "");
+      else cmp = (va ?? -Infinity) - (vb ?? -Infinity);
+      return direzioneOrdine === "asc" ? cmp : -cmp;
+    });
+    return l;
+  }, [clienti, ricerca, colonnaOrdine, direzioneOrdine]);
+
+  function cambiaOrdinamento(chiave) {
+    if (colonnaOrdine === chiave) { setDirezioneOrdine((d) => (d === "asc" ? "desc" : "asc")); return; }
+    setColonnaOrdine(chiave);
+    setDirezioneOrdine(chiave === "nome" || chiave === "email" ? "asc" : "desc");
+  }
+
+  const clienteAperto = chiaveAperta ? clienti.find((c) => c.chiave === chiaveAperta) : null;
+
+  const kpiCardStyle = { ...cardStyle, flex: "1 1 160px", textAlign: "center", padding: "16px 12px" };
+  const thStyleCrm = { padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" };
+  const tdStyleCrm = { padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}` };
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        </div>
+
+        {clienteAperto ? (
+          <DettaglioClienteShop cliente={clienteAperto} />
+        ) : (
+          <>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>CRM Shop Online</div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Clienti dello shop online, raggruppati per account (o per email quando non c'è un account).</div>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+              <button onClick={() => setVista("clienti")} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 20, border: "none", cursor: "pointer", background: vista === "clienti" ? NAVY : "#fff", color: vista === "clienti" ? "#fff" : NAVY, boxShadow: vista === "clienti" ? "none" : `inset 0 0 0 1px ${CREAM_BORDER}` }}>Clienti</button>
+              <button onClick={() => setVista("classifica")} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 20, border: "none", cursor: "pointer", background: vista === "classifica" ? NAVY : "#fff", color: vista === "classifica" ? "#fff" : NAVY, boxShadow: vista === "classifica" ? "none" : `inset 0 0 0 1px ${CREAM_BORDER}` }}>Classifica prodotti</button>
+            </div>
+
+            {vista === "classifica" ? (
+              <SezioneClassificaProdottiShop classifica={classifica} onApriClassificazioneVoci={onApriClassificazioneVoci} />
+            ) : (
+              <>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{kpi.totale.toLocaleString("it-IT")}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Clienti</div>
+              </div>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{kpi.conPiuOrdini.toLocaleString("it-IT")} <span style={{ fontSize: 14, color: MUTED }}>({fmtPctErp(kpi.percentualeConPiuOrdini)})</span></div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Con più di un ordine</div>
+              </div>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.carrelloMedio)}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Carrello medio</div>
+              </div>
+              <div style={kpiCardStyle}>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{kpi.ordiniMediPerCliente.toLocaleString("it-IT", { maximumFractionDigits: 2 })}</div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Ordini per cliente</div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14, maxWidth: 320 }}>
+              <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca per nome o email…" />
+            </div>
+
+            <div style={{ ...cardStyle, padding: 0, overflow: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+                <thead>
+                  <tr style={{ background: "#F7F5EF" }}>
+                    {COLONNE_CRM_SHOP.map((c) => (
+                      <th key={c.chiave} style={thStyleCrm} onClick={() => cambiaOrdinamento(c.chiave)}>
+                        {c.etichetta}{colonnaOrdine === c.chiave ? (direzioneOrdine === "asc" ? " ↑" : " ↓") : ""}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {elencoFiltrato.map((c) => (
+                    <tr key={c.chiave} onClick={() => setChiaveAperta(c.chiave)} style={{ cursor: "pointer" }}>
+                      <td style={{ ...tdStyleCrm, fontWeight: 700 }}>{c.nome ? toTitleCase(c.nome) : <span style={{ fontStyle: "italic", color: MUTED }}>senza nome</span>}</td>
+                      <td style={tdStyleCrm}>{c.email || "—"}</td>
+                      <td style={tdStyleCrm}>{c.numeroOrdini}</td>
+                      <td style={tdStyleCrm}>{fmtEuroErp2(c.totaleSpeso)}</td>
+                      <td style={tdStyleCrm}>{fmtEuroErp2(c.carrelloMedio)}</td>
+                      <td style={tdStyleCrm}>{fmtEuroErp2(c.spesaMaggiore)}</td>
+                      <td style={tdStyleCrm}>{c.primoOrdine ? fmtData(c.primoOrdine) : "—"}</td>
+                      <td style={tdStyleCrm}>{c.ultimoOrdine ? fmtData(c.ultimoOrdine) : "—"}</td>
+                      <td style={tdStyleCrm}>{c.giorniMedi != null ? Math.round(c.giorniMedi) : "—"}</td>
+                    </tr>
+                  ))}
+                  {elencoFiltrato.length === 0 && (
+                    <tr><td colSpan={COLONNE_CRM_SHOP.length} style={{ ...tdStyleCrm, textAlign: "center", color: MUTED }}>Nessun cliente trovato.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+              </>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// scheda cliente: elenco ordini con data/numero/stato/totale, carrello
+// espandibile da vendita.prodotti (nome/quantità/prezzo/totale riga)
+function DettaglioClienteShop({ cliente }) {
+  const [espansoId, setEspansoId] = useState(null);
+  const ordiniRecentiPrimi = [...cliente.ordini].sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
+  return (
+    <div>
+      <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{cliente.nome ? toTitleCase(cliente.nome) : "Cliente senza nome"}</div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>{cliente.email || "email non disponibile"} · {cliente.numeroOrdini} ordin{cliente.numeroOrdini === 1 ? "e" : "i"} · {fmtEuroErp2(cliente.totaleSpeso)} totali</div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {ordiniRecentiPrimi.map((o) => {
+          const espanso = espansoId === o.id;
+          const prodotti = Array.isArray(o.prodotti) ? o.prodotti : [];
+          return (
+            <div key={o.id} style={{ ...cardStyle, marginBottom: 0, cursor: "pointer" }} onClick={() => setEspansoId(espanso ? null : o.id)}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{o.numero_ordine || "—"}</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{o.data_ordine ? fmtData(o.data_ordine) : "—"} · {o.stato || "—"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(o.totale)}</div>
+                  <span style={{ color: MUTED, transform: espanso ? "rotate(180deg)" : "none", display: "flex" }}><IconaChevronGiuErp size={12} /></span>
+                </div>
+              </div>
+              {espanso && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  {prodotti.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun dettaglio carrello disponibile.</div>
+                  ) : prodotti.map((riga, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "5px 0", ...fontBody, fontSize: 13, color: NAVY }}>
+                      <span>{riga.quantita ? `${riga.quantita} × ` : ""}{riga.nome || "—"}</span>
+                      <span style={{ fontWeight: 700 }}>{riga.totale_riga != null ? fmtEuroErp2(riga.totale_riga) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// due classifiche per incasso — prodotti ed corsi — più l'avviso sulle
+// voci ancora da classificare (contano come prodotto finché qualcuno
+// non le smista in Classificazione voci di vendita)
+function SezioneClassificaProdottiShop({ classifica, onApriClassificazioneVoci }) {
+  const { classificaProdotti, classificaCorsi, vociNonClassificateDistinte } = classifica;
+  const totaleIncassoCorsi = classificaCorsi.reduce((a, r) => a + r.incasso, 0);
+  const totaleIncassoProdotti = classificaProdotti.reduce((a, r) => a + r.incasso, 0);
+
+  function tabellaClassifica(righe, etichettaVuoto) {
+    return (
+      <div style={{ ...cardStyle, padding: 0, overflow: "auto", flex: 1, minWidth: 300 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr style={{ background: "#F7F5EF" }}>
+              <th style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>Nome</th>
+              <th style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "right" }}>Quantità</th>
+              <th style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "right" }}>Incasso</th>
+            </tr>
+          </thead>
+          <tbody>
+            {righe.length === 0 ? (
+              <tr><td colSpan={3} style={{ padding: "14px 12px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{etichettaVuoto}</td></tr>
+            ) : righe.map((r) => (
+              <tr key={r.nome}>
+                <td style={{ padding: "9px 12px", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}` }}>{r.nome}</td>
+                <td style={{ padding: "9px 12px", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "right" }}>{r.quantita}</td>
+                <td style={{ padding: "9px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "right" }}>{fmtEuroErp2(r.incasso)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {vociNonClassificateDistinte > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FBF1D9", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "12px 14px", marginBottom: 18, flexWrap: "wrap" }}>
+          <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 200 }}>{vociNonClassificateDistinte} voce{vociNonClassificateDistinte === 1 ? "" : "i"} non ancora classificat{vociNonClassificateDistinte === 1 ? "a" : "e"} — {vociNonClassificateDistinte === 1 ? "conta" : "contano"} come prodotto finché non {vociNonClassificateDistinte === 1 ? "viene" : "vengono"} classificat{vociNonClassificateDistinte === 1 ? "a" : "e"}.</span>
+          {onApriClassificazioneVoci && (
+            <button onClick={onApriClassificazioneVoci} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "7px 12px", cursor: "pointer" }}>Vai a Classificazione voci</button>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ ...cardStyle, flex: "1 1 200px", textAlign: "center", padding: "16px 12px" }}>
+          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleIncassoProdotti)}</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Incasso prodotti</div>
+        </div>
+        <div style={{ ...cardStyle, flex: "1 1 200px", textAlign: "center", padding: "16px 12px" }}>
+          <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleIncassoCorsi)}</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Incasso corsi (esclusi dalle statistiche prodotto)</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 300px", minWidth: 300 }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Prodotti</div>
+          {tabellaClassifica(classificaProdotti, "Nessun prodotto classificato ancora.")}
+        </div>
+        <div style={{ flex: "1 1 300px", minWidth: 300 }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Corsi</div>
+          {tabellaClassifica(classificaCorsi, "Nessuna voce classificata come corso ancora.")}
         </div>
       </div>
     </div>
@@ -25473,6 +25964,7 @@ export default function App() {
   const [masterCorsi, setMasterCorsi] = useState([]);
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
   const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
+  const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
@@ -25507,7 +25999,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -25562,6 +26054,7 @@ export default function App() {
       supabase.from("allievi_crm").select("*"),
       supabase.from("assistente_corsi").select("*"),
       supabase.from("corsi_date_docenti").select("*"),
+      supabase.from("voci_shop_classificazione").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -25627,6 +26120,7 @@ export default function App() {
     setAllieviCrm(acrm.data || []);
     setAssistenteCorsi(ac.data || []);
     setCorsiDateDocenti(cdd.data || []);
+    setVociShopClassificazione(vsc.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -25977,6 +26471,9 @@ export default function App() {
   function apriVenditeAlBanco() { apriViewProtetta("venditealbanco"); }
   function apriProdottiUsatiKit() { apriViewProtetta("prodottiusatikit"); }
   function apriOmaggi() { apriViewProtetta("omaggi"); }
+  function apriClassificazioneVoci() { apriViewProtetta("classificazionevocishop"); }
+  function apriCrmShop() { apriViewProtetta("crmshop"); }
+  function apriGeneraCoupon() { apriViewProtetta("generacoupon"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
@@ -26322,7 +26819,21 @@ export default function App() {
           onApriVenditeAlBanco={apriVenditeAlBanco}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
           onApriOmaggi={apriOmaggi}
+          onApriClassificazioneVoci={apriClassificazioneVoci}
+          onApriCrmShop={apriCrmShop}
+          onApriGeneraCoupon={apriGeneraCoupon}
         />
+      )}
+
+      {view === "classificazionevocishop" && (
+        <PaginaClassificazioneVociShop
+          vociShopClassificazione={vociShopClassificazione} venditeShop={venditeShop}
+          ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+        />
+      )}
+
+      {view === "crmshop" && (
+        <PaginaCrmShop venditeShop={venditeShop} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} />
       )}
 
       {view === "statistichevenditeprodotti" && (
