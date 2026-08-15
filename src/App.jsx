@@ -1628,6 +1628,7 @@ async function estraiDatiModuloPdf(file) {
   const pdfjsLib = await getPdfjsLib();
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  try {
   const paginePossibili = [6, 5, 7].filter((n) => n <= pdf.numPages);
 
   for (const numPagina of paginePossibili) {
@@ -1676,6 +1677,12 @@ async function estraiDatiModuloPdf(file) {
     if (Object.keys(risultato).length > 0) return risultato;
   }
   return null;
+  } finally {
+    // libera la memoria del documento PDF: senza questo, rileggere molti
+    // moduli in sequenza (es. "Recupera residenze dai moduli") satura la RAM
+    // e la scheda del browser va in crash a metà
+    try { await pdf.destroy(); } catch (e) { /* ignora */ }
+  }
 }
 // data odierna in formato "YYYY-MM-DD", per confrontare con data_inizio/data_fine
 // trasforma un testo in una forma leggibile per l'URL: "Microblading Base" → "microblading-base"
@@ -19435,6 +19442,9 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
     for (let idx = 0; idx < daFare.length; idx++) {
       const i = daFare[idx];
       setBackfillStato({ fatti: idx, totali: daFare.length });
+      // breve pausa: lascia respirare il browser tra un PDF e l'altro, così
+      // la memoria si libera e la scheda non va in crash sui numeri grandi
+      await new Promise((r) => setTimeout(r, 30));
       try {
         const bytes = await scaricaBytesStorage("allegati-iscritti", i.file_iscrizione);
         const dati = await estraiDatiModuloPdf(new Blob([bytes], { type: "application/pdf" }));
