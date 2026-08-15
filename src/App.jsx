@@ -2280,6 +2280,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const thStyle = { ...celStyle, ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: "#F7F5EF", borderBottom: `1px solid ${CREAM_BORDER}` };
   const campoStyle = { ...fontScheda, fontSize: 12, fontWeight: 600, padding: "7px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, width: "100%", boxSizing: "border-box", background: "#fff", color: NAVY };
   const pulsanteDocenteStyle = { ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: 22, height: 22, cursor: "pointer", padding: 0 };
+  // larghezza fissa uguale su ogni riga (master principale ed extra),
+  // così le caselle "Master/Assistente/Leva" iniziano sempre alla
+  // stessa X qualunque sia la lunghezza dell'etichetta
+  const etichettaTipoStyle = { ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, whiteSpace: "nowrap", flexShrink: 0, width: 58 };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
@@ -2296,11 +2300,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
   // in Excel) afferrando la giunzione tra due colonne nell'intestazione;
-  // resta salvata per sempre in questo browser (localStorage)
+  // resta salvata per sempre in questo browser (localStorage). Limitata
+  // tra un minimo e un massimo (anche i valori già salvati, al
+  // caricamento): senza questo un trascinamento andato oltre gonfiava
+  // una colonna a dismisura e non c'era più modo di restringerla
+  const LARGHEZZA_COLONNA_MIN = 30;
+  const LARGHEZZA_COLONNA_MAX = 260;
+  const limitaLarghezza = (v) => Math.min(LARGHEZZA_COLONNA_MAX, Math.max(LARGHEZZA_COLONNA_MIN, v));
   const larghezzeSalvate = (() => {
     try {
       const v = JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_COLONNE) || "null");
-      if (Array.isArray(v) && v.length === LARGHEZZE_COLONNE_DEFAULT.length) return v;
+      if (Array.isArray(v) && v.length === LARGHEZZE_COLONNE_DEFAULT.length) return v.map(limitaLarghezza);
     } catch { /* localStorage non disponibile: usa i default */ }
     return LARGHEZZE_COLONNE_DEFAULT;
   })();
@@ -2317,7 +2327,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   function muoviRidimensionamento(e) {
     const r = ridimensionamentoRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
-    const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
+    const nuovaLarghezza = limitaLarghezza(r.startWidth + (e.clientX - r.startX));
     setLarghezze((precedenti) => precedenti.map((l, i) => (i === r.indice ? nuovaLarghezza : l)));
   }
   function fineRidimensionamento() {
@@ -2456,10 +2466,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
                     </td>
                     <td style={celStyle}>
-                      <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
-                        <option value="">—</option>
-                        {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-                      </select>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={etichettaTipoStyle}>Master</span>
+                        <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
+                          <option value="">—</option>
+                          {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                        </select>
+                      </div>
                     </td>
                     <td style={celStyle}>
                       <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
@@ -2488,7 +2501,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <tr key={riga.id}>
                       <td style={celStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
+                          <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
                           <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={riga.persona_id || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
                             <option value="">—</option>
                             {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
