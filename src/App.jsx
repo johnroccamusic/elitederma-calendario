@@ -2471,7 +2471,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           <thead>
             <tr>
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
-                <th key={i} style={{ ...thStyle, position: "relative", textAlign: (i === ETICHETTE_COLONNE_MASTER.length - 1 || etichetta === "Docenti") ? "center" : thStyle.textAlign }}>
+                <th key={i} style={{
+                  ...thStyle, position: "relative",
+                  textAlign: (i === ETICHETTE_COLONNE_MASTER.length - 1 || etichetta === "Sede OK?") ? "center" : thStyle.textAlign,
+                  // allineata con l'inizio della casella di scelta persona,
+                  // non con il bordo della cella: quella casella comincia
+                  // dopo l'etichetta fissa (Master/Assistente/Leva) + il gap
+                  paddingLeft: etichetta === "Docenti" ? 8 + etichettaTipoStyle.width + 6 : celStyle.paddingLeft,
+                }}>
                   {etichetta}
                   <div
                     onPointerDown={(e) => iniziaRidimensionamento(e, i)}
