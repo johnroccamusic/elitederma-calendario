@@ -25,7 +25,7 @@ create table if not exists public.corsi_date_docenti (
 );
 alter table public.corsi_date_docenti enable row level security;
 drop policy if exists "accesso interno corsi_date_docenti" on public.corsi_date_docenti;
-create policy "accesso interno corsi_date_docenti" on public.corsi_date_docenti for all to authenticated using (true) with check (true);
+create policy "accesso interno corsi_date_docenti" on public.corsi_date_docenti for all to anon using (true) with check (true);
 create index if not exists corsi_date_docenti_corso_data_idx on public.corsi_date_docenti (corso_data_id);
 
 -- Migrazione dei dati esistenti: gli elenchi assistente_ids/leva_ids

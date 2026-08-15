@@ -5,10 +5,11 @@
 -- fasce per numero di allievi come le master: qui l'importo non
 -- dipende da quanti allievi ci sono al corso).
 --
--- Le policy qui sono "to authenticated" (non "to anon" come nelle
--- sezioni storiche precedenti di questo file): la RLS è già stata
--- corretta in produzione a favore di "authenticated" e non va
--- regredita da un nuovo pezzo di setup.
+-- Le policy sono "to anon", come tutte le altre di questo file: la
+-- migrazione RLS verso "authenticated" (supabase/migrations/) non è
+-- ancora stata applicata in produzione, l'app oggi si autentica solo
+-- con la chiave anon. "to authenticated" qui bloccherebbe l'app
+-- (verificato: causa "row-level security policy" su ogni scrittura).
 -- ---------------------------------------------------------
 alter table public.leva add column if not exists foto_url text;
 alter table public.leva add column if not exists note text;
@@ -28,17 +29,17 @@ create table if not exists public.assistente_corsi (
 );
 alter table public.assistente_corsi enable row level security;
 drop policy if exists "accesso interno assistente_corsi" on public.assistente_corsi;
-create policy "accesso interno assistente_corsi" on public.assistente_corsi for all to authenticated using (true) with check (true);
+create policy "accesso interno assistente_corsi" on public.assistente_corsi for all to anon using (true) with check (true);
 create index if not exists assistente_corsi_assistente_idx on public.assistente_corsi (assistente_id);
 
 insert into storage.buckets (id, name, public) values ('leve-assistenti-foto', 'leve-assistenti-foto', true) on conflict (id) do nothing;
 drop policy if exists "accesso interno leve-assistenti-foto" on storage.objects;
-create policy "accesso interno leve-assistenti-foto" on storage.objects for all to authenticated
+create policy "accesso interno leve-assistenti-foto" on storage.objects for all to anon
   using (bucket_id = 'leve-assistenti-foto') with check (bucket_id = 'leve-assistenti-foto');
 
 insert into storage.buckets (id, name, public) values ('leve-assistenti-documenti', 'leve-assistenti-documenti', true) on conflict (id) do nothing;
 drop policy if exists "accesso interno leve-assistenti-documenti" on storage.objects;
-create policy "accesso interno leve-assistenti-documenti" on storage.objects for all to authenticated
+create policy "accesso interno leve-assistenti-documenti" on storage.objects for all to anon
   using (bucket_id = 'leve-assistenti-documenti') with check (bucket_id = 'leve-assistenti-documenti');
 
 notify pgrst, 'reload schema';
