@@ -21653,6 +21653,20 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   function rimuoviImmagineProdotto(chiave) {
     setProdottoForm((f) => ({ ...f, immagini: f.immagini.filter((im) => im.chiave !== chiave) }));
   }
+  async function sostituisciImmagineProdotto(chiave, file) {
+    if (!file) return;
+    setCaricandoImmagine(true);
+    try {
+      const url = await caricaFileSuStorage(file);
+      // wooImageId torna a null: al salvataggio va trattata come
+      // un'immagine nuova (nuovo src), non come riuso dello stesso
+      // allegato WooCommerce — la posizione nell'array resta invariata
+      setProdottoForm((f) => ({ ...f, immagini: f.immagini.map((im) => (im.chiave === chiave ? { ...im, url, wooImageId: null } : im)) }));
+    } catch (err) {
+      window.alert("Caricamento immagine non riuscito: " + err.message);
+    }
+    setCaricandoImmagine(false);
+  }
   function rendiCopertina(chiave) {
     setProdottoForm((f) => {
       const idx = f.immagini.findIndex((im) => im.chiave === chiave);
@@ -21837,6 +21851,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 {i !== 0 && (
                   <button onClick={() => rendiCopertina(im.chiave)} title="Rendi copertina" style={{ background: "rgba(14,27,51,0.75)", border: "none", borderRadius: 6, color: "#fff", width: 18, height: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, padding: 0 }}>★</button>
                 )}
+                <label title="Sostituisci immagine" style={{ background: "rgba(14,27,51,0.75)", border: "none", borderRadius: 6, color: "#fff", width: 18, height: 18, cursor: caricandoImmagine ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                  <input type="file" accept="image/*" style={{ display: "none" }} disabled={caricandoImmagine} onChange={(e) => sostituisciImmagineProdotto(im.chiave, e.target.files?.[0] || null)} />
+                </label>
                 <button onClick={() => rimuoviImmagineProdotto(im.chiave)} title="Elimina immagine" style={{ background: "rgba(192,57,43,0.85)", border: "none", borderRadius: 6, color: "#fff", width: 18, height: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
                 </button>
@@ -21848,7 +21866,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             <input type="file" accept="image/*" multiple onChange={onAggiungiImmaginiProdotto} style={{ display: "none" }} disabled={caricandoImmagine} />
           </label>
         </div>
-        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Trascina per riordinare le immagini. La prima è la copertina mostrata sullo shop.</div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Trascina per riordinare le immagini. La prima è la copertina mostrata sullo shop. L'icona con la fotocamera sostituisce l'immagine senza doverla prima cancellare.</div>
       </Field>
       <Field label="Nome prodotto"><input style={inputStyle} value={prodottoForm.nome} onChange={(e) => setProdottoForm((f) => ({ ...f, nome: e.target.value }))} /></Field>
       <Field label="Descrizione breve">
