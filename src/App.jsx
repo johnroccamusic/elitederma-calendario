@@ -19325,12 +19325,20 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
   const corsiDateAssegnate = (corsiDate || []).filter((cd) => (cd[campoIds] || []).includes(selezionatoId));
   const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
   const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
+  const totaleAssistenze = corsiDateAssegnate.length + (selezionato?.assistenze_extra || 0);
+  async function modificaAssistenzeExtra(delta) {
+    if (!selezionato) return;
+    const nuovoValore = Math.max(0, (selezionato.assistenze_extra || 0) + delta);
+    const { error } = await supabase.from(tabella).update({ assistenze_extra: nuovoValore }).eq("id", selezionato.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   function rigaCorsoData(cd) {
     return (
-      <div key={cd.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-        <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{corsoById[cd.corso_id]?.nome || "—"}</span>
-        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+      <div key={cd.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{corsoById[cd.corso_id]?.nome || "—"}</span>
+        <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
       </div>
     );
   }
@@ -19426,7 +19434,6 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
                       <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>{badgeLabel}</span>
                     </div>
-                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>{conteggioCorsi[selezionato.id] || 0} {(conteggioCorsi[selezionato.id] || 0) === 1 ? etichettaConteggio : etichettaConteggioPlur}</div>
                     {!modificaContatti ? (
                       <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
                         {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
@@ -19509,15 +19516,25 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
                 )}
 
                 {tab === "calendario" && (
-                  <div>
-                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
-                    {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
-                    {passate.length > 0 && (
-                      <>
-                        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
-                        {passate.map(rigaCorsoData)}
-                      </>
-                    )}
+                  <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
+                      {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
+                      {passate.length > 0 && (
+                        <>
+                          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
+                          {passate.map(rigaCorsoData)}
+                        </>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                      <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Assistenze</span>
+                      <span style={{ ...fontDisplay, fontSize: 34, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{totaleAssistenze}</span>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <button onClick={() => modificaAssistenzeExtra(1)} title="Aggiungi un'assistenza (es. anni scorsi)" style={{ width: 20, height: 16, background: NAVY, color: "#fff", border: "none", borderRadius: "4px 4px 0 0", cursor: "pointer", ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
+                        <button onClick={() => modificaAssistenzeExtra(-1)} disabled={!(selezionato?.assistenze_extra > 0)} title="Togli un'assistenza aggiunta a mano" style={{ width: 20, height: 16, background: NAVY, color: "#fff", border: "none", borderRadius: "0 0 4px 4px", cursor: selezionato?.assistenze_extra > 0 ? "pointer" : "default", opacity: selezionato?.assistenze_extra > 0 ? 1 : 0.4, ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
