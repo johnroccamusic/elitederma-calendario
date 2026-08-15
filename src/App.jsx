@@ -19449,6 +19449,15 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
                     )}
                   </div>
 
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <span style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY }}>Assistenze</span>
+                    <span style={{ ...fontDisplay, fontSize: 30, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{totaleAssistenze}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <button onClick={() => modificaAssistenzeExtra(1)} title="Aggiungi un'assistenza (es. anni scorsi)" style={{ width: 20, height: 16, background: NAVY, color: "#fff", border: "none", borderRadius: "4px 4px 0 0", cursor: "pointer", ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
+                      <button onClick={() => modificaAssistenzeExtra(-1)} disabled={!(selezionato?.assistenze_extra > 0)} title="Togli un'assistenza aggiunta a mano" style={{ width: 20, height: 16, background: NAVY, color: "#fff", border: "none", borderRadius: "0 0 4px 4px", cursor: selezionato?.assistenze_extra > 0 ? "pointer" : "default", opacity: selezionato?.assistenze_extra > 0 ? 1 : 0.4, ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
+                    </div>
+                  </div>
+
                   <div style={{ position: "relative", flexShrink: 0 }}>
                     <button onClick={() => setMenuAzioni((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
                       Azioni <IconaChevronGiuErp size={11} />
@@ -19516,25 +19525,15 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
                 )}
 
                 {tab === "calendario" && (
-                  <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
-                    <div style={{ flex: 1, minWidth: 160 }}>
-                      <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
-                      {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
-                      {passate.length > 0 && (
-                        <>
-                          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
-                          {passate.map(rigaCorsoData)}
-                        </>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                      <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Assistenze</span>
-                      <span style={{ ...fontDisplay, fontSize: 34, fontWeight: 800, color: NAVY, lineHeight: 1 }}>{totaleAssistenze}</span>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <button onClick={() => modificaAssistenzeExtra(1)} title="Aggiungi un'assistenza (es. anni scorsi)" style={{ width: 20, height: 16, background: NAVY, color: "#fff", border: "none", borderRadius: "4px 4px 0 0", cursor: "pointer", ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
-                        <button onClick={() => modificaAssistenzeExtra(-1)} disabled={!(selezionato?.assistenze_extra > 0)} title="Togli un'assistenza aggiunta a mano" style={{ width: 20, height: 16, background: NAVY, color: "#fff", border: "none", borderRadius: "0 0 4px 4px", cursor: selezionato?.assistenze_extra > 0 ? "pointer" : "default", opacity: selezionato?.assistenze_extra > 0 ? 1 : 0.4, ...fontBody, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
-                      </div>
-                    </div>
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
+                    {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
+                    {passate.length > 0 && (
+                      <>
+                        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
+                        {passate.map(rigaCorsoData)}
+                      </>
+                    )}
                   </div>
                 )}
 
