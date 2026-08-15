@@ -4869,9 +4869,6 @@ function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: corsoData.viaggio_prenotato ? "#2E7D32" : "#C0392B" }}>
           <span style={{ width: 8, height: 8, borderRadius: "50%", background: corsoData.viaggio_prenotato ? "#2E7D32" : "#C0392B" }} />
           {corsoData.viaggio_prenotato ? "Viaggio prenotato" : "Viaggio da prenotare"}
-          {biglietti.length > 0 && (
-            <AllegatoLink percorso={biglietti[0]} etichetta="· Scarica biglietto" onClick={(e) => e.stopPropagation()} style={{ color: NAVY }} />
-          )}
         </div>
       </div>
       {biglietti.length > 0 && (
