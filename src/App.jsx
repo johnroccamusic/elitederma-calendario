@@ -2492,27 +2492,31 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
             </tr>
           </thead>
           <tbody>
-            {righeMese.map((cd) => {
+            {righeMese.map((cd, indice) => {
               const corso = corsoById[cd.corso_id];
               const loc = locById[cd.location_id];
               const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
               const docenti = docentiPerCorsoData[cd.id] || [];
               const rowSpanGruppo = 1 + docenti.length;
+              // corsi alternati bianco / grigio chiarissimo, per riconoscere
+              // a colpo d'occhio dove finisce un corso e inizia il prossimo
+              const sfondoGruppo = indice % 2 === 1 ? "#FAFAF7" : "#fff";
+              const cellaGruppo = { ...celStyle, background: sfondoGruppo };
               return (
                 <React.Fragment key={cd.id}>
                   <tr>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top", borderLeft: `8px solid ${corso?.colore || NAVY}` }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top", borderLeft: `8px solid ${corso?.colore || NAVY}` }}>
                       <div>{sopra}</div>
                       <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, fontWeight: 700, verticalAlign: "top" }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 13, color: NAVY, fontWeight: 700, verticalAlign: "top" }}>
                       {corso?.nome?.toUpperCase() || "?"}
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center", verticalAlign: "top" }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, textAlign: "center", verticalAlign: "top" }}>
                       {semaforo(valoreCampo(cd, "sede_confermata"), () => salvaCampo(cd.id, "sede_confermata", !valoreCampo(cd, "sede_confermata")), "piccolo")}
                     </td>
-                    <td style={celStyle}>
+                    <td style={cellaGruppo}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={etichettaTipoStyle}>Master</span>
                         <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
@@ -2521,25 +2525,25 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         </select>
                       </div>
                     </td>
-                    <td style={{ ...celStyle, textAlign: "center" }}>
+                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
                       {flagAvvisata(!!valoreCampo(cd, "avvisata"), () => salvaCampo(cd.id, "avvisata", !valoreCampo(cd, "avvisata")))}
                     </td>
-                    <td style={celStyle}>
+                    <td style={cellaGruppo}>
                       <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
                     </td>
-                    <td style={celStyle}>
+                    <td style={cellaGruppo}>
                       {cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file")}
                     </td>
-                    <td style={celStyle}>
+                    <td style={cellaGruppo}>
                       <select style={campoStyle} value={valoreCampo(cd, "alloggio_id") || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
                         <option value="">—</option>
                         {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                       </select>
                     </td>
-                    <td style={celStyle}>
+                    <td style={cellaGruppo}>
                       <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center", verticalAlign: "top" }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, textAlign: "center", verticalAlign: "top" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         <button onClick={() => aggiungiDocente(cd, "master")} title="Aggiungi un'altra master" style={pulsanteDocenteStyle}>M</button>
                         <button onClick={() => aggiungiDocente(cd, "assistente")} title="Aggiungi un'assistente" style={pulsanteDocenteStyle}>A</button>
@@ -2549,7 +2553,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   </tr>
                   {docenti.map((riga) => (
                     <tr key={riga.id}>
-                      <td style={celStyle}>
+                      <td style={cellaGruppo}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
                           <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
@@ -2561,24 +2565,24 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           </button>
                         </div>
                       </td>
-                      <td style={{ ...celStyle, textAlign: "center" }}>
+                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
                         {flagAvvisata(!!valoreCampo(riga, "avvisata"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !valoreCampo(riga, "avvisata")))}
                       </td>
-                      <td style={celStyle}>
+                      <td style={cellaGruppo}>
                         {riga.tipo !== "leva" && (
                           <input style={campoStyle} defaultValue={riga.note || ""} onBlur={(e) => { if (e.target.value !== (riga.note || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note", e.target.value || null); }} />
                         )}
                       </td>
-                      <td style={celStyle}>
+                      <td style={cellaGruppo}>
                         {cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file")}
                       </td>
-                      <td style={celStyle}>
+                      <td style={cellaGruppo}>
                         <select style={campoStyle} value={valoreCampo(riga, "alloggio_id") || ""} onChange={(e) => salvaCampoGenerico("corsi_date_docenti", riga.id, "alloggio_id", e.target.value || null)}>
                           <option value="">—</option>
                           {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                         </select>
                       </td>
-                      <td style={celStyle}>
+                      <td style={cellaGruppo}>
                         {riga.tipo !== "leva" && (
                           <input style={campoStyle} defaultValue={riga.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (riga.note_viaggio || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note_viaggio", e.target.value || null); }} />
                         )}
