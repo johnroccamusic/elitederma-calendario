@@ -7982,7 +7982,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8005,8 +8005,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [showLocModal, setShowLocModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
   const [showHotelModal, setShowHotelModal] = useState(false);
-  const [showAssistenteModal, setShowAssistenteModal] = useState(false);
-  const [showLevaModal, setShowLevaModal] = useState(false);
   const [showVenditoriModal, setShowVenditoriModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
@@ -8022,8 +8020,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showLocModal, setShowLocModal], [showMagazziniModal, setShowMagazziniModal],
-      [showHotelModal, setShowHotelModal], [showAssistenteModal, setShowAssistenteModal],
-      [showLevaModal, setShowLevaModal], [showVenditoriModal, setShowVenditoriModal],
+      [showHotelModal, setShowHotelModal], [showVenditoriModal, setShowVenditoriModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -8032,7 +8029,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
     showCorsoModal, showTipiModellaModal, showLocModal, showMagazziniModal, showHotelModal,
-    showAssistenteModal, showLevaModal, showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
+    showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
   ]);
   // cellulare ed email vivono in colonne a sé, interrogate solo qui (non
   // nel caricamento generale): così, se in futuro dovesse mai mancare o
@@ -8230,30 +8227,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     ricarica();
   }
 
-  // "Promuovi": sposta il contatto da un elenco all'altro invece di
-  // doverlo ricreare da zero — copia nome/telefono/email nella nuova
-  // tabella e rimuove la riga da quella di partenza. Nessun collegamento
-  // esistente altrove (es. corsi_date.master_id) dipende da questi
-  // elenchi "Leva"/"Assistente", quindi non c'è niente da riattaccare
-  async function promuoviLevaAdAssistente(el) {
-    if (!window.confirm(`Promuovere "${toTitleCase(el.nome)}" ad Assistente? Verrà spostata dall'elenco Leve.`)) return;
-    const { error: erroreIns } = await supabase.from("assistente").insert({ nome: el.nome, telefono: el.telefono || null, email: el.email || null });
-    if (erroreIns) { setMsg("Errore: " + erroreIns.message); return; }
-    const { error: erroreDel } = await supabase.from("leva").delete().eq("id", el.id);
-    if (erroreDel) { setMsg("Errore: " + erroreDel.message); return; }
-    setMsg(`${toTitleCase(el.nome)} promossa ad Assistente.`);
-    ricarica();
-  }
-  async function promuoviAssistenteAMaster(el) {
-    if (!window.confirm(`Promuovere "${toTitleCase(el.nome)}" a Master? Verrà spostata dall'elenco Assistenti.`)) return;
-    const { error: erroreIns } = await supabase.from("master").insert({ nome: el.nome, telefono: el.telefono || null, email: el.email || null });
-    if (erroreIns) { setMsg("Errore: " + erroreIns.message); return; }
-    const { error: erroreDel } = await supabase.from("assistente").delete().eq("id", el.id);
-    if (erroreDel) { setMsg("Errore: " + erroreDel.message); return; }
-    setMsg(`${toTitleCase(el.nome)} promossa a Master.`);
-    ricarica();
-  }
-
   async function aggiungiCorso() {
     if (!nomeCorso.trim()) return;
     if (coloriUsati.includes(colore.toLowerCase())) {
@@ -8310,8 +8283,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     {
       chiave: "team", titolo: "Team", coloreBg: "#F5E6C8", Icona: IconaGruppoTeam,
       voci: [
-        { etichetta: "Gestione Leve", Icona: IconaLeveRiga, onClick: () => setShowLevaModal(true) },
-        { etichetta: "Gestione Assistenti", Icona: IconaAssistentiRiga, onClick: () => setShowAssistenteModal(true) },
+        { etichetta: "Gestione Leve", Icona: IconaLeveRiga, onClick: onApriGestioneLeve },
+        { etichetta: "Gestione Assistenti", Icona: IconaAssistentiRiga, onClick: onApriGestioneAssistenti },
         { etichetta: "Gestione Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
         { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
       ],
@@ -8628,30 +8601,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             nomeSingolare="Hotel" nomeArticolo="un" tabella="hotel"
             elementi={hotel} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. HOTEL ROMA"
-          />
-        </Modal>
-      )}
-
-      {showAssistenteModal && (
-        <Modal title="Gestione Assistenti" onClose={() => setShowAssistenteModal(false)}>
-          <GestioneListaSemplice
-            nomeSingolare="Assistente" nomeArticolo="un" tabella="assistente"
-            elementi={assistente} ricarica={ricarica} msg={msg} setMsg={setMsg}
-            placeholder="es. MARIA ROSSI"
-            mostraTelefono mostraEmail
-            azioneExtra={{ etichetta: "Promuovi a master", onClick: promuoviAssistenteAMaster }}
-          />
-        </Modal>
-      )}
-
-      {showLevaModal && (
-        <Modal title="Gestione Leve" onClose={() => setShowLevaModal(false)}>
-          <GestioneListaSemplice
-            nomeSingolare="Leva" nomeArticolo="una" tabella="leva"
-            elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg}
-            placeholder="es. LEVA 1"
-            mostraTelefono mostraEmail
-            azioneExtra={{ etichetta: "Promuovi ad assistente", onClick: promuoviLevaAdAssistente }}
           />
         </Modal>
       )}
@@ -19199,6 +19148,412 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica,
   );
 }
 
+// ---------- Gestione Leve / Gestione Assistenti ----------
+// Stesso layout di PaginaGestioneMaster (lista + dettaglio, avatar,
+// tab), ma un solo componente parametrizzato per le due tabelle invece
+// di duplicarlo: la differenza reale tra leva e assistente è piccola
+// (le assistenti si associano ai corsi con un compenso giornaliero
+// fisso, le leve no — non hanno alcun compenso) e non giustifica due
+// componenti quasi identici.
+//
+// Il "conteggio corsi" mostrato in lista ha due fonti diverse a seconda
+// del tipo: per le assistenti conta le righe di assistente_corsi
+// (corsi a cui è associata, con relativo compenso); per le leve conta
+// le edizioni (corsi_date) dove compare in leva_ids — non esiste un
+// concetto di "associazione al corso" per le leve, solo la storia di
+// dove hanno fatto assistenza.
+function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniCorsi, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const isAssistente = tabella === "assistente";
+  const campoIds = isAssistente ? "assistente_ids" : "leva_ids";
+  const titolo = isAssistente ? "Gestione Assistenti" : "Gestione Leve";
+  const sottotitolo = isAssistente
+    ? "Associa le assistenti ai corsi e definisci il compenso giornaliero."
+    : "Gestisci le leve e consulta i corsi a cui hanno fatto assistenza.";
+  const nomeSingolare = isAssistente ? "Assistente" : "Leva";
+  const badgeLabel = isAssistente ? "ASSISTENTE" : "LEVA";
+  const etichettaConteggio = isAssistente ? "corso associato" : "corso assistito";
+  const etichettaConteggioPlur = isAssistente ? "corsi associati" : "corsi assistiti";
+  const bucketFoto = "leve-assistenti-foto";
+  const bucketDocumenti = "leve-assistenti-documenti";
+  const promuoviConfig = isAssistente
+    ? { etichetta: "Promuovi a master", tabellaDestinazione: "master", verbo: "a Master" }
+    : { etichetta: "Promuovi ad assistente", tabellaDestinazione: "assistente", verbo: "ad Assistente" };
+
+  const [ricerca, setRicerca] = useState("");
+  const [filtro, setFiltro] = useState("tutti");
+  const [pagina, setPagina] = useState(0);
+  const PER_PAGINA = 10;
+  const [selezionatoId, setSelezionatoId] = useState(null);
+  const [tab, setTab] = useState(isAssistente ? "corsi" : "calendario");
+  const [corsoScelto, setCorsoScelto] = useState("");
+  const [mostraForm, setMostraForm] = useState(false);
+  const [nomeNuovo, setNomeNuovo] = useState("");
+  const [menuAzioni, setMenuAzioni] = useState(false);
+  const [modificaContatti, setModificaContatti] = useState(false);
+  const [emailMod, setEmailMod] = useState("");
+  const [telefonoMod, setTelefonoMod] = useState("");
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState("");
+  const [caricandoFoto, setCaricandoFoto] = useState(false);
+  const [caricandoDocumento, setCaricandoDocumento] = useState(false);
+
+  // si azzera quando si cambia tabella (navigazione tra le due pagine)
+  useEffect(() => {
+    setSelezionatoId(null); setRicerca(""); setFiltro("tutti"); setPagina(0);
+    setTab(isAssistente ? "corsi" : "calendario");
+  }, [tabella]);
+
+  const conteggioCorsi = useMemo(() => {
+    const mappa = {};
+    if (isAssistente) {
+      (associazioniCorsi || []).forEach((a) => { mappa[a.assistente_id] = (mappa[a.assistente_id] || 0) + 1; });
+    } else {
+      (corsiDate || []).forEach((cd) => { (cd[campoIds] || []).forEach((id) => { mappa[id] = (mappa[id] || 0) + 1; }); });
+    }
+    return mappa;
+  }, [associazioniCorsi, corsiDate, isAssistente, campoIds]);
+
+  const listaFiltrata = useMemo(() => {
+    let l = [...(elementi || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (ricerca.trim()) l = l.filter((el) => el.nome.toLowerCase().includes(ricerca.trim().toLowerCase()));
+    if (filtro === "con_corsi") l = l.filter((el) => (conteggioCorsi[el.id] || 0) > 0);
+    if (filtro === "senza_corsi") l = l.filter((el) => !(conteggioCorsi[el.id] || 0));
+    return l;
+  }, [elementi, conteggioCorsi, ricerca, filtro]);
+
+  useEffect(() => {
+    if ((!selezionatoId || !listaFiltrata.some((el) => el.id === selezionatoId)) && listaFiltrata.length > 0) {
+      setSelezionatoId(listaFiltrata[0].id);
+    }
+  }, [listaFiltrata, selezionatoId]);
+
+  const totalePagine = Math.max(1, Math.ceil(listaFiltrata.length / PER_PAGINA));
+  const paginaClamp = Math.min(pagina, totalePagine - 1);
+  const listaPagina = listaFiltrata.slice(paginaClamp * PER_PAGINA, paginaClamp * PER_PAGINA + PER_PAGINA);
+
+  const selezionato = (elementi || []).find((el) => el.id === selezionatoId);
+
+  useEffect(() => {
+    setNote(selezionato?.note || "");
+    setEmailMod(selezionato?.email || "");
+    setTelefonoMod(selezionato?.telefono || "");
+    setTab(isAssistente ? "corsi" : "calendario");
+    setModificaContatti(false);
+    setMenuAzioni(false);
+    setMsg("");
+  }, [selezionatoId]);
+
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const assegnazioniCorsi = isAssistente ? (associazioniCorsi || []).filter((a) => a.assistente_id === selezionatoId) : [];
+  const idsAssegnati = new Set(assegnazioniCorsi.map((a) => a.corso_id));
+  const corsiDisponibili = (corsi || []).filter((c) => !idsAssegnati.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  async function aggiungiElemento() {
+    if (!nomeNuovo.trim()) return;
+    const { error } = await supabase.from(tabella).insert({ nome: nomeNuovo.trim().toUpperCase() });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setNomeNuovo(""); setMostraForm(false); ricarica();
+  }
+  async function eliminaElemento() {
+    if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
+    const { error } = await supabase.from(tabella).delete().eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setSelezionatoId(null); setMenuAzioni(false); ricarica();
+  }
+  async function promuovi() {
+    if (!selezionato) return;
+    if (!window.confirm(`Promuovere "${toTitleCase(selezionato.nome)}" ${promuoviConfig.verbo}? Verrà spostata dall'elenco ${nomeSingolare === "Leva" ? "Leve" : "Assistenti"}.`)) return;
+    const { error: erroreIns } = await supabase.from(promuoviConfig.tabellaDestinazione).insert({ nome: selezionato.nome, telefono: selezionato.telefono || null, email: selezionato.email || null });
+    if (erroreIns) { window.alert("Errore: " + erroreIns.message); return; }
+    const { error: erroreDel } = await supabase.from(tabella).delete().eq("id", selezionato.id);
+    if (erroreDel) { window.alert("Errore: " + erroreDel.message); return; }
+    setSelezionatoId(null); setMenuAzioni(false); ricarica();
+  }
+  async function salvaContatti() {
+    const { error } = await supabase.from(tabella).update({ email: emailMod.trim() || null, telefono: telefonoMod.trim() || null }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setModificaContatti(false); ricarica();
+  }
+  async function caricaFoto(file) {
+    if (!file || !selezionatoId) return;
+    setCaricandoFoto(true);
+    const percorso = `${tabella}/${selezionatoId}/foto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from(bucketFoto).upload(percorso, file, { upsert: true });
+    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + erroreUpload.message); return; }
+    const { data: urlData } = supabase.storage.from(bucketFoto).getPublicUrl(percorso);
+    const { error } = await supabase.from(tabella).update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
+    setCaricandoFoto(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function salvaNote() {
+    if ((selezionato?.note || "") === note.trim()) return;
+    const { error } = await supabase.from(tabella).update({ note: note.trim() || null }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function caricaDocumento(file) {
+    if (!file || !selezionatoId) return;
+    setCaricandoDocumento(true); setMsg("");
+    const percorso = `${tabella}/${selezionatoId}/documento-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from(bucketDocumenti).upload(percorso, file);
+    if (erroreUpload) { setCaricandoDocumento(false); setMsg("Errore: " + erroreUpload.message); return; }
+    const { error } = await supabase.from(tabella).update({ documento_file_path: percorso }).eq("id", selezionatoId);
+    setCaricandoDocumento(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function aggiungiCorsoAssistente() {
+    if (!corsoScelto || !selezionatoId) return;
+    const { error } = await supabase.from("assistente_corsi").insert({ assistente_id: selezionatoId, corso_id: corsoScelto });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setCorsoScelto("");
+    ricarica();
+  }
+  async function rimuoviCorsoAssistente(assegnazioneId) {
+    if (!window.confirm("Rimuovere questo corso dall'assistente?")) return;
+    const { error } = await supabase.from("assistente_corsi").delete().eq("id", assegnazioneId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function salvaCompensoGiornaliero(assegnazioneId, valore) {
+    const numero = valore.trim() === "" ? null : Number(valore);
+    const { error } = await supabase.from("assistente_corsi").update({ compenso_giornaliero: numero }).eq("id", assegnazioneId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  const oggiStr = dataOggiStr();
+  const corsiDateAssegnate = (corsiDate || []).filter((cd) => (cd[campoIds] || []).includes(selezionatoId));
+  const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
+  const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
+
+  function rigaCorsoData(cd) {
+    return (
+      <div key={cd.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{corsoById[cd.corso_id]?.nome || "—"}</span>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+      </div>
+    );
+  }
+
+  const tabStyle = (attivo) => ({
+    ...fontBody, fontSize: 13.5, fontWeight: 700, color: attivo ? NAVY : MUTED,
+    background: "none", border: "none", borderBottom: attivo ? `2px solid ${GOLD}` : "2px solid transparent",
+    padding: "10px 4px", marginRight: 22, cursor: "pointer",
+  });
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1220, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>{sottotitolo}</div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi {nomeSingolare}</button>
+          <div style={{ flex: 1, minWidth: isMobile ? "100%" : 220, maxWidth: 320 }}>
+            <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); setPagina(0); }} placeholder={`Cerca ${nomeSingolare.toLowerCase()}…`} />
+          </div>
+          <select value={filtro} onChange={(e) => { setFiltro(e.target.value); setPagina(0); }} style={{ ...inputStyle, width: "auto", padding: "10px 12px" }}>
+            <option value="tutti">{isAssistente ? "Tutte le assistenti" : "Tutte le leve"}</option>
+            <option value="con_corsi">Con {etichettaConteggioPlur}</option>
+            <option value="senza_corsi">Senza {etichettaConteggioPlur}</option>
+          </select>
+        </div>
+
+        {mostraForm && (
+          <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input autoFocus value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungiElemento()} placeholder="ES. MARIA ROSSI" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+            <button onClick={aggiungiElemento} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer" }}>Salva</button>
+            <button onClick={() => { setMostraForm(false); setNomeNuovo(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "300px 1fr", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ ...cardStyle, padding: 16 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, padding: "0 4px 10px" }}>{nomeSingolare === "Leva" ? "Leve" : "Assistenti"} ({listaFiltrata.length})</div>
+            {listaPagina.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 4px" }}>Nessuna {nomeSingolare.toLowerCase()} trovata.</div>}
+            {listaPagina.map((el) => {
+              const attivo = el.id === selezionatoId;
+              const conteggio = conteggioCorsi[el.id] || 0;
+              return (
+                <div key={el.id} onClick={() => setSelezionatoId(el.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "9px 8px", borderRadius: 10, cursor: "pointer", marginBottom: 4,
+                    background: attivo ? "#FBF1D9" : "transparent", border: attivo ? `1px solid ${GOLD}` : "1px solid transparent",
+                  }}
+                >
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {el.foto_url ? <img src={el.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={18} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(el.nome)}</div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{conteggio} {conteggio === 1 ? etichettaConteggio : etichettaConteggioPlur}</div>
+                  </div>
+                  <IconaChevronDestra size={14} color={MUTED} />
+                </div>
+              );
+            })}
+            {totalePagine > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={paginaClamp === 0} style={{ background: "none", border: "none", cursor: paginaClamp === 0 ? "default" : "pointer", opacity: paginaClamp === 0 ? 0.35 : 1, display: "flex", color: NAVY, transform: "rotate(180deg)" }}><IconaChevronDestra size={14} color="currentColor" /></button>
+                {Array.from({ length: totalePagine }).map((_, i) => (
+                  <button key={i} onClick={() => setPagina(i)} style={{ width: 24, height: 24, borderRadius: "50%", border: "none", cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, background: i === paginaClamp ? NAVY : "transparent", color: i === paginaClamp ? "#fff" : MUTED }}>{i + 1}</button>
+                ))}
+                <button onClick={() => setPagina((p) => Math.min(totalePagine - 1, p + 1))} disabled={paginaClamp === totalePagine - 1} style={{ background: "none", border: "none", cursor: paginaClamp === totalePagine - 1 ? "default" : "pointer", opacity: paginaClamp === totalePagine - 1 ? 0.35 : 1, display: "flex", color: NAVY }}><IconaChevronDestra size={14} /></button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...cardStyle }}>
+            {!selezionato ? (
+              <div style={{ textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessuna {nomeSingolare.toLowerCase()} selezionata.</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {selezionato.foto_url ? <img src={selezionato.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={38} />}
+                    </div>
+                    <label title="Carica foto" style={{ position: "absolute", bottom: -2, right: -2, width: 26, height: 26, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: "2px solid #fff" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                      <input type="file" accept="image/*" style={{ display: "none" }} disabled={caricandoFoto} onChange={(e) => caricaFoto(e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>{badgeLabel}</span>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 3 }}>{conteggioCorsi[selezionato.id] || 0} {(conteggioCorsi[selezionato.id] || 0) === 1 ? etichettaConteggio : etichettaConteggioPlur}</div>
+                    {!modificaContatti ? (
+                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+                        {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
+                        {" · "}
+                        {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                        <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                        <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                        <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <button onClick={() => setMenuAzioni((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                      Azioni <IconaChevronGiuErp size={11} />
+                    </button>
+                    {menuAzioni && (
+                      <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 10, minWidth: 200, overflow: "hidden" }}>
+                        <div onClick={() => { setModificaContatti(true); setMenuAzioni(false); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>Modifica contatti</div>
+                        <div onClick={promuovi} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{promuoviConfig.etichetta}</div>
+                        <div onClick={eliminaElemento} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B" }}>Elimina {nomeSingolare.toLowerCase()}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 18, overflowX: "auto" }}>
+                  {isAssistente && <button onClick={() => setTab("corsi")} style={tabStyle(tab === "corsi")}>Corsi associati</button>}
+                  <button onClick={() => setTab("calendario")} style={tabStyle(tab === "calendario")}>Calendario</button>
+                  <button onClick={() => setTab("note")} style={tabStyle(tab === "note")}>Note e documenti</button>
+                </div>
+
+                {isAssistente && tab === "corsi" && (
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Associa corsi all'assistente</div>
+                    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+                      <select value={corsoScelto} onChange={(e) => setCorsoScelto(e.target.value)} style={{ ...inputStyle, flex: 1, minWidth: 200 }}>
+                        <option value="">Seleziona un corso…</option>
+                        {corsiDisponibili.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      </select>
+                      <button onClick={aggiungiCorsoAssistente} disabled={!corsoScelto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 9, padding: "10px 18px", cursor: corsoScelto ? "pointer" : "default", opacity: corsoScelto ? 1 : 0.5 }}>Aggiungi corso</button>
+                    </div>
+
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Corsi associati ({assegnazioniCorsi.length})</div>
+                    {assegnazioniCorsi.length === 0 ? (
+                      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Nessun corso associato ancora.</div>
+                    ) : assegnazioniCorsi.map((a) => {
+                      const c = corsoById[a.corso_id];
+                      return (
+                        <div key={a.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: c?.colore || NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 11, fontWeight: 700 }}>{abbreviazioneCorso(c?.nome)}</div>
+                          <div style={{ flex: 1, minWidth: 140 }}>
+                            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c?.nome || "—"}</div>
+                            {c?.categoria && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{c.categoria}</div>}
+                          </div>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, color: MUTED }}>
+                            Compenso giornaliero
+                            <input type="number" min="0" step="0.01" defaultValue={a.compenso_giornaliero ?? ""} placeholder="0,00"
+                              onBlur={(e) => salvaCompensoGiornaliero(a.id, e.target.value)}
+                              style={{ ...inputStyle, width: 90, padding: "6px 8px", fontSize: 12.5 }} />
+                            €
+                          </label>
+                          <button onClick={() => rimuoviCorsoAssistente(a.id)} title="Rimuovi corso" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 4, display: "flex" }}>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: "#FBF1D9", border: `1px solid ${GOLD}`, borderRadius: 10, padding: "12px 14px", marginTop: 8 }}>
+                      <span style={{ flexShrink: 0, color: GOLD, marginTop: 1 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                      </span>
+                      <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>Il compenso giornaliero è fisso: non cambia in base al numero di allievi al corso.</div>
+                    </div>
+                  </div>
+                )}
+
+                {tab === "calendario" && (
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Prossimi corsi</div>
+                    {prossime.length === 0 ? <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 12 }}>Nessun corso in programma.</div> : prossime.map(rigaCorsoData)}
+                    {passate.length > 0 && (
+                      <>
+                        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 16, marginBottom: 4 }}>Corsi passati</div>
+                        {passate.map(rigaCorsoData)}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {tab === "note" && (
+                  <div>
+                    <Field label="Note">
+                      <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={salvaNote} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder={`Note libere su questa ${nomeSingolare.toLowerCase()}…`} />
+                    </Field>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 6 }}>Documento</div>
+                    {selezionato.documento_file_path ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <AllegatoLink percorso={selezionato.documento_file_path} etichetta="Apri il documento caricato" bucket={bucketDocumenti} />
+                        <label style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", cursor: "pointer" }}>
+                          Sostituisci
+                          <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => caricaDocumento(e.target.files?.[0] || null)} />
+                        </label>
+                      </div>
+                    ) : (
+                      <input type="file" accept="image/*,application/pdf" style={inputStyle} disabled={caricandoDocumento} onChange={(e) => caricaDocumento(e.target.files?.[0] || null)} />
+                    )}
+                    {caricandoDocumento && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
+                    {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- CRM Allievi ----------
 // "iscritti" è "una riga per ogni corso comprato", non un'anagrafica
 // persona (niente id stabile, niente email/città): questa chiave
@@ -24878,6 +25233,7 @@ export default function App() {
   const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
+  const [assistenteCorsi, setAssistenteCorsi] = useState([]);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
@@ -24912,7 +25268,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -24965,6 +25321,7 @@ export default function App() {
       supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false }),
       supabase.from("master_corsi").select("*"),
       supabase.from("allievi_crm").select("*"),
+      supabase.from("assistente_corsi").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -25028,6 +25385,7 @@ export default function App() {
     setSpedizioniPos(sped.data || []);
     setMasterCorsi(mc.data || []);
     setAllieviCrm(acrm.data || []);
+    setAssistenteCorsi(ac.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -25380,6 +25738,8 @@ export default function App() {
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
+  function apriGestioneLeve() { setView("gestioneleve"); }
+  function apriGestioneAssistenti() { setView("gestioneassistenti"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
@@ -25658,7 +26018,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
@@ -25953,6 +26313,20 @@ export default function App() {
       {view === "gestionemaster" && (
         <PaginaGestioneMaster
           master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi}
+          ricarica={fetchDati} onBack={() => setView("impostazioni")}
+        />
+      )}
+
+      {view === "gestioneleve" && (
+        <PaginaGestioneTeam
+          tabella="leva" elementi={leva} corsi={corsi} corsiDate={corsiDate}
+          ricarica={fetchDati} onBack={() => setView("impostazioni")}
+        />
+      )}
+
+      {view === "gestioneassistenti" && (
+        <PaginaGestioneTeam
+          tabella="assistente" elementi={assistente} corsi={corsi} corsiDate={corsiDate} associazioniCorsi={assistenteCorsi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
