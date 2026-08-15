@@ -19194,6 +19194,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
   const [caricandoDocumento, setCaricandoDocumento] = useState(false);
+  const [assistenzeOverride, setAssistenzeOverride] = useState({});
 
   // si azzera quando si cambia tabella (navigazione tra le due pagine)
   useEffect(() => {
@@ -19325,12 +19326,22 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
   const corsiDateAssegnate = (corsiDate || []).filter((cd) => (cd[campoIds] || []).includes(selezionatoId));
   const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
   const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
-  const totaleAssistenze = corsiDateAssegnate.length + (selezionato?.assistenze_extra || 0);
+  // aggiornamento ottimistico: "ricarica" rifà l'intero fetchDati (tutte le
+  // tabelle dell'app), troppo lento per sentirsi immediato su un semplice
+  // +1/-1 — il numero sullo schermo cambia subito, il giro reale al
+  // database e il refetch completo restano in corsa dietro le quinte
+  const assistenzeExtraEffettivo = selezionato ? (assistenzeOverride[selezionato.id] ?? selezionato.assistenze_extra ?? 0) : 0;
+  const totaleAssistenze = corsiDateAssegnate.length + assistenzeExtraEffettivo;
   async function modificaAssistenzeExtra(delta) {
     if (!selezionato) return;
-    const nuovoValore = Math.max(0, (selezionato.assistenze_extra || 0) + delta);
+    const nuovoValore = Math.max(0, assistenzeExtraEffettivo + delta);
+    setAssistenzeOverride((m) => ({ ...m, [selezionato.id]: nuovoValore }));
     const { error } = await supabase.from(tabella).update({ assistenze_extra: nuovoValore }).eq("id", selezionato.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) {
+      window.alert("Errore: " + error.message);
+      setAssistenzeOverride((m) => { const copia = { ...m }; delete copia[selezionato.id]; return copia; });
+      return;
+    }
     ricarica();
   }
 
