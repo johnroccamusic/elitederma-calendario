@@ -167,10 +167,28 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 100, 150, 110, 140, 110
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
-// etichetta del tipo mostrata nella tendina vuota di una riga "docente
-// extra" (Aggiungi docenti), e lista di riferimento (master/assistente/
-// leva) da cui pesca le opzioni
+// etichetta del tipo mostrata a sinistra della tendina persona di una
+// riga "docente extra" (Aggiungi docenti), e lista di riferimento
+// (master/assistente/leva) da cui pesca le opzioni. L'ordine fisso con
+// cui compaiono le righe extra di un corso, indipendentemente
+// dall'ordine in cui sono state aggiunte con M/A/L
 const ETICHETTA_TIPO_DOCENTE = { master: "Master", assistente: "Assistente", leva: "Leva" };
+const ORDINE_TIPO_DOCENTE = { master: 0, assistente: 1, leva: 2 };
+
+// stato del pallino "Viaggio": tre vie invece del semplice booleano
+// prenotato/non prenotato, per chi non deve proprio viaggiare (es. una
+// leva del posto) — usato sia in Assegnazione Master sia nella
+// Dashboard Master (CardDataMaster)
+const VIAGGIO_STATI = {
+  si: { colore: "#2E7D32", etichetta: "Viaggio prenotato" },
+  no: { colore: "#C0392B", etichetta: "Viaggio da prenotare" },
+  non_occorre: { colore: "#8B8FA3", etichetta: "Non occorre" },
+};
+const ORDINE_STATI_VIAGGIO = ["no", "si", "non_occorre"];
+function prossimoStatoViaggio(stato) {
+  const idx = ORDINE_STATI_VIAGGIO.indexOf(stato || "no");
+  return ORDINE_STATI_VIAGGIO[(idx + 1) % ORDINE_STATI_VIAGGIO.length];
+}
 
 // una "stagione" va da settembre di un anno ad agosto dell'anno successivo,
 // identificata dall'anno in cui inizia (es. 2026 = Stagione 2026-2027)
@@ -2074,7 +2092,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const docentiPerCorsoData = useMemo(() => {
     const mappa = {};
     (corsiDateDocenti || []).forEach((d) => { (mappa[d.corso_data_id] ||= []).push(d); });
-    Object.values(mappa).forEach((lista) => lista.sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || (a.ts || "").localeCompare(b.ts || "")));
+    Object.values(mappa).forEach((lista) => lista.sort((a, b) => (ORDINE_TIPO_DOCENTE[a.tipo] - ORDINE_TIPO_DOCENTE[b.tipo]) || (a.ts || "").localeCompare(b.ts || "")));
     return mappa;
   }, [corsiDateDocenti]);
   function nomeDocente(d) {
@@ -2223,16 +2241,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  // selezionare "—" sulla tendina persona di una riga extra la rimuove
-  // del tutto — stesso principio già in uso altrove nell'app
   async function impostaPersonaDocente(riga, valore) {
-    if (!valore) {
-      const { error } = await supabase.from("corsi_date_docenti").delete().eq("id", riga.id);
-      if (error) { window.alert("Errore: " + error.message); return; }
-      ricarica();
-      return;
-    }
-    await salvaCampoGenerico("corsi_date_docenti", riga.id, "persona_id", valore);
+    await salvaCampoGenerico("corsi_date_docenti", riga.id, "persona_id", valore || null);
+  }
+  // cestino a destra della tendina persona: rimuove la riga extra, con
+  // conferma (non basta più selezionare "—")
+  async function rimuoviDocente(riga) {
+    const nome = riga.persona_id ? nomeDocente(riga) : null;
+    if (!window.confirm(`Rimuovere questa riga${nome ? ` (${ETICHETTA_TIPO_DOCENTE[riga.tipo]} — ${toTitleCase(nome)})` : ` (${ETICHETTA_TIPO_DOCENTE[riga.tipo]})`}?`)) return;
+    const { error } = await supabase.from("corsi_date_docenti").delete().eq("id", riga.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
   }
 
   async function caricaBigliettiGenerico(tabella, id, fileAttuali, campo, fileList) {
@@ -2363,15 +2382,16 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // caricare biglietti, dicitura "N file" per cancellarli — generica,
   // usata sia per la riga principale (tabella "corsi_date") sia per le
   // righe "docenti extra" (tabella "corsi_date_docenti")
-  function cellaViaggio(tabella, riga, campoPrenotato, campoFile) {
+  function cellaViaggio(tabella, riga, campoStato, campoFile) {
     const nBiglietti = (riga[campoFile] || []).length;
-    const attivo = !!riga[campoPrenotato];
+    const stato = riga[campoStato] || "no";
+    const stile = VIAGGIO_STATI[stato];
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
         <button
-          onClick={() => salvaCampoGenerico(tabella, riga.id, campoPrenotato, !attivo)}
-          title={attivo ? "Viaggio prenotato" : "Viaggio non prenotato"}
-          style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: attivo ? "#2E7D32" : "#C0392B", flexShrink: 0 }}
+          onClick={() => salvaCampoGenerico(tabella, riga.id, campoStato, prossimoStatoViaggio(stato))}
+          title={`${stile.etichetta} (clicca per cambiare)`}
+          style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: stile.colore, flexShrink: 0 }}
         />
         <label style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>
           +
@@ -2398,7 +2418,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           <thead>
             <tr>
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
-                <th key={i} style={{ ...thStyle, position: "relative" }}>
+                <th key={i} style={{ ...thStyle, position: "relative", textAlign: i === ETICHETTE_COLONNE_MASTER.length - 1 ? "center" : thStyle.textAlign }}>
                   {etichetta}
                   <div
                     onPointerDown={(e) => iniziaRidimensionamento(e, i)}
@@ -2421,18 +2441,18 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               return (
                 <React.Fragment key={cd.id}>
                   <tr>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, textAlign: "center" }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top" }}>
                       <div>{sopra}</div>
-                      <div style={{ fontSize: 8, color: MUTED }}>{sotto}</div>
+                      <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, fontWeight: 700 }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, fontWeight: 700, verticalAlign: "top" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
                         {corso?.nome?.toUpperCase() || "?"}
                       </span>
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center" }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center", verticalAlign: "top" }}>
                       {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
                     </td>
                     <td style={celStyle}>
@@ -2445,7 +2465,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
                     </td>
                     <td style={celStyle}>
-                      {cellaViaggio("corsi_date", cd, "viaggio_prenotato", "viaggio_file")}
+                      {cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file")}
                     </td>
                     <td style={celStyle}>
                       <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
@@ -2456,8 +2476,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td style={celStyle}>
                       <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center" }}>
-                      <div style={{ ...fontScheda, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Aggiungi docenti</div>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center", verticalAlign: "top" }}>
                       <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
                         <button onClick={() => aggiungiDocente(cd, "master")} title="Aggiungi un'altra master" style={pulsanteDocenteStyle}>M</button>
                         <button onClick={() => aggiungiDocente(cd, "assistente")} title="Aggiungi un'assistente" style={pulsanteDocenteStyle}>A</button>
@@ -2468,14 +2487,24 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   {docenti.map((riga) => (
                     <tr key={riga.id}>
                       <td style={celStyle}>
-                        <select style={campoStyle} value={riga.persona_id || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
-                          <option value="">— {ETICHETTA_TIPO_DOCENTE[riga.tipo]} —</option>
-                          {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
-                        </select>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, whiteSpace: "nowrap", flexShrink: 0 }}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
+                          <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={riga.persona_id || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
+                            <option value="">—</option>
+                            {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+                          </select>
+                          <button onClick={() => rimuoviDocente(riga)} title="Rimuovi questa riga" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 2, display: "flex", flexShrink: 0 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                          </button>
+                        </div>
                       </td>
-                      <td style={celStyle} />
                       <td style={celStyle}>
-                        {cellaViaggio("corsi_date_docenti", riga, "viaggio_prenotato", "viaggio_file")}
+                        {riga.tipo !== "leva" && (
+                          <input style={campoStyle} defaultValue={riga.note || ""} onBlur={(e) => { if (e.target.value !== (riga.note || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note", e.target.value || null); }} />
+                        )}
+                      </td>
+                      <td style={celStyle}>
+                        {cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file")}
                       </td>
                       <td style={celStyle}>
                         <select style={campoStyle} value={riga.alloggio_id || ""} onChange={(e) => salvaCampoGenerico("corsi_date_docenti", riga.id, "alloggio_id", e.target.value || null)}>
@@ -2483,7 +2512,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                         </select>
                       </td>
-                      <td style={celStyle} />
+                      <td style={celStyle}>
+                        {riga.tipo !== "leva" && (
+                          <input style={campoStyle} defaultValue={riga.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (riga.note_viaggio || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note_viaggio", e.target.value || null); }} />
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </React.Fragment>
@@ -4868,6 +4901,7 @@ function PaginaDashboardVenditori({
 // compito di chi gestisce l'assegnazione)
 function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
   const biglietti = corsoData.viaggio_file || [];
+  const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   return (
     <div
       onClick={apribile ? () => onApriInventario(corsoData.id) : undefined}
@@ -4880,9 +4914,9 @@ function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
             {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} · {toTitleCase(loc?.nome || "—")}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: corsoData.viaggio_prenotato ? "#2E7D32" : "#C0392B" }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: corsoData.viaggio_prenotato ? "#2E7D32" : "#C0392B" }} />
-          {corsoData.viaggio_prenotato ? "Viaggio prenotato" : "Viaggio da prenotare"}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: statoViaggio.colore }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: statoViaggio.colore }} />
+          {statoViaggio.etichetta}
         </div>
       </div>
       {biglietti.length > 0 && (
