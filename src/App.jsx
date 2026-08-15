@@ -163,10 +163,14 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 100, 70, 60, 100, 90, 100, 90, 150, 150, 100, 100];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 100, 150, 110, 140, 110];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Assistenti", "Leve", "Viaggio master", "Viaggio ass.", "Alloggio", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
+// etichetta del tipo mostrata nella tendina vuota di una riga "docente
+// extra" (Aggiungi docenti), e lista di riferimento (master/assistente/
+// leva) da cui pesca le opzioni
+const ETICHETTA_TIPO_DOCENTE = { master: "Master", assistente: "Assistente", leva: "Leva" };
 
 // una "stagione" va da settembre di un anno ad agosto dell'anno successivo,
 // identificata dall'anno in cui inizia (es. 2026 = Stagione 2026-2027)
@@ -2055,12 +2059,28 @@ function Gate({ onOk }) {
 
 // ---------- Assegnazione Master ----------
 // tabella orizzontale con una riga per ogni data futura: sede confermata,
-// master/assistenti/leve/alloggio assegnabili da tendina, note libere e
-// gestione biglietti di viaggio (stato prenotazione, upload file, link da
-// copiare e mandare alla master).
-function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assistente, leva, ricarica, onBack }) {
+// note libere, la master principale sui campi diretti di corsi_date
+// (master/note/viaggio/alloggio/note viaggio, come sempre), più
+// "Aggiungi docenti" (M/A/L) per altre master/assistenti/leve: ognuna
+// diventa una riga propria in corsi_date_docenti, con i propri
+// biglietti di viaggio e il proprio hotel.
+function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, ricarica, onBack }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  // "docenti extra" di ciascuna edizione (altre master, assistenti, leve
+  // oltre alla master principale sui campi diretti di corsi_date), una
+  // riga per persona con i propri biglietti/hotel — vedi Aggiungi docenti
+  const docentiPerCorsoData = useMemo(() => {
+    const mappa = {};
+    (corsiDateDocenti || []).forEach((d) => { (mappa[d.corso_data_id] ||= []).push(d); });
+    Object.values(mappa).forEach((lista) => lista.sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || (a.ts || "").localeCompare(b.ts || "")));
+    return mappa;
+  }, [corsiDateDocenti]);
+  function nomeDocente(d) {
+    const lista = d.tipo === "master" ? master : d.tipo === "assistente" ? assistente : leva;
+    return lista.find((p) => p.id === d.persona_id)?.nome || "";
+  }
 
   const [filtroCorso, setFiltroCorso] = useState("");
   const [filtroCitta, setFiltroCitta] = useState("");
@@ -2135,18 +2155,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     .filter((cd) => inStagioneVista(cd.data_inizio))
     .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
     .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
-    .filter((cd) => !filtroMaster || cd.master_id === filtroMaster)
-    .filter((cd) => !filtroAssistente || (cd.assistente_ids || []).includes(filtroAssistente))
-    .filter((cd) => !filtroLeva || (cd.leva_ids || []).includes(filtroLeva))
+    .filter((cd) => !filtroMaster || cd.master_id === filtroMaster || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "master" && d.persona_id === filtroMaster))
+    .filter((cd) => !filtroAssistente || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "assistente" && d.persona_id === filtroAssistente))
+    .filter((cd) => !filtroLeva || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "leva" && d.persona_id === filtroLeva))
     .filter((cd) => {
       const q = ricercaTesto.trim().toLowerCase();
       if (!q) return true;
-      const nomiAssistenti = (cd.assistente_ids || []).map((id) => assistente.find((a) => a.id === id)?.nome || "");
-      const nomiLeve = (cd.leva_ids || []).map((id) => leva.find((l) => l.id === id)?.nome || "");
+      const nomiDocenti = (docentiPerCorsoData[cd.id] || []).map(nomeDocente);
       const campi = [
         corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome,
         master.find((m) => m.id === cd.master_id)?.nome,
-        ...nomiAssistenti, ...nomiLeve,
+        ...nomiDocenti,
       ];
       return campi.some((c) => (c || "").toLowerCase().includes(q));
     })
@@ -2179,12 +2198,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
         const nome = master.find((m) => m.id === cd.master_id)?.nome;
         if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
       }
-      (cd.assistente_ids || []).forEach((id) => {
-        const nome = assistente.find((a) => a.id === id)?.nome;
-        if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
-      });
-      (cd.leva_ids || []).forEach((id) => {
-        const nome = leva.find((l) => l.id === id)?.nome;
+      (docentiPerCorsoData[cd.id] || []).forEach((d) => {
+        const nome = nomeDocente(d);
         if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
       });
     });
@@ -2192,57 +2207,52 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     .map(([nome, n]) => ({ nome, n }))
     .sort((a, b) => b.n - a.n);
 
-  async function salvaCampo(id, campo, valore) {
-    const { error } = await supabase.from("corsi_date").update({ [campo]: valore }).eq("id", id);
+  // generiche perché servono sia alla riga principale (tabella
+  // "corsi_date": la prima master) sia alle righe "docenti extra"
+  // (tabella "corsi_date_docenti": altre master, assistenti, leve) —
+  // stesso comportamento, tabella diversa
+  async function salvaCampoGenerico(tabella, id, campo, valore) {
+    const { error } = await supabase.from(tabella).update({ [campo]: valore }).eq("id", id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
+  function salvaCampo(id, campo, valore) { return salvaCampoGenerico("corsi_date", id, campo, valore); }
 
-  // aggiunge una riga vuota all'elenco (assistente_ids / leva_ids)
-  function aggiungiRigaElenco(cd, campo) {
-    salvaCampo(cd.id, campo, [...(cd[campo] || []), null]);
+  async function aggiungiDocente(cd, tipo) {
+    const { error } = await supabase.from("corsi_date_docenti").insert({ corso_data_id: cd.id, tipo, persona_id: null });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
   }
-  // aggiorna la riga "idx" dell'elenco: selezionare "—" (valore vuoto) rimuove quella riga
-  function modificaRigaElenco(cd, campo, idx, valore) {
-    const elenco = [...(cd[campo] || [])];
-    if (!valore) elenco.splice(idx, 1);
-    else elenco[idx] = valore;
-    salvaCampo(cd.id, campo, elenco);
+  // selezionare "—" sulla tendina persona di una riga extra la rimuove
+  // del tutto — stesso principio già in uso altrove nell'app
+  async function impostaPersonaDocente(riga, valore) {
+    if (!valore) {
+      const { error } = await supabase.from("corsi_date_docenti").delete().eq("id", riga.id);
+      if (error) { window.alert("Errore: " + error.message); return; }
+      ricarica();
+      return;
+    }
+    await salvaCampoGenerico("corsi_date_docenti", riga.id, "persona_id", valore);
   }
 
-  async function caricaBiglietti(cd, fileList, campo) {
+  async function caricaBigliettiGenerico(tabella, id, fileAttuali, campo, fileList) {
     const nuovi = [];
     for (const file of Array.from(fileList || [])) {
-      const percorso = `${cd.id}/biglietto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+      const percorso = `${id}/biglietto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
       const { error } = await supabase.storage.from("allegati-iscritti").upload(percorso, file);
       if (error) { window.alert("Errore caricamento: " + error.message); return; }
       nuovi.push(percorso);
     }
     if (nuovi.length === 0) return;
-    await salvaCampo(cd.id, campo, [...(cd[campo] || []), ...nuovi]);
+    await salvaCampoGenerico(tabella, id, campo, [...(fileAttuali || []), ...nuovi]);
   }
 
-  async function cancellaBiglietti(cd, campo) {
-    const n = (cd[campo] || []).length;
+  async function cancellaBigliettiGenerico(tabella, id, fileAttuali, campo) {
+    const n = (fileAttuali || []).length;
     if (n === 0) return;
     if (!window.confirm(`Vuoi cancellare ${n === 1 ? "il file caricato" : `i ${n} file caricati`}?`)) return;
-    await salvaCampo(cd.id, campo, []);
+    await salvaCampoGenerico(tabella, id, campo, []);
     window.alert("Eseguito.");
-  }
-
-  async function copiaBiglietti(cd, campo, tipo) {
-    const file = cd[campo] || [];
-    if (file.length === 0) { window.alert("Non ci sono biglietti."); return; }
-    const corso = corsoById[cd.corso_id];
-    const loc = locById[cd.location_id];
-    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), slugData(cd.data_inizio, cd.data_fine)].filter(Boolean).join("/");
-    const url = `${window.location.origin}${window.location.pathname}?biglietti=${leggibile}${tipo ? `&tipo=${tipo}` : ""}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      window.alert("Link copiato.");
-    } catch (e) {
-      window.alert("Impossibile copiare automaticamente. Link: " + url);
-    }
   }
 
   const fontScheda = { fontFamily: "'Sofia Sans Condensed',sans-serif" };
@@ -2250,6 +2260,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
   const celStyle = { padding: "10px 8px", borderBottom: bordoV, verticalAlign: "middle" };
   const thStyle = { ...celStyle, ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: "#F7F5EF", borderBottom: `1px solid ${CREAM_BORDER}` };
   const campoStyle = { ...fontScheda, fontSize: 12, fontWeight: 600, padding: "7px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, width: "100%", boxSizing: "border-box", background: "#fff", color: NAVY };
+  const pulsanteDocenteStyle = { ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: 22, height: 22, cursor: "pointer", padding: 0 };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
@@ -2299,35 +2310,20 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     });
   }
 
-  // elenco di tendine per un campo "array" (assistente_ids/leva_ids): un
-  // quadratino "+" in alto aggiunge una riga, selezionare "—" su una riga
-  // già esistente la rimuove
-  function elencoModificabile(cd, campo, opzioni) {
-    const elenco = cd[campo] || [];
-    const righeVisibili = elenco.length > 0 ? elenco : [null];
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-        {righeVisibili.map((id, idx) => {
-          const sceltiAltrove = elenco.filter((_, i) => i !== idx);
-          const opzioniDisponibili = opzioni.filter((o) => o.id === id || !sceltiAltrove.includes(o.id));
-          return (
-            <select
-              key={idx}
-              style={campoStyle}
-              value={id || ""}
-              onChange={(e) => {
-                if (e.target.value === "__aggiungi__") { aggiungiRigaElenco(cd, campo); return; }
-                modificaRigaElenco(cd, campo, idx, e.target.value);
-              }}
-            >
-              <option value="">—</option>
-              {opzioniDisponibili.map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
-              <option value="__aggiungi__">+ Aggiungi</option>
-            </select>
-          );
-        })}
-      </div>
+  // opzioni disponibili per la tendina persona di una riga "docente
+  // extra": esclude chi è già scelto altrove nello stesso corso per lo
+  // stesso tipo (incluso, per le master, la master principale già sui
+  // campi diretti di corsi_date)
+  function opzioniPersonaDocente(cd, riga) {
+    const opzioniComplete = riga.tipo === "master" ? master : riga.tipo === "assistente" ? assistente : leva;
+    const usati = new Set(
+      (docentiPerCorsoData[cd.id] || [])
+        .filter((d) => d.tipo === riga.tipo && d.id !== riga.id)
+        .map((d) => d.persona_id)
+        .filter(Boolean)
     );
+    if (riga.tipo === "master" && cd.master_id) usati.add(cd.master_id);
+    return opzioniComplete.filter((o) => o.id === riga.persona_id || !usati.has(o.id));
   }
 
   function filtroDropdown(chiave, etichetta, valore, setValore, opzioni, Icona) {
@@ -2363,33 +2359,27 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
     );
   }
 
-  // cella "Viaggio master"/"Viaggio ass.": pallino rosso/verde (prenotato
-  // o no), icona per copiare il link di sola lettura dei biglietti, "+"
-  // per caricarne di nuovi, conteggio di quelli già presenti
-  function cellaViaggio(cd, campoPrenotato, campoFile, tipoLink) {
-    const nBiglietti = (cd[campoFile] || []).length;
-    const attivo = !!cd[campoPrenotato];
+  // cella "Viaggio": pallino rosso/verde (prenotato o no), "+" per
+  // caricare biglietti, dicitura "N file" per cancellarli — generica,
+  // usata sia per la riga principale (tabella "corsi_date") sia per le
+  // righe "docenti extra" (tabella "corsi_date_docenti")
+  function cellaViaggio(tabella, riga, campoPrenotato, campoFile) {
+    const nBiglietti = (riga[campoFile] || []).length;
+    const attivo = !!riga[campoPrenotato];
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
         <button
-          onClick={() => salvaCampo(cd.id, campoPrenotato, !attivo)}
+          onClick={() => salvaCampoGenerico(tabella, riga.id, campoPrenotato, !attivo)}
           title={attivo ? "Viaggio prenotato" : "Viaggio non prenotato"}
           style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: attivo ? "#2E7D32" : "#C0392B", flexShrink: 0 }}
         />
-        <button
-          onClick={() => copiaBiglietti(cd, campoFile, tipoLink)}
-          title="Copia link biglietti"
-          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", flexShrink: 0, padding: 0 }}
-        >
-          <IconaCopiaFile size={14} color={NAVY} />
-        </button>
         <label style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>
           +
-          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBiglietti(cd, e.target.files, campoFile); e.target.value = ""; }} />
+          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, riga[campoFile], campoFile, e.target.files); e.target.value = ""; }} />
         </label>
         {nBiglietti > 0 && (
           <span
-            onClick={() => cancellaBiglietti(cd, campoFile)}
+            onClick={() => cancellaBigliettiGenerico(tabella, riga.id, riga[campoFile], campoFile)}
             title="Clicca per cancellare i file caricati"
             style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
           >
@@ -2426,53 +2416,77 @@ function AssegnazioneMaster({ corsi, location, corsiDate, master, hotel, assiste
               const corso = corsoById[cd.corso_id];
               const loc = locById[cd.location_id];
               const { sopra, sotto } = fmtDataStack(cd.data_inizio, cd.data_fine);
+              const docenti = docentiPerCorsoData[cd.id] || [];
+              const rowSpanGruppo = 1 + docenti.length;
               return (
-                <tr key={cd.id}>
-                  <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, textAlign: "center" }}>
-                    <div>{sopra}</div>
-                    <div style={{ fontSize: 8, color: MUTED }}>{sotto}</div>
-                  </td>
-                  <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, fontWeight: 700 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                      {corso?.nome?.toUpperCase() || "?"}
-                    </span>
-                  </td>
-                  <td style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                  <td style={{ ...celStyle, textAlign: "center" }}>
-                    {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
-                  </td>
-                  <td style={celStyle}>
-                    <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
-                      <option value="">—</option>
-                      {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
-                    </select>
-                  </td>
-                  <td style={celStyle}>
-                    <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
-                  </td>
-                  <td style={celStyle}>
-                    {elencoModificabile(cd, "assistente_ids", assistente)}
-                  </td>
-                  <td style={celStyle}>
-                    {elencoModificabile(cd, "leva_ids", leva)}
-                  </td>
-                  <td style={celStyle}>
-                    {cellaViaggio(cd, "viaggio_prenotato", "viaggio_file", undefined)}
-                  </td>
-                  <td style={celStyle}>
-                    {cellaViaggio(cd, "viaggio_assistente_prenotato", "viaggio_assistente_file", "assistente")}
-                  </td>
-                  <td style={celStyle}>
-                    <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
-                      <option value="">—</option>
-                      {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
-                    </select>
-                  </td>
-                  <td style={celStyle}>
-                    <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
-                  </td>
-                </tr>
+                <React.Fragment key={cd.id}>
+                  <tr>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, textAlign: "center" }}>
+                      <div>{sopra}</div>
+                      <div style={{ fontSize: 8, color: MUTED }}>{sotto}</div>
+                    </td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY, fontWeight: 700 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ width: 9, height: 9, borderRadius: 3, background: corso?.colore || NAVY, flexShrink: 0 }} />
+                        {corso?.nome?.toUpperCase() || "?"}
+                      </span>
+                    </td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 10, color: NAVY }}>{loc?.nome?.toUpperCase() || "?"}</td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center" }}>
+                      {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
+                    </td>
+                    <td style={celStyle}>
+                      <select style={campoStyle} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
+                        <option value="">—</option>
+                        {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                      </select>
+                    </td>
+                    <td style={celStyle}>
+                      <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
+                    </td>
+                    <td style={celStyle}>
+                      {cellaViaggio("corsi_date", cd, "viaggio_prenotato", "viaggio_file")}
+                    </td>
+                    <td style={celStyle}>
+                      <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
+                        <option value="">—</option>
+                        {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
+                      </select>
+                    </td>
+                    <td style={celStyle}>
+                      <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
+                    </td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center" }}>
+                      <div style={{ ...fontScheda, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Aggiungi docenti</div>
+                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                        <button onClick={() => aggiungiDocente(cd, "master")} title="Aggiungi un'altra master" style={pulsanteDocenteStyle}>M</button>
+                        <button onClick={() => aggiungiDocente(cd, "assistente")} title="Aggiungi un'assistente" style={pulsanteDocenteStyle}>A</button>
+                        <button onClick={() => aggiungiDocente(cd, "leva")} title="Aggiungi una leva" style={pulsanteDocenteStyle}>L</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {docenti.map((riga) => (
+                    <tr key={riga.id}>
+                      <td style={celStyle}>
+                        <select style={campoStyle} value={riga.persona_id || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
+                          <option value="">— {ETICHETTA_TIPO_DOCENTE[riga.tipo]} —</option>
+                          {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
+                        </select>
+                      </td>
+                      <td style={celStyle} />
+                      <td style={celStyle}>
+                        {cellaViaggio("corsi_date_docenti", riga, "viaggio_prenotato", "viaggio_file")}
+                      </td>
+                      <td style={celStyle}>
+                        <select style={campoStyle} value={riga.alloggio_id || ""} onChange={(e) => salvaCampoGenerico("corsi_date_docenti", riga.id, "alloggio_id", e.target.value || null)}>
+                          <option value="">—</option>
+                          {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
+                        </select>
+                      </td>
+                      <td style={celStyle} />
+                    </tr>
+                  ))}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -18738,7 +18752,7 @@ function EditorFasceCompenso({ fasce, onCambia }) {
 // associati/Compensi/Calendario/Note e documenti. Sostituisce il vecchio
 // modale "Master" — è la pagina che si apre da Impostazioni > Definisci
 // Master.
-function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica, onBack }) {
+function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDateDocenti, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [filtro, setFiltro] = useState("tutti");
@@ -18872,7 +18886,12 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica,
   }
 
   const oggiStr = dataOggiStr();
-  const corsiDateAssegnate = (corsiDate || []).filter((cd) => cd.master_id === selezionatoId);
+  // corsi dove è la master principale (corsi_date.master_id) più quelli
+  // dove compare come master "extra" aggiunta da Aggiungi docenti in
+  // Assegnazione Master (corsi_date_docenti, tipo master) — un corso con
+  // più master compare nel calendario di entrambe
+  const corsiDataIdExtra = new Set((corsiDateDocenti || []).filter((d) => d.tipo === "master" && d.persona_id === selezionatoId).map((d) => d.corso_data_id));
+  const corsiDateAssegnate = (corsiDate || []).filter((cd) => cd.master_id === selezionatoId || corsiDataIdExtra.has(cd.id));
   const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
   const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
 
@@ -19156,13 +19175,19 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica,
 // Il "conteggio corsi" mostrato in lista ha due fonti diverse a seconda
 // del tipo: per le assistenti conta le righe di assistente_corsi
 // (corsi a cui è associata, con relativo compenso); per le leve conta
-// le edizioni (corsi_date) dove compare in leva_ids — non esiste un
+// le edizioni dove compare come "docente extra" di tipo leva in
+// corsi_date_docenti (assegnata da Assegnazione Master) — non esiste un
 // concetto di "associazione al corso" per le leve, solo la storia di
 // dove hanno fatto assistenza.
-function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniCorsi, ricarica, onBack }) {
+function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDocenti, associazioniCorsi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const isAssistente = tabella === "assistente";
-  const campoIds = isAssistente ? "assistente_ids" : "leva_ids";
+  // tipo con cui questa persona compare nelle righe "docenti extra" di
+  // Assegnazione Master (corsi_date_docenti) — quante volte e in quali
+  // corsi ha fatto assistenza, letto da lì e non più dai vecchi
+  // assistente_ids/leva_ids su corsi_date
+  const tipoDocente = isAssistente ? "assistente" : "leva";
+  const docentiDiQuestoTipo = useMemo(() => (corsiDateDocenti || []).filter((d) => d.tipo === tipoDocente), [corsiDateDocenti, tipoDocente]);
   const titolo = isAssistente ? "Gestione Assistenti" : "Gestione Leve";
   const sottotitolo = isAssistente
     ? "Associa le assistenti ai corsi e definisci il compenso giornaliero."
@@ -19207,10 +19232,10 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
     if (isAssistente) {
       (associazioniCorsi || []).forEach((a) => { mappa[a.assistente_id] = (mappa[a.assistente_id] || 0) + 1; });
     } else {
-      (corsiDate || []).forEach((cd) => { (cd[campoIds] || []).forEach((id) => { mappa[id] = (mappa[id] || 0) + 1; }); });
+      docentiDiQuestoTipo.forEach((d) => { if (d.persona_id) mappa[d.persona_id] = (mappa[d.persona_id] || 0) + 1; });
     }
     return mappa;
-  }, [associazioniCorsi, corsiDate, isAssistente, campoIds]);
+  }, [associazioniCorsi, docentiDiQuestoTipo, isAssistente]);
 
   const listaFiltrata = useMemo(() => {
     let l = [...(elementi || [])].sort((a, b) => a.nome.localeCompare(b.nome));
@@ -19323,7 +19348,8 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, associazioniC
   }
 
   const oggiStr = dataOggiStr();
-  const corsiDateAssegnate = (corsiDate || []).filter((cd) => (cd[campoIds] || []).includes(selezionatoId));
+  const corsiDataIdAssegnati = new Set(docentiDiQuestoTipo.filter((d) => d.persona_id === selezionatoId).map((d) => d.corso_data_id));
+  const corsiDateAssegnate = (corsiDate || []).filter((cd) => corsiDataIdAssegnati.has(cd.id));
   const prossime = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) >= oggiStr).sort((a, b) => (a.data_inizio || "").localeCompare(b.data_inizio || ""));
   const passate = corsiDateAssegnate.filter((cd) => (cd.data_fine || cd.data_inizio) < oggiStr).sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || ""));
   // aggiornamento ottimistico: "ricarica" rifà l'intero fetchDati (tutte le
@@ -25276,6 +25302,7 @@ export default function App() {
   const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
+  const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
@@ -25310,7 +25337,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -25364,6 +25391,7 @@ export default function App() {
       supabase.from("master_corsi").select("*"),
       supabase.from("allievi_crm").select("*"),
       supabase.from("assistente_corsi").select("*"),
+      supabase.from("corsi_date_docenti").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -25428,6 +25456,7 @@ export default function App() {
     setMasterCorsi(mc.data || []);
     setAllieviCrm(acrm.data || []);
     setAssistenteCorsi(ac.data || []);
+    setCorsiDateDocenti(cdd.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -26354,21 +26383,21 @@ export default function App() {
 
       {view === "gestionemaster" && (
         <PaginaGestioneMaster
-          master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi}
+          master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
 
       {view === "gestioneleve" && (
         <PaginaGestioneTeam
-          tabella="leva" elementi={leva} corsi={corsi} corsiDate={corsiDate}
+          tabella="leva" elementi={leva} corsi={corsi} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
 
       {view === "gestioneassistenti" && (
         <PaginaGestioneTeam
-          tabella="assistente" elementi={assistente} corsi={corsi} corsiDate={corsiDate} associazioniCorsi={assistenteCorsi}
+          tabella="assistente" elementi={assistente} corsi={corsi} corsiDate={corsiDate} associazioniCorsi={assistenteCorsi} corsiDateDocenti={corsiDateDocenti}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
@@ -26389,7 +26418,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "calendario" && (
