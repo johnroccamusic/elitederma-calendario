@@ -2426,7 +2426,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           title={`${stile.etichetta} (clicca per cambiare)`}
           style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: stile.colore, flexShrink: 0 }}
         />
-        <label style={{ ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", cursor: "pointer", whiteSpace: "nowrap" }}>
+        <label style={{ ...fontScheda, fontSize: 16, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1 }}>
           +
           <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, riga[campoFile], campoFile, e.target.files); e.target.value = ""; }} />
         </label>
@@ -2434,7 +2434,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           <span
             onClick={() => cancellaBigliettiGenerico(tabella, riga.id, riga[campoFile], campoFile)}
             title="Clicca per cancellare i file caricati"
-            style={{ ...fontScheda, fontSize: 8, color: MUTED, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
+            style={{ ...fontScheda, fontSize: 12, fontWeight: 600, color: NAVY, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
           >
             {nBiglietti} file
           </span>
