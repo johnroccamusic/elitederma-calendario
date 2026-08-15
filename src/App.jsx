@@ -11466,8 +11466,9 @@ const ICONA_CESTINO_PATH = <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1
 // scopribile e comunque rotto su Safari iOS insieme a "zoom", vedi
 // useZoomScheda), sotto una certa soglia si passa a righe impilate in
 // verticale che si adattano da sole a qualunque schermo
-function TabellaDateCorsi({ mesi, renderRiga }) {
+function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
   const isMobile = useIsMobile();
+  const numeroColonne = mostraColonnaSede ? 5 : 4;
   const gruppi = Object.keys(mesi).sort().map((chiaveMese) => {
     const gruppoMese = mesi[chiaveMese];
     return { chiaveMese, gruppoMese, voci: gruppoMese.voci.slice().sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)) };
@@ -11490,10 +11491,17 @@ function TabellaDateCorsi({ mesi, renderRiga }) {
   return (
     <div style={{ overflowX: "auto" }}>
     <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse" }}>
-      <colgroup><col /><col style={{ width: 140 }} /><col style={{ width: 230 }} /><col style={{ width: 110 }} /></colgroup>
+      <colgroup>
+        <col />
+        {mostraColonnaSede && <col style={{ width: 160 }} />}
+        <col style={{ width: 140 }} /><col style={{ width: 230 }} /><col style={{ width: 110 }} />
+      </colgroup>
       <thead>
         <tr style={{ borderBottom: `2px solid ${GOLD}` }}>
           <th style={{ textAlign: "left", padding: "0 10px 12px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Corso e docente</th>
+          {mostraColonnaSede && (
+            <th style={{ textAlign: "left", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Sede</th>
+          )}
           <th style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Data</th>
           <th style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Capienza</th>
           <th style={{ textAlign: "right", padding: "0 0 12px 10px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Azioni</th>
@@ -11503,7 +11511,7 @@ function TabellaDateCorsi({ mesi, renderRiga }) {
         {gruppi.map(({ chiaveMese, gruppoMese, voci }) => (
           <React.Fragment key={chiaveMese}>
             <tr>
-              <td colSpan={4} style={{ padding: "10px 12px", background: BG }}>
+              <td colSpan={numeroColonne} style={{ padding: "10px 12px", background: BG }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 }}>{gruppoMese.etichetta}</span>
                   <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{voci.length} cors{voci.length === 1 ? "o" : "i"}</span>
@@ -11534,19 +11542,21 @@ function CardCittaData({ c, renderRiga }) {
           <div style={{ ...fontBody, fontSize: 15, color: MUTED }}>{totaleCorsiCitta} cors{totaleCorsiCitta === 1 ? "o" : "i"} programmat{totaleCorsiCitta === 1 ? "o" : "i"}</div>
         </div>
       </div>
-      <TabellaDateCorsi mesi={c.mesi} renderRiga={renderRiga} />
+      <TabellaDateCorsi mesi={c.mesi} renderRiga={renderRiga} mostraColonnaSede={false} />
     </div>
   );
 }
 
 // stessa tabella ma senza intestazione città: usata in modalità
-// Cronologico, dove tutte le città stanno in un'unica scheda
+// Cronologico, dove tutte le città stanno in un'unica scheda — qui la
+// sede va invece in una colonna propria, ben visibile, perché non c'è
+// più l'intestazione città della card a comunicarla
 function CardCronologico({ mesi, renderRiga }) {
   const [zoom, controlliZoom] = useZoomScheda();
   return (
     <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, zoom: `${zoom}%` }}>
       {controlliZoom}
-      <TabellaDateCorsi mesi={mesi} renderRiga={renderRiga} />
+      <TabellaDateCorsi mesi={mesi} renderRiga={renderRiga} mostraColonnaSede />
     </div>
   );
 }
@@ -11589,6 +11599,13 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
         {mostraCitta && toTitleCase(locById[cd.location_id]?.nome || "?")}
         {mostraCitta && cd.master_id && " · "}
         {cd.master_id && `Master: ${toTitleCase(masterById[cd.master_id]?.nome || "?")}`}
+      </div>
+    );
+    // su desktop, quando c'è la colonna Sede dedicata (mostraCitta), sotto
+    // al nome del corso resta solo la master — la città non si ripete
+    const sottotitoloSoloMaster = cd.master_id && (
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        Master: {toTitleCase(masterById[cd.master_id]?.nome || "?")}
       </div>
     );
     const azioni = (
@@ -11642,10 +11659,15 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
               <span style={{ width: 4, height: 34, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
-                {rigaCittaMaster}
+                {sottotitoloSoloMaster}
               </div>
             </div>
           </td>
+          {mostraCitta && (
+            <td style={{ padding: "16px 10px", ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {toTitleCase(locById[cd.location_id]?.nome || "?")}
+            </td>
+          )}
           <td style={{ padding: "16px 10px", ...fontBody, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", textAlign: "center" }}>
             {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
           </td>
@@ -11658,7 +11680,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
         </tr>
         {idInModifica === cd.id && renderModifica && (
           <tr>
-            <td colSpan={4} style={{ padding: "0 0 12px" }}>{renderModifica(cd)}</td>
+            <td colSpan={mostraCitta ? 5 : 4} style={{ padding: "0 0 12px" }}>{renderModifica(cd)}</td>
           </tr>
         )}
       </React.Fragment>
