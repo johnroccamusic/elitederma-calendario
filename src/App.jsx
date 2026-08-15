@@ -166,7 +166,7 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 90, 100, 150, 110, 140, 80];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Avvisata", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
 // (master/assistente/leva) da cui pesca le opzioni. L'ordine fisso con
@@ -2230,11 +2230,27 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // (tabella "corsi_date_docenti": altre master, assistenti, leve) —
   // stesso comportamento, tabella diversa
   async function salvaCampoGenerico(tabella, id, campo, valore) {
+    // aggiornamento ottimistico: "ricarica" rifà l'intero fetchDati
+    // (tutte le tabelle dell'app), troppo lento per sentirsi immediato
+    // su un clic (pallino viaggio, flag Avvisata, tendine…) — il valore
+    // cambia subito sullo schermo, il salvataggio vero e il refetch
+    // completo restano in corsa dietro le quinte
+    const chiave = `${id}:${campo}`;
+    setOverrideCampi((m) => ({ ...m, [chiave]: valore }));
     const { error } = await supabase.from(tabella).update({ [campo]: valore }).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) {
+      window.alert("Errore: " + error.message);
+      setOverrideCampi((m) => { const copia = { ...m }; delete copia[chiave]; return copia; });
+      return;
+    }
     ricarica();
   }
   function salvaCampo(id, campo, valore) { return salvaCampoGenerico("corsi_date", id, campo, valore); }
+  const [overrideCampi, setOverrideCampi] = useState({});
+  function valoreCampo(oggetto, campo) {
+    const chiave = `${oggetto.id}:${campo}`;
+    return chiave in overrideCampi ? overrideCampi[chiave] : oggetto[campo];
+  }
 
   async function aggiungiDocente(cd, tipo) {
     const { error } = await supabase.from("corsi_date_docenti").insert({ corso_data_id: cd.id, tipo, persona_id: null });
@@ -2416,8 +2432,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // usata sia per la riga principale (tabella "corsi_date") sia per le
   // righe "docenti extra" (tabella "corsi_date_docenti")
   function cellaViaggio(tabella, riga, campoStato, campoFile) {
-    const nBiglietti = (riga[campoFile] || []).length;
-    const stato = riga[campoStato] || "no";
+    const nBiglietti = (valoreCampo(riga, campoFile) || []).length;
+    const stato = valoreCampo(riga, campoStato) || "no";
     const stile = VIAGGIO_STATI[stato];
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap" }}>
@@ -2428,11 +2444,11 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         />
         <label style={{ ...fontScheda, fontSize: 16, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1 }}>
           +
-          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, riga[campoFile], campoFile, e.target.files); e.target.value = ""; }} />
+          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile, e.target.files); e.target.value = ""; }} />
         </label>
         {nBiglietti > 0 && (
           <span
-            onClick={() => cancellaBigliettiGenerico(tabella, riga.id, riga[campoFile], campoFile)}
+            onClick={() => cancellaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile)}
             title="Clicca per cancellare i file caricati"
             style={{ ...fontScheda, fontSize: 12, fontWeight: 600, color: NAVY, whiteSpace: "nowrap", cursor: "pointer", textDecoration: "underline" }}
           >
@@ -2451,7 +2467,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           <thead>
             <tr>
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
-                <th key={i} style={{ ...thStyle, position: "relative", textAlign: i === ETICHETTE_COLONNE_MASTER.length - 1 ? "center" : thStyle.textAlign }}>
+                <th key={i} style={{ ...thStyle, position: "relative", textAlign: (i === ETICHETTE_COLONNE_MASTER.length - 1 || etichetta === "Docenti") ? "center" : thStyle.textAlign }}>
                   {etichetta}
                   <div
                     onPointerDown={(e) => iniziaRidimensionamento(e, i)}
@@ -2486,19 +2502,19 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                     <td rowSpan={rowSpanGruppo} style={{ ...celStyle, textAlign: "center", verticalAlign: "top" }}>
-                      {semaforo(cd.sede_confermata, () => salvaCampo(cd.id, "sede_confermata", !cd.sede_confermata), "piccolo")}
+                      {semaforo(valoreCampo(cd, "sede_confermata"), () => salvaCampo(cd.id, "sede_confermata", !valoreCampo(cd, "sede_confermata")), "piccolo")}
                     </td>
                     <td style={celStyle}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={etichettaTipoStyle}>Master</span>
-                        <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={cd.master_id || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
+                        <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
                           <option value="">—</option>
                           {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
                         </select>
                       </div>
                     </td>
                     <td style={{ ...celStyle, textAlign: "center" }}>
-                      {flagAvvisata(!!cd.avvisata, () => salvaCampo(cd.id, "avvisata", !cd.avvisata))}
+                      {flagAvvisata(!!valoreCampo(cd, "avvisata"), () => salvaCampo(cd.id, "avvisata", !valoreCampo(cd, "avvisata")))}
                     </td>
                     <td style={celStyle}>
                       <input style={campoStyle} defaultValue={cd.note || ""} onBlur={(e) => { if (e.target.value !== (cd.note || "")) salvaCampo(cd.id, "note", e.target.value || null); }} />
@@ -2507,7 +2523,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       {cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file")}
                     </td>
                     <td style={celStyle}>
-                      <select style={campoStyle} value={cd.alloggio_id || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
+                      <select style={campoStyle} value={valoreCampo(cd, "alloggio_id") || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
                         <option value="">—</option>
                         {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                       </select>
@@ -2528,7 +2544,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       <td style={celStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
-                          <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={riga.persona_id || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
+                          <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
                             <option value="">—</option>
                             {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
                           </select>
@@ -2538,7 +2554,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         </div>
                       </td>
                       <td style={{ ...celStyle, textAlign: "center" }}>
-                        {flagAvvisata(!!riga.avvisata, () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !riga.avvisata))}
+                        {flagAvvisata(!!valoreCampo(riga, "avvisata"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !valoreCampo(riga, "avvisata")))}
                       </td>
                       <td style={celStyle}>
                         {riga.tipo !== "leva" && (
@@ -2549,7 +2565,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         {cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file")}
                       </td>
                       <td style={celStyle}>
-                        <select style={campoStyle} value={riga.alloggio_id || ""} onChange={(e) => salvaCampoGenerico("corsi_date_docenti", riga.id, "alloggio_id", e.target.value || null)}>
+                        <select style={campoStyle} value={valoreCampo(riga, "alloggio_id") || ""} onChange={(e) => salvaCampoGenerico("corsi_date_docenti", riga.id, "alloggio_id", e.target.value || null)}>
                           <option value="">—</option>
                           {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                         </select>
@@ -2641,13 +2657,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           {caricoAssegnazioni.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assegnazione ancora.</div>
           ) : (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
               {caricoAssegnazioni.map((p) => (
-                <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px 6px 6px", background: "#fff" }}>
-                  <div style={{ width: 26, height: 26, borderRadius: "50%", background: GOLD, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", ...fontScheda, fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                    {inizialiNomeLogo(p.nome)}
-                  </div>
-                  <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
+                <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px", background: "#fff" }}>
+                  <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
                   <span style={{ ...fontScheda, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
                 </div>
               ))}
