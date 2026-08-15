@@ -2490,7 +2490,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               return (
                 <React.Fragment key={cd.id}>
                   <tr>
-                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top", borderLeft: `4px solid ${corso?.colore || NAVY}` }}>
+                    <td rowSpan={rowSpanGruppo} style={{ ...celStyle, ...fontScheda, fontSize: 13, color: NAVY, textAlign: "center", verticalAlign: "top", borderLeft: `8px solid ${corso?.colore || NAVY}` }}>
                       <div>{sopra}</div>
                       <div style={{ fontSize: 10, color: MUTED }}>{sotto}</div>
                     </td>
