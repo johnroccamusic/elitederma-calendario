@@ -2533,7 +2533,25 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           <option value="">—</option>
                           {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
                         </select>
-                        <button onClick={() => apriAggiungiDocente(cd)} title="Aggiungi un docente (master, assistente o leva)" style={pulsantePiuDocenteStyle}>+</button>
+                        <div style={{ position: "relative", flexShrink: 0 }}>
+                          <button onClick={() => apriAggiungiDocente(cd)} title="Aggiungi un docente (master, assistente o leva)" style={pulsantePiuDocenteStyle}>+</button>
+                          {corsoDataAggiungiDocente?.id === cd.id && (
+                            <div style={{ position: "absolute", top: "calc(100% + 10px)", left: -8, zIndex: 30, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 10px 28px -8px rgba(14,27,51,0.35)", padding: 14, width: 220 }}>
+                              <div style={{ position: "absolute", top: -7, left: 14, width: 12, height: 12, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderTop: "none", borderRight: "none", transform: "rotate(135deg)" }} />
+                              <Field label="Aggiungi">
+                                <select style={inputStyle} value={tipoDocenteScelto} onChange={(e) => setTipoDocenteScelto(e.target.value)}>
+                                  <option value="master">Master</option>
+                                  <option value="assistente">Assistente</option>
+                                  <option value="leva">Leva</option>
+                                </select>
+                              </Field>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <Button onClick={confermaAggiungiDocente}>Aggiungi</Button>
+                                <Button variant="ghost" onClick={() => setCorsoDataAggiungiDocente(null)}>Annulla</Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
@@ -2734,22 +2752,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           </div>
         ))}
       </div>
-
-      {corsoDataAggiungiDocente && (
-        <Modal title="Aggiungi docente" onClose={() => setCorsoDataAggiungiDocente(null)}>
-          <Field label="Aggiungi">
-            <select style={inputStyle} value={tipoDocenteScelto} onChange={(e) => setTipoDocenteScelto(e.target.value)}>
-              <option value="master">Master</option>
-              <option value="assistente">Assistente</option>
-              <option value="leva">Leva</option>
-            </select>
-          </Field>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button onClick={confermaAggiungiDocente}>Aggiungi</Button>
-            <Button variant="ghost" onClick={() => setCorsoDataAggiungiDocente(null)}>Annulla</Button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }
