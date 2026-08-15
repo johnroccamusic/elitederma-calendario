@@ -2312,7 +2312,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // "+" grosso a destra del nome della master: apre la finestra per
   // scegliere che tipo di docente extra aggiungere (era prima i tre
   // pulsanti M/A/L, ora un'unica finestra con una tendina)
-  const pulsantePiuDocenteStyle = { ...fontScheda, fontSize: 20, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 9, width: 32, height: 32, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 1 };
+  const pulsantePiuDocenteStyle = { ...fontScheda, fontSize: 26, fontWeight: 800, color: "#000", background: "none", border: "none", cursor: "pointer", padding: "0 4px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 1 };
   // larghezza fissa uguale su ogni riga (master principale ed extra),
   // così le caselle "Master/Assistente/Leva" iniziano sempre alla
   // stessa X qualunque sia la lunghezza dell'etichetta
