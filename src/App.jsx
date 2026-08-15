@@ -163,7 +163,7 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 100, 150, 110, 140, 110];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 100, 150, 110, 140, 80];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Master", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
@@ -2303,10 +2303,17 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // resta salvata per sempre in questo browser (localStorage). Limitata
   // tra un minimo e un massimo (anche i valori già salvati, al
   // caricamento): senza questo un trascinamento andato oltre gonfiava
-  // una colonna a dismisura e non c'era più modo di restringerla
+  // una colonna a dismisura e non c'era più modo di restringerla.
+  // "Aggiungi docenti" ha un massimo suo, più stretto: contiene solo
+  // tre pulsanti piccoli, non le ci serve mai lo spazio delle altre
+  const INDICE_COLONNA_AGGIUNGI_DOCENTI = LARGHEZZE_COLONNE_DEFAULT.length - 1;
   const LARGHEZZA_COLONNA_MIN = 30;
   const LARGHEZZA_COLONNA_MAX = 260;
-  const limitaLarghezza = (v) => Math.min(LARGHEZZA_COLONNA_MAX, Math.max(LARGHEZZA_COLONNA_MIN, v));
+  const LARGHEZZA_COLONNA_MAX_AGGIUNGI_DOCENTI = 100;
+  const limitaLarghezza = (v, indice) => {
+    const max = indice === INDICE_COLONNA_AGGIUNGI_DOCENTI ? LARGHEZZA_COLONNA_MAX_AGGIUNGI_DOCENTI : LARGHEZZA_COLONNA_MAX;
+    return Math.min(max, Math.max(LARGHEZZA_COLONNA_MIN, v));
+  };
   const larghezzeSalvate = (() => {
     try {
       const v = JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_COLONNE) || "null");
@@ -2327,7 +2334,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   function muoviRidimensionamento(e) {
     const r = ridimensionamentoRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
-    const nuovaLarghezza = limitaLarghezza(r.startWidth + (e.clientX - r.startX));
+    const nuovaLarghezza = limitaLarghezza(r.startWidth + (e.clientX - r.startX), r.indice);
     setLarghezze((precedenti) => precedenti.map((l, i) => (i === r.indice ? nuovaLarghezza : l)));
   }
   function fineRidimensionamento() {
