@@ -163,10 +163,10 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 110, 90, 100, 150, 110, 140, 80];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 140];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Note viaggio", "Aggiungi docenti"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Note viaggio"];
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
 // (master/assistente/leva) da cui pesca le opzioni. L'ordine fisso con
@@ -2079,16 +2079,17 @@ function Gate({ onOk }) {
 // tabella orizzontale con una riga per ogni data futura: sede confermata,
 // note libere, la master principale sui campi diretti di corsi_date
 // (master/note/viaggio/alloggio/note viaggio, come sempre), più
-// "Aggiungi docenti" (M/A/L) per altre master/assistenti/leve: ognuna
-// diventa una riga propria in corsi_date_docenti, con i propri
-// biglietti di viaggio e il proprio hotel.
+// il "+" accanto al nome della master apre la scelta di che tipo di
+// docente extra aggiungere (master/assistente/leva): ognuna diventa
+// una riga propria in corsi_date_docenti, con i propri biglietti di
+// viaggio e il proprio hotel.
 function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, ricarica, onBack }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
   // "docenti extra" di ciascuna edizione (altre master, assistenti, leve
   // oltre alla master principale sui campi diretti di corsi_date), una
-  // riga per persona con i propri biglietti/hotel — vedi Aggiungi docenti
+  // riga per persona con i propri biglietti/hotel — vedi il "+" accanto al nome della master
   const docentiPerCorsoData = useMemo(() => {
     const mappa = {};
     (corsiDateDocenti || []).forEach((d) => { (mappa[d.corso_data_id] ||= []).push(d); });
@@ -2107,6 +2108,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const [filtroLeva, setFiltroLeva] = useState("");
   const [apriFiltro, setApriFiltro] = useState(""); // quale tendina filtro è aperta, "" = nessuna
   const [ricercaTesto, setRicercaTesto] = useState("");
+  // finestra "Aggiungi docente" (sostituisce i tre pulsanti M/A/L): tiene
+  // il corso su cui si sta aggiungendo, null quando è chiusa
+  const [corsoDataAggiungiDocente, setCorsoDataAggiungiDocente] = useState(null);
+  const [tipoDocenteScelto, setTipoDocenteScelto] = useState("master");
   // agosto è tecnicamente l'ultimo mese della stagione PRECEDENTE (la
   // stagione va da settembre ad agosto), ma è anche il mese in cui si
   // organizza la stagione che sta per iniziare: questa spunta mostra anche
@@ -2257,6 +2262,15 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
+  function apriAggiungiDocente(cd) {
+    setTipoDocenteScelto("master");
+    setCorsoDataAggiungiDocente(cd);
+  }
+  async function confermaAggiungiDocente() {
+    if (!corsoDataAggiungiDocente) return;
+    await aggiungiDocente(corsoDataAggiungiDocente, tipoDocenteScelto);
+    setCorsoDataAggiungiDocente(null);
+  }
   async function impostaPersonaDocente(riga, valore) {
     await salvaCampoGenerico("corsi_date_docenti", riga.id, "persona_id", valore || null);
   }
@@ -2295,7 +2309,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const celStyle = { padding: "10px 8px", borderBottom: bordoV, verticalAlign: "middle" };
   const thStyle = { ...celStyle, ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: "#F7F5EF", borderBottom: `1px solid ${CREAM_BORDER}` };
   const campoStyle = { ...fontScheda, fontSize: 12, fontWeight: 600, padding: "7px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, width: "100%", boxSizing: "border-box", background: "#fff", color: NAVY };
-  const pulsanteDocenteStyle = { ...fontScheda, fontSize: 11, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 6, width: 22, height: 22, cursor: "pointer", padding: 0 };
+  // "+" grosso a destra del nome della master: apre la finestra per
+  // scegliere che tipo di docente extra aggiungere (era prima i tre
+  // pulsanti M/A/L, ora un'unica finestra con una tendina)
+  const pulsantePiuDocenteStyle = { ...fontScheda, fontSize: 20, fontWeight: 800, color: "#fff", background: NAVY, border: "none", borderRadius: 9, width: 32, height: 32, cursor: "pointer", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 1 };
   // larghezza fissa uguale su ogni riga (master principale ed extra),
   // così le caselle "Master/Assistente/Leva" iniziano sempre alla
   // stessa X qualunque sia la lunghezza dell'etichetta
@@ -2335,17 +2352,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // resta salvata per sempre in questo browser (localStorage). Limitata
   // tra un minimo e un massimo (anche i valori già salvati, al
   // caricamento): senza questo un trascinamento andato oltre gonfiava
-  // una colonna a dismisura e non c'era più modo di restringerla.
-  // "Aggiungi docenti" ha un massimo suo, più stretto: contiene solo
-  // tre pulsanti piccoli, non le ci serve mai lo spazio delle altre
-  const INDICE_COLONNA_AGGIUNGI_DOCENTI = LARGHEZZE_COLONNE_DEFAULT.length - 1;
+  // una colonna a dismisura e non c'era più modo di restringerla
   const LARGHEZZA_COLONNA_MIN = 30;
   const LARGHEZZA_COLONNA_MAX = 260;
-  const LARGHEZZA_COLONNA_MAX_AGGIUNGI_DOCENTI = 100;
-  const limitaLarghezza = (v, indice) => {
-    const max = indice === INDICE_COLONNA_AGGIUNGI_DOCENTI ? LARGHEZZA_COLONNA_MAX_AGGIUNGI_DOCENTI : LARGHEZZA_COLONNA_MAX;
-    return Math.min(max, Math.max(LARGHEZZA_COLONNA_MIN, v));
-  };
+  const limitaLarghezza = (v) => Math.min(LARGHEZZA_COLONNA_MAX, Math.max(LARGHEZZA_COLONNA_MIN, v));
   const larghezzeSalvate = (() => {
     try {
       const v = JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_COLONNE) || "null");
@@ -2366,7 +2376,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   function muoviRidimensionamento(e) {
     const r = ridimensionamentoRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
-    const nuovaLarghezza = limitaLarghezza(r.startWidth + (e.clientX - r.startX), r.indice);
+    const nuovaLarghezza = limitaLarghezza(r.startWidth + (e.clientX - r.startX));
     setLarghezze((precedenti) => precedenti.map((l, i) => (i === r.indice ? nuovaLarghezza : l)));
   }
   function fineRidimensionamento() {
@@ -2473,7 +2483,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
                 <th key={i} style={{
                   ...thStyle, position: "relative",
-                  textAlign: (i === ETICHETTE_COLONNE_MASTER.length - 1 || etichetta === "Sede OK?") ? "center" : thStyle.textAlign,
+                  textAlign: etichetta === "Sede OK?" ? "center" : thStyle.textAlign,
                   // allineata con l'inizio della casella di scelta persona,
                   // non con il bordo della cella: quella casella comincia
                   // dopo l'etichetta fissa (Master/Assistente/Leva) + il gap
@@ -2523,6 +2533,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           <option value="">—</option>
                           {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
                         </select>
+                        <button onClick={() => apriAggiungiDocente(cd)} title="Aggiungi un docente (master, assistente o leva)" style={pulsantePiuDocenteStyle}>+</button>
                       </div>
                     </td>
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
@@ -2542,13 +2553,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     </td>
                     <td style={cellaGruppo}>
                       <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
-                    </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, textAlign: "center", verticalAlign: "top" }}>
-                      <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                        <button onClick={() => aggiungiDocente(cd, "master")} title="Aggiungi un'altra master" style={pulsanteDocenteStyle}>M</button>
-                        <button onClick={() => aggiungiDocente(cd, "assistente")} title="Aggiungi un'assistente" style={pulsanteDocenteStyle}>A</button>
-                        <button onClick={() => aggiungiDocente(cd, "leva")} title="Aggiungi una leva" style={pulsanteDocenteStyle}>L</button>
-                      </div>
                     </td>
                   </tr>
                   {docenti.map((riga) => (
@@ -2730,6 +2734,22 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           </div>
         ))}
       </div>
+
+      {corsoDataAggiungiDocente && (
+        <Modal title="Aggiungi docente" onClose={() => setCorsoDataAggiungiDocente(null)}>
+          <Field label="Aggiungi">
+            <select style={inputStyle} value={tipoDocenteScelto} onChange={(e) => setTipoDocenteScelto(e.target.value)}>
+              <option value="master">Master</option>
+              <option value="assistente">Assistente</option>
+              <option value="leva">Leva</option>
+            </select>
+          </Field>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={confermaAggiungiDocente}>Aggiungi</Button>
+            <Button variant="ghost" onClick={() => setCorsoDataAggiungiDocente(null)}>Annulla</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
