@@ -19591,11 +19591,11 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         )}
 
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "0 0 14px 14px", marginBottom: 30 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 900 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
             <thead>
               <tr>
-                {["", "Allievo", "Email", "Telefono", "Città provenienza", "Regione provenienza", "Città corso frequentato", "Corsi acquistati", "Data acquisto", "Azioni"].map((h, i) => (
-                  <th key={i} style={{ padding: "10px 12px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, textAlign: "left", background: BG, whiteSpace: "nowrap" }}>{h}</th>
+                {[["", "3%"], ["Allievo", "13%"], ["Email", "15%"], ["Telefono", "9%"], ["Città res.", "9%"], ["Regione res.", "9%"], ["Città corso", "9%"], ["Corsi", "14%"], ["Data acq.", "8%"], ["Azioni", "6%"]].map(([h, w], i) => (
+                  <th key={i} style={{ width: w, padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -19605,32 +19605,32 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               )}
               {risultati.map((a) => (
                 <tr key={a.chiave} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                  <td style={{ padding: "10px 12px" }}>
-                    <input type="checkbox" checked={selezionati.has(a.chiave)} onChange={() => toggleRiga(a.chiave)} style={{ width: 16, height: 16 }} />
+                  <td style={{ padding: "5px 6px" }}>
+                    <input type="checkbox" checked={selezionati.has(a.chiave)} onChange={() => toggleRiga(a.chiave)} style={{ width: 14, height: 14 }} />
                   </td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => setDettaglioChiave(a.chiave)}>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", wordBreak: "break-word" }} onClick={() => setDettaglioChiave(a.chiave)}>
                     {toTitleCase(a.nome)} {toTitleCase(a.cognome)}
                   </td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: a.email ? NAVY : MUTED }}>{a.email || "—"}</td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.telefono || "—"}</td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: a.cittaProvenienza ? NAVY : MUTED, whiteSpace: "nowrap" }}>{a.cittaProvenienza ? toTitleCase(a.cittaProvenienza) : "—"}</td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: a.regioneProvenienza ? NAVY : MUTED, whiteSpace: "nowrap" }}>{a.regioneProvenienza ? toTitleCase(a.regioneProvenienza) : "—"}</td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.cittaCorso.map(toTitleCase).join(", ") || "—"}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: a.email ? NAVY : MUTED, wordBreak: "break-word" }}>{a.email || "—"}</td>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, wordBreak: "break-word" }}>{a.telefono || "—"}</td>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: a.cittaProvenienza ? NAVY : MUTED, wordBreak: "break-word" }}>{a.cittaProvenienza ? toTitleCase(a.cittaProvenienza) : "—"}</td>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: a.regioneProvenienza ? NAVY : MUTED, wordBreak: "break-word" }}>{a.regioneProvenienza ? toTitleCase(a.regioneProvenienza) : "—"}</td>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, wordBreak: "break-word" }}>{a.cittaCorso.map(toTitleCase).join(", ") || "—"}</td>
+                  <td style={{ padding: "5px 6px" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "flex-start" }}>
                       {a.corsi.map((c) => (
-                        <span key={c.id} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.32), borderRadius: 20, padding: "3px 10px", whiteSpace: "nowrap" }}>{toTitleCase(c.nome)}</span>
+                        <span key={c.id} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: NAVY, background: coloreTenue(c.colore || NAVY, 0.32), borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>{toTitleCase(c.nome)}</span>
                       ))}
                     </div>
                   </td>
-                  <td style={{ padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "—"}</td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <button onClick={() => setDettaglioChiave(a.chiave)} title="Apri dettaglio" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, whiteSpace: "nowrap" }}>{a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "—"}</td>
+                  <td style={{ padding: "5px 6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                      <button onClick={() => setDettaglioChiave(a.chiave)} title="Apri dettaglio" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 3, display: "flex" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" /></svg>
                       </button>
                       <div style={{ position: "relative" }}>
-                        <button onClick={() => setMenuRigaAperto((v) => (v === a.chiave ? null : a.chiave))} title="Altre azioni" style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, padding: 4, fontSize: 18, lineHeight: 1 }}>⋮</button>
+                        <button onClick={() => setMenuRigaAperto((v) => (v === a.chiave ? null : a.chiave))} title="Altre azioni" style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, padding: 3, fontSize: 16, lineHeight: 1 }}>⋮</button>
                         {menuRigaAperto === a.chiave && (
                           <>
                             <div onClick={() => setMenuRigaAperto(null)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
