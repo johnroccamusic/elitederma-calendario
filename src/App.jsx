@@ -16804,6 +16804,222 @@ function SezioneClassificaProdottiShop({ classifica, onApriClassificazioneVoci }
   );
 }
 
+// ---------- Genera Coupon ----------
+const ETICHETTA_TIPO_SCONTO = { percent: "Percentuale", fixed_cart: "Importo fisso sul carrello", fixed_product: "Importo fisso per prodotto" };
+const ETICHETTA_STATO_COUPON = {
+  bozza: { testo: "Bozza", colore: MUTED },
+  programmato: { testo: "Programmato", colore: "#B8860B" },
+  attivo: { testo: "Attivo", colore: "#2E7D32" },
+  scaduto: { testo: "Scaduto", colore: "#8B8FA3" },
+  annullato: { testo: "Annullato", colore: "#C0392B" },
+};
+// converte gli id locali scelti nel form nei rispettivi id WooCommerce:
+// la tabella coupon salva solo id Woo (product_categories/product_ids
+// di WooCommerce vogliono quelli, non gli uuid interni dell'app)
+function idsWooDaLocali(idsLocali, elenco, campoWoo) {
+  const mappa = Object.fromEntries((elenco || []).map((el) => [el.id, el[campoWoo]]));
+  return Array.from(idsLocali).map((id) => mappa[id]).filter((v) => v != null);
+}
+
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [codice, setCodice] = useState("");
+  const [descrizione, setDescrizione] = useState("");
+  const [tipoSconto, setTipoSconto] = useState("percent");
+  const [valore, setValore] = useState("");
+  const [validoDa, setValidoDa] = useState("");
+  const [validoFinoA, setValidoFinoA] = useState("");
+  const [ambito, setAmbito] = useState("tutto");
+  const [categorieSelId, setCategorieSelId] = useState(() => new Set());
+  const [prodottiSelId, setProdottiSelId] = useState(() => new Set());
+  const [escludiCategorieSelId, setEscludiCategorieSelId] = useState(() => new Set());
+  const [escludiProdottiSelId, setEscludiProdottiSelId] = useState(() => new Set());
+  const [ricercaProdotti, setRicercaProdotti] = useState("");
+  const [utilizziMax, setUtilizziMax] = useState("");
+  const [utilizziMaxPerUtente, setUtilizziMaxPerUtente] = useState("");
+  const [spesaMinima, setSpesaMinima] = useState("");
+  const [nonCumulabile, setNonCumulabile] = useState(false);
+  const [limitaAEmail, setLimitaAEmail] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [attivandoId, setAttivandoId] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [msgTipo, setMsgTipo] = useState("errore");
+
+  function toggleSet(setter, id) {
+    setter((prev) => { const nuovo = new Set(prev); nuovo.has(id) ? nuovo.delete(id) : nuovo.add(id); return nuovo; });
+  }
+
+  function svuotaForm() {
+    setCodice(""); setDescrizione(""); setTipoSconto("percent"); setValore("");
+    setValidoDa(""); setValidoFinoA(""); setAmbito("tutto");
+    setCategorieSelId(new Set()); setProdottiSelId(new Set());
+    setEscludiCategorieSelId(new Set()); setEscludiProdottiSelId(new Set());
+    setUtilizziMax(""); setUtilizziMaxPerUtente(""); setSpesaMinima("");
+    setNonCumulabile(false); setLimitaAEmail("");
+  }
+
+  async function salvaCoupon() {
+    if (!codice.trim()) { setMsgTipo("errore"); setMsg("Il codice è obbligatorio."); return; }
+    const valoreNum = parseNum(valore);
+    if (!(valoreNum > 0)) { setMsgTipo("errore"); setMsg("Inserisci un valore di sconto maggiore di zero."); return; }
+    setSalvando(true); setMsg("");
+    const oggi = dataOggiStr();
+    const stato = validoDa && validoDa > oggi ? "programmato" : "bozza";
+    const payload = {
+      codice: codice.trim().toLowerCase(),
+      descrizione: descrizione.trim() || null,
+      tipo_sconto: tipoSconto,
+      valore: valoreNum,
+      valido_da: validoDa || null,
+      valido_fino_a: validoFinoA || null,
+      ambito,
+      categorie_ids: ambito === "categorie" ? idsWooDaLocali(categorieSelId, categorieProdotti, "woo_category_id") : [],
+      prodotti_ids: ambito === "prodotti" ? idsWooDaLocali(prodottiSelId, prodottiShop, "woo_product_id") : [],
+      escludi_categorie_ids: idsWooDaLocali(escludiCategorieSelId, categorieProdotti, "woo_category_id"),
+      escludi_prodotti_ids: idsWooDaLocali(escludiProdottiSelId, prodottiShop, "woo_product_id"),
+      utilizzi_max: utilizziMax.trim() ? Number(utilizziMax) : null,
+      utilizzi_max_per_utente: utilizziMaxPerUtente.trim() ? Number(utilizziMaxPerUtente) : null,
+      spesa_minima: spesaMinima.trim() ? parseNum(spesaMinima) : null,
+      non_cumulabile: nonCumulabile,
+      limita_a_email: limitaAEmail.trim() ? limitaAEmail.split(",").map((s) => s.trim()).filter(Boolean) : null,
+      stato,
+    };
+    const { error } = await supabase.from("coupon").insert(payload);
+    setSalvando(false);
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    setMsgTipo("successo"); setMsg(stato === "programmato" ? "Coupon salvato come programmato." : "Coupon salvato come bozza — premi \"Crea su WooCommerce\" per attivarlo.");
+    svuotaForm();
+    ricarica();
+  }
+
+  async function attivaCoupon(riga) {
+    setAttivandoId(riga.id); setMsg("");
+    const { data, error } = await supabase.functions.invoke("woo-crea-coupon", { body: { couponId: riga.id } });
+    setAttivandoId(null);
+    if (error || data?.errore) { setMsgTipo("errore"); setMsg("Errore creazione su WooCommerce: " + (data?.errore || error.message)); return; }
+    setMsgTipo("successo"); setMsg(`Coupon "${riga.codice}" creato su WooCommerce.`);
+    ricarica();
+  }
+
+  const prodottiFiltrati = useMemo(() => {
+    const q = ricercaProdotti.trim().toLowerCase();
+    const l = [...(prodottiShop || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    return q ? l.filter((p) => p.nome.toLowerCase().includes(q)) : l;
+  }, [prodottiShop, ricercaProdotti]);
+  const categorieOrdinate = useMemo(() => [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome)), [categorieProdotti]);
+
+  function listaCheckbox(elenco, selId, setSelId, vuoto) {
+    return (
+      <div style={{ maxHeight: 160, overflow: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 8 }}>
+        {elenco.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 4 }}>{vuoto}</div>
+        ) : elenco.map((el) => (
+          <label key={el.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 4px", cursor: "pointer" }}>
+            <input type="checkbox" checked={selId.has(el.id)} onChange={() => toggleSet(setSelId, el.id)} />
+            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{el.nome}</span>
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  const couponOrdinati = useMemo(() => [...(coupon || [])].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")), [coupon]);
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Genera Coupon</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
+
+        {msg && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: msgTipo === "errore" ? "#C0392B" : "#2E7D32", marginBottom: 14, padding: "8px 10px", background: msgTipo === "errore" ? "#FBEAEA" : "#EAF5EC", borderRadius: 8 }}>{msg}</div>
+        )}
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Nuovo coupon</div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px" }}><Field label="Codice"><input style={{ ...inputStyle, textTransform: "uppercase" }} value={codice} onChange={(e) => setCodice(e.target.value)} placeholder="ES. BENVENUTO10" /></Field></div>
+            <div style={{ flex: "2 1 260px" }}><Field label="Descrizione"><input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} /></Field></div>
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 200px" }}>
+              <Field label="Tipo di sconto">
+                <select style={inputStyle} value={tipoSconto} onChange={(e) => setTipoSconto(e.target.value)}>
+                  {Object.entries(ETICHETTA_TIPO_SCONTO).map(([chiave, etichetta]) => <option key={chiave} value={chiave}>{etichetta}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 150px" }}><Field label={tipoSconto === "percent" ? "Valore (%)" : "Valore (€)"}><input type="number" min="0" step="0.01" style={inputStyle} value={valore} onChange={(e) => setValore(e.target.value)} /></Field></div>
+          </div>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 180px" }}><Field label="Valido da"><input type="date" style={inputStyle} value={validoDa} onChange={(e) => setValidoDa(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 180px" }}><Field label="Valido fino a"><input type="date" style={inputStyle} value={validoFinoA} onChange={(e) => setValidoFinoA(e.target.value)} /></Field></div>
+          </div>
+
+          <Field label="Ambito">
+            <select style={inputStyle} value={ambito} onChange={(e) => setAmbito(e.target.value)}>
+              <option value="tutto">Tutto il catalogo</option>
+              <option value="categorie">Solo alcune categorie</option>
+              <option value="prodotti">Solo alcuni prodotti</option>
+            </select>
+          </Field>
+          {ambito === "categorie" && <Field label={`Categorie incluse (${categorieSelId.size})`}>{listaCheckbox(categorieOrdinate, categorieSelId, setCategorieSelId, "Nessuna categoria disponibile.")}</Field>}
+          {ambito === "prodotti" && (
+            <Field label={`Prodotti inclusi (${prodottiSelId.size})`}>
+              <input style={{ ...inputStyle, marginBottom: 6 }} value={ricercaProdotti} onChange={(e) => setRicercaProdotti(e.target.value)} placeholder="Cerca prodotto…" />
+              {listaCheckbox(prodottiFiltrati, prodottiSelId, setProdottiSelId, "Nessun prodotto trovato.")}
+            </Field>
+          )}
+
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 150px" }}><Field label="Utilizzi massimi"><input type="number" min="0" style={inputStyle} value={utilizziMax} onChange={(e) => setUtilizziMax(e.target.value)} placeholder="Illimitati" /></Field></div>
+            <div style={{ flex: "1 1 150px" }}><Field label="Utilizzi max per cliente"><input type="number" min="0" style={inputStyle} value={utilizziMaxPerUtente} onChange={(e) => setUtilizziMaxPerUtente(e.target.value)} placeholder="Illimitati" /></Field></div>
+            <div style={{ flex: "1 1 150px" }}><Field label="Spesa minima (€)"><input type="number" min="0" step="0.01" style={inputStyle} value={spesaMinima} onChange={(e) => setSpesaMinima(e.target.value)} placeholder="Nessuna" /></Field></div>
+          </div>
+          <Field label="Limita a queste email (separate da virgola)">
+            <input style={inputStyle} value={limitaAEmail} onChange={(e) => setLimitaAEmail(e.target.value)} placeholder="mario@esempio.it, giulia@esempio.it" />
+          </Field>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginTop: 4, marginBottom: 14 }}>
+            <input type="checkbox" checked={nonCumulabile} onChange={(e) => setNonCumulabile(e.target.checked)} style={{ width: 15, height: 15 }} />
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Non cumulabile con altri coupon</span>
+          </label>
+
+          <Button onClick={salvaCoupon} disabled={salvando}>{salvando ? "Salvo…" : "Salva coupon"}</Button>
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>Coupon ({couponOrdinati.length})</div>
+        {couponOrdinati.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun coupon ancora.</div>
+        ) : couponOrdinati.map((c) => {
+          const statoInfo = ETICHETTA_STATO_COUPON[c.stato] || ETICHETTA_STATO_COUPON.bozza;
+          return (
+            <div key={c.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
+                  <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
+                </div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>
+                  {c.tipo_sconto === "percent" ? `${c.valore}%` : fmtEuroErp2(c.valore)} · {ETICHETTA_TIPO_SCONTO[c.tipo_sconto]}
+                  {c.valido_fino_a ? ` · scade il ${fmtData(c.valido_fino_a)}` : ""}
+                </div>
+              </div>
+              {(c.stato === "bozza" || c.stato === "programmato") && (
+                <Button onClick={() => attivaCoupon(c)} disabled={attivandoId === c.id}>{attivandoId === c.id ? "Creo…" : "Crea su WooCommerce"}</Button>
+              )}
+              {c.stato === "attivo" && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>ID WooCommerce: {c.woo_coupon_id}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // "Analisi andamento": prima sezione di "Dashboard analisi" — ex corpo di
 // PaginaErp (KPI/grafici/andamento per sede), meno "+ Nuova operazione"
 // (si trova ora in "Inserimento costi e ricavi") e meno il click sulla
@@ -25965,6 +26181,7 @@ export default function App() {
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
   const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
   const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
+  const [coupon, setCoupon] = useState([]);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
@@ -25999,7 +26216,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -26055,6 +26272,7 @@ export default function App() {
       supabase.from("assistente_corsi").select("*"),
       supabase.from("corsi_date_docenti").select("*"),
       supabase.from("voci_shop_classificazione").select("*"),
+      supabase.from("coupon").select("*").order("created_at", { ascending: false }),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -26121,6 +26339,7 @@ export default function App() {
     setAssistenteCorsi(ac.data || []);
     setCorsiDateDocenti(cdd.data || []);
     setVociShopClassificazione(vsc.data || []);
+    setCoupon(cpn.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -26834,6 +27053,13 @@ export default function App() {
 
       {view === "crmshop" && (
         <PaginaCrmShop venditeShop={venditeShop} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} />
+      )}
+
+      {view === "generacoupon" && (
+        <PaginaGeneraCoupon
+          coupon={coupon} categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
+          ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+        />
       )}
 
       {view === "statistichevenditeprodotti" && (
