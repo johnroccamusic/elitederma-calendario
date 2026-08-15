@@ -8031,19 +8031,22 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     showCorsoModal, showTipiModellaModal, showLocModal, showMagazziniModal, showHotelModal,
     showAssistenteModal, showLevaModal, showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
   ]);
-  // il cellulare vive in una colonna a sé, interrogata solo qui (non nel
-  // caricamento generale): così, se in futuro dovesse mai mancare o dare
-  // errore, non rischia di svuotare l'elenco venditori usato ovunque
-  // altrove (login, selezione "Tutor")
+  // cellulare ed email vivono in colonne a sé, interrogate solo qui (non
+  // nel caricamento generale): così, se in futuro dovesse mai mancare o
+  // dare errore, non rischia di svuotare l'elenco venditori usato
+  // ovunque altrove (login, selezione "Tutor")
   const [telefoniVenditori, setTelefoniVenditori] = useState({});
+  const [emailVenditori, setEmailVenditori] = useState({});
   useEffect(() => {
     if (!showVenditoriModal) return;
-    supabase.from("venditori").select("id, telefono").then(({ data }) => {
+    supabase.from("venditori").select("id, telefono, email").then(({ data }) => {
       setTelefoniVenditori(Object.fromEntries((data || []).map((v) => [v.id, v.telefono || ""])));
+      setEmailVenditori(Object.fromEntries((data || []).map((v) => [v.id, v.email || ""])));
     });
     // si riallinea anche quando "venditori" cambia (es. dopo aver salvato
-    // un numero: ricarica() in GestioneListaSemplice rifà fetchDati, che
-    // non include più il telefono, quindi va ripreso da qui)
+    // un numero/email: ricarica() in GestioneListaSemplice rifà
+    // fetchDati, che non include più questi campi, quindi vanno ripresi
+    // da qui)
   }, [showVenditoriModal, venditori]);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
@@ -8221,6 +8224,30 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
     setMsg("Città aggiornata.");
+    ricarica();
+  }
+
+  // "Promuovi": sposta il contatto da un elenco all'altro invece di
+  // doverlo ricreare da zero — copia nome/telefono/email nella nuova
+  // tabella e rimuove la riga da quella di partenza. Nessun collegamento
+  // esistente altrove (es. corsi_date.master_id) dipende da questi
+  // elenchi "Leva"/"Assistente", quindi non c'è niente da riattaccare
+  async function promuoviLevaAdAssistente(el) {
+    if (!window.confirm(`Promuovere "${toTitleCase(el.nome)}" ad Assistente? Verrà spostata dall'elenco Leve.`)) return;
+    const { error: erroreIns } = await supabase.from("assistente").insert({ nome: el.nome, telefono: el.telefono || null, email: el.email || null });
+    if (erroreIns) { setMsg("Errore: " + erroreIns.message); return; }
+    const { error: erroreDel } = await supabase.from("leva").delete().eq("id", el.id);
+    if (erroreDel) { setMsg("Errore: " + erroreDel.message); return; }
+    setMsg(`${toTitleCase(el.nome)} promossa ad Assistente.`);
+    ricarica();
+  }
+  async function promuoviAssistenteAMaster(el) {
+    if (!window.confirm(`Promuovere "${toTitleCase(el.nome)}" a Master? Verrà spostata dall'elenco Assistenti.`)) return;
+    const { error: erroreIns } = await supabase.from("master").insert({ nome: el.nome, telefono: el.telefono || null, email: el.email || null });
+    if (erroreIns) { setMsg("Errore: " + erroreIns.message); return; }
+    const { error: erroreDel } = await supabase.from("assistente").delete().eq("id", el.id);
+    if (erroreDel) { setMsg("Errore: " + erroreDel.message); return; }
+    setMsg(`${toTitleCase(el.nome)} promossa a Master.`);
     ricarica();
   }
 
@@ -8608,6 +8635,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             nomeSingolare="Assistente" nomeArticolo="un" tabella="assistente"
             elementi={assistente} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
+            mostraTelefono mostraEmail
+            azioneExtra={{ etichetta: "Promuovi a master", onClick: promuoviAssistenteAMaster }}
           />
         </Modal>
       )}
@@ -8618,6 +8647,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             nomeSingolare="Leva" nomeArticolo="una" tabella="leva"
             elementi={leva} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. LEVA 1"
+            mostraTelefono mostraEmail
+            azioneExtra={{ etichetta: "Promuovi ad assistente", onClick: promuoviLevaAdAssistente }}
           />
         </Modal>
       )}
@@ -8627,7 +8658,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (per entrare dalla home nella propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento — e un numero di cellulare, che useremo per l'integrazione dei messaggi con WhatsApp.</div>
           <GestioneListaSemplice
             nomeSingolare="Venditore" nomeArticolo="un" tabella="venditori"
-            elementi={venditori.map((v) => ({ ...v, telefono: telefoniVenditori[v.id] || "" }))} ricarica={ricarica} msg={msg} setMsg={setMsg}
+            elementi={venditori.map((v) => ({ ...v, telefono: telefoniVenditori[v.id] || "", email: emailVenditori[v.id] || "" }))} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MARIA ROSSI"
             mostraPassword passwordDiDefault="0000"
             onImpostaPassword={async (venditoreId, password) => {
@@ -8635,7 +8666,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
               if (error) setMsg("Errore password: " + error.message);
               else ricarica();
             }}
-            mostraTelefono
+            mostraTelefono mostraEmail
           />
         </Modal>
       )}
@@ -10716,7 +10747,38 @@ function RigaTelefonoVenditore({ valoreDiDefault, onSalva }) {
     </div>
   );
 }
-function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono }) {
+// email di una leva/assistente/venditore: stesso identico pattern "campo
+// + Salva" di RigaTelefonoVenditore qui sopra, solo per l'email
+function RigaEmailGenerica({ valoreDiDefault, onSalva }) {
+  const [email, setEmail] = useState(valoreDiDefault || "");
+  const [salvando, setSalvando] = useState(false);
+  const [fatto, setFatto] = useState(false);
+  async function salva() {
+    setSalvando(true); setFatto(false);
+    await onSalva(email.trim());
+    setSalvando(false); setFatto(true);
+    setTimeout(() => setFatto(false), 2000);
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <IconaBustaErp size={16} color={MUTED} />
+      <input
+        style={{ ...inputStyle, maxWidth: 220, padding: "6px 10px" }}
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <button
+        onClick={salva}
+        disabled={salvando}
+        style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 10px", cursor: salvando ? "default" : "pointer" }}
+      >
+        {salvando ? "Salvo…" : fatto ? "Salvato ✓" : "Salva"}
+      </button>
+    </div>
+  );
+}
+function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi, ricarica, msg, setMsg, placeholder, mostraPassword, onImpostaPassword, passwordDiDefault, mostraTelefono, mostraEmail, azioneExtra }) {
   const [nome, setNome] = useState("");
   const [inModifica, setInModifica] = useState(null);
   const [modNome, setModNome] = useState("");
@@ -10743,6 +10805,11 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
   }
   async function salvaTelefono(id, telefono) {
     const { error } = await supabase.from(tabella).update({ telefono }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function salvaEmail(id, email) {
+    const { error } = await supabase.from(tabella).update({ email: email || null }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
@@ -10776,12 +10843,16 @@ function GestioneListaSemplice({ nomeSingolare, nomeArticolo, tabella, elementi,
             label={el.nome.toUpperCase()}
             onModifica={() => apriModifica(el)}
             onDelete={() => elimina(el.id)}
+            pulsanteExtra={azioneExtra ? { etichetta: azioneExtra.etichetta, onClick: () => azioneExtra.onClick(el) } : undefined}
           />
           {mostraPassword && (
             <RigaPasswordVenditore key={el.password} valoreDiDefault={el.password || passwordDiDefault || "0000"} onImposta={(pwd) => onImpostaPassword(el.id, pwd)} />
           )}
           {mostraTelefono && (
             <RigaTelefonoVenditore valoreDiDefault={el.telefono || ""} onSalva={(tel) => salvaTelefono(el.id, tel)} />
+          )}
+          {mostraEmail && (
+            <RigaEmailGenerica valoreDiDefault={el.email || ""} onSalva={(email) => salvaEmail(el.id, email)} />
           )}
           {inModifica === el.id && (
             <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -11165,7 +11236,7 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
   );
 }
 
-function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
+function RigaEliminabile({ label, dettaglio, onModifica, onDelete, pulsanteExtra }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div>
@@ -11173,6 +11244,14 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete }) {
         {dettaglio && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{dettaglio}</div>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        {pulsanteExtra && (
+          <button
+            onClick={pulsanteExtra.onClick}
+            style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "5px 10px", cursor: "pointer", whiteSpace: "nowrap", marginRight: 4 }}
+          >
+            {pulsanteExtra.etichetta}
+          </button>
+        )}
         {onModifica && (
           <button
             onClick={onModifica}
@@ -18779,7 +18858,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, ricarica,
     setNomeNuovo(""); setMostraForm(false); ricarica();
   }
   async function eliminaMaster() {
-    if (!selezionatoId || !window.confirm("Eliminare questa master? L'operazione è irreversibile.")) return;
+    if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
     const { error } = await supabase.from("master").delete().eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     setSelezionatoId(null); setMenuAzioni(false); ricarica();
