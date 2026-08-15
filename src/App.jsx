@@ -2087,15 +2087,28 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
+  // aggiunta/rimozione ottimistica delle righe "docente extra": "ricarica"
+  // rifà l'intero fetchDati, troppo lento per sentirsi immediato — una
+  // riga appena inserita (con l'id vero restituito dall'insert, non
+  // finto: le interazioni successive su quella riga, es. scegliere la
+  // persona, devono poter salvare subito) compare qui finché il
+  // refetch completo non la porta in corsiDateDocenti, dopodiché sparisce
+  // da sola (dedup per id); una riga appena rimossa si nasconde subito
+  const [righeExtraOttimistiche, setRigheExtraOttimistiche] = useState([]);
+  const [idsRimosseOttimisticamente, setIdsRimosseOttimisticamente] = useState(() => new Set());
+
   // "docenti extra" di ciascuna edizione (altre master, assistenti, leve
   // oltre alla master principale sui campi diretti di corsi_date), una
   // riga per persona con i propri biglietti/hotel — vedi il "+" accanto al nome della master
   const docentiPerCorsoData = useMemo(() => {
     const mappa = {};
-    (corsiDateDocenti || []).forEach((d) => { (mappa[d.corso_data_id] ||= []).push(d); });
+    const idsReali = new Set((corsiDateDocenti || []).map((d) => d.id));
+    const extra = righeExtraOttimistiche.filter((d) => !idsReali.has(d.id));
+    const tutte = [...(corsiDateDocenti || []), ...extra].filter((d) => !idsRimosseOttimisticamente.has(d.id));
+    tutte.forEach((d) => { (mappa[d.corso_data_id] ||= []).push(d); });
     Object.values(mappa).forEach((lista) => lista.sort((a, b) => (ORDINE_TIPO_DOCENTE[a.tipo] - ORDINE_TIPO_DOCENTE[b.tipo]) || (a.ts || "").localeCompare(b.ts || "")));
     return mappa;
-  }, [corsiDateDocenti]);
+  }, [corsiDateDocenti, righeExtraOttimistiche, idsRimosseOttimisticamente]);
   function nomeDocente(d) {
     const lista = d.tipo === "master" ? master : d.tipo === "assistente" ? assistente : leva;
     return lista.find((p) => p.id === d.persona_id)?.nome || "";
@@ -2258,8 +2271,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   }
 
   async function aggiungiDocente(cd, tipo) {
-    const { error } = await supabase.from("corsi_date_docenti").insert({ corso_data_id: cd.id, tipo, persona_id: null });
+    // "select().single()" restituisce subito la riga vera (con id vero,
+    // non provvisorio): compare a schermo appena arrivata la risposta
+    // dell'insert, senza aspettare l'intero fetchDati
+    const { data, error } = await supabase.from("corsi_date_docenti").insert({ corso_data_id: cd.id, tipo, persona_id: null }).select().single();
     if (error) { window.alert("Errore: " + error.message); return; }
+    setRigheExtraOttimistiche((prev) => [...prev, data]);
     ricarica();
   }
   function apriAggiungiDocente(cd) {
@@ -2279,8 +2296,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   async function rimuoviDocente(riga) {
     const nome = riga.persona_id ? nomeDocente(riga) : null;
     if (!window.confirm(`Rimuovere questa riga${nome ? ` (${ETICHETTA_TIPO_DOCENTE[riga.tipo]} — ${toTitleCase(nome)})` : ` (${ETICHETTA_TIPO_DOCENTE[riga.tipo]})`}?`)) return;
+    setIdsRimosseOttimisticamente((prev) => new Set(prev).add(riga.id));
     const { error } = await supabase.from("corsi_date_docenti").delete().eq("id", riga.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (error) {
+      window.alert("Errore: " + error.message);
+      setIdsRimosseOttimisticamente((prev) => { const copia = new Set(prev); copia.delete(riga.id); return copia; });
+      return;
+    }
     ricarica();
   }
 
