@@ -2442,10 +2442,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           title={`${stile.etichetta} (clicca per cambiare)`}
           style={{ width: 18, height: 18, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer", background: stile.colore, flexShrink: 0 }}
         />
-        <label style={{ ...fontScheda, fontSize: 16, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1 }}>
-          +
-          <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile, e.target.files); e.target.value = ""; }} />
-        </label>
+        {stato === "non_occorre" ? (
+          <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: MUTED, whiteSpace: "nowrap" }}>In sede</span>
+        ) : (
+          <label style={{ ...fontScheda, fontSize: 16, fontWeight: 700, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "3px 10px", cursor: "pointer", whiteSpace: "nowrap", lineHeight: 1 }}>
+            +
+            <input type="file" multiple accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { caricaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile, e.target.files); e.target.value = ""; }} />
+          </label>
+        )}
         {nBiglietti > 0 && (
           <span
             onClick={() => cancellaBigliettiGenerico(tabella, riga.id, valoreCampo(riga, campoFile), campoFile)}
