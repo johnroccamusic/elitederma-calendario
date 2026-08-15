@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { regioneDaCitta } from "./comuni-regioni";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
 // importate in cima al file, quel peso va scaricato e interpretato PRIMA
@@ -1608,6 +1609,10 @@ const ETICHETTE_MODULO_PDF = {
   nome: "nome",
   cognome: "cognome",
   telefono: "telefono",
+  indirizzoResidenza: "indirizzo di residenza",
+  capResidenza: "cap",
+  cittaResidenza: "città di residenza",
+  email: "email",
   accontoMetodo: "acconto pagato a mezzo",
   accontoImporto: "di euro",
   tagliaDivisa: "taglia divisa",
@@ -1623,6 +1628,7 @@ async function estraiDatiModuloPdf(file) {
   const pdfjsLib = await getPdfjsLib();
   const buffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+  try {
   const paginePossibili = [6, 5, 7].filter((n) => n <= pdf.numPages);
 
   for (const numPagina of paginePossibili) {
@@ -1671,6 +1677,12 @@ async function estraiDatiModuloPdf(file) {
     if (Object.keys(risultato).length > 0) return risultato;
   }
   return null;
+  } finally {
+    // libera la memoria del documento PDF: senza questo, rileggere molti
+    // moduli in sequenza (es. "Recupera residenze dai moduli") satura la RAM
+    // e la scheda del browser va in crash a metà
+    try { await pdf.destroy(); } catch (e) { /* ignora */ }
+  }
 }
 // data odierna in formato "YYYY-MM-DD", per confrontare con data_inizio/data_fine
 // trasforma un testo in una forma leggibile per l'URL: "Microblading Base" → "microblading-base"
@@ -12652,6 +12664,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   const [pacchettoKit, setPacchettoKit] = useState("");
   const [tipoOfferta, setTipoOfferta] = useState("");
   const [tagliaDivisa, setTagliaDivisa] = useState("");
+  // residenza letta dal modulo di iscrizione (pagina 6): serve al CRM per
+  // citta/regione di residenza. Non ha campi visibili nel form: si legge dal
+  // PDF e si salva insieme al resto
+  const [cittaResidenza, setCittaResidenza] = useState("");
+  const [indirizzoResidenza, setIndirizzoResidenza] = useState("");
+  const [capResidenza, setCapResidenza] = useState("");
+  const [emailIscritto, setEmailIscritto] = useState("");
   const [totalePattuito, setTotalePattuito] = useState("");
   const [quotaSpeciale, setQuotaSpeciale] = useState("");
   const [fileIscrizione, setFileIscrizione] = useState(null);
@@ -13197,6 +13216,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
     setPacchettoKit(""); setTipoOfferta(""); setTagliaDivisa("");
+    setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto("");
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
   }
@@ -13211,6 +13231,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   function apriModificaCompleta(i) {
     setNome(i.nome); setCognome(i.cognome); setNote(i.note || "");
     setTutor(i.tutor || ""); setTelefono(i.telefono || "");
+    setCittaResidenza(i.citta_residenza || ""); setIndirizzoResidenza(i.indirizzo_residenza || ""); setCapResidenza(i.cap_residenza || ""); setEmailIscritto(i.email || "");
     setVecchiaIscrizione(i.vecchia_iscrizione === true);
     setPagAcconto({
       imponibile: i.acconto_imponibile != null ? String(i.acconto_imponibile) : "",
@@ -13540,6 +13561,18 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       const idIscritto = modificandoId || nuovoId;
       if (nuovoId) setModificandoId(nuovoId); // da qui in poi i campi successivi si autosalvano sullo stesso iscritto
 
+      // residenza (dal modulo, pagina 6) salvata a parte e "best-effort": se
+      // le colonne non esistono ancora sul database (migrazione non eseguita),
+      // l'errore viene ignorato e NON blocca il salvataggio dell'iscrizione
+      if (idIscritto && (cittaResidenza.trim() || indirizzoResidenza.trim() || capResidenza.trim() || emailIscritto.trim())) {
+        await supabase.from("iscritti").update({
+          citta_residenza: cittaResidenza.trim() || null,
+          indirizzo_residenza: indirizzoResidenza.trim() || null,
+          cap_residenza: capResidenza.trim() || null,
+          email: emailIscritto.trim().toLowerCase() || null,
+        }).eq("id", idIscritto);
+      }
+
       // finisce in automatico nella coda "Verifica Pagamenti" (etichettato
       // "Verifica bonifico") solo la quota che diventa "segnalata" proprio
       // in questo salvataggio — cioè che PRIMA di questo salvataggio non lo
@@ -13596,6 +13629,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (dati.nome && !salta(nome.trim())) setNome(dati.nome.toUpperCase());
     if (dati.cognome && !salta(cognome.trim())) setCognome(dati.cognome.toUpperCase());
     if (dati.telefono && !salta(telefono.trim())) setTelefono(dati.telefono.toUpperCase());
+    if (dati.cittaResidenza && !salta(cittaResidenza.trim())) setCittaResidenza(dati.cittaResidenza.toUpperCase());
+    if (dati.indirizzoResidenza && !salta(indirizzoResidenza.trim())) setIndirizzoResidenza(dati.indirizzoResidenza.toUpperCase());
+    if (dati.capResidenza && !salta(capResidenza.trim())) setCapResidenza(dati.capResidenza.replace(/[^0-9]/g, "").slice(0, 5));
+    if (dati.email && !salta(emailIscritto.trim())) setEmailIscritto(dati.email.toLowerCase());
 
     if (dati.tagliaDivisa && !salta(tagliaDivisa)) {
       const taglia = ["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].find((t) => t.toLowerCase() === dati.tagliaDivisa.toLowerCase());
@@ -19125,10 +19162,22 @@ function costruisciAllieviCrm(iscritti, allieviCrm, corsi, corsiDate, location) 
     });
     const crm = crmByChiave[chiave];
     const date = righe.map((r) => r.ts).filter(Boolean).sort();
+    // citta di residenza: presa dal modulo di iscrizione (colonna
+    // citta_residenza sull'iscritto più recente che ce l'ha); la regione si
+    // calcola in locale dalla citta (o dal CAP). Un valore inserito a mano nel
+    // CRM (allievi_crm) ha comunque la priorità e sovrascrive quello del modulo.
+    const rigaResidenza = ordinate.find((r) => (r.citta_residenza || "").trim());
+    const cittaModulo = (rigaResidenza?.citta_residenza || "").trim();
+    const capModulo = (rigaResidenza?.cap_residenza || "").trim();
+    const cittaResidenza = (crm?.citta_provenienza || "").trim() || cittaModulo;
+    const regioneResidenza = (crm?.regione_provenienza || "").trim() || regioneDaCitta(cittaResidenza, capModulo);
+    // email: presa dal modulo (iscritto più recente che ce l'ha); un valore
+    // inserito a mano nel CRM ha comunque la priorità
+    const emailModulo = (ordinate.find((r) => (r.email || "").trim())?.email || "").trim();
     return {
       chiave,
       nome: ultima.nome, cognome: ultima.cognome, telefono: ultima.telefono || "",
-      email: crm?.email || "", cittaProvenienza: crm?.citta_provenienza || "", regioneProvenienza: crm?.regione_provenienza || "", note: crm?.note || "",
+      email: (crm?.email || "").trim() || emailModulo, cittaProvenienza: cittaResidenza, regioneProvenienza: regioneResidenza, note: crm?.note || "",
       corsi: Object.values(corsiMap),
       cittaCorso: Array.from(cittaCorsoSet),
       dataAcquisto: date.length ? date[date.length - 1] : null,
@@ -19139,7 +19188,7 @@ function costruisciAllieviCrm(iscritti, allieviCrm, corsi, corsiDate, location) 
   });
 }
 function esportaCsvCrmAllievi(righe) {
-  const intestazione = ["Allievo", "Email", "Telefono", "Città provenienza", "Regione provenienza", "Città corso frequentato", "Corsi acquistati", "Data acquisto"];
+  const intestazione = ["Allievo", "Email", "Telefono", "Città di residenza", "Regione di residenza", "Città corso frequentato", "Corsi acquistati", "Data acquisto"];
   const righeCsv = righe.map((a) => [
     `${a.nome} ${a.cognome}`, a.email, a.telefono, a.cittaProvenienza, a.regioneProvenienza,
     a.cittaCorso.join("; "), a.corsi.map((c) => c.nome).join("; "), a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "",
@@ -19161,10 +19210,12 @@ function esportaCsvCrmAllievi(righe) {
 function DettaglioAllievoCrm({ allievo, corsoById, locById, cdById, onClose, ricarica }) {
   const [email, setEmail] = useState(allievo.email);
   const [citta, setCitta] = useState(allievo.cittaProvenienza);
-  const [regione, setRegione] = useState(allievo.regioneProvenienza);
   const [note, setNote] = useState(allievo.note);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  // la regione si calcola in automatico dalla città (tabella comuni offline):
+  // non è un campo modificabile a mano
+  const regioneCalcolata = regioneDaCitta(citta);
 
   async function salva() {
     setSalvando(true); setMsg("");
@@ -19172,7 +19223,7 @@ function DettaglioAllievoCrm({ allievo, corsoById, locById, cdById, onClose, ric
       chiave: allievo.chiave,
       email: email.trim() || null,
       citta_provenienza: citta.trim() || null,
-      regione_provenienza: regione.trim() || null,
+      regione_provenienza: regioneCalcolata || null,
       note: note.trim() || null,
     }, { onConflict: "chiave" });
     setSalvando(false);
@@ -19196,13 +19247,13 @@ function DettaglioAllievoCrm({ allievo, corsoById, locById, cdById, onClose, ric
       </div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
-          <Field label="Città di provenienza">
+          <Field label="Città di residenza">
             <input value={citta} onChange={(e) => setCitta(e.target.value.toUpperCase())} placeholder="es. MILANO" style={{ ...inputStyle, textTransform: "uppercase" }} />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Regione di provenienza">
-            <input value={regione} onChange={(e) => setRegione(e.target.value.toUpperCase())} placeholder="es. LOMBARDIA" style={{ ...inputStyle, textTransform: "uppercase" }} />
+          <Field label="Regione di residenza (auto)">
+            <div style={{ ...inputStyle, background: "#F7F5EF", color: regioneCalcolata ? NAVY : MUTED, display: "flex", alignItems: "center" }}>{regioneCalcolata || "— (città non riconosciuta)"}</div>
           </Field>
         </div>
       </div>
@@ -19260,7 +19311,7 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
   const [telefono, setTelefono] = useState("");
   const [email, setEmail] = useState("");
   const [citta, setCitta] = useState("");
-  const [regione, setRegione] = useState("");
+  const regioneCalcolata = regioneDaCitta(citta);
   const [totale, setTotale] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
@@ -19277,12 +19328,12 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
       totale_pattuito: totale === "" ? null : parseNum(totale),
     });
     if (erroreIscritto) { setSalvando(false); setMsg("Errore: " + erroreIscritto.message); return; }
-    if (email.trim() || citta.trim() || regione.trim()) {
+    if (email.trim() || citta.trim()) {
       const { error: erroreCrm } = await supabase.from("allievi_crm").upsert({
         chiave: chiaveAllievo(nome, cognome, telefono),
         email: email.trim() || null,
         citta_provenienza: citta.trim() || null,
-        regione_provenienza: regione.trim() || null,
+        regione_provenienza: regioneCalcolata || null,
       }, { onConflict: "chiave" });
       if (erroreCrm) { setSalvando(false); setMsg("Iscritto creato, ma errore nel salvare email/città: " + erroreCrm.message); return; }
     }
@@ -19329,13 +19380,13 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
       </div>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
-          <Field label="Città di provenienza">
-            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={citta} onChange={(e) => setCitta(e.target.value)} />
+          <Field label="Città di residenza">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={citta} onChange={(e) => setCitta(e.target.value.toUpperCase())} />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Regione di provenienza">
-            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={regione} onChange={(e) => setRegione(e.target.value)} />
+          <Field label="Regione di residenza (auto)">
+            <div style={{ ...inputStyle, background: "#F7F5EF", color: regioneCalcolata ? NAVY : MUTED, display: "flex", alignItems: "center" }}>{regioneCalcolata || "—"}</div>
           </Field>
         </div>
       </div>
@@ -19375,6 +19426,49 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   const [mostraComunicazione, setMostraComunicazione] = useState(false);
   const [menuAzioniAperto, setMenuAzioniAperto] = useState(false);
   const [menuRigaAperto, setMenuRigaAperto] = useState(null);
+  const [backfillStato, setBackfillStato] = useState(null); // { fatti, totali } mentre rilegge i moduli, o null
+
+  // rilegge i moduli PDF già caricati (file_iscrizione) degli allievi che non
+  // hanno ancora la città di residenza, la estrae dalla pagina 6 e aggiorna
+  // l'iscritto — serve a popolare gli allievi già esistenti, dato che prima
+  // queste etichette del modulo non venivano lette
+  async function recuperaResidenzeDaiModuli() {
+    setMenuAzioniAperto(false);
+    // da rifare: chi ha un modulo caricato ma non ha ancora né città né email
+    const daFare = (iscritti || []).filter((i) => i.file_iscrizione && !((i.citta_residenza || "").trim() && (i.email || "").trim()));
+    if (daFare.length === 0) { window.alert("Tutti gli allievi con un modulo caricato hanno già città di residenza ed email."); return; }
+    if (!window.confirm(`Rileggo ${daFare.length} modul${daFare.length === 1 ? "o" : "i"} PDF per recuperare città di residenza ed email. Può richiedere qualche minuto: non chiudere la pagina. Procedo?`)) return;
+    let ok = 0, senzaDati = 0, erroriSalvataggio = 0, primoErrore = "";
+    for (let idx = 0; idx < daFare.length; idx++) {
+      const i = daFare[idx];
+      setBackfillStato({ fatti: idx, totali: daFare.length });
+      // breve pausa: lascia respirare il browser tra un PDF e l'altro, così
+      // la memoria si libera e la scheda non va in crash sui numeri grandi
+      await new Promise((r) => setTimeout(r, 30));
+      try {
+        const bytes = await scaricaBytesStorage("allegati-iscritti", i.file_iscrizione);
+        const dati = await estraiDatiModuloPdf(new Blob([bytes], { type: "application/pdf" }));
+        const citta = (dati?.cittaResidenza || "").trim();
+        const email = (dati?.email || "").trim();
+        if (!citta && !email && !(dati?.indirizzoResidenza || "").trim()) { senzaDati++; continue; }
+        const { error } = await supabase.from("iscritti").update({
+          citta_residenza: citta.toUpperCase() || null,
+          indirizzo_residenza: (dati.indirizzoResidenza || "").trim().toUpperCase() || null,
+          cap_residenza: (dati.capResidenza || "").replace(/[^0-9]/g, "").slice(0, 5) || null,
+          email: email.toLowerCase() || null,
+        }).eq("id", i.id);
+        if (error) { erroriSalvataggio++; if (!primoErrore) primoErrore = error.message; }
+        else ok++;
+      } catch { senzaDati++; }
+    }
+    setBackfillStato(null);
+    await ricarica();
+    if (erroriSalvataggio > 0 && /column|colonna|schema|residenza|email/i.test(primoErrore)) {
+      window.alert(`Attenzione: il database non ha ancora le colonne per residenza/email (migrazione non eseguita). Esegui il file supabase-iscritti-residenza-setup.sql su Supabase, poi riprova.\n\nDettaglio: ${primoErrore}`);
+      return;
+    }
+    window.alert(`Recupero completato: ${ok} aggiornat${ok === 1 ? "o" : "i"}${senzaDati ? `, ${senzaDati} senza dati leggibili nel modulo` : ""}${erroriSalvataggio ? `, ${erroriSalvataggio} con errore di salvataggio` : ""}.`);
+  }
 
   // cambiare un filtro o la ricerca svuota la selezione: altrimenti si
   // rischierebbe di mandare un'azione di massa su persone che non fanno
@@ -19500,7 +19594,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
           {cardStat(<IconaGruppoTeam size={22} />, "Totale allievi", allievi.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneAllievi)}</>)}
           {cardStat(<IconaTileVenditori size={22} color={GOLD} />, "Corsi acquistati", iscritti.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneCorsi)}</>)}
-          {cardStat(<IconaPin size={22} />, "Città di provenienza", opzioniCittaProv.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
+          {cardStat(<IconaPin size={22} />, "Città di residenza", opzioniCittaProv.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
           {cardStat(<IconaPin size={22} />, "Città corso frequentato", opzioniCittaCorso.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
         </div>
 
@@ -19576,8 +19670,11 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               <>
                 <div onClick={() => setMenuAzioniAperto(false)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
                 <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 10, minWidth: 200, overflow: "hidden" }}>
-                  <div onClick={() => { setMenuAzioniAperto(false); esportaCsvCrmAllievi(allieviSelezionati.length ? allieviSelezionati : risultati); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                  <div onClick={() => { setMenuAzioniAperto(false); esportaCsvCrmAllievi(allieviSelezionati.length ? allieviSelezionati : risultati); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>
                     Esporta {allieviSelezionati.length ? "selezionati" : "risultati filtrati"}
+                  </div>
+                  <div onClick={recuperaResidenzeDaiModuli} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                    Recupera residenze dai moduli
                   </div>
                 </div>
               </>
@@ -19589,12 +19686,17 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
             La selezione è stata svuotata perché hai cambiato un filtro.
           </div>
         )}
+        {backfillStato && (
+          <div style={{ background: "#EAF3EC", border: `1px solid #CBE3D2`, borderRadius: 10, padding: "10px 16px", marginBottom: 10, ...fontBody, fontSize: 13, color: "#2E7D32", fontWeight: 600 }}>
+            Recupero città di residenza dai moduli… {backfillStato.fatti}/{backfillStato.totali}
+          </div>
+        )}
 
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "0 0 14px 14px", marginBottom: 30 }}>
           <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
             <thead>
               <tr>
-                {[["", "3%"], ["Allievo", "13%"], ["Email", "15%"], ["Telefono", "9%"], ["Città res.", "9%"], ["Regione res.", "9%"], ["Città corso", "9%"], ["Corsi", "14%"], ["Data acq.", "8%"], ["Azioni", "6%"]].map(([h, w], i) => (
+                {[["", "3%"], ["Allievo", "13%"], ["Email", "15%"], ["Telefono", "9%"], ["Città di res.", "9%"], ["Regione di res.", "9%"], ["Città corso", "9%"], ["Corsi", "14%"], ["Data acq.", "8%"], ["Azioni", "6%"]].map(([h, w], i) => (
                   <th key={i} style={{ width: w, padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>

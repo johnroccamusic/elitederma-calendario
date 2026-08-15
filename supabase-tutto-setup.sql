@@ -2053,3 +2053,19 @@ drop policy if exists "accesso interno allievi_crm" on public.allievi_crm;
 create policy "accesso interno allievi_crm" on public.allievi_crm for all to anon using (true) with check (true);
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 73) Residenza allievo (dal modulo di iscrizione): città, indirizzo e
+-- CAP di residenza letti dalla pagina 6 del modulo (PDF), più l'email.
+-- Usati dal CRM/Allievi per mostrare "Città di res." e calcolare la
+-- "Regione di res." dalla città. Il modulo può non contenerli (allievi
+-- vecchi): restano NULL finché non si rilegge il PDF (vedi "Recupera
+-- residenze dai moduli" in CRM Allievi > Altre azioni).
+-- ---------------------------------------------------------
+alter table public.iscritti add column if not exists citta_residenza text;
+alter table public.iscritti add column if not exists indirizzo_residenza text;
+alter table public.iscritti add column if not exists cap_residenza text;
+alter table public.iscritti add column if not exists email text;
+
+notify pgrst, 'reload schema';
