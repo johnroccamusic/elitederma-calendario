@@ -13516,11 +13516,28 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     });
   const quoteAssistentiClasse = round2(righeAssistentiClasse.reduce((s, r) => s + r.totale, 0));
 
+  // riga "Commissione ricerca modelle": quando la classe incassa quote
+  // modelle, il 50% va riportato come costo — di default interamente
+  // cash (è così che viene pattuita), ma con lo stesso split libero
+  // Bonifico/Cash delle altre righe automatiche se serve correggerlo.
+  const totaleModelleClasse = round2(listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0));
+  const commissioneModelleClasse = round2(totaleModelleClasse * 0.5);
+  const rigaCommissioneModelleClasse = totaleModelleClasse > 0 ? (() => {
+    const dati = conSplit(corsoData.id, { commissione_modelle_bonifico: corsoData.commissione_modelle_bonifico, commissione_modelle_cash: corsoData.commissione_modelle_cash });
+    const bonifico = dati.commissione_modelle_bonifico;
+    const cash = dati.commissione_modelle_cash;
+    return {
+      rigaId: corsoData.id, tabella: "corsi_date", tipo: "modelle", nome: "Commissione ricerca modelle", totale: commissioneModelleClasse,
+      bonifico: bonifico ?? 0, cash: cash ?? (bonifico == null ? commissioneModelleClasse : 0),
+    };
+  })() : null;
+
   const righeSpeseTutte = [
     rigaVenditoreClasse,
     ...righeMasterClasse,
     ...(rigaLocationClasse ? [rigaLocationClasse] : []),
     ...righeAssistentiClasse,
+    ...(rigaCommissioneModelleClasse ? [rigaCommissioneModelleClasse] : []),
   ];
   const totaleSpeseAutomaticheClasse = round2(righeSpeseTutte.reduce((s, r) => s + r.totale, 0));
   const totaleCostiClasse = round2(
@@ -13528,15 +13545,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
-  // Cassa Contanti: tutto il cash incassato (prima del corso + al corso)
-  // meno tutte le uscite cash della tabella spese (master/location/
-  // assistenti/venditore + spese reali) — coerente con lo schizzo:
-  // incasso cash - spese cash
-  const cassaContantiClasse = round2(
-    contantiClasse + cashPrimaDelCorsoClasse
-    - righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
-    - speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
+  // Totale Cash da pagare: somma di tutta la colonna Cash della tabella
+  // spese (righe automatiche + spese reali)
+  const totaleCashDaPagareClasse = round2(
+    righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
+    + speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
   );
+  // "Cash pulito in busta": tutto il cash incassato (prima del corso +
+  // al corso) meno tutto il Cash da pagare della tabella spese
+  const cassaContantiClasse = round2(contantiClasse + cashPrimaDelCorsoClasse - totaleCashDaPagareClasse);
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
@@ -14849,8 +14866,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     <div style={{ flex: "0 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Giorni</div>
                   </div>
                   {righeSpeseTutte.map((r) => {
-                    const campoBonifico = r.tipo === "location" ? "location_bonifico" : r.tipo === "venditore" ? "quota_venditore_bonifico" : "quota_bonifico";
-                    const campoCash = r.tipo === "location" ? "location_cash" : r.tipo === "venditore" ? "quota_venditore_cash" : "quota_cash";
+                    const campoBonifico = r.tipo === "location" ? "location_bonifico" : r.tipo === "venditore" ? "quota_venditore_bonifico" : r.tipo === "modelle" ? "commissione_modelle_bonifico" : "quota_bonifico";
+                    const campoCash = r.tipo === "location" ? "location_cash" : r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
                     return (
                       <div key={r.tipo + "_" + r.rigaId} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
                         <div style={{ flex: "2 1 170px", minWidth: 0 }}>
@@ -14925,19 +14942,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14, paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <div>
-                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale incasso netto</div>
-                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {incassoNettoClasse}</div>
-                </div>
-                <div>
-                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale spese</div>
-                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCostiClasse}</div>
-                </div>
-                <div>
-                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Risultato classe</div>
-                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: risultatoClasse < 0 ? "#C0392B" : NAVY }}>€ {risultatoClasse}</div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Totale Cash da pagare</div>
+                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCashDaPagareClasse}</div>
                 </div>
                 <div style={{ padding: "8px 16px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}` }}>
-                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cassa Contanti</div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash pulito in busta</div>
                   <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
                 </div>
                 <Button onClick={salvaCostiClasse} disabled={salvandoCosti}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
