@@ -14655,17 +14655,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </div>
         </div>
       )}
-      <div style={{ position: "relative", overflow: "hidden", background: NAVY, borderRadius: 24, padding: "28px 26px", marginBottom: 0 }}>
+      <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 24, padding: "28px 26px", marginBottom: 0 }}>
         <DecorazioneOndeHero />
         <div style={{ ...fontBody, position: "relative", fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>
           {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
         </div>
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 22 }}>
-          <div style={{ ...fontHero, fontSize: 40, color: "#F7F2E7", lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+          <div style={{ ...fontHero, fontSize: 40, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
           {loc?.nome && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
               <IconaPin size={16} color={GOLD} />
-              <span style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+              <span style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
             </div>
           )}
         </div>
@@ -14682,14 +14682,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
           ].filter(Boolean);
           return (
-            <div style={{ position: "relative", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 14, padding: "18px 20px" }}>
+            <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px" }}>
               <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
                 {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
-                  <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? "1px solid rgba(255,255,255,0.12)" : "none" }}>
+                  <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
                     <Icona size={26} color={GOLD} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
-                      <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#F7F2E7", whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                      <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
                     </div>
                   </div>
                 ))}
