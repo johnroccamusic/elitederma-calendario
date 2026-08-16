@@ -14601,7 +14601,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                       {categorieRiepilogo.map((cat) => (
                         <div key={cat.id}>
                           <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.nome}</div>
-                          {sottocategorieDiCategoria(costiSottocategorie, cat.id).filter((v) => !v.automatico).map((v) => (
+                          {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v) => (
                             <button
                               key={v.id}
                               onClick={() => aggiungiVoceCosto(`${cat.id}::${v.id}`)}
