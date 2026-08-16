@@ -2305,20 +2305,28 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // vista, indipendentemente dagli altri filtri attivi) — un'unica
   // classifica del carico di lavoro complessivo, non solo delle master
   const conteggioCarico = {};
+  function incrementaCarico(nome, nomeCorso) {
+    if (!nome) return;
+    if (!conteggioCarico[nome]) conteggioCarico[nome] = { totale: 0, perCorso: {} };
+    conteggioCarico[nome].totale += 1;
+    if (nomeCorso) conteggioCarico[nome].perCorso[nomeCorso] = (conteggioCarico[nome].perCorso[nomeCorso] || 0) + 1;
+  }
   corsiDate
     .filter((cd) => cd.data_fine >= dataOggiStr() && inStagioneVista(cd.data_inizio))
     .forEach((cd) => {
+      const nomeCorso = corsoById[cd.corso_id]?.nome;
       if (cd.master_id) {
-        const nome = master.find((m) => m.id === cd.master_id)?.nome;
-        if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
+        incrementaCarico(master.find((m) => m.id === cd.master_id)?.nome, nomeCorso);
       }
       (docentiPerCorsoData[cd.id] || []).forEach((d) => {
-        const nome = nomeDocente(d);
-        if (nome) conteggioCarico[nome] = (conteggioCarico[nome] || 0) + 1;
+        incrementaCarico(nomeDocente(d), nomeCorso);
       });
     });
   const caricoAssegnazioni = Object.entries(conteggioCarico)
-    .map(([nome, n]) => ({ nome, n }))
+    .map(([nome, dati]) => ({
+      nome, n: dati.totale,
+      dettaglio: Object.entries(dati.perCorso).map(([corso, n]) => ({ corso, n })).sort((a, b) => b.n - a.n),
+    }))
     .sort((a, b) => b.n - a.n);
 
   // generiche perché servono sia alla riga principale (tabella
@@ -2858,9 +2866,16 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridTemplateRows: `repeat(${Math.ceil(caricoAssegnazioni.length / 4)}, auto)`, gridAutoFlow: "column", gap: 10 }}>
               {caricoAssegnazioni.map((p) => (
-                <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px", background: "#fff" }}>
-                  <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
-                  <span style={{ ...fontScheda, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
+                <div key={p.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px", background: "#fff" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
+                    <span style={{ ...fontScheda, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
+                  </div>
+                  {p.dettaglio.length > 0 && (
+                    <div style={{ ...fontBody, fontSize: 9.5, color: MUTED, marginTop: 3, lineHeight: 1.3 }}>
+                      {p.dettaglio.map((d) => `${d.n} ${d.corso}`).join(", ")}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
