@@ -18689,6 +18689,11 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
+  async function toggleEsclusaVenditaDiretta(c) {
+    const { error } = await supabase.from("categorie_prodotti").update({ escludi_vendita_diretta: !c.escludi_vendita_diretta }).eq("id", c.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   return (
     <Modal title="Gestisci categorie" onClose={onClose} maxWidth={560}>
@@ -18719,6 +18724,10 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ flex: 1, ...fontBody, fontSize: 13.5, color: NAVY }}>{c.nome}</span>
+                  <label title="Esclude i prodotti di questa categoria dalla vendita diretta (POS e shop online)" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
+                    <input type="checkbox" checked={!!c.escludi_vendita_diretta} onChange={() => toggleEsclusaVenditaDiretta(c)} style={{ width: 13, height: 13 }} />
+                    Non sul POS
+                  </label>
                   {dalloShop ? (
                     <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }} title="Modificabile solo da Gestione shop">Dallo shop</span>
                   ) : (
@@ -22069,15 +22078,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
-  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  // categorie escluse dalla vendita diretta ("Non sul POS", Gestisci
+  // categorie in Magazzino): né la categoria compare nel filtro, né i
+  // suoi prodotti tra quelli vendibili al banco
+  const categorieIdEscluseVenditaDiretta = new Set((categorieProdotti || []).filter((c) => c.escludi_vendita_diretta).map((c) => c.id));
+  const categorieOrdinate = [...(categorieProdotti || [])].filter((c) => !c.escludi_vendita_diretta).sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
   (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
   const immagineUrlPerProdotto = {};
   [...(prodottiImmagini || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).forEach((im) => { if (!immagineUrlPerProdotto[im.prodotto_id]) immagineUrlPerProdotto[im.prodotto_id] = im.url; });
 
   // solo prodotti con un prezzo possono essere venduti al banco: quelli
-  // senza (materiali di consumo, arredi…) restano fuori dal POS
-  const prodottiVendibili = (prodottiShop || []).filter((p) => p.attivo !== false && p.prezzo_vendita != null);
+  // senza (materiali di consumo, arredi…) restano fuori dal POS, così
+  // come quelli con almeno una categoria esclusa dalla vendita diretta
+  const prodottiVendibili = (prodottiShop || []).filter((p) =>
+    p.attivo !== false && p.prezzo_vendita != null
+    && !(categorieIdPerProdottoId[p.id] || []).some((cid) => categorieIdEscluseVenditaDiretta.has(cid))
+  );
 
   let prodottiVisti = prodottiVendibili;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => (categorieIdPerProdottoId[p.id] || []).includes(categoriaSel));
