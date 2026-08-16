@@ -13615,9 +13615,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
     + speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
   );
-  // "Cash pulito in busta": tutto il cash incassato (prima del corso +
-  // al corso) meno tutto il Cash da pagare della tabella spese
-  const cassaContantiClasse = round2(contantiClasse + cashPrimaDelCorsoClasse - totaleCashDaPagareClasse);
+  // "Cash pulito in busta": solo il cash incassato FISICAMENTE al corso
+  // (non il cash prima del corso, che non è nella busta consegnata quel
+  // giorno) meno tutto il Cash da pagare della tabella spese — può
+  // risultare negativo se le spese cash superano il cash incassato al
+  // corso, e in tal caso serve integrare da un'altra fonte
+  const cassaContantiClasse = round2(contantiClasse - totaleCashDaPagareClasse);
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
