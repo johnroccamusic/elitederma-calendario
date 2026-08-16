@@ -13110,7 +13110,7 @@ function BottonePulsanteScheda({ p }) {
     </button>
   );
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -13368,8 +13368,29 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // effetti (va pagata al venditore): fa parte del totale costi anche prima
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
+  // costo delle master di questa edizione: somma dei compensi di TUTTE le
+  // persone di tipo Master assegnate (quella principale su
+  // corsi_date.master_id + eventuali extra aggiunte con "+" in
+  // Assegnazione Master), ciascuna nella fascia corrispondente al numero
+  // di allievi iscritti — dato già impostato in Gestione Master → tab
+  // Compensi, nessun input manuale qui. Le assistenti restano escluse:
+  // hanno un compenso giornaliero fisso a parte, in assistente_corsi.
+  const masterIdsClasse = [
+    corsoData.master_id,
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => d.persona_id),
+  ].filter(Boolean);
+  function compensoFasciaPer(numAllievi, fasce) {
+    const f = (fasce || []).find((x) => numAllievi >= (x.da ?? 0) && (x.a == null || numAllievi <= x.a));
+    return f?.compenso ?? 0;
+  }
+  const quoteMasterClasse = round2(
+    masterIdsClasse.reduce((s, masterId) => {
+      const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === masterId && mc.corso_id === corsoData.corso_id);
+      return s + compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso);
+    }, 0)
+  );
   const totaleCostiClasse = round2(
-    quoteVenditoreClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
+    quoteVenditoreClasse + quoteMasterClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
@@ -14675,9 +14696,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   + Aggiungi riga
                 </button>
               </div>
-              <div style={{ maxWidth: 220, marginBottom: 14 }}>
+              <div style={{ maxWidth: 220, marginBottom: 10 }}>
                 <Field label="Quota venditore">
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteVenditoreClasse}</div>
+                </Field>
+              </div>
+              <div style={{ maxWidth: 220, marginBottom: 14 }}>
+                <Field label="Quota master">
+                  <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteMasterClasse}</div>
                 </Field>
               </div>
               {speseClasse.length === 0 ? (
@@ -27920,6 +27946,8 @@ export default function App() {
           corsiDate={corsiDate}
           iscritti={iscritti}
           master={master}
+          masterCorsi={masterCorsi}
+          corsiDateDocenti={corsiDateDocenti}
           fontDiplomi={fontDiplomi}
           diplomaEccezioni={diplomaEccezioni}
           segnaposti={segnaposti}
