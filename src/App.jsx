@@ -14679,65 +14679,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </div>
         </div>
       )}
-      <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 24, padding: "28px 26px", marginBottom: 0 }}>
-        <DecorazioneOndeHero />
-        <div style={{ ...fontBody, position: "relative", fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>
-          {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
-        </div>
-        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 22 }}>
-          <div style={{ ...fontHero, fontSize: 40, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
-          {loc?.nome && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
-              <IconaPin size={18} color={GOLD} />
-              <span style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
-            </div>
-          )}
-        </div>
-        {(() => {
-          const celleIntestazione = [
-            {
-              chiave: "date", Icona: IconaDataAccento, label: "Date",
-              valore: fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
-            },
-            corsoData.master_id && {
-              chiave: "master", Icona: IconaMasterAccento, label: "Master",
-              valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
-            },
-            { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
-          ].filter(Boolean);
-          return (
-            <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
-                {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
-                  <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                    <Icona size={26} color={GOLD} />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
-                      <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-      </div>
-
       {(() => {
         // "lista", "modelle" e il form di iscrizione condividono la
         // stessa barra completa, sempre visibile: entrare in "Assegna
         // modelle" o "Iscrivi" non deve far sparire il contesto/i tasti
         // del corso. Solo "modelle" raggiunta da Gestione modelle (che
         // ha un suo "Torna" dedicato) resta col tasto singolo di prima
-        if (vista === "modelle" && origineGestioneModelle) {
-          return (
-            <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
-              <div style={{ background: "#fff", borderRadius: 22, padding: "8px 10px", display: "flex", alignItems: "center", gap: 4, boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
-                <BottonePulsanteScheda p={{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }} />
-              </div>
-            </div>
-          );
-        }
+        const tornaSpeciale = vista === "modelle" && origineGestioneModelle;
 
         // Stampa diplomi/segnaposto e Riepilogo amministrativo restano
         // visibili solo a chi ha già sbloccato l'accesso amministratore:
@@ -14773,13 +14721,63 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         ];
 
         return (
-          <div style={{ position: "relative", marginTop: -20, marginBottom: 32, zIndex: 2, padding: "0 6px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ background: "#fff", borderRadius: 20, padding: "14px 18px", boxShadow: "0 18px 32px -18px rgba(14,27,51,0.2)", display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
-              {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+          <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 24, padding: "28px 26px", marginBottom: 32 }}>
+            <DecorazioneOndeHero />
+            <div style={{ ...fontBody, position: "relative", fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>
+              {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
             </div>
-            <div style={{ background: "#fff", borderRadius: 20, padding: 14, boxShadow: "0 18px 32px -18px rgba(14,27,51,0.2)", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "nowrap" }}>
-              {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 22 }}>
+              <div style={{ ...fontHero, fontSize: 40, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+              {loc?.nome && (
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
+                  <IconaPin size={18} color={GOLD} />
+                  <span style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+                </div>
+              )}
             </div>
+            {(() => {
+              const celleIntestazione = [
+                {
+                  chiave: "date", Icona: IconaDataAccento, label: "Date",
+                  valore: fmtIntervalloEsteso(corsoData.data_inizio, corsoData.data_fine),
+                },
+                corsoData.master_id && {
+                  chiave: "master", Icona: IconaMasterAccento, label: "Master",
+                  valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
+                },
+                { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
+              ].filter(Boolean);
+              return (
+                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 20 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
+                    {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
+                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                        <Icona size={26} color={GOLD} />
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
+                          <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+            {tornaSpeciale ? (
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <BottonePulsanteScheda p={{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }} />
+              </div>
+            ) : (
+              <>
+                <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: 16 }} />
+                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap", marginBottom: 16 }}>
+                  {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+                </div>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "nowrap" }}>
+                  {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+                </div>
+              </>
+            )}
           </div>
         );
       })()}
