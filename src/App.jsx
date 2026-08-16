@@ -13331,7 +13331,37 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     righeSpeseTutte, totaleSpeseAutomaticheClasse,
   };
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+
+// spazi verticali regolabili della card in cima a "Gestione Iscrizioni"
+// (titolo corso + pulsanti): non una preferenza personale come le
+// larghezze colonna di Assegnazione Master, ma un valore condiviso —
+// chi programma li regola trascinando le maniglie apposite (visibili
+// solo a ruoloUtente "programmatore") e il risultato si salva per tutti
+const ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI = "00000000-0000-0000-0000-000000000003";
+const SPAZI_ISCRIZIONI_DEFAULT = {
+  paddingTop: 18, paddingBottom: 18,
+  dopoEyebrow: 6, dopoTitolo: 12, dopoDateBox: 12, dopoDivider: 10, dopoSecondari: 28,
+};
+const SPAZIO_VERTICALE_MIN = 0;
+const SPAZIO_VERTICALE_MAX = 80;
+// maniglia trascinabile stile "ridimensiona colonna" di Excel, ma in
+// verticale: una striscia sottile con una linea tratteggiata, visibile
+// solo quando ruoloUtente === "programmatore" nel chiamante
+function ManigliaSpazioVerticale({ onPointerDown, onPointerMove, onPointerUp }) {
+  return (
+    <div
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      title="Trascina per regolare lo spazio verticale (salvato per tutti)"
+      style={{ height: 14, margin: "-7px 0", cursor: "ns-resize", position: "relative", zIndex: 6, display: "flex", alignItems: "center", touchAction: "none" }}
+    >
+      <div style={{ width: "100%", borderTop: "1px dashed #4A5FBF", opacity: 0.55 }} />
+    </div>
+  );
+}
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -14668,6 +14698,43 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // singola classe)
   const soloLettura = !!(modificandoId && !adminSbloccato);
 
+  // spazi verticali della card "Gestione Iscrizioni", regolabili solo da
+  // ruoloUtente "programmatore" trascinando le maniglie dedicate — vedi
+  // ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI/SPAZI_ISCRIZIONI_DEFAULT sopra
+  const [spaziIscrizioni, setSpaziIscrizioni] = useState(() => ({ ...SPAZI_ISCRIZIONI_DEFAULT, ...(layoutIscrizioni?.spazi || {}) }));
+  useEffect(() => {
+    setSpaziIscrizioni({ ...SPAZI_ISCRIZIONI_DEFAULT, ...(layoutIscrizioni?.spazi || {}) });
+  }, [layoutIscrizioni]);
+  const ridimensionamentoSpazioRef = React.useRef(null);
+  function iniziaRidimensionamentoSpazio(e, chiave) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ridimensionamentoSpazioRef.current = { chiave, pointerId: e.pointerId, startY: e.clientY, startValore: spaziIscrizioni[chiave] };
+  }
+  function muoviRidimensionamentoSpazio(e) {
+    const r = ridimensionamentoSpazioRef.current;
+    if (!r || e.pointerId !== r.pointerId) return;
+    const nuovoValore = Math.min(SPAZIO_VERTICALE_MAX, Math.max(SPAZIO_VERTICALE_MIN, r.startValore + (e.clientY - r.startY)));
+    setSpaziIscrizioni((prev) => ({ ...prev, [r.chiave]: nuovoValore }));
+  }
+  async function fineRidimensionamentoSpazio() {
+    if (!ridimensionamentoSpazioRef.current) return;
+    ridimensionamentoSpazioRef.current = null;
+    const { error } = await supabase.from("impostazioni_layout_iscrizioni").update({ spazi: spaziIscrizioni }).eq("id", ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  function manigliaSpazio(chiave) {
+    if (ruoloUtente !== "programmatore") return null;
+    return (
+      <ManigliaSpazioVerticale
+        onPointerDown={(e) => iniziaRidimensionamentoSpazio(e, chiave)}
+        onPointerMove={muoviRidimensionamentoSpazio}
+        onPointerUp={fineRidimensionamentoSpazio}
+      />
+    );
+  }
+
   // riga "etichetta / importo / metodo" della sezione Pagamenti: da
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px 160px" }}>
@@ -14721,12 +14788,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         ];
 
         return (
-          <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "18px 22px", marginBottom: 22 }}>
+          <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: `${spaziIscrizioni.paddingTop}px 22px ${spaziIscrizioni.paddingBottom}px`, marginBottom: 22 }}>
             <DecorazioneOndeHero />
-            <div style={{ ...fontBody, position: "relative", fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>
+            <div style={{ ...fontBody, position: "relative", fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: spaziIscrizioni.dopoEyebrow }}>
               {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
             </div>
-            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            {manigliaSpazio("dopoEyebrow")}
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoTitolo }}>
               <div style={{ ...fontHero, fontSize: 28, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
               {loc?.nome && (
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 18, padding: "4px 12px", flexShrink: 0 }}>
@@ -14735,6 +14803,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </div>
               )}
             </div>
+            {manigliaSpazio("dopoTitolo")}
             {(() => {
               const celleIntestazione = [
                 {
@@ -14748,7 +14817,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
               ].filter(Boolean);
               return (
-                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", marginBottom: spaziIscrizioni.dopoDateBox }}>
                   <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
                     {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
                       <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, paddingLeft: idx > 0 ? 10 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
@@ -14763,16 +14832,19 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </div>
               );
             })()}
+            {manigliaSpazio("dopoDateBox")}
             {tornaSpeciale ? (
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <BottonePulsanteScheda p={{ chiave: "torna", etichetta: "Torna a Gestione modelle", Icona: IconaFrecciaSinistra, onClick: onTornaGestioneModelle }} />
               </div>
             ) : (
               <>
-                <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: 10 }} />
-                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", marginBottom: 28 }}>
+                <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
+                {manigliaSpazio("dopoDivider")}
+                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoSecondari }}>
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
+                {manigliaSpazio("dopoSecondari")}
                 <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "nowrap" }}>
                   {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
@@ -27296,6 +27368,7 @@ export default function App() {
   const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
   const [categorieGruppi, setCategorieGruppi] = useState(null); // riga singola: "Associa il gruppo a una categoria di spesa" per assistenti/master/hotel/location
   const [layoutAssegnazioneMaster, setLayoutAssegnazioneMaster] = useState(null); // riga singola: larghezze colonne "fissate su tutti i terminali" in Assegnazione Master
+  const [layoutIscrizioni, setLayoutIscrizioni] = useState(null); // riga singola: spazi verticali della card "Gestione Iscrizioni", regolati da ruoloUtente "programmatore"
   const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
   // "Analisi costi di gestione": catalogo categorie/sotto-categorie (amministrabile), registro spese, ripartizioni multi-ambito, budget, soglie di allerta, ambiti evento/fornitore
   const [costiCategorie, setCostiCategorie] = useState([]);
@@ -27404,7 +27477,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg, ilam] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg, ilam, ilis] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -27463,6 +27536,7 @@ export default function App() {
       supabase.from("coupon").select("*").order("created_at", { ascending: false }),
       supabase.from("impostazioni_categorie_gruppi").select("*").limit(1),
       supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1),
+      supabase.from("impostazioni_layout_iscrizioni").select("*").limit(1),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -27532,6 +27606,7 @@ export default function App() {
     setCoupon(cpn.data || []);
     setCategorieGruppi(icg.data?.[0] || null);
     setLayoutAssegnazioneMaster(ilam.data?.[0] || null);
+    setLayoutIscrizioni(ilis.data?.[0] || null);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -28575,6 +28650,7 @@ export default function App() {
           assistenteCorsi={assistenteCorsi}
           leva={leva}
           hotel={hotel}
+          layoutIscrizioni={layoutIscrizioni}
           fontDiplomi={fontDiplomi}
           diplomaEccezioni={diplomaEccezioni}
           segnaposti={segnaposti}
