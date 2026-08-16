@@ -163,7 +163,7 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 65, 80, 90, 95, 76, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 70, 65, 80, 90, 95, 76, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
@@ -171,7 +171,7 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 
 // il valore vecchio in localStorage vince sempre su quello nuovo
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v2";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Bonifico Fattura", "Pago Cash", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Tipo pagamento", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Bonifico Fattura", "Pago Cash", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -2690,6 +2690,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, textAlign: "center", verticalAlign: "top" }}>
                       {semaforo(valoreCampo(cd, "sede_confermata"), () => salvaCampo(cd.id, "sede_confermata", !valoreCampo(cd, "sede_confermata")), "piccolo")}
+                    </td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
+                      <select style={campoStyle} value={valoreCampo(cd, "tipo_pagamento_location") || ""} onChange={(e) => salvaCampo(cd.id, "tipo_pagamento_location", e.target.value || null)}>
+                        <option value="">—</option>
+                        <option value="cash">Cash</option>
+                        <option value="bonifico">Bonifico</option>
+                      </select>
                     </td>
                     <td style={cellaGruppo}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -8339,6 +8346,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [tipiModellaSelCorsoModifica, setTipiModellaSelCorsoModifica] = useState([]);
   const [nomeLoc, setNomeLoc] = useState("");
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
+  const [costoCashLoc, setCostoCashLoc] = useState("");
+  const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
   const [msg, setMsg] = useState("");
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
@@ -8399,6 +8408,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeLoc, setModNomeLoc] = useState("");
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
+  const [modCostoCashLoc, setModCostoCashLoc] = useState("");
+  const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
@@ -8553,12 +8564,16 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     setLocInModifica(l.id);
     setModNomeLoc(l.nome.toUpperCase());
     setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
+    setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
+    setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
     const { error } = await supabase.from("location").update({
       nome: modNomeLoc.trim().toUpperCase(),
       posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
+      costo_giornaliero_cash: modCostoCashLoc === "" ? null : Number(modCostoCashLoc),
+      costo_giornaliero_bonifico: modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc),
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
@@ -8600,9 +8615,11 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     const { error } = await supabase.from("location").insert({
       nome: nomeLoc.trim().toUpperCase(),
       posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
+      costo_giornaliero_cash: costoCashLoc === "" ? null : Number(costoCashLoc),
+      costo_giornaliero_bonifico: costoBonificoLoc === "" ? null : Number(costoBonificoLoc),
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeLoc(""); setPostiMaxLoc(""); setMsg("Location aggiunta.");
+    setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setMsg("Location aggiunta.");
     ricarica();
   }
   async function toggleMagazzinoLocale(locationId, valore) {
@@ -8863,6 +8880,12 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
             <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
           </Field>
+          <Field label="Costo giornaliero Cash (opzionale)">
+            <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
+          </Field>
+          <Field label="Costo giornaliero Bonifico (opzionale)">
+            <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
+          </Field>
           <Button onClick={aggiungiLocation}>Aggiungi location</Button>
 
           <div style={{ ...hStyle, marginTop: 24 }}>Città esistenti</div>
@@ -8883,6 +8906,12 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                   </Field>
                   <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
                     <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
+                  </Field>
+                  <Field label="Costo giornaliero Cash (opzionale)">
+                    <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
+                  </Field>
+                  <Field label="Costo giornaliero Bonifico (opzionale)">
+                    <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
                   </Field>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
@@ -13381,21 +13410,31 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // corsi_date.master_id + eventuali extra aggiunte con "+" in
   // Assegnazione Master), ciascuna nella fascia corrispondente al numero
   // di allievi iscritti — dato già impostato in Gestione Master → tab
-  // Compensi, nessun input manuale qui.
-  const masterIdsClasse = [
-    corsoData.master_id,
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => d.persona_id),
-  ].filter(Boolean);
+  // Compensi, nessun input manuale qui. Tenuta per riga (non solo per
+  // id) per sapere quali sono state pagate cash (flag "Pago Cash" in
+  // Assegnazione Master), serve al calcolo di "Cash netto" più sotto.
+  const righeMasterClasse = [
+    { masterId: corsoData.master_id, pagaCash: !!corsoData.paga_cash },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => ({ masterId: d.persona_id, pagaCash: !!d.paga_cash })),
+  ].filter((r) => r.masterId);
   function compensoFasciaPer(numAllievi, fasce) {
     const f = (fasce || []).find((x) => numAllievi >= (x.da ?? 0) && (x.a == null || numAllievi <= x.a));
     return f?.compenso ?? 0;
   }
-  const quoteMasterClasse = round2(
-    masterIdsClasse.reduce((s, masterId) => {
-      const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === masterId && mc.corso_id === corsoData.corso_id);
-      return s + compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso);
-    }, 0)
-  );
+  function compensoMasterRiga(r) {
+    const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === r.masterId && mc.corso_id === corsoData.corso_id);
+    return compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso);
+  }
+  const quoteMasterClasse = round2(righeMasterClasse.reduce((s, r) => s + compensoMasterRiga(r), 0));
+  const quoteMasterCashClasse = round2(righeMasterClasse.filter((r) => r.pagaCash).reduce((s, r) => s + compensoMasterRiga(r), 0));
+  // costo della sede di questa edizione: costo giornaliero pattuito
+  // (Cash o Bonifico, scelto in Assegnazione Master → "Tipo pagamento")
+  // moltiplicato per i giorni del corso — dato impostato una volta sola
+  // sulla sede (Impostazioni → Location), nessun input manuale qui.
+  const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
+  const costoGiornalieroLocation = corsoData.tipo_pagamento_location === "cash" ? (locSedeClasse?.costo_giornaliero_cash || 0)
+    : corsoData.tipo_pagamento_location === "bonifico" ? (locSedeClasse?.costo_giornaliero_bonifico || 0)
+    : 0;
   // costo delle assistenti di questa edizione: il compenso impostato
   // nella scheda dell'assistente (Gestione Assistenti → Corsi associati,
   // assistente_corsi.compenso_giornaliero) è giornaliero — di default
@@ -13420,15 +13459,22 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       return { rigaId: d.id, nome: persona?.nome || "—", giorni, compensoGiorno, importo: round2(giorni * compensoGiorno) };
     });
   const quoteAssistentiClasse = round2(righeAssistentiClasse.reduce((s, r) => s + r.importo, 0));
+  const costoLocationClasse = round2(costoGiornalieroLocation * durataGiorniCorso);
   const totaleCostiClasse = round2(
-    quoteVenditoreClasse + quoteMasterClasse + quoteAssistentiClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
+    quoteVenditoreClasse + quoteMasterClasse + quoteAssistentiClasse + costoLocationClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
   // quota di contante già "spesa" al corso stesso (es. pranzi pagati in
-  // contanti dal master): il KPI "Contanti" resta il puro incassato,
-  // questo è un secondo indicatore che lo mostra al netto di quella spesa
-  const cashNettoClasse = round2(contantiClasse - speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
+  // contanti dal master, quota master pagata cash, sede pagata cash): il
+  // KPI "Contanti" resta il puro incassato, questo è un secondo
+  // indicatore che lo mostra al netto di quegli esborsi
+  const cashNettoClasse = round2(
+    contantiClasse
+    - speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
+    - quoteMasterCashClasse
+    - (corsoData.tipo_pagamento_location === "cash" ? costoLocationClasse : 0)
+  );
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
@@ -14732,11 +14778,21 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteVenditoreClasse}</div>
                 </Field>
               </div>
-              <div style={{ maxWidth: 220, marginBottom: righeAssistentiClasse.length > 0 ? 10 : 14 }}>
+              <div style={{ maxWidth: 220, marginBottom: (righeAssistentiClasse.length > 0 || corsoData.tipo_pagamento_location) ? 10 : 14 }}>
                 <Field label="Quota master">
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteMasterClasse}</div>
                 </Field>
               </div>
+              {corsoData.tipo_pagamento_location && (
+                <div style={{ maxWidth: 220, marginBottom: righeAssistentiClasse.length > 0 ? 10 : 14 }}>
+                  <Field label="Costo location">
+                    <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {costoLocationClasse}</div>
+                  </Field>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>
+                    {locSedeClasse?.nome || "—"} · {corsoData.tipo_pagamento_location === "cash" ? "Cash" : "Bonifico"} · {durataGiorniCorso} {durataGiorniCorso === 1 ? "giorno" : "giorni"}
+                  </div>
+                </div>
+              )}
               {righeAssistentiClasse.length > 0 && (
                 <div style={{ maxWidth: 420, marginBottom: 14 }}>
                   <Field label="Quota assistenti">
