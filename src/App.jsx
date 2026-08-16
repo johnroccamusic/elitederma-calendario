@@ -14770,7 +14770,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             ) : (
               <>
                 <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: 10 }} />
-                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", marginBottom: 10 }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", marginBottom: 28 }}>
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "nowrap" }}>
