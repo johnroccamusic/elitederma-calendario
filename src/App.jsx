@@ -163,15 +163,15 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 100, 80, 90, 76, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 100, 80, 90, 82, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
 // intestazioni sovrapposte anche dopo aver corretto i default, perché
 // il valore vecchio in localStorage vince sempre su quello nuovo
-const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v6";
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v7";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Tipo di pagamento", "Notti prenotate", "Pattuito a notte", "Pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Tipo di pagamento", "Notti prenotate", "Pattuito a notte", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -183,6 +183,7 @@ const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
   ["Tipo di pagamento", ["Tipo di", "pagamento"]],
   ["Notti prenotate", ["Notti", "prenotate"]],
   ["Pattuito a notte", ["Pattuito", "a notte"]],
+  ["Hotel pagato", ["Hotel", "pagato"]],
 ]);
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
@@ -2488,7 +2489,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     </button>
   );
   const flagAvvisata = (attivo, onClick) => flagSemplice(attivo, onClick, "Avvisata", "Non ancora avvisata");
-  const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Pagato", "Non ancora pagato");
+  const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Hotel pagato", "Hotel non ancora pagato");
   // tendina Bonifico/Cash, usata sia per "Tipo di pagamento" (l'alloggio di
   // una riga docente) sia per "Pagamento sede" (il costo location
   // dell'edizione): il Riepilogo Amministrativo la legge per decidere in
@@ -2636,7 +2637,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
                 <th key={i} style={{
                   ...thStyle, position: "relative",
-                  textAlign: (etichetta === "Sede OK?" || etichetta === "Pagato" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
+                  textAlign: (etichetta === "Sede OK?" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
                   lineHeight: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? 1.25 : thStyle.lineHeight,
                   // separatore tra le intestazioni: senza, due etichette
                   // corte in colonne strette (es. "Avvisata"/"Note") sembrano
@@ -13510,8 +13511,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // è uno split libero ma segue in blocco la tendina "Tipo di pagamento"
   // di quella riga.
   const righeAlloggioBase = [
-    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, tipoPagamento: corsoData.tipo_pagamento_alloggio },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, tipoPagamento: d.tipo_pagamento_alloggio })),
+    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato })),
   ];
   const righeAlloggioClasse = righeAlloggioBase
     .filter((r) => r.alloggioId && r.pattuitoPeriodo)
@@ -13521,7 +13522,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       const totale = round2(r.pattuitoPeriodo);
       const cash = r.tipoPagamento === "cash" ? totale : 0;
       const bonifico = r.tipoPagamento === "cash" ? 0 : totale;
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash };
+      // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
+      // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
+      // ma qui aggiunge solo un'indicazione visiva (pallino verde)
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato };
     });
 
   // righe "Quota assistenti": il compenso giornaliero impostato nella
@@ -14907,8 +14911,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
                     return (
                       <div key={r.tipo + "_" + r.rigaId} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
-                        <div style={{ flex: "2 1 170px", minWidth: 0 }}>
-                          <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</div>
+                        <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                          <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{r.nome}</div>
+                          {r.tipo === "alloggio" && r.pagato && (
+                            <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
+                          )}
                         </div>
                         <div style={{ flex: "1 1 90px", minWidth: 0 }}>
                           <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
