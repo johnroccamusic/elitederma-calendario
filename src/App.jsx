@@ -163,13 +163,22 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 80, 90, 95, 65, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 80, 90, 95, 76, 140];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Richiesta fattura", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
-// sola (colonne strette, per non occupare spazio in larghezza)
-const COLONNE_HEADER_SU_DUE_RIGHE = new Set(["Richiesta fattura", "Pattuito a notte", "Pattuito per periodo", "Notti prenotate"]);
+// sola (colonne strette, per non occupare spazio in larghezza). Il
+// ritorno a capo è forzato qui (non lasciato al wrap automatico del
+// CSS): con una larghezza di colonna già salvata più larga in
+// localStorage il testo ci starebbe su una riga sola e non andrebbe
+// mai a capo da solo
+const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
+  ["Richiesta fattura", ["Richiesta", "fattura"]],
+  ["Notti prenotate", ["Notti", "prenotate"]],
+  ["Pattuito a notte", ["Pattuito", "a notte"]],
+  ["Pattuito per periodo", ["Pattuito", "per periodo"]],
+]);
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
 // (master/assistente/leva) da cui pesca le opzioni. L'ordine fisso con
@@ -2358,7 +2367,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const fontScheda = { fontFamily: "'Sofia Sans Condensed',sans-serif" };
   const bordoV = `1px solid ${CREAM_BORDER}`;
   const celStyle = { padding: "10px 8px", borderBottom: bordoV, verticalAlign: "middle" };
-  const thStyle = { ...celStyle, ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: "#F7F5EF", borderBottom: `1px solid ${CREAM_BORDER}` };
+  // verticalAlign "bottom" (non "middle" ereditato da celStyle) e overflow
+  // "hidden": con intestazioni miste a una riga e a due righe nella stessa
+  // tabella, la riga dell'header prende l'altezza della più alta — senza
+  // "bottom" quelle a una riga restano centrate a mezz'aria invece di
+  // restare vicine alla casella sotto; senza "hidden" un'etichetta troppo
+  // lunga per la sua colonna sconfina visivamente in quella accanto
+  const thStyle = { ...celStyle, ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap", background: "#F7F5EF", borderBottom: `1px solid ${CREAM_BORDER}`, verticalAlign: "bottom", overflow: "hidden" };
   const campoStyle = { ...fontScheda, fontSize: 12, fontWeight: 600, padding: "7px 8px", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, width: "100%", boxSizing: "border-box", background: "#fff", color: NAVY };
   // "+" grosso a destra del nome della master: apre la finestra per
   // scegliere che tipo di docente extra aggiungere (era prima i tre
@@ -2538,14 +2553,15 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                 <th key={i} style={{
                   ...thStyle, position: "relative",
                   textAlign: (etichetta === "Sede OK?" || etichetta === "Pagato" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
-                  whiteSpace: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? "normal" : thStyle.whiteSpace,
                   lineHeight: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? 1.25 : thStyle.lineHeight,
                   // allineata con l'inizio della casella di scelta persona,
                   // non con il bordo della cella: quella casella comincia
                   // dopo l'etichetta fissa (Master/Assistente/Leva) + il gap
                   paddingLeft: etichetta === "Docenti" ? 8 + etichettaTipoStyle.width + 6 : celStyle.paddingLeft,
                 }}>
-                  {etichetta}
+                  {COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)
+                    ? COLONNE_HEADER_SU_DUE_RIGHE.get(etichetta).map((riga, r) => <div key={r}>{riga}</div>)
+                    : etichetta}
                   <div
                     onPointerDown={(e) => iniziaRidimensionamento(e, i)}
                     onPointerMove={muoviRidimensionamento}
