@@ -163,15 +163,15 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 70, 65, 80, 90, 95, 76, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 80, 90, 95, 76, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
 // intestazioni sovrapposte anche dopo aver corretto i default, perché
 // il valore vecchio in localStorage vince sempre su quello nuovo
-const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v2";
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v3";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Tipo pagamento", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Bonifico Fattura", "Pago Cash", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Bonifico Fattura", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -180,7 +180,6 @@ const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Tipo p
 // mai a capo da solo
 const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
   ["Bonifico Fattura", ["Bonifico", "Fattura"]],
-  ["Pago Cash", ["Pago", "Cash"]],
   ["Notti prenotate", ["Notti", "prenotate"]],
   ["Pattuito a notte", ["Pattuito", "a notte"]],
   ["Pattuito per periodo", ["Pattuito", "per periodo"]],
@@ -2502,7 +2501,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   );
   const flagAvvisata = (attivo, onClick) => flagSemplice(attivo, onClick, "Avvisata", "Non ancora avvisata");
   const flagBonificoFattura = (attivo, onClick) => flagSemplice(attivo, onClick, "Bonifico con fattura", "Nessun bonifico con fattura");
-  const flagPagaCash = (attivo, onClick) => flagSemplice(attivo, onClick, "Pagato in contanti", "Non pagato in contanti");
   const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Pagato", "Non ancora pagato");
 
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
@@ -2691,13 +2689,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, textAlign: "center", verticalAlign: "top" }}>
                       {semaforo(valoreCampo(cd, "sede_confermata"), () => salvaCampo(cd.id, "sede_confermata", !valoreCampo(cd, "sede_confermata")), "piccolo")}
                     </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
-                      <select style={campoStyle} value={valoreCampo(cd, "tipo_pagamento_location") || ""} onChange={(e) => salvaCampo(cd.id, "tipo_pagamento_location", e.target.value || null)}>
-                        <option value="">—</option>
-                        <option value="cash">Cash</option>
-                        <option value="bonifico">Bonifico</option>
-                      </select>
-                    </td>
                     <td style={cellaGruppo}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <span style={etichettaTipoStyle}>Master</span>
@@ -2744,9 +2735,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
                       {flagBonificoFattura(!!valoreCampo(cd, "richiesta_fattura"), () => salvaCampo(cd.id, "richiesta_fattura", !valoreCampo(cd, "richiesta_fattura")))}
                     </td>
-                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                      {flagPagaCash(!!valoreCampo(cd, "paga_cash"), () => salvaCampo(cd.id, "paga_cash", !valoreCampo(cd, "paga_cash")))}
-                    </td>
                     <CelleNottiPattuito riga={cd} salva={(campi) => salvaCampiGenerico("corsi_date", cd.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
                       {flagPagato(!!valoreCampo(cd, "pagato"), () => salvaCampo(cd.id, "pagato", !valoreCampo(cd, "pagato")))}
@@ -2788,9 +2776,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       </td>
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
                         {flagBonificoFattura(!!valoreCampo(riga, "richiesta_fattura"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "richiesta_fattura", !valoreCampo(riga, "richiesta_fattura")))}
-                      </td>
-                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                        {flagPagaCash(!!valoreCampo(riga, "paga_cash"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "paga_cash", !valoreCampo(riga, "paga_cash")))}
                       </td>
                       <CelleNottiPattuito riga={riga} salva={(campi) => salvaCampiGenerico("corsi_date_docenti", riga.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
@@ -9310,64 +9295,35 @@ const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
 // campi che si ricalcolano a vicenda — servono stati locali controllati
 // (non i soliti defaultValue+onBlur non controllati usati altrove) perché
 // il blur di un campo deve aggiornare il valore MOSTRATO in un altro
+// riga della tabella "Spese" per una spesa vera (Titolo/Totale/Bonifico/
+// Cash): "Totale" è l'unico importo mostrato/modificabile a vista —
+// l'imponibile (spese.imponibile) resta calcolato dietro le quinte al
+// 22% per non rompere l'Analisi costi aziendale, che lo legge. "Cash" è
+// l'unico campo libero (spese.importo_pagato_cash); "Bonifico" è sempre
+// il complemento (Totale − Cash), sola lettura — niente più percentuale
 function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
-  const [imponibile, setImponibile] = useState(spesa.imponibile != null ? String(spesa.imponibile) : "");
   const [totale, setTotale] = useState(spesa.totale != null ? String(spesa.totale) : "");
-  const [pctCash, setPctCash] = useState(spesa.percentuale_pagata_cash != null ? String(spesa.percentuale_pagata_cash) : "");
-  const [importoCash, setImportoCash] = useState(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
+  const [cash, setCash] = useState(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
 
   useEffect(() => {
-    setImponibile(spesa.imponibile != null ? String(spesa.imponibile) : "");
     setTotale(spesa.totale != null ? String(spesa.totale) : "");
-    setPctCash(spesa.percentuale_pagata_cash != null ? String(spesa.percentuale_pagata_cash) : "");
-    setImportoCash(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
-  }, [spesa.imponibile, spesa.totale, spesa.percentuale_pagata_cash, spesa.importo_pagato_cash]);
+    setCash(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
+  }, [spesa.totale, spesa.importo_pagato_cash]);
 
-  const cashDisabilitato = pctCash !== "";
   const vociTitolo = CAMPI_RIEPILOGO_AMMINISTRATIVO;
   const titoloCorrisponde = vociTitolo.some((c) => c.sottocategoriaId === spesa.sottocategoria_id);
+  const totaleNum = totale === "" ? 0 : parseNum(totale);
+  const cashNum = cash === "" ? 0 : parseNum(cash);
+  const bonifico = round2(totaleNum - cashNum);
 
-  function commitImponibile() {
-    const v = imponibile === "" ? null : parseNum(imponibile);
-    if (v === (spesa.imponibile ?? null)) return;
-    const nuovoTotale = v == null ? null : round2(v * (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100));
-    setTotale(nuovoTotale != null ? String(nuovoTotale) : "");
-    const campi = { imponibile: v, totale: nuovoTotale };
-    if (pctCash !== "") {
-      const nuovoCash = v == null ? null : round2(v * (parseNum(pctCash) / 100));
-      setImportoCash(nuovoCash != null ? String(nuovoCash) : "");
-      campi.importo_pagato_cash = nuovoCash;
-    }
-    onSalva(campi);
-  }
   function commitTotale() {
     const v = totale === "" ? null : parseNum(totale);
     if (v === (spesa.totale ?? null)) return;
     const nuovoImponibile = v == null ? null : round2(v / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100));
-    setImponibile(nuovoImponibile != null ? String(nuovoImponibile) : "");
-    const campi = { totale: v, imponibile: nuovoImponibile };
-    if (pctCash !== "") {
-      const nuovoCash = nuovoImponibile == null ? null : round2(nuovoImponibile * (parseNum(pctCash) / 100));
-      setImportoCash(nuovoCash != null ? String(nuovoCash) : "");
-      campi.importo_pagato_cash = nuovoCash;
-    }
-    onSalva(campi);
+    onSalva({ totale: v, imponibile: nuovoImponibile });
   }
-  function commitPctCash() {
-    const v = pctCash === "" ? null : parseNum(pctCash);
-    if (v === (spesa.percentuale_pagata_cash ?? null)) return;
-    const campi = { percentuale_pagata_cash: v };
-    if (v != null) {
-      const imp = imponibile === "" ? 0 : parseNum(imponibile);
-      const nuovoCash = round2(imp * (v / 100));
-      setImportoCash(String(nuovoCash));
-      campi.importo_pagato_cash = nuovoCash;
-    }
-    onSalva(campi);
-  }
-  function commitImportoCash() {
-    if (cashDisabilitato) return;
-    const v = importoCash === "" ? null : parseNum(importoCash);
+  function commitCash() {
+    const v = cash === "" ? null : parseNum(cash);
     if (v === (spesa.importo_pagato_cash ?? null)) return;
     onSalva({ importo_pagato_cash: v });
   }
@@ -9375,7 +9331,7 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
       <div style={{ flex: "2 1 170px", minWidth: 0 }}>
-        <Field label="Titolo">
+        <Field label="Voce">
           <select
             style={inputStyle}
             value={titoloCorrisponde ? spesa.sottocategoria_id || "" : "__altro__"}
@@ -9394,27 +9350,18 @@ function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSotto
         </Field>
       </div>
       <div style={{ flex: "1 1 100px", minWidth: 0 }}>
-        <Field label="Imponibile">
-          <input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => setImponibile(e.target.value)} onBlur={commitImponibile} />
-        </Field>
-      </div>
-      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
-        <Field label="Con IVA">
+        <Field label="Totale">
           <input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
         </Field>
       </div>
-      <div style={{ flex: "0 1 90px", minWidth: 0 }}>
-        <Field label="% pagata cash">
-          <input type="number" min="0" max="100" style={inputStyle} value={pctCash} onChange={(e) => setPctCash(e.target.value)} onBlur={commitPctCash} />
+      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+        <Field label="Bonifico">
+          <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {bonifico}</div>
         </Field>
       </div>
       <div style={{ flex: "1 1 100px", minWidth: 0 }}>
-        <Field label="Importo pagato cash">
-          <input
-            style={{ ...inputStyle, ...(cashDisabilitato ? { background: "#EFEFEF", color: MUTED } : {}) }}
-            inputMode="decimal" disabled={cashDisabilitato}
-            value={importoCash} onChange={(e) => setImportoCash(e.target.value)} onBlur={commitImportoCash}
-          />
+        <Field label="Cash">
+          <input style={inputStyle} inputMode="decimal" value={cash} onChange={(e) => setCash(e.target.value)} onBlur={commitCash} />
         </Field>
       </div>
       <button
@@ -13405,43 +13352,73 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // effetti (va pagata al venditore): fa parte del totale costi anche prima
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
-  // costo delle master di questa edizione: somma dei compensi di TUTTE le
-  // persone di tipo Master assegnate (quella principale su
-  // corsi_date.master_id + eventuali extra aggiunte con "+" in
-  // Assegnazione Master), ciascuna nella fascia corrispondente al numero
-  // di allievi iscritti — dato già impostato in Gestione Master → tab
-  // Compensi, nessun input manuale qui. Tenuta per riga (non solo per
-  // id) per sapere quali sono state pagate cash (flag "Pago Cash" in
-  // Assegnazione Master), serve al calcolo di "Cash netto" più sotto.
-  const righeMasterClasse = [
-    { masterId: corsoData.master_id, pagaCash: !!corsoData.paga_cash },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => ({ masterId: d.persona_id, pagaCash: !!d.paga_cash })),
-  ].filter((r) => r.masterId);
+
+  // Incassi lordo/netto: il "lordo" è l'importo di sempre (contanti+pos
+  // incassati al corso), il "netto" scorpora l'IVA al 22% — stessa
+  // aliquota fissa usata ovunque nel Riepilogo. "Di cui" applica lo
+  // stesso scorporo a ciascun metodo, così le due voci tornano a sommare
+  const IVA_RIEPILOGO = 22;
+  const scorpora = (v) => round2(v / (1 + IVA_RIEPILOGO / 100));
+  const incassoLordoClasse = daIncassareClasse;
+  const incassoNettoClasse = scorpora(incassoLordoClasse);
+  const contantiNettoClasse = scorpora(contantiClasse);
+  const contoCorrenteNettoClasse = scorpora(posClasse);
+
+  // sovrascrittura ottimistica dello split Bonifico/Cash di una riga
+  // (master/location/assistente): "ricarica" rifà l'intero fetchDati,
+  // troppo lento per sentirsi immediato su un blur
+  const [splitOverride, setSplitOverride] = useState({});
+  async function salvaSplitRiga(tabella, rigaId, campi) {
+    setSplitOverride((m) => ({ ...m, [rigaId]: { ...(m[rigaId] || {}), ...campi } }));
+    const { error } = await supabase.from(tabella).update(campi).eq("id", rigaId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  function conSplit(rigaId, base) {
+    return { ...base, ...(splitOverride[rigaId] || {}) };
+  }
+
+  // righe "Compenso Master": una per ogni persona di tipo Master su
+  // questa edizione (principale + eventuali extra aggiunte con "+" in
+  // Assegnazione Master). Il Totale si calcola da solo dalle fasce
+  // (Gestione Master → Compensi, in base al numero di allievi); Bonifico
+  // e Cash sono uno split libero dell'amministratore (anche a metà),
+  // salvato per quella riga soltanto.
   function compensoFasciaPer(numAllievi, fasce) {
     const f = (fasce || []).find((x) => numAllievi >= (x.da ?? 0) && (x.a == null || numAllievi <= x.a));
     return f?.compenso ?? 0;
   }
-  function compensoMasterRiga(r) {
+  const righeMasterBase = [
+    { rigaId: corsoData.id, tabella: "corsi_date", masterId: corsoData.master_id, quota_bonifico: corsoData.quota_bonifico, quota_cash: corsoData.quota_cash },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", masterId: d.persona_id, quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash })),
+  ].filter((r) => r.masterId);
+  const righeMasterClasse = righeMasterBase.map((r) => {
+    const dati = conSplit(r.rigaId, r);
     const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === r.masterId && mc.corso_id === corsoData.corso_id);
-    return compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso);
-  }
-  const quoteMasterClasse = round2(righeMasterClasse.reduce((s, r) => s + compensoMasterRiga(r), 0));
-  const quoteMasterCashClasse = round2(righeMasterClasse.filter((r) => r.pagaCash).reduce((s, r) => s + compensoMasterRiga(r), 0));
-  // costo della sede di questa edizione: costo giornaliero pattuito
-  // (Cash o Bonifico, scelto in Assegnazione Master → "Tipo pagamento")
-  // moltiplicato per i giorni del corso — dato impostato una volta sola
-  // sulla sede (Impostazioni → Location), nessun input manuale qui.
-  const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
-  const costoGiornalieroLocation = corsoData.tipo_pagamento_location === "cash" ? (locSedeClasse?.costo_giornaliero_cash || 0)
-    : corsoData.tipo_pagamento_location === "bonifico" ? (locSedeClasse?.costo_giornaliero_bonifico || 0)
-    : 0;
-  // costo delle assistenti di questa edizione: il compenso impostato
-  // nella scheda dell'assistente (Gestione Assistenti → Corsi associati,
-  // assistente_corsi.compenso_giornaliero) è giornaliero — di default
-  // vale per tutta la durata del corso, ma su questa specifica edizione
-  // può essere corretto con +/- se l'assistente non c'è stata tutti i
-  // giorni (corsi_date_docenti.giorni_presenza, per quella riga soltanto)
+    const persona = (master || []).find((m) => m.id === r.masterId);
+    const totale = compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso);
+    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: persona?.nome || "—", totale, bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
+  });
+  const quoteMasterClasse = round2(righeMasterClasse.reduce((s, r) => s + r.totale, 0));
+
+  // riga "Costo location": costo giornaliero pattuito sulla sede
+  // (Impostazioni → Location — la tariffa bonifico se impostata, sennò
+  // quella cash) moltiplicato per i giorni del corso, come punto di
+  // partenza; Bonifico e Cash restano uno split libero come sopra.
   const durataGiorniCorso = Math.max(1, differenzaGiorni(corsoData.data_inizio, corsoData.data_fine) + 1);
+  const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
+  const costoGiornalieroLocation = locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null;
+  const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
+  const rigaLocationClasse = costoGiornalieroLocation != null ? (() => {
+    const dati = conSplit(corsoData.id, { location_bonifico: corsoData.location_bonifico, location_cash: corsoData.location_cash });
+    return { rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse, bonifico: dati.location_bonifico ?? 0, cash: dati.location_cash ?? 0 };
+  })() : null;
+
+  // righe "Quota assistenti": il compenso giornaliero impostato nella
+  // scheda dell'assistente (Gestione Assistenti → Corsi associati) vale
+  // di default per tutta la durata del corso, corretto con +/- se
+  // l'assistente non c'è stata tutti i giorni (giorni_presenza, per
+  // quella riga soltanto). Stesso split libero Bonifico/Cash del master.
   const [giorniPresenzaOverride, setGiorniPresenzaOverride] = useState({});
   async function salvaGiorniPresenza(rigaId, giorni) {
     setGiorniPresenzaOverride((m) => ({ ...m, [rigaId]: giorni }));
@@ -13456,24 +13433,30 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       const assegnazione = (assistenteCorsi || []).find((ac) => ac.assistente_id === d.persona_id && ac.corso_id === corsoData.corso_id);
       const compensoGiorno = assegnazione?.compenso_giornaliero || 0;
       const persona = (assistente || []).find((a) => a.id === d.persona_id);
-      return { rigaId: d.id, nome: persona?.nome || "—", giorni, compensoGiorno, importo: round2(giorni * compensoGiorno) };
+      const dati = conSplit(d.id, { quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash });
+      return { rigaId: d.id, tabella: "corsi_date_docenti", tipo: "assistente", nome: persona?.nome || "—", giorni, compensoGiorno, totale: round2(giorni * compensoGiorno), bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
     });
-  const quoteAssistentiClasse = round2(righeAssistentiClasse.reduce((s, r) => s + r.importo, 0));
-  const costoLocationClasse = round2(costoGiornalieroLocation * durataGiorniCorso);
+  const quoteAssistentiClasse = round2(righeAssistentiClasse.reduce((s, r) => s + r.totale, 0));
+
+  const righeSpeseTutte = [
+    ...righeMasterClasse,
+    ...(rigaLocationClasse ? [rigaLocationClasse] : []),
+    ...righeAssistentiClasse,
+  ];
+  const totaleSpeseAutomaticheClasse = round2(righeSpeseTutte.reduce((s, r) => s + r.totale, 0));
   const totaleCostiClasse = round2(
-    quoteVenditoreClasse + quoteMasterClasse + quoteAssistentiClasse + costoLocationClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
+    quoteVenditoreClasse + totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
-  // quota di contante già "spesa" al corso stesso (es. pranzi pagati in
-  // contanti dal master, quota master pagata cash, sede pagata cash): il
-  // KPI "Contanti" resta il puro incassato, questo è un secondo
-  // indicatore che lo mostra al netto di quegli esborsi
-  const cashNettoClasse = round2(
-    contantiClasse
+  // Cassa Contanti: incasso netto in contanti meno tutte le uscite cash
+  // della tabella spese (master/location/assistenti + spese reali) —
+  // la stessa idea di "Cash netto" di prima, ora coerente con lo
+  // schizzo: incasso cash - spese cash
+  const cassaContantiClasse = round2(
+    contantiNettoClasse
+    - righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
     - speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
-    - quoteMasterCashClasse
-    - (corsoData.tipo_pagamento_location === "cash" ? costoLocationClasse : 0)
   );
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
@@ -14641,33 +14624,37 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
           {costiAperto && (
             <div style={{ padding: "0 20px 20px" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 22 }}>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Incassi</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 10 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Totale da incassare</div>
-                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {daIncassareClasse}</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Incasso lordo (IVA inclusa)</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {incassoLordoClasse}</div>
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Contanti</div>
-                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Incasso netto (IVA esclusa)</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {incassoNettoClasse}</div>
                   </div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Contanti al netto delle spese di questa classe pagate in contanti">
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash netto</div>
-                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {cashNettoClasse}</div>
-                  </div>
-                </div>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Di cui</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14, marginBottom: 22 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Pos</div>
-                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {posClasse}</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Conto corrente</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contoCorrenteNettoClasse}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiNettoClasse}</div>
                   </div>
                 </div>
               </div>
@@ -14759,46 +14746,46 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   )}
                 </div>
               </div>
-              <div style={{ maxWidth: 220, marginBottom: 10 }}>
+              <div style={{ maxWidth: 220, marginBottom: 16 }}>
                 <Field label="Quota venditore">
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteVenditoreClasse}</div>
                 </Field>
               </div>
-              <div style={{ maxWidth: 220, marginBottom: (righeAssistentiClasse.length > 0 || corsoData.tipo_pagamento_location) ? 10 : 14 }}>
-                <Field label="Quota master">
-                  <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteMasterClasse}</div>
-                </Field>
-              </div>
-              {corsoData.tipo_pagamento_location && (
-                <div style={{ maxWidth: 220, marginBottom: righeAssistentiClasse.length > 0 ? 10 : 14 }}>
-                  <Field label="Costo location">
-                    <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {costoLocationClasse}</div>
-                  </Field>
-                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 3, lineHeight: 1.4 }}>
-                    {locSedeClasse?.nome || "—"} · {corsoData.tipo_pagamento_location === "cash" ? "Cash" : "Bonifico"} · {durataGiorniCorso} {durataGiorniCorso === 1 ? "giorno" : "giorni"}
-                  </div>
-                </div>
-              )}
-              {righeAssistentiClasse.length > 0 && (
-                <div style={{ maxWidth: 420, marginBottom: 14 }}>
-                  <Field label="Quota assistenti">
-                    <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteAssistentiClasse}</div>
-                  </Field>
-                  <div style={{ marginTop: 8 }}>
-                    {righeAssistentiClasse.map((r) => (
-                      <div key={r.rigaId} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                        <span style={{ flex: "1 1 130px", minWidth: 0, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                          <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 14, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
-                          <span style={{ minWidth: 62, textAlign: "center" }}>{r.giorni} {r.giorni === 1 ? "giorno" : "giorni"}</span>
-                          <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 14, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
-                        </div>
-                        <span style={{ minWidth: 72, textAlign: "right", fontWeight: 700, flexShrink: 0 }}>€ {r.importo}</span>
+              {righeSpeseTutte.length > 0 && (
+                <div style={{ marginBottom: 14 }}>
+                  {righeSpeseTutte.map((r) => (
+                    <div key={r.tipo + "_" + r.rigaId} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+                      <div style={{ flex: "2 1 170px", minWidth: 0 }}>
+                        <Field label="Voce">
+                          <div style={{ ...inputStyle, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</div>
+                        </Field>
+                        {r.giorni != null && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                            <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
+                            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, minWidth: 58, textAlign: "center" }}>{r.giorni} {r.giorni === 1 ? "giorno" : "giorni"}</span>
+                            <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 22, height: 22, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 13, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>
-                    Compenso giornaliero impostato in Gestione Assistenti → Corsi associati. Di default {durataGiorniCorso} giorni (la durata del corso) — regola con +/− se l'assistente non c'è stata tutti i giorni.
+                      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+                        <Field label="Totale">
+                          <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+                        <Field label="Bonifico">
+                          <input style={inputStyle} inputMode="decimal" defaultValue={r.bonifico || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.bonifico || null)) salvaSplitRiga(r.tabella, r.rigaId, r.tipo === "location" ? { location_bonifico: v } : { quota_bonifico: v }); }} />
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+                        <Field label="Cash">
+                          <input style={inputStyle} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, r.tipo === "location" ? { location_cash: v } : { quota_cash: v }); }} />
+                        </Field>
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: -6, marginBottom: 10, lineHeight: 1.4 }}>
+                    Compenso master dalle fasce in Gestione Master → Compensi; costo location dalla tariffa sede (Impostazioni → Location) × {durataGiorniCorso} {durataGiorniCorso === 1 ? "giorno" : "giorni"}; compenso assistenti dal giornaliero in Gestione Assistenti, correggibile con +/− se non c'è stata tutti i giorni. Bonifico e Cash sono liberi: dividi il Totale come è stato pagato davvero.
                   </div>
                 </div>
               )}
@@ -14848,12 +14835,20 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14, paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <div>
-                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale costi</div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale incasso netto</div>
+                  <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {incassoNettoClasse}</div>
+                </div>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale spese</div>
                   <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCostiClasse}</div>
                 </div>
                 <div>
                   <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Risultato classe</div>
                   <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: risultatoClasse < 0 ? "#C0392B" : NAVY }}>€ {risultatoClasse}</div>
+                </div>
+                <div style={{ padding: "8px 16px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}` }}>
+                  <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cassa Contanti</div>
+                  <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
                 </div>
                 <Button onClick={salvaCostiClasse} disabled={salvandoCosti}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
               </div>
