@@ -14848,6 +14848,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "nowrap" }}>
                   {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
+                {manigliaSpazio("paddingBottom")}
               </>
             )}
           </div>
