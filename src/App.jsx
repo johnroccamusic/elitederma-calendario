@@ -19939,7 +19939,7 @@ function EditorFasceCompenso({ fasce, onCambia }) {
 // associati/Compensi/Calendario/Note e documenti. Sostituisce il vecchio
 // modale "Master" — è la pagina che si apre da Impostazioni > Definisci
 // Master.
-function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDateDocenti, struttureCompensi, ricarica, onBack }) {
+function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDateDocenti, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [filtro, setFiltro] = useState("tutti");
@@ -19951,8 +19951,11 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const [corsoEspansoId, setCorsoEspansoId] = useState(null);
   const [mostraForm, setMostraForm] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
-  const [mostraFormStruttura, setMostraFormStruttura] = useState(false);
-  const [nomeNuovaStruttura, setNomeNuovaStruttura] = useState("");
+  // vista generale (non legata al master selezionato a sinistra): elenco
+  // master con dettaglio, oppure "Gestione compensi" (elenco corsi con i
+  // rispettivi compensi di default)
+  const [vistaGestione, setVistaGestione] = useState("master");
+  const [corsoCompensiEspansoId, setCorsoCompensiEspansoId] = useState(null);
   const [menuAzioni, setMenuAzioni] = useState(false);
   const [modificaContatti, setModificaContatti] = useState(false);
   const [emailMod, setEmailMod] = useState("");
@@ -20040,13 +20043,12 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   }
   async function aggiungiCorso() {
     if (!corsoScelto || !selezionatoId) return;
-    // se il corso ha una struttura compensi collegata, le sue fasce sono
-    // solo il punto di partenza: una copia, non un riferimento — da qui
-    // in poi si modificano con salvaFasce() come qualunque altra fascia,
-    // senza più nessun legame con la struttura di origine
+    // il compenso di default del corso (impostato in "Gestione compensi")
+    // è solo il punto di partenza: una copia, non un riferimento — da qui
+    // in poi si modifica con salvaFasce() come una fascia qualunque,
+    // senza più nessun legame con il default del corso
     const corso = corsoById[corsoScelto];
-    const struttura = (struttureCompensi || []).find((s) => s.id === corso?.struttura_compensi_id);
-    const fasceIniziali = struttura ? struttura.fasce.map((f) => ({ ...f })) : [];
+    const fasceIniziali = (corso?.fasce_compenso_default || []).map((f) => ({ ...f }));
     const { error } = await supabase.from("master_corsi").insert({ master_id: selezionatoId, corso_id: corsoScelto, fasce_compenso: fasceIniziali });
     if (error) { window.alert("Errore: " + error.message); return; }
     setCorsoScelto("");
@@ -20063,39 +20065,11 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
-  // "Strutture compensi": fasce riutilizzabili collegate a più corsi
-  // (vedi aggiungiCorso sopra, che le copia quando si associa un corso
-  // collegato a un master) — tab non legato al master selezionato
-  async function aggiungiStrutturaCompensi() {
-    if (!nomeNuovaStruttura.trim()) return;
-    const { error } = await supabase.from("strutture_compensi").insert({ nome: nomeNuovaStruttura.trim(), fasce: [] });
-    if (error) { window.alert("Errore: " + error.message); return; }
-    setNomeNuovaStruttura(""); setMostraFormStruttura(false); ricarica();
-  }
-  async function rinominaStrutturaCompensi(id, nome) {
-    const { error } = await supabase.from("strutture_compensi").update({ nome }).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  async function salvaFasceStruttura(id, fasce) {
-    const { error } = await supabase.from("strutture_compensi").update({ fasce }).eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  async function eliminaStrutturaCompensi(id) {
-    if (!window.confirm("Eliminare questa struttura? I corsi collegati restano, ma senza più fasce precompilate per le prossime associazioni.")) return;
-    const { error } = await supabase.from("strutture_compensi").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  async function collegaCorsoAStruttura(strutturaId, corsoId) {
-    if (!corsoId) return;
-    const { error } = await supabase.from("corsi").update({ struttura_compensi_id: strutturaId }).eq("id", corsoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  async function scollegaCorsoDaStruttura(corsoId) {
-    const { error } = await supabase.from("corsi").update({ struttura_compensi_id: null }).eq("id", corsoId);
+  // "Gestione compensi": il compenso di default di un corso (vedi
+  // aggiungiCorso sopra, che lo copia quando quel corso viene associato
+  // a un master) — vista generale, non legata al master selezionato
+  async function salvaFasceCorso(corsoId, fasce) {
+    const { error } = await supabase.from("corsi").update({ fasce_compenso_default: fasce }).eq("id", corsoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
@@ -20151,6 +20125,13 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Master</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Associa i master ai corsi e definisci i compensi in base al numero di allievi.</div>
 
+        <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 20 }}>
+          <button onClick={() => setVistaGestione("master")} style={tabStyle(vistaGestione === "master")}>Master</button>
+          <button onClick={() => setVistaGestione("compensi")} style={tabStyle(vistaGestione === "compensi")}>Gestione compensi</button>
+        </div>
+
+        {vistaGestione === "master" && (
+        <>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi Master</button>
           <div style={{ flex: 1, minWidth: isMobile ? "100%" : 220, maxWidth: 320 }}>
@@ -20264,7 +20245,6 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                   <button onClick={() => setTab("compensi")} style={tabStyle(tab === "compensi")}>Compensi</button>
                   <button onClick={() => setTab("calendario")} style={tabStyle(tab === "calendario")}>Calendario</button>
                   <button onClick={() => setTab("note")} style={tabStyle(tab === "note")}>Note e documenti</button>
-                  <button onClick={() => setTab("strutture")} style={tabStyle(tab === "strutture")}>Strutture compensi</button>
                 </div>
 
                 {tab === "corsi" && (
@@ -20389,72 +20369,48 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                   </div>
                 )}
 
-                {tab === "strutture" && (
-                  <div>
-                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16, lineHeight: 1.5 }}>
-                      Una struttura raccoglie le fasce di compenso di più corsi insieme: quando associ a un master uno dei corsi qui sotto, le fasce vengono copiate come punto di partenza — modificarle poi per quel master non cambia la struttura né gli altri master.
-                    </div>
-
-                    {!mostraFormStruttura ? (
-                      <button onClick={() => setMostraFormStruttura(true)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 9, padding: "10px 16px", cursor: "pointer", marginBottom: 18 }}>+ Nuova struttura</button>
-                    ) : (
-                      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 18 }}>
-                        <input autoFocus value={nomeNuovaStruttura} onChange={(e) => setNomeNuovaStruttura(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungiStrutturaCompensi()} placeholder="ES. FASCE STANDARD BASE" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
-                        <button onClick={aggiungiStrutturaCompensi} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer" }}>Salva</button>
-                        <button onClick={() => { setMostraFormStruttura(false); setNomeNuovaStruttura(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
-                      </div>
-                    )}
-
-                    {(struttureCompensi || []).length === 0 ? (
-                      <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna struttura compensi definita ancora.</div>
-                    ) : (struttureCompensi || []).map((s) => {
-                      const corsiCollegati = (corsi || []).filter((c) => c.struttura_compensi_id === s.id);
-                      const corsiSenzaStruttura = (corsi || []).filter((c) => !c.struttura_compensi_id).sort((a, b) => a.nome.localeCompare(b.nome));
-                      return (
-                        <div key={s.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "14px 16px", marginBottom: 14 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                            <input
-                              defaultValue={s.nome}
-                              onBlur={(e) => { if (e.target.value.trim() && e.target.value !== s.nome) rinominaStrutturaCompensi(s.id, e.target.value.trim()); }}
-                              style={{ ...inputStyle, flex: 1, fontWeight: 700, minWidth: 160 }}
-                            />
-                            <button onClick={() => eliminaStrutturaCompensi(s.id)} title="Elimina struttura" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}>
-                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
-                            </button>
-                          </div>
-
-                          <EditorFasceCompenso fasce={s.fasce || []} onCambia={(fasce) => salvaFasceStruttura(s.id, fasce)} />
-
-                          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginTop: 16, marginBottom: 8 }}>Corsi collegati ({corsiCollegati.length})</div>
-                          {corsiCollegati.length === 0 ? (
-                            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>Nessun corso collegato ancora.</div>
-                          ) : (
-                            <div style={{ marginBottom: 10 }}>
-                              {corsiCollegati.map((c) => (
-                                <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                                  <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{c.nome}</span>
-                                  <button onClick={() => scollegaCorsoDaStruttura(c.id)} title="Scollega da questa struttura" style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Scollega</button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          <select
-                            value=""
-                            onChange={(e) => collegaCorsoAStruttura(s.id, e.target.value)}
-                            style={{ ...inputStyle, maxWidth: 320 }}
-                          >
-                            <option value="">+ Aggiungi corso a questa struttura…</option>
-                            {corsiSenzaStruttura.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-                          </select>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </>
             )}
           </div>
         </div>
+        </>
+        )}
+
+        {vistaGestione === "compensi" && (
+          <div style={{ ...cardStyle }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Compensi di default per corso</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18, lineHeight: 1.5 }}>
+              Le fasce impostate qui sono il punto di partenza: quando associ questo corso a un master (tab "Corsi associati"), vengono copiate lì — modificarle poi per quel master non cambia questo default né gli altri master già associati.
+            </div>
+            {(corsi || []).length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso definito ancora.</div>
+            ) : [...(corsi || [])].sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => {
+              const espanso = corsoCompensiEspansoId === c.id;
+              const fasce = c.fasce_compenso_default || [];
+              return (
+                <div key={c.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: c?.colore || NAVY, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 11, fontWeight: 700 }}>{abbreviazioneCorso(c?.nome)}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.nome}</div>
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{fasce.length === 0 ? "Nessuna fascia impostata" : `${fasce.length} fasc${fasce.length === 1 ? "ia" : "e"}`}</div>
+                    </div>
+                    <button onClick={() => setCorsoCompensiEspansoId(espanso ? null : c.id)} title={espanso ? "Chiudi" : "Modifica compensi"} style={{ background: "none", border: "none", color: NAVY, cursor: "pointer", padding: 4, display: "flex", transform: espanso ? "rotate(180deg)" : "none" }}>
+                      {espanso ? <IconaChevronGiuErp size={14} /> : (
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                      )}
+                    </button>
+                  </div>
+                  {espanso && (
+                    <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <EditorFasceCompenso fasce={fasce} onCambia={(nuoveFasce) => salvaFasceCorso(c.id, nuoveFasce)} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -26729,7 +26685,6 @@ export default function App() {
   const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
-  const [struttureCompensi, setStruttureCompensi] = useState([]);
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
   const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
   const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
@@ -26768,7 +26723,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, stc] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -26825,7 +26780,6 @@ export default function App() {
       supabase.from("corsi_date_docenti").select("*"),
       supabase.from("voci_shop_classificazione").select("*"),
       supabase.from("coupon").select("*").order("created_at", { ascending: false }),
-      supabase.from("strutture_compensi").select("*"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -26893,7 +26847,6 @@ export default function App() {
     setCorsiDateDocenti(cdd.data || []);
     setVociShopClassificazione(vsc.data || []);
     setCoupon(cpn.data || []);
-    setStruttureCompensi(stc.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -27847,7 +27800,6 @@ export default function App() {
       {view === "gestionemaster" && (
         <PaginaGestioneMaster
           master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
-          struttureCompensi={struttureCompensi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}

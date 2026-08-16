@@ -2390,3 +2390,16 @@ create policy "accesso interno strutture_compensi" on public.strutture_compensi 
 alter table public.corsi add column if not exists struttura_compensi_id uuid references public.strutture_compensi(id) on delete set null;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 86) Ripensata: "Gestione compensi" non è una struttura nominata da
+-- collegare ai corsi, ma un compenso di default diretto su ciascun
+-- corso. Tolto l'impalcatura della sezione 85 (mai popolata: nessuna
+-- struttura era ancora stata creata), sostituita da una sola colonna.
+-- ---------------------------------------------------------
+alter table public.corsi drop column if exists struttura_compensi_id;
+drop table if exists public.strutture_compensi;
+alter table public.corsi add column if not exists fasce_compenso_default jsonb not null default '[]';
+
+notify pgrst, 'reload schema';
