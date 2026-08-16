@@ -163,15 +163,15 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 100, 80, 90, 95, 76, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 100, 80, 90, 76, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
 // intestazioni sovrapposte anche dopo aver corretto i default, perché
 // il valore vecchio in localStorage vince sempre su quello nuovo
-const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v5";
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v6";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Tipo di pagamento", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Tipo di pagamento", "Notti prenotate", "Pattuito a notte", "Pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -183,7 +183,6 @@ const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
   ["Tipo di pagamento", ["Tipo di", "pagamento"]],
   ["Notti prenotate", ["Notti", "prenotate"]],
   ["Pattuito a notte", ["Pattuito", "a notte"]],
-  ["Pattuito per periodo", ["Pattuito", "per periodo"]],
 ]);
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
@@ -2135,24 +2134,21 @@ function Gate({ onOk }) {
 function CelleNottiPattuito({ riga, salva, cellaGruppo, campoStyle }) {
   const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
   const [aNotte, setANotte] = useState(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
-  const [periodo, setPeriodo] = useState(riga.pattuito_periodo != null ? String(riga.pattuito_periodo) : "");
 
   useEffect(() => {
     setNotti(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
     setANotte(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
-    setPeriodo(riga.pattuito_periodo != null ? String(riga.pattuito_periodo) : "");
-  }, [riga.notti_prenotate, riga.pattuito_a_notte, riga.pattuito_periodo]);
+  }, [riga.notti_prenotate, riga.pattuito_a_notte]);
 
+  // "Pattuito per periodo" (notti × pattuito a notte) non è più una colonna
+  // a vista: resta calcolato e salvato qui dietro le quinte perché il
+  // Riepilogo Amministrativo lo usa come Totale della riga "Costo Alloggio"
   function commitNotti() {
     const v = notti === "" ? null : Number(notti);
     if (v === (riga.notti_prenotate ?? null)) return;
     const aNotteNum = aNotte === "" ? null : parseNum(aNotte);
     const campi = { notti_prenotate: v };
-    if (v != null && aNotteNum != null) {
-      const nuovoPeriodo = round2(v * aNotteNum);
-      setPeriodo(String(nuovoPeriodo));
-      campi.pattuito_periodo = nuovoPeriodo;
-    }
+    if (v != null && aNotteNum != null) campi.pattuito_periodo = round2(v * aNotteNum);
     salva(campi);
   }
   function commitANotte() {
@@ -2160,29 +2156,17 @@ function CelleNottiPattuito({ riga, salva, cellaGruppo, campoStyle }) {
     if (v === (riga.pattuito_a_notte ?? null)) return;
     const nottiNum = notti === "" ? null : Number(notti);
     const campi = { pattuito_a_notte: v };
-    if (v != null && nottiNum != null) {
-      const nuovoPeriodo = round2(nottiNum * v);
-      setPeriodo(String(nuovoPeriodo));
-      campi.pattuito_periodo = nuovoPeriodo;
-    }
+    if (v != null && nottiNum != null) campi.pattuito_periodo = round2(nottiNum * v);
     salva(campi);
-  }
-  function commitPeriodo() {
-    const v = periodo === "" ? null : parseNum(periodo);
-    if (v === (riga.pattuito_periodo ?? null)) return;
-    salva({ pattuito_periodo: v });
   }
 
   return (
     <>
       <td style={cellaGruppo}>
-        <input type="number" min="0" style={{ ...campoStyle, textAlign: "center" }} value={notti} onChange={(e) => setNotti(e.target.value)} onBlur={commitNotti} />
+        <input type="text" inputMode="numeric" style={{ ...campoStyle, textAlign: "center" }} value={notti} onChange={(e) => setNotti(e.target.value)} onBlur={commitNotti} />
       </td>
       <td style={cellaGruppo}>
-        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} value={aNotte} onChange={(e) => setANotte(e.target.value)} onBlur={commitANotte} />
-      </td>
-      <td style={cellaGruppo}>
-        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} onBlur={commitPeriodo} />
+        <input type="text" inputMode="decimal" style={{ ...campoStyle, textAlign: "center" }} value={aNotte} onChange={(e) => setANotte(e.target.value)} onBlur={commitANotte} />
       </td>
     </>
   );
