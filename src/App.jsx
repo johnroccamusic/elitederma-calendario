@@ -25937,8 +25937,8 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
               <div style={{ flex: 1, minWidth: 0 }}>
                 <input
                   style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, border: "none", background: "transparent", width: "100%", padding: 0 }}
-                  value={cat.nome} onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => rinominaCategoria(cat.id, e.target.value)}
+                  defaultValue={cat.nome} onClick={(e) => e.stopPropagation()}
+                  onBlur={(e) => { if (e.target.value.trim() && e.target.value !== cat.nome) rinominaCategoria(cat.id, e.target.value.trim()); }}
                 />
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{conteggioUsoCategoria(cat.id)} spese{cat.attiva === false ? " · disattivata" : ""}</div>
               </div>
@@ -25958,7 +25958,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
               <div style={{ padding: "0 18px 16px" }}>
                 {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v, j, lista) => (
                   <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: `1px solid ${CREAM_BORDER}`, opacity: v.attiva === false ? 0.55 : 1 }}>
-                    <input style={{ ...fontBody, fontSize: 13, color: NAVY, border: "none", background: "transparent", flex: 1, padding: 0 }} value={v.nome} onChange={(e) => rinominaSottocategoria(v.id, e.target.value)} />
+                    <input style={{ ...fontBody, fontSize: 13, color: NAVY, border: "none", background: "transparent", flex: 1, padding: 0 }} defaultValue={v.nome} onBlur={(e) => { if (e.target.value.trim() && e.target.value !== v.nome) rinominaSottocategoria(v.id, e.target.value.trim()); }} />
                     <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, whiteSpace: "nowrap" }}>{conteggioUsoSottocategoria(v.id)} spese</span>
                     <button onClick={() => spostaSottocategoria(v, -1)} disabled={j === 0} title="Su" style={{ border: "none", background: "none", cursor: j === 0 ? "default" : "pointer", color: j === 0 ? "#D8D3C4" : NAVY, padding: 3, fontSize: 12 }}>↑</button>
                     <button onClick={() => spostaSottocategoria(v, 1)} disabled={j === lista.length - 1} title="Giù" style={{ border: "none", background: "none", cursor: j === lista.length - 1 ? "default" : "pointer", color: j === lista.length - 1 ? "#D8D3C4" : NAVY, padding: 3, fontSize: 12 }}>↓</button>
