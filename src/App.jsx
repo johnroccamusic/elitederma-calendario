@@ -13341,15 +13341,16 @@ const ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI = "00000000-0000-0000-0000-000000000003"
 const SPAZI_ISCRIZIONI_DEFAULT = {
   paddingTop: 18, paddingBottom: 18,
   dopoEyebrow: 6, dopoTitolo: 12, dopoDateBox: 12, dopoDivider: 10, dopoSecondari: 28,
-  titoloFontSize: 28, pillolaFontSize: 16, pillolaPaddingV: 4,
+  titoloFontSize: 28, pillolaFontSize: 16, pillolaPaddingV: 4, dateBoxPaddingV: 10,
 };
 // min/max per ciascuna chiave regolabile: gli spazi verticali vanno da 0
 // a 80px, i due font (titolo/pillola città) hanno un range proprio,
-// l'altezza della pillola (padding verticale) un altro ancora
+// i padding verticali (pillola, riquadro Date/Master/Disponibilità) un
+// altro ancora
 const LIMITI_SPAZI_ISCRIZIONI = {
   paddingTop: [0, 80], paddingBottom: [0, 80],
   dopoEyebrow: [0, 80], dopoTitolo: [0, 80], dopoDateBox: [0, 80], dopoDivider: [0, 80], dopoSecondari: [0, 80],
-  titoloFontSize: [18, 64], pillolaFontSize: [10, 36], pillolaPaddingV: [2, 40],
+  titoloFontSize: [18, 64], pillolaFontSize: [10, 36], pillolaPaddingV: [2, 40], dateBoxPaddingV: [4, 60],
 };
 // maniglia trascinabile stile "ridimensiona colonna" di Excel: in
 // verticale (striscia con linea tratteggiata orizzontale) per gli spazi,
@@ -14861,7 +14862,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
               ].filter(Boolean);
               return (
-                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", marginBottom: spaziIscrizioni.dopoDateBox }}>
+                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
                   <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
                     {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
                       <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, paddingLeft: idx > 0 ? 10 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
@@ -14876,6 +14877,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </div>
               );
             })()}
+            {manigliaRidimensiona("dateBoxPaddingV", "y")}
             {manigliaSpazio("dopoDateBox")}
             {tornaSpeciale ? (
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
