@@ -2701,7 +2701,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
                       {selectBonificoCash(valoreCampo(cd, "pagamento_sede"), (v) => salvaCampo(cd.id, "pagamento_sede", v))}
                     </td>
-                    <td style={cellaGruppo}>
+                    <td style={{ ...cellaGruppo, verticalAlign: "top" }}>
                       <div>
                         <span style={etichettaTipoStyle}>Master</span>
                       </div>
@@ -2759,7 +2759,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   </tr>
                   {docenti.map((riga) => (
                     <tr key={riga.id}>
-                      <td style={cellaGruppo}>
+                      <td style={{ ...cellaGruppo, verticalAlign: "top" }}>
                         <div>
                           <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
                         </div>
@@ -2777,9 +2777,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         {flagAvvisata(!!valoreCampo(riga, "avvisata"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "avvisata", !valoreCampo(riga, "avvisata")))}
                       </td>
                       <td style={cellaGruppo}>
-                        {riga.tipo !== "leva" && (
-                          <input style={campoStyle} defaultValue={riga.note || ""} onBlur={(e) => { if (e.target.value !== (riga.note || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note", e.target.value || null); }} />
-                        )}
+                        <input style={campoStyle} defaultValue={riga.note || ""} onBlur={(e) => { if (e.target.value !== (riga.note || "")) salvaCampoGenerico("corsi_date_docenti", riga.id, "note", e.target.value || null); }} />
                       </td>
                       <td style={cellaGruppo}>
                         {cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file")}
