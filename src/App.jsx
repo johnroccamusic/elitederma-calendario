@@ -16836,135 +16836,6 @@ function GaugeMargineErp({ percentuale }) {
   );
 }
 
-// form "+ Nuova operazione" → "Entrata": incasso non legato a
-// un'iscrizione (es. vendita in accademia di un prodotto a un cliente
-// occasionale). Stessa struttura/UX di "Uscita", ma senza voce di costo:
-// qui la descrizione libera indica cosa è stato venduto/incassato
-function ModaleNuovaEntrata({ location, onClose, onSalvato, entrataEsistente }) {
-  const [data, setData] = useState(entrataEsistente?.data || dataOggiStr());
-  const [citta, setCitta] = useState(entrataEsistente?.sede_id || "");
-  const [descrizione, setDescrizione] = useState(entrataEsistente?.descrizione || "");
-  const [imponibile, setImponibile] = useState(entrataEsistente ? String(entrataEsistente.imponibile) : "");
-  const [totale, setTotale] = useState(entrataEsistente ? String(entrataEsistente.totale) : "");
-  const [iva, setIva] = useState(entrataEsistente?.iva_percentuale ?? 22);
-  const [esenteIva, setEsenteIva] = useState(entrataEsistente ? entrataEsistente.iva_percentuale === 0 && entrataEsistente.metodo_pagamento !== "Cash no iva" : false);
-  const [metodo, setMetodo] = useState(entrataEsistente?.metodo_pagamento || "");
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  const ivaBloccata = esenteIva || metodo === "Cash no iva";
-  const ivaEffettiva = ivaBloccata ? 0 : iva;
-
-  function totaleDaImponibile(v, ivaPct) {
-    return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100)));
-  }
-  function imponibileDaTotale(v, ivaPct) {
-    return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100)));
-  }
-
-  function onImponibileChange(v) {
-    setImponibile(v);
-    setTotale(ivaBloccata ? v : totaleDaImponibile(v, ivaEffettiva));
-  }
-  function onTotaleChange(v) {
-    setTotale(v);
-    setImponibile(ivaBloccata ? v : imponibileDaTotale(v, ivaEffettiva));
-  }
-  function onIvaChange(v) {
-    setIva(v);
-    if (!ivaBloccata) setTotale(totaleDaImponibile(imponibile, v));
-  }
-  function ricalcolaBlocco(nuovaBloccata) {
-    setTotale(nuovaBloccata ? imponibile : totaleDaImponibile(imponibile, iva));
-  }
-  function onEsenteChange(checked) {
-    setEsenteIva(checked);
-    ricalcolaBlocco(checked || metodo === "Cash no iva");
-  }
-  function onMetodoChange(opz) {
-    setMetodo(opz);
-    ricalcolaBlocco(esenteIva || opz === "Cash no iva");
-  }
-
-  async function salva() {
-    const imp = parseNum(imponibile);
-    if (!imp) { setMsg("Inserisci un imponibile."); return; }
-    setSalvando(true);
-    const riga = {
-      descrizione: descrizione.trim() || null,
-      sede_id: citta || null,
-      imponibile: imp,
-      iva_percentuale: ivaEffettiva,
-      totale: totale === "" ? imp : round2(parseNum(totale)),
-      data,
-      metodo_pagamento: metodo || null,
-    };
-    const { error } = entrataEsistente
-      ? await supabase.from("entrate_manuali").update(riga).eq("id", entrataEsistente.id)
-      : await supabase.from("entrate_manuali").insert(riga);
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    onSalvato();
-  }
-
-  return (
-    <Modal title={entrataEsistente ? "Modifica entrata" : "Nuova entrata"} onClose={onClose}>
-      <div style={{ display: "flex", gap: 14 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Data"><input type="date" style={inputStyle} value={data} onChange={(e) => setData(e.target.value)} /></Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Città (opzionale)">
-            <select style={inputStyle} value={citta} onChange={(e) => setCitta(e.target.value)}>
-              <option value="">—</option>
-              {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
-            </select>
-          </Field>
-        </div>
-      </div>
-      <Field label="Descrizione (es. vendita prodotto, cliente occasionale)">
-        <input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} />
-      </Field>
-      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 6 }}>
-        <input type="checkbox" checked={esenteIva} onChange={(e) => onEsenteChange(e.target.checked)} />
-        Importo esente iva
-      </label>
-      <div style={{ display: "flex", gap: 8 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="IVA">
-            <select
-              style={{ ...inputStyle, background: ivaBloccata ? "#EFEFEF" : "#fff", color: ivaBloccata ? MUTED : NAVY }}
-              disabled={ivaBloccata}
-              value={ivaEffettiva}
-              onChange={(e) => onIvaChange(Number(e.target.value))}
-            >
-              {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Totale"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field>
-        </div>
-      </div>
-      <Field label="Metodo di pagamento">
-        <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY }}>
-          {["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"].map((opz) => (
-            <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-              <input type="radio" name="metodo-entrata" checked={metodo === opz} onChange={() => onMetodoChange(opz)} />
-              {opz}
-            </label>
-          ))}
-        </div>
-      </Field>
-      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : "Salva entrata"}</Button>
-    </Modal>
-  );
-}
-
 // pannello aperto cliccando la card "Ricavi e costi": confronto anno
 // scolastico su anno scolastico (settembre -> agosto), UNA RIGA PER
 // ANNO, con i 12 mesi in orizzontale dentro la riga (stesso stile a
@@ -18379,42 +18250,51 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
 // budget + "Nuova operazione" (entrata/uscita) spostati qui da PaginaErp,
 // più due colonne con l'elenco di tutte le spese e di tutti i ricavi
 // manuali del periodo, ciascuna con modifica ed elimina
-function PaginaInserimentoCostiRicavi({ spese, entrateManuali, location, costiCategorie, costiSottocategorie, fornitori, ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget }) {
+// colori della pillola "Stato" nella tabella Spese — stesso principio
+// verde/ambra/rosso già usato per STATI_VENDITA_SHOP altrove nell'app
+const COLORE_STATO_SPESA = {
+  pagata: { colore: "#2E7D32", sfondo: "#E3F3E5" },
+  parzialmente_pagata: { colore: "#B8860B", sfondo: "#FBF1D9" },
+  fatturata: { colore: "#B8860B", sfondo: "#FBF1D9" },
+  impegnata: { colore: "#B8860B", sfondo: "#FBF1D9" },
+  preventivata: { colore: MUTED, sfondo: "#EFEFEF" },
+  scaduta: { colore: "#C0392B", sfondo: "#FBE4E1" },
+  annullata: { colore: "#C0392B", sfondo: "#FBE4E1" },
+};
+// piccola pillola di testo (sotto-categoria, fornitore) usata come "tag"
+// sotto la descrizione di ogni spesa
+function ChipSpesa({ children }) {
+  return (
+    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 600, color: NAVY, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "2px 8px", whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+const SPESE_PAGINA_INIZIALE = 10;
+function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategorie, fornitori, ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("ultimomese");
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
-  const [menuNuovaOperazione, setMenuNuovaOperazione] = useState(false);
-  const [modaleEntrataAperta, setModaleEntrataAperta] = useState(false);
-  const [entrataInModifica, setEntrataInModifica] = useState(null);
   const [importCsvAperto, setImportCsvAperto] = useState(false);
+  const [mostraTutte, setMostraTutte] = useState(false);
 
   const range = rangePeriodoInserimento(periodo, { da: customDa, a: customA });
 
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
   const costiSottocategorieById = Object.fromEntries((costiSottocategorie || []).map((v) => [v.id, v]));
-  const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
   const speseFiltrate = (spese || [])
     .filter((s) => s.data_documento && s.data_documento >= range.inizio && s.data_documento <= range.fine)
     .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-  const entrateFiltrate = (entrateManuali || [])
-    .filter((e) => e.data && e.data >= range.inizio && e.data <= range.fine)
-    .sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const speseVisibili = mostraTutte ? speseFiltrate : speseFiltrate.slice(0, SPESE_PAGINA_INIZIALE);
 
   const totaleSpese = round2(speseFiltrate.reduce((s, sp) => s + (sp.totale || 0), 0));
-  const totaleEntrate = round2(entrateFiltrate.reduce((s, e) => s + (e.totale || 0), 0));
 
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
     const { error } = await supabase.from("spese").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
-  async function eliminaEntrata(id) {
-    if (!window.confirm("Eliminare questa entrata?")) return;
-    const { error } = await supabase.from("entrate_manuali").delete().eq("id", id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
@@ -18434,44 +18314,14 @@ function PaginaInserimentoCostiRicavi({ spese, entrateManuali, location, costiCa
             <button onClick={() => esportaCsvSpese(speseFiltrate.map((s) => ({ spesa: s, importo: s.totale })), costiCategorieById, costiSottocategorieById)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
             <button onClick={() => window.print()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta PDF</button>
             <button onClick={onApriBudget} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Budget</button>
-            <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setMenuNuovaOperazione((v) => !v)}
-                style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}
-              >
-                + Nuova operazione
-              </button>
-              {menuNuovaOperazione && (
-                <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)", overflow: "hidden", minWidth: 160 }}>
-                  <button
-                    onClick={() => { setMenuNuovaOperazione(false); onApriNuovaSpesa(); }}
-                    style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", background: "transparent", color: NAVY, cursor: "pointer" }}
-                  >
-                    Uscita
-                  </button>
-                  <button
-                    onClick={() => { setMenuNuovaOperazione(false); setEntrataInModifica(null); setModaleEntrataAperta(true); }}
-                    style={{ ...fontBody, display: "block", width: "100%", textAlign: "left", fontSize: 13.5, fontWeight: 600, padding: "12px 16px", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, background: "transparent", color: NAVY, cursor: "pointer" }}
-                  >
-                    Entrata
-                  </button>
-                </div>
-              )}
-            </div>
+            <button onClick={onApriNuovaSpesa} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}>+ Nuova spesa</button>
           </div>
         </div>
         {importCsvAperto && (
           <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
         )}
-        {modaleEntrataAperta && (
-          <ModaleNuovaEntrata
-            location={location} entrataEsistente={entrataInModifica}
-            onClose={() => { setModaleEntrataAperta(false); setEntrataInModifica(null); }}
-            onSalvato={() => { setModaleEntrataAperta(false); setEntrataInModifica(null); ricarica(); }}
-          />
-        )}
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Inserimento costi e ricavi</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese e i ricavi inseriti manualmente, con modifica ed eliminazione.</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Costi</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
 
         <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: periodo === "personalizzato" ? 10 : 0 }}>
@@ -18495,71 +18345,81 @@ function PaginaInserimentoCostiRicavi({ spese, entrateManuali, location, costiCa
           )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 14 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
-              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Spese</div>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B" }}>{fmtEuroErp(totaleSpese)}</div>
+        <div style={{ ...cardStyle, marginBottom: 0, padding: isMobile ? 16 : 26 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+            <div>
+              <div style={{ ...fontHero, fontSize: 26, color: NAVY }}>Spese</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{speseFiltrate.length} vo{speseFiltrate.length === 1 ? "ce" : "ci"}</div>
             </div>
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>{speseFiltrate.length} vo{speseFiltrate.length === 1 ? "ce" : "ci"}</div>
-            {speseFiltrate.map((spesa) => (
-              <div key={spesa.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{spesa.descrizione || costiSottocategorieById[spesa.sottocategoria_id]?.nome || "Spesa"}</div>
-                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                      {spesa.data_documento ? fmtData(spesa.data_documento) : "—"}
-                      {costiCategorieById[spesa.categoria_id] ? ` · ${costiCategorieById[spesa.categoria_id].nome}` : ""}
-                      {spesa.fornitore_id ? ` · ${fornitoriById[spesa.fornitore_id]?.nome}` : ""}
-                      {" · "}{etichettaOpzione(STATI_SPESA, spesa.stato)}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(spesa.totale)}</span>
-                    <button onClick={() => onApriModificaSpesa(spesa.id)} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                    </button>
-                    <button onClick={() => eliminaSpesa(spesa.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {speseFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>}
+            <div style={{ textAlign: "right" }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Totale spese</div>
+              <div style={{ ...fontHero, fontSize: 24, color: "#C0392B" }}>{fmtEuroErp(totaleSpese)}</div>
+            </div>
           </div>
 
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
-              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Ricavi</div>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>{fmtEuroErp(totaleEntrate)}</div>
-            </div>
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 12 }}>{entrateFiltrate.length} vo{entrateFiltrate.length === 1 ? "ce" : "ci"}</div>
-            {entrateFiltrate.map((entrata) => (
-              <div key={entrata.id} style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{entrata.descrizione || "Entrata"}</div>
-                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                      {entrata.data ? fmtData(entrata.data) : "—"}
-                      {entrata.sede_id && locationById[entrata.sede_id] ? ` · ${toTitleCase(locationById[entrata.sede_id].nome)}` : ""}
-                      {entrata.metodo_pagamento ? ` · ${entrata.metodo_pagamento}` : ""}
+          {speseFiltrate.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>
+          ) : (
+            <>
+              {!isMobile && (
+                <div style={{ display: "flex", gap: 12, padding: "0 0 8px", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 4 }}>
+                  <div style={{ flex: "0 0 56px", ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Data</div>
+                  <div style={{ flex: "1 1 auto", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Descrizione</div>
+                  <div style={{ flex: "0 0 100px", textAlign: "right", ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Importo</div>
+                  <div style={{ flex: "0 0 120px", ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5 }}>Stato</div>
+                  <div style={{ flex: "0 0 60px" }} />
+                </div>
+              )}
+              {speseVisibili.map((spesa) => {
+                const [anno, mese, giorno] = (spesa.data_documento || "").split("-").map(Number);
+                const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
+                const sottocategoria = costiSottocategorieById[spesa.sottocategoria_id];
+                const categoria = costiCategorieById[spesa.categoria_id];
+                const fornitore = spesa.fornitore_id ? fornitoriById[spesa.fornitore_id] : null;
+                return (
+                  <div key={spesa.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: isMobile ? "wrap" : "nowrap" }}>
+                    <div style={{ flex: "0 0 56px", textAlign: "center" }}>
+                      <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
+                      {mese && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>{MESI_ABBR[mese - 1]}</div>}
+                      {anno && <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{anno}</div>}
+                    </div>
+                    <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY }}>{spesa.descrizione || sottocategoria?.nome || "Spesa"}</div>
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>
+                        {categoria?.nome || "—"}{fornitore ? ` · ${fornitore.nome}` : ""}
+                      </div>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
+                        {sottocategoria && <ChipSpesa>{sottocategoria.nome}</ChipSpesa>}
+                        {fornitore && <ChipSpesa>{fornitore.nome}</ChipSpesa>}
+                      </div>
+                    </div>
+                    <div style={{ flex: isMobile ? "1 1 auto" : "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp(spesa.totale)}</div>
+                    <div style={{ flex: isMobile ? "1 1 auto" : "0 0 120px" }}>
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                        {etichettaOpzione(STATI_SPESA, spesa.stato)}
+                      </span>
+                    </div>
+                    <div style={{ flex: "0 0 60px", display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+                      <button onClick={() => onApriModificaSpesa(spesa.id)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                      </button>
+                      <button onClick={() => eliminaSpesa(spesa.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                      </button>
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp(entrata.totale)}</span>
-                    <button onClick={() => { setEntrataInModifica(entrata); setModaleEntrataAperta(true); }} title="Modifica" style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                    </button>
-                    <button onClick={() => eliminaEntrata(entrata.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex" }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                    </button>
-                  </div>
+                );
+              })}
+              {!mostraTutte && speseFiltrate.length > SPESE_PAGINA_INIZIALE && (
+                <div style={{ textAlign: "center", marginTop: 14 }}>
+                  <button onClick={() => setMostraTutte(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                    Mostra altre spese
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                  </button>
                 </div>
-              </div>
-            ))}
-            {entrateFiltrate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun ricavo nel periodo.</div>}
-          </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -28403,7 +28263,7 @@ export default function App() {
 
       {view === "inserimentocostiricavi" && (
         <PaginaInserimentoCostiRicavi
-          spese={spese} entrateManuali={entrateManuali} location={location}
+          spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
           ricarica={fetchDati} onBack={() => setView("erp")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
