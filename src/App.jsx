@@ -2181,7 +2181,7 @@ function CelleNottiPattuito({ riga, salva, cellaGruppo, campoStyle }) {
 // docente extra aggiungere (master/assistente/leva): ognuna diventa
 // una riga propria in corsi_date_docenti, con i propri biglietti di
 // viaggio e il proprio hotel.
-function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, ricarica, onBack }) {
+function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, ruoloUtente, layoutCondiviso, ricarica, onBack }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -2518,9 +2518,35 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
       const v = JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_COLONNE) || "null");
       if (Array.isArray(v) && v.length === LARGHEZZE_COLONNE_DEFAULT.length) return v.map(limitaLarghezza);
     } catch { /* localStorage non disponibile: usa i default */ }
+    // nessuna regolazione personale salvata in questo browser: parte dalla
+    // vista "fissata su tutti i terminali" da chi programma, se esiste ed
+    // è compatibile con le colonne attuali (stessa versione = stesso
+    // numero di colonne) — altrimenti il default hardcoded
+    if (
+      layoutCondiviso?.versione_colonne === CHIAVE_LARGHEZZE_COLONNE &&
+      Array.isArray(layoutCondiviso?.larghezze_colonne) &&
+      layoutCondiviso.larghezze_colonne.length === LARGHEZZE_COLONNE_DEFAULT.length
+    ) {
+      return layoutCondiviso.larghezze_colonne.map(limitaLarghezza);
+    }
     return LARGHEZZE_COLONNE_DEFAULT;
   })();
   const [larghezze, setLarghezze] = useState(larghezzeSalvate);
+  const [salvandoLayoutCondiviso, setSalvandoLayoutCondiviso] = useState(false);
+  // solo chi programma vede "Fissa vista su tutti i terminali": scrive le
+  // larghezze attuali come punto di partenza condiviso per chi apre questa
+  // pagina senza ancora una propria regolazione salvata nel suo browser
+  async function fissaVistaSuTuttiITerminali() {
+    setSalvandoLayoutCondiviso(true);
+    const { error } = await supabase
+      .from("impostazioni_layout_assegnazione_master")
+      .update({ larghezze_colonne: larghezze, versione_colonne: CHIAVE_LARGHEZZE_COLONNE })
+      .eq("id", "00000000-0000-0000-0000-000000000002");
+    setSalvandoLayoutCondiviso(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    window.alert("Fissata: chi apre questa pagina per la prima volta su un nuovo browser partirà da questa distribuzione delle colonne.");
+    ricarica();
+  }
   const COLONNE = larghezze.map((larghezza) => ({ larghezza }));
   const larghezzaTabella = larghezze.reduce((a, b) => a + b, 0);
 
@@ -2920,11 +2946,23 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   {gruppiMese[chiave].righe.length} cors{gruppiMese[chiave].righe.length === 1 ? "o" : "i"} visibil{gruppiMese[chiave].righe.length === 1 ? "e" : "i"}
                 </div>
               </div>
-              <div
-                title="Al momento è disponibile solo la vista tabella"
-                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", opacity: 0.6, cursor: "default", background: "#fff" }}
-              >
-                <IconaGrigliaTabella size={15} color={MUTED} /> Vista tabella <IconaChevronGiuErp size={12} color={MUTED} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {ruoloUtente === "programmatore" && (
+                  <button
+                    onClick={fissaVistaSuTuttiITerminali}
+                    disabled={salvandoLayoutCondiviso}
+                    title="Salva la distribuzione attuale delle colonne come punto di partenza per chi apre questa pagina su un altro terminale"
+                    style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", cursor: salvandoLayoutCondiviso ? "default" : "pointer", background: "#fff", opacity: salvandoLayoutCondiviso ? 0.6 : 1 }}
+                  >
+                    {salvandoLayoutCondiviso ? "Salvo…" : "Fissa vista su tutti i terminali"}
+                  </button>
+                )}
+                <div
+                  title="Al momento è disponibile solo la vista tabella"
+                  style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", opacity: 0.6, cursor: "default", background: "#fff" }}
+                >
+                  <IconaGrigliaTabella size={15} color={MUTED} /> Vista tabella <IconaChevronGiuErp size={12} color={MUTED} />
+                </div>
               </div>
             </div>
             {tabellaMese(gruppiMese[chiave].righe)}
@@ -27256,6 +27294,7 @@ export default function App() {
   const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
   const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
   const [categorieGruppi, setCategorieGruppi] = useState(null); // riga singola: "Associa il gruppo a una categoria di spesa" per assistenti/master/hotel/location
+  const [layoutAssegnazioneMaster, setLayoutAssegnazioneMaster] = useState(null); // riga singola: larghezze colonne "fissate su tutti i terminali" in Assegnazione Master
   const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
   // "Analisi costi di gestione": catalogo categorie/sotto-categorie (amministrabile), registro spese, ripartizioni multi-ambito, budget, soglie di allerta, ambiti evento/fornitore
   const [costiCategorie, setCostiCategorie] = useState([]);
@@ -27364,7 +27403,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg, ilam] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -27422,6 +27461,7 @@ export default function App() {
       supabase.from("voci_shop_classificazione").select("*"),
       supabase.from("coupon").select("*").order("created_at", { ascending: false }),
       supabase.from("impostazioni_categorie_gruppi").select("*").limit(1),
+      supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -27490,6 +27530,7 @@ export default function App() {
     setVociShopClassificazione(vsc.data || []);
     setCoupon(cpn.data || []);
     setCategorieGruppi(icg.data?.[0] || null);
+    setLayoutAssegnazioneMaster(ilam.data?.[0] || null);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -28500,7 +28541,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "calendario" && (
