@@ -2416,3 +2416,30 @@ notify pgrst, 'reload schema';
 alter table public.master add column if not exists regime_fiscale text;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 88) Riepilogo amministrativo: quota assistenti. Il compenso di
+-- un'assistente (assistente_corsi.compenso_giornaliero, per
+-- assistente+corso, già esistente) si intende giornaliero — di
+-- default vale per tutti i giorni del corso, ma su una singola
+-- edizione l'assistente potrebbe non esserci stata tutti i giorni.
+-- giorni_presenza (nullable: null = usa la durata intera del corso)
+-- registra l'eventuale scostamento, per quella specifica edizione.
+-- ---------------------------------------------------------
+alter table public.corsi_date_docenti add column if not exists giorni_presenza integer;
+
+notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 89) Vitto e ospitalità dei corsi: nuova sotto-voce "Rimborso spesa
+-- per appartamento" (spesa/generi alimentari per l'appartamento dove
+-- alloggiano master/assistenti, distinta dal rimborso colazioni già
+-- esistente).
+-- ---------------------------------------------------------
+insert into public.costi_sottocategorie (id, categoria_id, nome, ordine, automatico, campo_automatico) values
+  ('vitto_corsi__rimborso_spesa_appartamento', 'vitto_corsi', 'Rimborso spesa per appartamento', 7, false, null)
+on conflict (id) do nothing;
+
+notify pgrst, 'reload schema';

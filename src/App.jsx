@@ -13110,7 +13110,7 @@ function BottonePulsanteScheda({ p }) {
     </button>
   );
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -13373,8 +13373,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // corsi_date.master_id + eventuali extra aggiunte con "+" in
   // Assegnazione Master), ciascuna nella fascia corrispondente al numero
   // di allievi iscritti — dato già impostato in Gestione Master → tab
-  // Compensi, nessun input manuale qui. Le assistenti restano escluse:
-  // hanno un compenso giornaliero fisso a parte, in assistente_corsi.
+  // Compensi, nessun input manuale qui.
   const masterIdsClasse = [
     corsoData.master_id,
     ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => d.persona_id),
@@ -13389,8 +13388,32 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       return s + compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso);
     }, 0)
   );
+  // costo delle assistenti di questa edizione: il compenso impostato
+  // nella scheda dell'assistente (Gestione Assistenti → Corsi associati,
+  // assistente_corsi.compenso_giornaliero) è giornaliero — di default
+  // vale per tutta la durata del corso, ma su questa specifica edizione
+  // può essere corretto con +/- se l'assistente non c'è stata tutti i
+  // giorni (corsi_date_docenti.giorni_presenza, per quella riga soltanto)
+  const durataGiorniCorso = Math.max(1, differenzaGiorni(corsoData.data_inizio, corsoData.data_fine) + 1);
+  const [giorniPresenzaOverride, setGiorniPresenzaOverride] = useState({});
+  async function salvaGiorniPresenza(rigaId, giorni) {
+    setGiorniPresenzaOverride((m) => ({ ...m, [rigaId]: giorni }));
+    const { error } = await supabase.from("corsi_date_docenti").update({ giorni_presenza: giorni }).eq("id", rigaId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  const righeAssistentiClasse = (corsiDateDocenti || [])
+    .filter((d) => d.corso_data_id === corsoData.id && d.tipo === "assistente")
+    .map((d) => {
+      const giorni = giorniPresenzaOverride[d.id] ?? d.giorni_presenza ?? durataGiorniCorso;
+      const assegnazione = (assistenteCorsi || []).find((ac) => ac.assistente_id === d.persona_id && ac.corso_id === corsoData.corso_id);
+      const compensoGiorno = assegnazione?.compenso_giornaliero || 0;
+      const persona = (assistente || []).find((a) => a.id === d.persona_id);
+      return { rigaId: d.id, nome: persona?.nome || "—", giorni, compensoGiorno, importo: round2(giorni * compensoGiorno) };
+    });
+  const quoteAssistentiClasse = round2(righeAssistentiClasse.reduce((s, r) => s + r.importo, 0));
   const totaleCostiClasse = round2(
-    quoteVenditoreClasse + quoteMasterClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
+    quoteVenditoreClasse + quoteMasterClasse + quoteAssistentiClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
@@ -14701,11 +14724,34 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteVenditoreClasse}</div>
                 </Field>
               </div>
-              <div style={{ maxWidth: 220, marginBottom: 14 }}>
+              <div style={{ maxWidth: 220, marginBottom: righeAssistentiClasse.length > 0 ? 10 : 14 }}>
                 <Field label="Quota master">
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteMasterClasse}</div>
                 </Field>
               </div>
+              {righeAssistentiClasse.length > 0 && (
+                <div style={{ maxWidth: 420, marginBottom: 14 }}>
+                  <Field label="Quota assistenti">
+                    <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteAssistentiClasse}</div>
+                  </Field>
+                  <div style={{ marginTop: 8 }}>
+                    {righeAssistentiClasse.map((r) => (
+                      <div key={r.rigaId} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                        <span style={{ flex: "1 1 130px", minWidth: 0, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.nome}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                          <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 14, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
+                          <span style={{ minWidth: 62, textAlign: "center" }}>{r.giorni} {r.giorni === 1 ? "giorno" : "giorni"}</span>
+                          <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 24, height: 24, borderRadius: 6, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 14, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
+                        </div>
+                        <span style={{ minWidth: 72, textAlign: "right", fontWeight: 700, flexShrink: 0 }}>€ {r.importo}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4, lineHeight: 1.4 }}>
+                    Compenso giornaliero impostato in Gestione Assistenti → Corsi associati. Di default {durataGiorniCorso} giorni (la durata del corso) — regola con +/− se l'assistente non c'è stata tutti i giorni.
+                  </div>
+                </div>
+              )}
               {speseClasse.length === 0 ? (
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Nessuna spesa registrata per questa classe.</div>
               ) : (
@@ -27948,6 +27994,8 @@ export default function App() {
           master={master}
           masterCorsi={masterCorsi}
           corsiDateDocenti={corsiDateDocenti}
+          assistente={assistente}
+          assistenteCorsi={assistenteCorsi}
           fontDiplomi={fontDiplomi}
           diplomaEccezioni={diplomaEccezioni}
           segnaposti={segnaposti}
