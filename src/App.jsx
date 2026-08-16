@@ -14939,7 +14939,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     return (
                       <div key={r.tipo + "_" + r.rigaId} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
                         <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
-                          <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}>{r.nome}</div>
+                          <div style={{ ...campoCompattoStyle, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
                           {r.tipo === "alloggio" && r.pagato && (
                             <span title="Hotel pagato" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
                           )}
