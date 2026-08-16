@@ -163,7 +163,7 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 80, 90, 95, 76, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 65, 80, 90, 95, 76, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
@@ -171,7 +171,7 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 
 // il valore vecchio in localStorage vince sempre su quello nuovo
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v2";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Richiesta fattura", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Bonifico Fattura", "Pago Cash", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -179,7 +179,8 @@ const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docent
 // localStorage il testo ci starebbe su una riga sola e non andrebbe
 // mai a capo da solo
 const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
-  ["Richiesta fattura", ["Richiesta", "fattura"]],
+  ["Bonifico Fattura", ["Bonifico", "Fattura"]],
+  ["Pago Cash", ["Pago", "Cash"]],
   ["Notti prenotate", ["Notti", "prenotate"]],
   ["Pattuito a notte", ["Pattuito", "a notte"]],
   ["Pattuito per periodo", ["Pattuito", "per periodo"]],
@@ -2500,7 +2501,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     </button>
   );
   const flagAvvisata = (attivo, onClick) => flagSemplice(attivo, onClick, "Avvisata", "Non ancora avvisata");
-  const flagRichiestaFattura = (attivo, onClick) => flagSemplice(attivo, onClick, "Fattura richiesta", "Fattura non richiesta");
+  const flagBonificoFattura = (attivo, onClick) => flagSemplice(attivo, onClick, "Bonifico con fattura", "Nessun bonifico con fattura");
+  const flagPagaCash = (attivo, onClick) => flagSemplice(attivo, onClick, "Pagato in contanti", "Non pagato in contanti");
   const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Pagato", "Non ancora pagato");
 
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
@@ -2733,7 +2735,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       </select>
                     </td>
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                      {flagRichiestaFattura(!!valoreCampo(cd, "richiesta_fattura"), () => salvaCampo(cd.id, "richiesta_fattura", !valoreCampo(cd, "richiesta_fattura")))}
+                      {flagBonificoFattura(!!valoreCampo(cd, "richiesta_fattura"), () => salvaCampo(cd.id, "richiesta_fattura", !valoreCampo(cd, "richiesta_fattura")))}
+                    </td>
+                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
+                      {flagPagaCash(!!valoreCampo(cd, "paga_cash"), () => salvaCampo(cd.id, "paga_cash", !valoreCampo(cd, "paga_cash")))}
                     </td>
                     <CelleNottiPattuito riga={cd} salva={(campi) => salvaCampiGenerico("corsi_date", cd.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
@@ -2775,7 +2780,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         </select>
                       </td>
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                        {flagRichiestaFattura(!!valoreCampo(riga, "richiesta_fattura"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "richiesta_fattura", !valoreCampo(riga, "richiesta_fattura")))}
+                        {flagBonificoFattura(!!valoreCampo(riga, "richiesta_fattura"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "richiesta_fattura", !valoreCampo(riga, "richiesta_fattura")))}
+                      </td>
+                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
+                        {flagPagaCash(!!valoreCampo(riga, "paga_cash"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "paga_cash", !valoreCampo(riga, "paga_cash")))}
                       </td>
                       <CelleNottiPattuito riga={riga} salva={(campi) => salvaCampiGenerico("corsi_date_docenti", riga.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
