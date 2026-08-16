@@ -13123,21 +13123,45 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
 // va a capo su due righe (mai il tasto stesso), così i 4 tasti oro
 // restano sempre affiancati sulla stessa riga anche su schermi stretti
 function BottonePulsanteScheda({ p }) {
+  // le tile primarie (Iscrivi/Contabilità classe/Riepilogo amministrativo/
+  // Assegna modelle) hanno un layout diverso dai pulsanti secondari (Esci/
+  // Modifica date/Stampa...): icona in un cerchio sopra, etichetta sotto,
+  // invece di icona e testo affiancati
+  if (p.primario) {
+    return (
+      <button
+        onClick={p.onClick}
+        disabled={p.disabled}
+        style={{
+          ...fontDisplay, fontWeight: 700, fontSize: 12.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+          padding: "18px 12px", borderRadius: 16, border: "none", cursor: p.disabled ? "default" : "pointer",
+          background: "transparent", color: NAVY, opacity: p.disabled ? 0.5 : 1,
+          textTransform: "uppercase", letterSpacing: 0.3,
+          flex: "1 1 0", minWidth: 0, boxSizing: "border-box",
+        }}
+      >
+        <span style={{ width: 52, height: 52, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <p.Icona size={22} color={p.attivo ? "#fff" : NAVY} />
+        </span>
+        <span style={{ whiteSpace: "normal", lineHeight: 1.2, textAlign: "center" }}>{p.etichetta}</span>
+      </button>
+    );
+  }
   return (
     <button
       onClick={p.onClick}
       disabled={p.disabled}
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 6,
-        padding: p.primario ? "10px 8px" : "10px 14px",
+        ...fontDisplay, fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
+        padding: "10px 4px",
         borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
-        background: p.attivo ? NAVY : p.primario ? BG_CHIARO : "transparent",
-        color: p.attivo ? "#fff" : NAVY, opacity: p.disabled ? 0.5 : 1,
+        background: "transparent",
+        color: NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
-        flex: p.primario ? "1 1 0" : "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
+        flex: "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={16} color={p.attivo ? "#fff" : p.primario ? NAVY : GOLD} />
+      <p.Icona size={17} color={GOLD} />
       <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "left", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
@@ -14664,8 +14688,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div style={{ ...fontHero, fontSize: 40, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
           {loc?.nome && (
             <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
-              <IconaPin size={16} color={GOLD} />
-              <span style={{ ...fontBody, fontSize: 17, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+              <IconaPin size={18} color={GOLD} />
+              <span style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
             </div>
           )}
         </div>
@@ -14749,14 +14773,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         ];
 
         return (
-          <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
-            <div style={{ background: "#fff", borderRadius: 22, padding: "10px 10px 8px", boxShadow: "0 22px 40px -10px rgba(14,27,51,0.22)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
-                {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
-              </div>
-              <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexWrap: "nowrap" }}>
-                {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
-              </div>
+          <div style={{ position: "relative", marginTop: -20, marginBottom: 32, zIndex: 2, padding: "0 6px", display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ background: "#fff", borderRadius: 20, padding: "14px 18px", boxShadow: "0 18px 32px -18px rgba(14,27,51,0.2)", display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap" }}>
+              {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
+            </div>
+            <div style={{ background: "#fff", borderRadius: 20, padding: 14, boxShadow: "0 18px 32px -18px rgba(14,27,51,0.2)", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "nowrap" }}>
+              {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
             </div>
           </div>
         );
