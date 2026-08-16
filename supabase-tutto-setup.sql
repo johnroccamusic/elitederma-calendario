@@ -2510,3 +2510,14 @@ alter table public.corsi_date drop column if exists tipo_pagamento_location;
 alter table public.corsi_date_docenti drop column if exists paga_cash;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 95) Riepilogo amministrativo: "Quota venditore" diventa una riga
+-- della tabella spese come le altre (Compenso Master, Costo location,
+-- Quota assistenti), con lo stesso split libero Bonifico/Cash.
+-- ---------------------------------------------------------
+alter table public.corsi_date add column if not exists quota_venditore_bonifico numeric;
+alter table public.corsi_date add column if not exists quota_venditore_cash numeric;
+
+notify pgrst, 'reload schema';
