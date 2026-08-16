@@ -9191,6 +9191,135 @@ const CAMPI_RIEPILOGO_AMMINISTRATIVO = [
   { chiave: "rimborso_parcheggi", etichetta: "Rimborso parcheggi", categoriaId: "viaggi_corsi", sottocategoriaId: "viaggi_corsi__rimborso_parcheggi" },
 ];
 
+const ALIQUOTA_IVA_RIEPILOGO_CLASSE = 22;
+
+// una riga della tabella "Costi della classe" (Riepilogo amministrativo):
+// Imponibile/Con IVA e % pagata cash/Importo pagato cash sono coppie di
+// campi che si ricalcolano a vicenda — servono stati locali controllati
+// (non i soliti defaultValue+onBlur non controllati usati altrove) perché
+// il blur di un campo deve aggiornare il valore MOSTRATO in un altro
+function RigaCostoClasse({ spesa, onSalva, onElimina, costiCategorie, costiSottocategorie }) {
+  const [imponibile, setImponibile] = useState(spesa.imponibile != null ? String(spesa.imponibile) : "");
+  const [totale, setTotale] = useState(spesa.totale != null ? String(spesa.totale) : "");
+  const [pctCash, setPctCash] = useState(spesa.percentuale_pagata_cash != null ? String(spesa.percentuale_pagata_cash) : "");
+  const [importoCash, setImportoCash] = useState(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
+
+  useEffect(() => {
+    setImponibile(spesa.imponibile != null ? String(spesa.imponibile) : "");
+    setTotale(spesa.totale != null ? String(spesa.totale) : "");
+    setPctCash(spesa.percentuale_pagata_cash != null ? String(spesa.percentuale_pagata_cash) : "");
+    setImportoCash(spesa.importo_pagato_cash != null ? String(spesa.importo_pagato_cash) : "");
+  }, [spesa.imponibile, spesa.totale, spesa.percentuale_pagata_cash, spesa.importo_pagato_cash]);
+
+  const cashDisabilitato = pctCash !== "";
+  const vociTitolo = CAMPI_RIEPILOGO_AMMINISTRATIVO;
+  const titoloCorrisponde = vociTitolo.some((c) => c.sottocategoriaId === spesa.sottocategoria_id);
+
+  function commitImponibile() {
+    const v = imponibile === "" ? null : parseNum(imponibile);
+    if (v === (spesa.imponibile ?? null)) return;
+    const nuovoTotale = v == null ? null : round2(v * (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100));
+    setTotale(nuovoTotale != null ? String(nuovoTotale) : "");
+    const campi = { imponibile: v, totale: nuovoTotale };
+    if (pctCash !== "") {
+      const nuovoCash = v == null ? null : round2(v * (parseNum(pctCash) / 100));
+      setImportoCash(nuovoCash != null ? String(nuovoCash) : "");
+      campi.importo_pagato_cash = nuovoCash;
+    }
+    onSalva(campi);
+  }
+  function commitTotale() {
+    const v = totale === "" ? null : parseNum(totale);
+    if (v === (spesa.totale ?? null)) return;
+    const nuovoImponibile = v == null ? null : round2(v / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100));
+    setImponibile(nuovoImponibile != null ? String(nuovoImponibile) : "");
+    const campi = { totale: v, imponibile: nuovoImponibile };
+    if (pctCash !== "") {
+      const nuovoCash = nuovoImponibile == null ? null : round2(nuovoImponibile * (parseNum(pctCash) / 100));
+      setImportoCash(nuovoCash != null ? String(nuovoCash) : "");
+      campi.importo_pagato_cash = nuovoCash;
+    }
+    onSalva(campi);
+  }
+  function commitPctCash() {
+    const v = pctCash === "" ? null : parseNum(pctCash);
+    if (v === (spesa.percentuale_pagata_cash ?? null)) return;
+    const campi = { percentuale_pagata_cash: v };
+    if (v != null) {
+      const imp = imponibile === "" ? 0 : parseNum(imponibile);
+      const nuovoCash = round2(imp * (v / 100));
+      setImportoCash(String(nuovoCash));
+      campi.importo_pagato_cash = nuovoCash;
+    }
+    onSalva(campi);
+  }
+  function commitImportoCash() {
+    if (cashDisabilitato) return;
+    const v = importoCash === "" ? null : parseNum(importoCash);
+    if (v === (spesa.importo_pagato_cash ?? null)) return;
+    onSalva({ importo_pagato_cash: v });
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ flex: "2 1 170px", minWidth: 0 }}>
+        <Field label="Titolo">
+          <select
+            style={inputStyle}
+            value={titoloCorrisponde ? spesa.sottocategoria_id || "" : "__altro__"}
+            onChange={(e) => {
+              const scelta = vociTitolo.find((c) => c.sottocategoriaId === e.target.value);
+              if (scelta) onSalva({ categoria_id: scelta.categoriaId, sottocategoria_id: scelta.sottocategoriaId });
+            }}
+          >
+            {!titoloCorrisponde && (
+              <option value="__altro__">
+                {sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || categoriaCostoDi(costiCategorie, spesa.categoria_id)?.nome || "Altra voce"}
+              </option>
+            )}
+            {vociTitolo.map((c) => <option key={c.chiave} value={c.sottocategoriaId}>{c.etichetta}</option>)}
+          </select>
+        </Field>
+      </div>
+      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+        <Field label="Imponibile">
+          <input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => setImponibile(e.target.value)} onBlur={commitImponibile} />
+        </Field>
+      </div>
+      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+        <Field label="Con IVA">
+          <input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => setTotale(e.target.value)} onBlur={commitTotale} />
+        </Field>
+      </div>
+      <div style={{ flex: "0 1 90px", minWidth: 0 }}>
+        <Field label="% pagata cash">
+          <input type="number" min="0" max="100" style={inputStyle} value={pctCash} onChange={(e) => setPctCash(e.target.value)} onBlur={commitPctCash} />
+        </Field>
+      </div>
+      <div style={{ flex: "1 1 100px", minWidth: 0 }}>
+        <Field label="Importo pagato cash">
+          <input
+            style={{ ...inputStyle, ...(cashDisabilitato ? { background: "#EFEFEF", color: MUTED } : {}) }}
+            inputMode="decimal" disabled={cashDisabilitato}
+            value={importoCash} onChange={(e) => setImportoCash(e.target.value)} onBlur={commitImportoCash}
+          />
+        </Field>
+      </div>
+      <button
+        onClick={onElimina}
+        title="Elimina voce"
+        style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+          <path d="M10 11v6" /><path d="M14 11v6" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 const ALIQUOTE_IVA_COSTI = [22, 10, 4, 0];
 const STATI_SPESA = [
   { chiave: "preventivata", etichetta: "Preventivata" },
@@ -13034,15 +13163,43 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // chiuso perché, se sempre aperto, intralcia la normale gestione
   // contabilità (spuntare incassato, aprire schede...)
   const [costiAperto, setCostiAperto] = useState(sottoVistaIniziale?.costiAperto ?? false);
-  // ognuno dei 10 costi fissi è ormai una spesa vera in "spese" (non più
-  // un numero nudo su corsi_date): il valore mostrato in ogni casella è
-  // la somma di quelle spese per questa classe+sotto-categoria
-  const totaliRiepilogo = Object.fromEntries(
-    CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => [
-      c.chiave,
-      round2((spese || []).filter((s) => s.classe_id === corsoData.id && s.sottocategoria_id === c.sottocategoriaId).reduce((s, v) => s + (v.imponibile || 0), 0)),
-    ])
-  );
+  // "Costi della classe": una riga per ogni spesa vera in "spese" con
+  // classe_id = questa classe (non più limitata a una per categoria).
+  // Overlay ottimistico sulle modifiche appena salvate — senza,
+  // ogni modifica a una cella resterebbe "indietro" finché non arriva
+  // il refresh completo di fetchDati (40+ query, percepibile come lento)
+  const [speseClasseOverride, setSpeseClasseOverride] = useState({});
+  const [speseClasseNuove, setSpeseClasseNuove] = useState([]);
+  const [speseClasseRimosse, setSpeseClasseRimosse] = useState(new Set());
+  const speseClasseReali = (spese || []).filter((s) => s.classe_id === corsoData.id);
+  const idsSpeseClasseReali = new Set(speseClasseReali.map((s) => s.id));
+  const speseClasse = [...speseClasseReali, ...speseClasseNuove.filter((s) => !idsSpeseClasseReali.has(s.id))]
+    .filter((s) => !speseClasseRimosse.has(s.id))
+    .map((s) => (speseClasseOverride[s.id] ? { ...s, ...speseClasseOverride[s.id] } : s));
+  async function salvaCampiSpesaClasse(id, campi) {
+    setSpeseClasseOverride((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...campi } }));
+    const { error } = await supabase.from("spese").update(campi).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function aggiungiRigaCostoClasse() {
+    const prima = CAMPI_RIEPILOGO_AMMINISTRATIVO[0];
+    const { data, error } = await supabase.from("spese").insert({
+      tipo_ambito: "classe", classe_id: corsoData.id,
+      categoria_id: prima.categoriaId, sottocategoria_id: prima.sottocategoriaId,
+      descrizione: prima.etichetta, imponibile: 0, totale: 0,
+    }).select().single();
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setSpeseClasseNuove((prev) => [...prev, data]);
+    ricarica();
+  }
+  async function rimuoviRigaCostoClasse(id) {
+    if (!window.confirm("Vuoi eliminare questa voce di costo?")) return;
+    setSpeseClasseRimosse((prev) => new Set(prev).add(id));
+    const { error } = await supabase.from("spese").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
   // voci di costo aggiunte liberamente dall'amministratore (titolo + importo)
   const [costiExtra, setCostiExtra] = useState(
     Array.isArray(corsoData.costi_extra) ? corsoData.costi_extra.map((c) => ({ titolo: c.titolo || "", valore: c.valore != null ? String(c.valore) : "", categoria: c.categoria || "", sottovoce: c.sottovoce || "" })) : []
@@ -13137,10 +13294,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
   const totaleCostiClasse = round2(
-    quoteVenditoreClasse + Object.values(totaliRiepilogo).reduce((s, v) => s + v, 0) +
+    quoteVenditoreClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
+  // quota di contante già "spesa" al corso stesso (es. pranzi pagati in
+  // contanti dal master): il KPI "Contanti" resta il puro incassato,
+  // questo è un secondo indicatore che lo mostra al netto di quella spesa
+  const cashNettoClasse = round2(contantiClasse - speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0));
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
@@ -14359,6 +14520,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
                   </div>
                 </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Contanti al netto delle spese di questa classe pagate in contanti">
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash netto</div>
+                    <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {cashNettoClasse}</div>
+                  </div>
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
                   <div style={{ minWidth: 0 }}>
@@ -14423,30 +14591,36 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </div>
               )}
 
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Costi della classe</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
+                <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Costi della classe</div>
+                <button
+                  type="button" onClick={aggiungiRigaCostoClasse}
+                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+                >
+                  + Aggiungi riga
+                </button>
+              </div>
+              <div style={{ maxWidth: 220, marginBottom: 14 }}>
                 <Field label="Quota venditore">
                   <div style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}>€ {quoteVenditoreClasse}</div>
                 </Field>
-                {CAMPI_RIEPILOGO_AMMINISTRATIVO.map((c) => {
-                  // se una spesa per questa classe+sottocategoria esiste già,
-                  // il click deve riaprire QUELLA per modificarla — non
-                  // crearne una seconda identica (duplicava il costo)
-                  const spesaEsistente = (spese || []).find((s) => s.classe_id === corsoData.id && s.sottocategoria_id === c.sottocategoriaId);
-                  return (
-                    <Field key={c.chiave} label={c.etichetta}>
-                      <button
-                        type="button"
-                        onClick={() => (spesaEsistente ? onApriModificaSpesaPerClasse(spesaEsistente.id, corsoData.id, c.categoriaId, c.sottocategoriaId) : onApriNuovaSpesaPerClasse(corsoData.id, c.categoriaId, c.sottocategoriaId))}
-                        title={spesaEsistente ? "Modifica spesa" : "Aggiungi spesa"}
-                        style={{ ...inputStyle, textAlign: "left", cursor: "pointer", background: "#fff", color: totaliRiepilogo[c.chiave] ? NAVY : MUTED }}
-                      >
-                        {totaliRiepilogo[c.chiave] ? `€ ${totaliRiepilogo[c.chiave]}` : "+ Aggiungi"}
-                      </button>
-                    </Field>
-                  );
-                })}
               </div>
+              {speseClasse.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 20 }}>Nessuna spesa registrata per questa classe.</div>
+              ) : (
+                <div style={{ marginBottom: 12 }}>
+                  {speseClasse.map((spesa) => (
+                    <RigaCostoClasse
+                      key={spesa.id}
+                      spesa={spesa}
+                      onSalva={(campi) => salvaCampiSpesaClasse(spesa.id, campi)}
+                      onElimina={() => rimuoviRigaCostoClasse(spesa.id)}
+                      costiCategorie={costiCategorie}
+                      costiSottocategorie={costiSottocategorie}
+                    />
+                  ))}
+                </div>
+              )}
 
               {costiExtra.map((voce, idx) => (
                 <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 14, flexWrap: "wrap" }}>
