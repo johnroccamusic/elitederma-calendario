@@ -16059,6 +16059,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
             );
           })}
+          {/* contorni dei posti ancora liberi in classe: si vedono sempre,
+              anche a zero iscritti, per rendere subito visibile quanto
+              spazio resta senza dover leggere il numero in alto */}
+          {liberi > 0 && Array.from({ length: liberi }).map((_, idx) => (
+            <div key={`posto-libero-${idx}`} style={{ border: `1px dashed ${CREAM_BORDER}`, borderRadius: 14, padding: 16, marginBottom: 10, minHeight: 24 }} />
+          ))}
           {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{msg}</div>}
 
           {mostraGestione && (
