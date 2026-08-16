@@ -2860,19 +2860,19 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         </div>
 
         <div style={{ ...cardStyle, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.15)", marginBottom: 24 }}>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>Carico assegnazioni</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Carico assegnazioni</div>
           {caricoAssegnazioni.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assegnazione ancora.</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridTemplateRows: `repeat(${Math.ceil(caricoAssegnazioni.length / 4)}, auto)`, gridAutoFlow: "column", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridTemplateRows: `repeat(${Math.ceil(caricoAssegnazioni.length / 4)}, auto)`, gridAutoFlow: "column", gap: 6 }}>
               {caricoAssegnazioni.map((p) => (
-                <div key={p.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px", background: "#fff" }}>
+                <div key={p.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 6px", background: "#fff" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
                     <span style={{ ...fontScheda, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
                   </div>
                   {p.dettaglio.length > 0 && (
-                    <div style={{ ...fontBody, fontSize: 9.5, color: MUTED, marginTop: 3, lineHeight: 1.3 }}>
+                    <div style={{ ...fontBody, fontSize: 9.5, color: MUTED, marginTop: 1, lineHeight: 1.15 }}>
                       {p.dettaglio.map((d) => `${d.n} ${d.corso}`).join(", ")}
                     </div>
                   )}
