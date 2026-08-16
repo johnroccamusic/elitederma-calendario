@@ -5036,7 +5036,7 @@ function PaginaDashboardVenditori({
 // caricati da "Assegnazione Master" (stesso file, stesso bucket
 // "allegati-iscritti" — qui è solo in lettura, il caricamento resta un
 // compito di chi gestisce l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, apribile, onApriInventario }) {
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   return (
@@ -5064,6 +5064,26 @@ function CardDataMaster({ corsoData, corso, loc, apribile, onApriInventario }) {
               <AllegatoLink key={i} percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
             ))}
           </div>
+        </div>
+      )}
+      {hotelAssociato && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Alloggio</div>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{toTitleCase(hotelAssociato.nome)}</div>
+            {(hotelAssociato.indirizzo || hotelAssociato.citta) && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>
+                {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}
+                {hotelAssociato.indirizzo && hotelAssociato.citta ? " · " : ""}
+                {hotelAssociato.citta ? toTitleCase(hotelAssociato.citta) : ""}
+              </div>
+            )}
+          </div>
+          {hotelAssociato.telefono && (
+            <a href={`https://wa.me/${numeroWhatsapp(hotelAssociato.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Contatta su WhatsApp" style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flexShrink: 0 }}>
+              {hotelAssociato.telefono} <IconaWhatsapp size={18} />
+            </a>
+          )}
         </div>
       )}
       {apribile && (
@@ -5190,7 +5210,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -5340,6 +5360,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, masterLogga
             ) : prossimeDate.map((cd) => (
               <CardDataMaster
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
+                hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
               />
             ))}
@@ -8164,7 +8185,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8186,7 +8207,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
-  const [showHotelModal, setShowHotelModal] = useState(false);
   const [showVenditoriModal, setShowVenditoriModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
@@ -8202,7 +8222,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showLocModal, setShowLocModal], [showMagazziniModal, setShowMagazziniModal],
-      [showHotelModal, setShowHotelModal], [showVenditoriModal, setShowVenditoriModal],
+      [showVenditoriModal, setShowVenditoriModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -8210,7 +8230,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showLocModal, showMagazziniModal, showHotelModal,
+    showCorsoModal, showTipiModellaModal, showLocModal, showMagazziniModal,
     showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
   ]);
   // cellulare ed email vivono in colonne a sé, interrogate solo qui (non
@@ -8476,7 +8496,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       voci: [
         { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
         { etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
-        { etichetta: "Definisci Hotel", Icona: IconaHotelRiga, onClick: () => setShowHotelModal(true) },
+        { etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
         { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
         { etichetta: "Definisci magazzini distaccati", Icona: IconaPin, onClick: () => setShowMagazziniModal(true) },
         { etichetta: "Assegna Master", Icona: IconaMasterRiga, onClick: onApriAssegnazioneMaster },
@@ -8773,16 +8793,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             nomeSingolare="Tipo di modella" nomeArticolo="un" tabella="tipi_modella"
             elementi={tipiModella} ricarica={ricarica} msg={msg} setMsg={setMsg}
             placeholder="es. MICROBLADING"
-          />
-        </Modal>
-      )}
-
-      {showHotelModal && (
-        <Modal title="Hotel" onClose={() => setShowHotelModal(false)}>
-          <GestioneListaSemplice
-            nomeSingolare="Hotel" nomeArticolo="un" tabella="hotel"
-            elementi={hotel} ricarica={ricarica} msg={msg} setMsg={setMsg}
-            placeholder="es. HOTEL ROMA"
           />
         </Modal>
       )}
@@ -20478,6 +20488,135 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   );
 }
 
+// ---------- Gestione Hotel ----------
+// anagrafica degli hotel usati come alloggio per le edizioni
+// (Assegnazione Master): contatti + indirizzo + i due costi a notte
+// (spesso diversi fra pagamento cash e fattura). Se un hotel è
+// associato a un'edizione, i suoi dati compaiono nella Dashboard
+// Master sotto al relativo corso (vedi CardDataMaster).
+function PaginaGestioneHotel({ hotel, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const [selezionatoId, setSelezionatoId] = useState(null);
+  const [mostraForm, setMostraForm] = useState(false);
+  const [nomeNuovo, setNomeNuovo] = useState("");
+
+  const listaFiltrata = useMemo(() => {
+    let l = [...(hotel || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (ricerca.trim()) l = l.filter((h) => h.nome.toLowerCase().includes(ricerca.trim().toLowerCase()));
+    return l;
+  }, [hotel, ricerca]);
+
+  useEffect(() => {
+    if ((!selezionatoId || !listaFiltrata.some((h) => h.id === selezionatoId)) && listaFiltrata.length > 0) {
+      setSelezionatoId(listaFiltrata[0].id);
+    }
+  }, [listaFiltrata, selezionatoId]);
+
+  const selezionato = (hotel || []).find((h) => h.id === selezionatoId);
+
+  async function aggiungiHotel() {
+    if (!nomeNuovo.trim()) return;
+    const { error } = await supabase.from("hotel").insert({ nome: nomeNuovo.trim().toUpperCase() });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setNomeNuovo(""); setMostraForm(false); ricarica();
+  }
+  async function eliminaHotel() {
+    if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo hotel? L'operazione è irreversibile.")) return;
+    const { error } = await supabase.from("hotel").delete().eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setSelezionatoId(null); ricarica();
+  }
+  async function salvaCampo(campo, valore) {
+    const { error } = await supabase.from("hotel").update({ [campo]: valore }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Hotel</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Anagrafica degli hotel usati come alloggio per le edizioni dei corsi.</div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi Hotel</button>
+          <div style={{ flex: 1, minWidth: isMobile ? "100%" : 220, maxWidth: 320 }}>
+            <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca hotel…" />
+          </div>
+        </div>
+
+        {mostraForm && (
+          <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input autoFocus value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungiHotel()} placeholder="ES. HOTEL ROMA" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+            <button onClick={aggiungiHotel} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer" }}>Salva</button>
+            <button onClick={() => { setMostraForm(false); setNomeNuovo(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "280px 1fr", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ ...cardStyle, padding: 16 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, padding: "0 4px 10px" }}>Hotel ({listaFiltrata.length})</div>
+            {listaFiltrata.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 4px" }}>Nessun hotel trovato.</div>}
+            {listaFiltrata.map((h) => {
+              const attivo = h.id === selezionatoId;
+              return (
+                <div key={h.id} onClick={() => setSelezionatoId(h.id)}
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 8px", borderRadius: 10, cursor: "pointer", marginBottom: 4, background: attivo ? "#FBF1D9" : "transparent", border: attivo ? `1px solid ${GOLD}` : "1px solid transparent" }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(h.nome)}</div>
+                    {h.citta && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{toTitleCase(h.citta)}</div>}
+                  </div>
+                  <IconaChevronDestra size={14} color={MUTED} />
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ ...cardStyle }}>
+            {!selezionato ? (
+              <div style={{ textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun hotel selezionato.</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+                  <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
+                  <button onClick={eliminaHotel} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 14px", cursor: "pointer" }}>Elimina hotel</button>
+                </div>
+
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 260px" }}><Field label="Nome"><input defaultValue={selezionato.nome || ""} onBlur={(e) => { if (e.target.value.trim() && e.target.value !== selezionato.nome) salvaCampo("nome", e.target.value.trim().toUpperCase()); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "1 1 200px" }}><Field label="Telefono"><input defaultValue={selezionato.telefono || ""} onBlur={(e) => { if (e.target.value !== (selezionato.telefono || "")) salvaCampo("telefono", e.target.value.trim() || null); }} style={inputStyle} placeholder="+39 ..." /></Field></div>
+                  <div style={{ flex: "1 1 240px" }}><Field label="Email"><input defaultValue={selezionato.email || ""} onBlur={(e) => { if (e.target.value !== (selezionato.email || "")) salvaCampo("email", e.target.value.trim() || null); }} style={inputStyle} placeholder="info@hotel.it" /></Field></div>
+                </div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "2 1 260px" }}><Field label="Indirizzo"><input defaultValue={selezionato.indirizzo || ""} onBlur={(e) => { if (e.target.value !== (selezionato.indirizzo || "")) salvaCampo("indirizzo", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "0 1 110px" }}><Field label="Civico"><input defaultValue={selezionato.civico || ""} onBlur={(e) => { if (e.target.value !== (selezionato.civico || "")) salvaCampo("civico", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "1 1 180px" }}><Field label="Città"><input defaultValue={selezionato.citta || ""} onBlur={(e) => { if (e.target.value !== (selezionato.citta || "")) salvaCampo("citta", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
+                </div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <Field label="Costo a notte — Cash">
+                      <input type="number" min="0" step="0.01" defaultValue={selezionato.costo_notte_cash ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (selezionato.costo_notte_cash ?? null)) salvaCampo("costo_notte_cash", v); }} style={inputStyle} placeholder="0,00" />
+                    </Field>
+                  </div>
+                  <div style={{ flex: "1 1 200px" }}>
+                    <Field label="Costo a notte — Fattura">
+                      <input type="number" min="0" step="0.01" defaultValue={selezionato.costo_notte_fattura ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (selezionato.costo_notte_fattura ?? null)) salvaCampo("costo_notte_fattura", v); }} style={inputStyle} placeholder="0,00" />
+                    </Field>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- CRM Allievi ----------
 // "iscritti" è "una riga per ogni corso comprato", non un'anagrafica
 // persona (niente id stabile, niente email/città): questa chiave
@@ -26698,6 +26837,7 @@ export default function App() {
   function apriGestioneMaster() { setView("gestionemaster"); }
   function apriGestioneLeve() { setView("gestioneleve"); }
   function apriGestioneAssistenti() { setView("gestioneassistenti"); }
+  function apriGestioneHotel() { setView("gestionehotel"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
@@ -26976,7 +27116,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
@@ -27190,7 +27330,7 @@ export default function App() {
 
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
-          master={master} corsi={corsi} location={location} corsiDate={corsiDate}
+          master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel}
           masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
           onApriInventarioSede={apriInventarioSede}
@@ -27308,6 +27448,10 @@ export default function App() {
           tabella="assistente" elementi={assistente} corsi={corsi} corsiDate={corsiDate} associazioniCorsi={assistenteCorsi} corsiDateDocenti={corsiDateDocenti}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
+      )}
+
+      {view === "gestionehotel" && (
+        <PaginaGestioneHotel hotel={hotel} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "crmallievi" && (
