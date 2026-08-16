@@ -3840,7 +3840,7 @@ function esportaCsvStatisticaVenditori(righeCorsi, colonneVenditori) {
   URL.revokeObjectURL(url);
 }
 
-function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) {
+function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
   // periodo di default: mese corrente (stessa convenzione di "Ultimo
   // mese" nella scheda personale del venditore) — così le classifiche
   // qui sotto mostrano subito dati utili senza dover scegliere un filtro
@@ -4104,6 +4104,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, onBack }) 
           Esporta
         </button>
       </div>
+      <SelettoreCategoriaGruppo campo="venditori_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
 
       <div style={{ display: "flex", gap: 14, alignItems: "flex-end", marginTop: 20, marginBottom: 16, flexWrap: "wrap" }}>
         <Field label="Periodo rapido">
@@ -13125,6 +13126,157 @@ function BottonePulsanteScheda({ p }) {
     </button>
   );
 }
+
+// calcolo puro delle righe "Costi della classe" (Compenso Master, Costo
+// Location, Costo Alloggio, Compenso Assistenti, Quota venditore,
+// Commissione ricerca modelle) del Riepilogo Amministrativo di UN corso —
+// estratto da SchedaData per essere riusato anche dallo Scadenziario, che
+// deve ripetere lo stesso calcolo su tutti i corsi conclusi senza
+// duplicare la logica dei soldi. `overrides` (splitOverride/
+// giorniPresenzaOverride) sono le cache ottimistiche locali del Riepilogo
+// di un corso aperto: lo Scadenziario le lascia vuote e legge diretto dal DB.
+function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location }, overrides = {}) {
+  const { splitOverride = {}, giorniPresenzaOverride = {} } = overrides;
+  function conSplit(rigaId, base) {
+    return { ...base, ...(splitOverride[rigaId] || {}) };
+  }
+
+  const listaIscritti = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
+  // la quota venditore di ogni iscritto è un costo della classe a tutti gli
+  // effetti (va pagata al venditore): fa parte del totale costi anche prima
+  // che l'amministratore compili qualunque altro campo del pannello
+  const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
+
+  // riga "Quota venditore": stesso formato delle altre righe della
+  // tabella spese (in linea con Compenso Master/Costo location/Quota
+  // assistenti, non più un box a sé) — Totale calcolato dalle quote di
+  // iscrizione, Bonifico/Cash uno split libero come le altre righe.
+  const rigaVenditoreClasse = (() => {
+    const dati = conSplit(corsoData.id, { quota_venditore_bonifico: corsoData.quota_venditore_bonifico, quota_venditore_cash: corsoData.quota_venditore_cash });
+    return { rigaId: corsoData.id, tabella: "corsi_date", tipo: "venditore", nome: "Quota venditore", totale: quoteVenditoreClasse, bonifico: dati.quota_venditore_bonifico ?? 0, cash: dati.quota_venditore_cash ?? 0 };
+  })();
+
+  // durata dell'edizione in giorni, dedotta dal calendario (data_inizio/
+  // data_fine): serve sia al compenso master (fascia = tariffa
+  // giornaliera, moltiplicata per i giorni) sia al costo location e al
+  // compenso assistenti più sotto
+  const durataGiorniCorso = Math.max(1, differenzaGiorni(corsoData.data_inizio, corsoData.data_fine) + 1);
+
+  // righe "Compenso Master": una per ogni persona di tipo Master su
+  // questa edizione (principale + eventuali extra aggiunte con "+" in
+  // Assegnazione Master). Il Totale si calcola da solo: la fascia
+  // (Gestione Master → Compensi, in base al numero di allievi) è una
+  // tariffa GIORNALIERA, moltiplicata per i giorni del corso dedotti dal
+  // calendario. Bonifico e Cash sono uno split libero dell'amministratore
+  // (anche a metà), salvato per quella riga soltanto.
+  function compensoFasciaPer(numAllievi, fasce) {
+    const f = (fasce || []).find((x) => numAllievi >= (x.da ?? 0) && (x.a == null || numAllievi <= x.a));
+    return f?.compenso ?? 0;
+  }
+  const righeMasterBase = [
+    { rigaId: corsoData.id, tabella: "corsi_date", masterId: corsoData.master_id, quota_bonifico: corsoData.quota_bonifico, quota_cash: corsoData.quota_cash },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", masterId: d.persona_id, quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash })),
+  ].filter((r) => r.masterId);
+  const righeMasterClasse = righeMasterBase.map((r) => {
+    const dati = conSplit(r.rigaId, r);
+    const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === r.masterId && mc.corso_id === corsoData.corso_id);
+    const persona = (master || []).find((m) => m.id === r.masterId);
+    const totale = round2(compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso) * durataGiorniCorso);
+    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: `Costo Master — ${persona?.nome || "—"}`, totale, bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
+  });
+
+  // riga "Costo location": costo giornaliero pattuito sulla sede
+  // (Impostazioni → Location) moltiplicato per i giorni del corso. Quale
+  // tariffa usare — cash o bonifico — non è più uno split libero: segue
+  // la tendina "Pagamento sede" scelta in Assegnazione Master, che decide
+  // in blocco se l'intero importo va in Bonifico o in Cash (con
+  // ripiego sull'altra tariffa se quella scelta non è impostata sulla
+  // location).
+  const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
+  const pagamentoSedeClasse = corsoData.pagamento_sede === "cash" ? "cash" : "bonifico";
+  const costoGiornalieroLocation = pagamentoSedeClasse === "cash"
+    ? (locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
+    : (locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null);
+  const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
+  const rigaLocationClasse = costoGiornalieroLocation != null ? {
+    rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse,
+    bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
+    cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
+  } : null;
+
+  // righe "Costo Alloggio": una per ogni persona (master, assistente o
+  // leva) con un hotel assegnato su questa edizione in Assegnazione
+  // Master. Il Totale è il "Pattuito per periodo" già calcolato lì
+  // (notti prenotate × pattuito a notte); come per "Costo location", non
+  // è uno split libero ma segue in blocco la tendina "Tipo di pagamento"
+  // di quella riga.
+  const righeAlloggioBase = [
+    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato })),
+  ];
+  const righeAlloggioClasse = righeAlloggioBase
+    .filter((r) => r.alloggioId && r.pattuitoPeriodo)
+    .map((r) => {
+      const listaPersone = r.personaTipo === "master" ? master : r.personaTipo === "assistente" ? assistente : leva;
+      const persona = (listaPersone || []).find((p) => p.id === r.personaId);
+      const totale = round2(r.pattuitoPeriodo);
+      const cash = r.tipoPagamento === "cash" ? totale : 0;
+      const bonifico = r.tipoPagamento === "cash" ? 0 : totale;
+      // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
+      // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
+      // ma qui aggiunge solo un'indicazione visiva (pallino verde)
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato };
+    });
+
+  // righe "Quota assistenti": il compenso giornaliero impostato nella
+  // scheda dell'assistente (Gestione Assistenti → Corsi associati) vale
+  // di default per tutta la durata del corso, corretto con +/- se
+  // l'assistente non c'è stata tutti i giorni (giorni_presenza, per
+  // quella riga soltanto). Stesso split libero Bonifico/Cash del master.
+  const righeAssistentiClasse = (corsiDateDocenti || [])
+    .filter((d) => d.corso_data_id === corsoData.id && d.tipo === "assistente")
+    .map((d) => {
+      const giorni = giorniPresenzaOverride[d.id] ?? d.giorni_presenza ?? durataGiorniCorso;
+      const assegnazione = (assistenteCorsi || []).find((ac) => ac.assistente_id === d.persona_id && ac.corso_id === corsoData.corso_id);
+      const compensoGiorno = assegnazione?.compenso_giornaliero || 0;
+      const persona = (assistente || []).find((a) => a.id === d.persona_id);
+      const dati = conSplit(d.id, { quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash });
+      return { rigaId: d.id, tabella: "corsi_date_docenti", tipo: "assistente", nome: `Costo Assistente — ${persona?.nome || "—"}`, giorni, compensoGiorno, totale: round2(giorni * compensoGiorno), bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
+    });
+
+  // riga "Commissione ricerca modelle": quando la classe incassa quote
+  // modelle, il 50% va riportato come costo — di default interamente
+  // cash (è così che viene pattuita), ma con lo stesso split libero
+  // Bonifico/Cash delle altre righe automatiche se serve correggerlo.
+  const totaleModelleClasse = round2(listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0));
+  const commissioneModelleClasse = round2(totaleModelleClasse * 0.5);
+  const rigaCommissioneModelleClasse = totaleModelleClasse > 0 ? (() => {
+    const dati = conSplit(corsoData.id, { commissione_modelle_bonifico: corsoData.commissione_modelle_bonifico, commissione_modelle_cash: corsoData.commissione_modelle_cash });
+    const bonifico = dati.commissione_modelle_bonifico;
+    const cash = dati.commissione_modelle_cash;
+    return {
+      rigaId: corsoData.id, tabella: "corsi_date", tipo: "modelle", nome: "Commissione ricerca modelle", totale: commissioneModelleClasse,
+      bonifico: bonifico ?? 0, cash: cash ?? (bonifico == null ? commissioneModelleClasse : 0),
+    };
+  })() : null;
+
+  const righeSpeseTutte = [
+    rigaVenditoreClasse,
+    ...righeMasterClasse,
+    ...(rigaLocationClasse ? [rigaLocationClasse] : []),
+    ...righeAssistentiClasse,
+    ...righeAlloggioClasse,
+    ...(rigaCommissioneModelleClasse ? [rigaCommissioneModelleClasse] : []),
+  ];
+  const totaleSpeseAutomaticheClasse = round2(righeSpeseTutte.reduce((s, r) => s + r.totale, 0));
+
+  return {
+    listaIscritti, quoteVenditoreClasse, durataGiorniCorso,
+    righeMasterClasse, rigaLocationClasse, costoLocationClasse, righeAlloggioClasse, righeAssistentiClasse,
+    totaleModelleClasse, commissioneModelleClasse, rigaCommissioneModelleClasse,
+    righeSpeseTutte, totaleSpeseAutomaticheClasse,
+  };
+}
 function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
@@ -13379,10 +13531,6 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   const contantiClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Contanti" ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
   const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
   const daIncassareClasse = round2(contantiClasse + posClasse);
-  // la quota venditore di ogni iscritto è un costo della classe a tutti gli
-  // effetti (va pagata al venditore): fa parte del totale costi anche prima
-  // che l'amministratore compili qualunque altro campo del pannello
-  const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
 
   // Incassi lordo/netto/di cui: non più uno scorporo IVA generico, ma la
   // somma dei VERI campi "totale" (con IVA) e "imponibile" (senza IVA)
@@ -13442,97 +13590,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
-  function conSplit(rigaId, base) {
-    return { ...base, ...(splitOverride[rigaId] || {}) };
-  }
 
-  // riga "Quota venditore": stesso formato delle altre righe della
-  // tabella spese (in linea con Compenso Master/Costo location/Quota
-  // assistenti, non più un box a sé) — Totale calcolato dalle quote di
-  // iscrizione, Bonifico/Cash uno split libero come le altre righe.
-  const rigaVenditoreClasse = (() => {
-    const dati = conSplit(corsoData.id, { quota_venditore_bonifico: corsoData.quota_venditore_bonifico, quota_venditore_cash: corsoData.quota_venditore_cash });
-    return { rigaId: corsoData.id, tabella: "corsi_date", tipo: "venditore", nome: "Quota venditore", totale: quoteVenditoreClasse, bonifico: dati.quota_venditore_bonifico ?? 0, cash: dati.quota_venditore_cash ?? 0 };
-  })();
-
-  // durata dell'edizione in giorni, dedotta dal calendario (data_inizio/
-  // data_fine): serve sia al compenso master (fascia = tariffa
-  // giornaliera, moltiplicata per i giorni) sia al costo location e al
-  // compenso assistenti più sotto
-  const durataGiorniCorso = Math.max(1, differenzaGiorni(corsoData.data_inizio, corsoData.data_fine) + 1);
-
-  // righe "Compenso Master": una per ogni persona di tipo Master su
-  // questa edizione (principale + eventuali extra aggiunte con "+" in
-  // Assegnazione Master). Il Totale si calcola da solo: la fascia
-  // (Gestione Master → Compensi, in base al numero di allievi) è una
-  // tariffa GIORNALIERA, moltiplicata per i giorni del corso dedotti dal
-  // calendario. Bonifico e Cash sono uno split libero dell'amministratore
-  // (anche a metà), salvato per quella riga soltanto.
-  function compensoFasciaPer(numAllievi, fasce) {
-    const f = (fasce || []).find((x) => numAllievi >= (x.da ?? 0) && (x.a == null || numAllievi <= x.a));
-    return f?.compenso ?? 0;
-  }
-  const righeMasterBase = [
-    { rigaId: corsoData.id, tabella: "corsi_date", masterId: corsoData.master_id, quota_bonifico: corsoData.quota_bonifico, quota_cash: corsoData.quota_cash },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id && d.tipo === "master").map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", masterId: d.persona_id, quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash })),
-  ].filter((r) => r.masterId);
-  const righeMasterClasse = righeMasterBase.map((r) => {
-    const dati = conSplit(r.rigaId, r);
-    const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === r.masterId && mc.corso_id === corsoData.corso_id);
-    const persona = (master || []).find((m) => m.id === r.masterId);
-    const totale = round2(compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso) * durataGiorniCorso);
-    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: `Costo Master — ${persona?.nome || "—"}`, totale, bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
-  });
-  const quoteMasterClasse = round2(righeMasterClasse.reduce((s, r) => s + r.totale, 0));
-
-  // riga "Costo location": costo giornaliero pattuito sulla sede
-  // (Impostazioni → Location) moltiplicato per i giorni del corso. Quale
-  // tariffa usare — cash o bonifico — non è più uno split libero: segue
-  // la tendina "Pagamento sede" scelta in Assegnazione Master, che decide
-  // in blocco se l'intero importo va in Bonifico o in Cash (con
-  // ripiego sull'altra tariffa se quella scelta non è impostata sulla
-  // location).
-  const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
-  const pagamentoSedeClasse = corsoData.pagamento_sede === "cash" ? "cash" : "bonifico";
-  const costoGiornalieroLocation = pagamentoSedeClasse === "cash"
-    ? (locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
-    : (locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null);
-  const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
-  const rigaLocationClasse = costoGiornalieroLocation != null ? {
-    rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse,
-    bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
-    cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
-  } : null;
-
-  // righe "Costo Alloggio": una per ogni persona (master, assistente o
-  // leva) con un hotel assegnato su questa edizione in Assegnazione
-  // Master. Il Totale è il "Pattuito per periodo" già calcolato lì
-  // (notti prenotate × pattuito a notte); come per "Costo location", non
-  // è uno split libero ma segue in blocco la tendina "Tipo di pagamento"
-  // di quella riga.
-  const righeAlloggioBase = [
-    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato })),
-  ];
-  const righeAlloggioClasse = righeAlloggioBase
-    .filter((r) => r.alloggioId && r.pattuitoPeriodo)
-    .map((r) => {
-      const listaPersone = r.personaTipo === "master" ? master : r.personaTipo === "assistente" ? assistente : leva;
-      const persona = (listaPersone || []).find((p) => p.id === r.personaId);
-      const totale = round2(r.pattuitoPeriodo);
-      const cash = r.tipoPagamento === "cash" ? totale : 0;
-      const bonifico = r.tipoPagamento === "cash" ? 0 : totale;
-      // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
-      // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
-      // ma qui aggiunge solo un'indicazione visiva (pallino verde)
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato };
-    });
-
-  // righe "Quota assistenti": il compenso giornaliero impostato nella
-  // scheda dell'assistente (Gestione Assistenti → Corsi associati) vale
-  // di default per tutta la durata del corso, corretto con +/- se
-  // l'assistente non c'è stata tutti i giorni (giorni_presenza, per
-  // quella riga soltanto). Stesso split libero Bonifico/Cash del master.
+  // righe "Costi della classe" (Compenso Master, Costo Location, Costo
+  // Alloggio, Compenso Assistenti, Quota venditore, Commissione ricerca
+  // modelle): stesso calcolo puro riusato dallo Scadenziario per tutti i
+  // corsi conclusi — vedi calcolaRigheSpeseCorso, subito sopra SchedaData.
   const [giorniPresenzaOverride, setGiorniPresenzaOverride] = useState({});
   async function salvaGiorniPresenza(rigaId, giorni) {
     setGiorniPresenzaOverride((m) => ({ ...m, [rigaId]: giorni }));
@@ -13540,43 +13602,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
-  const righeAssistentiClasse = (corsiDateDocenti || [])
-    .filter((d) => d.corso_data_id === corsoData.id && d.tipo === "assistente")
-    .map((d) => {
-      const giorni = giorniPresenzaOverride[d.id] ?? d.giorni_presenza ?? durataGiorniCorso;
-      const assegnazione = (assistenteCorsi || []).find((ac) => ac.assistente_id === d.persona_id && ac.corso_id === corsoData.corso_id);
-      const compensoGiorno = assegnazione?.compenso_giornaliero || 0;
-      const persona = (assistente || []).find((a) => a.id === d.persona_id);
-      const dati = conSplit(d.id, { quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash });
-      return { rigaId: d.id, tabella: "corsi_date_docenti", tipo: "assistente", nome: `Costo Assistente — ${persona?.nome || "—"}`, giorni, compensoGiorno, totale: round2(giorni * compensoGiorno), bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
-    });
-  const quoteAssistentiClasse = round2(righeAssistentiClasse.reduce((s, r) => s + r.totale, 0));
-
-  // riga "Commissione ricerca modelle": quando la classe incassa quote
-  // modelle, il 50% va riportato come costo — di default interamente
-  // cash (è così che viene pattuita), ma con lo stesso split libero
-  // Bonifico/Cash delle altre righe automatiche se serve correggerlo.
-  const totaleModelleClasse = round2(listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0));
-  const commissioneModelleClasse = round2(totaleModelleClasse * 0.5);
-  const rigaCommissioneModelleClasse = totaleModelleClasse > 0 ? (() => {
-    const dati = conSplit(corsoData.id, { commissione_modelle_bonifico: corsoData.commissione_modelle_bonifico, commissione_modelle_cash: corsoData.commissione_modelle_cash });
-    const bonifico = dati.commissione_modelle_bonifico;
-    const cash = dati.commissione_modelle_cash;
-    return {
-      rigaId: corsoData.id, tabella: "corsi_date", tipo: "modelle", nome: "Commissione ricerca modelle", totale: commissioneModelleClasse,
-      bonifico: bonifico ?? 0, cash: cash ?? (bonifico == null ? commissioneModelleClasse : 0),
-    };
-  })() : null;
-
-  const righeSpeseTutte = [
-    rigaVenditoreClasse,
-    ...righeMasterClasse,
-    ...(rigaLocationClasse ? [rigaLocationClasse] : []),
-    ...righeAssistentiClasse,
-    ...righeAlloggioClasse,
-    ...(rigaCommissioneModelleClasse ? [rigaCommissioneModelleClasse] : []),
-  ];
-  const totaleSpeseAutomaticheClasse = round2(righeSpeseTutte.reduce((s, r) => s + r.totale, 0));
+  const { righeSpeseTutte, totaleSpeseAutomaticheClasse } =
+    calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location }, { splitOverride, giorniPresenzaOverride });
   const totaleCostiClasse = round2(
     totaleSpeseAutomaticheClasse + speseClasse.reduce((s, x) => s + (x.totale || 0), 0) +
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
@@ -16852,7 +16879,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente di contabilità
-function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti }) {
+function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti, onApriScadenziario }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -16877,6 +16904,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Inserimento costi e ricavi" descrizione="Registra e gestisci costi, ricavi e altri movimenti contabili." Icona={IconaTileCostiRicavi} onClick={onApriInserimentoCostiRicavi} />
           <TileHome title="Gestisci categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Costi e ricavi." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
+          <TileHome title="Scadenziario" descrizione="Bonifici da pagare su tutti i corsi conclusi, con ricevute e archivio spese evase." Icona={IconaTileCostiRicavi} onClick={onApriScadenziario} />
         </div>
       </div>
     </div>
@@ -17940,6 +17968,230 @@ function PaginaDashboardAnalisi({
         <SezioneAnalisiMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
         />
+      </div>
+    </div>
+  );
+}
+
+// mappa tipo di riga del Riepilogo Amministrativo → campo di
+// impostazioni_categorie_gruppi che dice a quale sotto-categoria di spesa
+// imputare quel tipo di costo una volta pagato; "modelle" non passa da lì,
+// ha già una sotto-categoria fissa creata apposta (vedi migrazione
+// "commissione ricerca modelle")
+function categoriaGruppoPer(tipo, categorieGruppi) {
+  if (tipo === "modelle") return "commerciale__commissione_ricerca_modelle";
+  const campo = {
+    master: "master_categoria_spesa_id",
+    location: "location_categoria_spesa_id",
+    alloggio: "hotel_categoria_spesa_id",
+    assistente: "assistenti_categoria_spesa_id",
+    venditore: "venditori_categoria_spesa_id",
+  }[tipo];
+  return campo ? categorieGruppi?.[campo] || null : null;
+}
+// dove impostare la categoria di gruppo mancante, mostrato come nota nello
+// Scadenziario così non si resta bloccati senza sapere dove andare
+const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
+  master: "Gestione Master", location: "Impostazioni → Location", alloggio: "Gestione Hotel",
+  assistente: "Gestione Assistenti", venditore: "Statistiche venditori",
+};
+
+async function caricaRicevutaSpesa(file) {
+  const nomeFile = `${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+  const { error } = await supabase.storage.from("spese-allegati").upload(nomeFile, file);
+  if (error) return { errore: error.message };
+  const { data } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
+  return { url: data.publicUrl };
+}
+
+// riga di "Da pagare": upload ricevuta + data pagamento + tasto "Pagato",
+// stesso componente sia per le righe virtuali (master/location/alloggio/
+// assistente/venditore/modelle) sia per le spese reali già in tabella —
+// l'unica differenza (insert vs update) resta nel gestore passato da fuori
+function RigaScadenziarioDaPagare({ nome, corsoLabel, totale, categoriaNome, disabilitato, motivoDisabilitato, onConferma }) {
+  const [file, setFile] = useState(null);
+  const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
+  const [salvando, setSalvando] = useState(false);
+  async function confermaPagato() {
+    setSalvando(true);
+    await onConferma({ file, dataPagamento });
+    setSalvando(false);
+  }
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nome}</div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{corsoLabel}{categoriaNome ? ` · ${categoriaNome}` : ""}</div>
+      </div>
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
+      {disabilitato ? (
+        <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
+      ) : (
+        <>
+          <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
+          <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
+          <button onClick={confermaPagato} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando ? 0.6 : 1, flexShrink: 0 }}>
+            {salvando ? "Salvo…" : "Pagato"}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// "Scadenziario": tutti i bonifici che il Riepilogo Amministrativo segna
+// come da pagare, su TUTTI i corsi conclusi, in un solo elenco — invece di
+// doverli andare a cercare corso per corso. Riusa lo stesso calcolo del
+// Riepilogo (calcolaRigheSpeseCorso, sopra SchedaData) così i due punti
+// non possono mai raccontare numeri diversi. "Pagato" scrive una spesa
+// vera in contabilità (tabella "spese"), già classificata per sede e
+// categoria in base a "Associa il gruppo a una categoria di spesa"
+// (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
+function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, spese, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriModificaSpesa }) {
+  const isMobile = useIsMobile();
+  const [tab, setTab] = useState("dapagare");
+  const [msg, setMsg] = useState("");
+
+  const oggiStr = dataOggiStr();
+  const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  function etichettaCorso(cd) {
+    const c = corsiById[cd.corso_id];
+    const l = locationById[cd.location_id];
+    return `${c?.nome || "?"} · ${l?.nome ? toTitleCase(l.nome) : "?"} · ${fmtDataCompatta(cd.data_inizio, cd.data_fine)}`;
+  }
+
+  function bonificoDiSpesaReale(s) { return round2((s.totale || 0) - (s.importo_pagato_cash || 0)); }
+
+  const corsiConclusi = (corsiDate || []).filter((cd) => cd.data_fine <= oggiStr);
+  const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
+
+  const righeVirtuali = [];
+  corsiConclusi.forEach((cd) => {
+    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location });
+    righeSpeseTutte.forEach((r) => {
+      if (!(r.bonifico > 0)) return;
+      const chiave = `${r.tipo}_${r.rigaId}`;
+      if (spesePerChiave.has(chiave)) return;
+      righeVirtuali.push({ key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) });
+    });
+  });
+
+  const righeReali = (spese || [])
+    .filter((s) => s.tipo_ambito === "classe" && !s.origine_scadenziario_chiave && s.stato !== "pagata")
+    .map((s) => ({ spesa: s, corsoData: (corsiDate || []).find((cd) => cd.id === s.classe_id) }))
+    .filter((x) => x.corsoData && x.corsoData.data_fine <= oggiStr && bonificoDiSpesaReale(x.spesa) > 0)
+    .map((x) => ({
+      key: `reale_${x.spesa.id}`, tipo: "reale", corsoData: x.corsoData, spesaReale: x.spesa,
+      nome: x.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, x.spesa.sottocategoria_id)?.nome || "Spesa",
+      totale: bonificoDiSpesaReale(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
+    }));
+
+  const daPagare = [...righeVirtuali, ...righeReali].sort((a, b) => (a.corsoData.data_fine || "").localeCompare(b.corsoData.data_fine || ""));
+
+  const speseEvase = (spese || [])
+    .filter((s) => s.tipo_ambito === "classe" && s.stato === "pagata")
+    .map((s) => ({ spesa: s, bonifico: s.origine_scadenziario_chiave ? (s.totale || 0) : bonificoDiSpesaReale(s) }))
+    .filter((x) => x.bonifico > 0)
+    .sort((a, b) => (b.spesa.data_pagamento || "").localeCompare(a.spesa.data_pagamento || ""));
+
+  async function segnaPagataVirtuale(item, { file, dataPagamento }) {
+    setMsg("");
+    let allegatoPath = null;
+    if (file) {
+      const { errore, url } = await caricaRicevutaSpesa(file);
+      if (errore) { setMsg("Errore allegato: " + errore); return; }
+      allegatoPath = url;
+    }
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      tipo_ambito: "classe", classe_id: item.corsoData.id, sede_id: item.corsoData.location_id, corso_id: item.corsoData.corso_id,
+      imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: item.totale,
+      stato: "pagata", data_pagamento: dataPagamento || null, metodo_pagamento: "Bonifico",
+      allegato_path: allegatoPath, origine: "automatico",
+      origine_scadenziario_chiave: item.chiave,
+    });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  async function segnaPagataReale(item, { file, dataPagamento }) {
+    setMsg("");
+    let allegatoPath = item.spesaReale.allegato_path || null;
+    if (file) {
+      const { errore, url } = await caricaRicevutaSpesa(file);
+      if (errore) { setMsg("Errore allegato: " + errore); return; }
+      allegatoPath = url;
+    }
+    const { error } = await supabase.from("spese").update({ stato: "pagata", data_pagamento: dataPagamento || null, allegato_path: allegatoPath, metodo_pagamento: "Bonifico" }).eq("id", item.spesaReale.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
+  function confermaPagato(item, dati) {
+    return item.tipo === "reale" ? segnaPagataReale(item, dati) : segnaPagataVirtuale(item, dati);
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Scadenziario</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Bonifici da pagare su tutti i corsi conclusi, ricevuta e stato in un unico elenco.</div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <TabPillola attivo={tab === "dapagare"} onClick={() => setTab("dapagare")}>Da pagare ({daPagare.length})</TabPillola>
+          <TabPillola attivo={tab === "evase"} onClick={() => setTab("evase")}>Evase ({speseEvase.length})</TabPillola>
+        </div>
+
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
+
+        {tab === "dapagare" && (
+          <div style={{ ...cardStyle }}>
+            {daPagare.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun bonifico da pagare al momento.</div>}
+            {daPagare.map((item) => (
+              <RigaScadenziarioDaPagare
+                key={item.key}
+                nome={item.nome}
+                corsoLabel={etichettaCorso(item.corsoData)}
+                totale={item.totale}
+                categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
+                disabilitato={!item.sottocategoriaId}
+                motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Gestisci categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
+                onConferma={(dati) => confermaPagato(item, dati)}
+              />
+            ))}
+          </div>
+        )}
+
+        {tab === "evase" && (
+          <div style={{ ...cardStyle }}>
+            {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
+            {speseEvase.map(({ spesa, bonifico }) => (
+              <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                    {spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"}
+                    {locationById[spesa.sede_id] ? ` · ${toTitleCase(locationById[spesa.sede_id].nome)}` : ""}
+                    {sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id) ? ` · ${sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id).nome}` : ""}
+                  </div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(bonifico)}</div>
+                {spesa.allegato_path && (
+                  <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ display: "flex", color: NAVY }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                  </a>
+                )}
+                <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -27062,6 +27314,10 @@ export default function App() {
   // precompila e blocca categoria/sotto-categoria/classe, e al termine
   // riporta alla scheda della classe invece che al catalogo costi
   const [spesaPrefill, setSpesaPrefill] = useState(null);
+  // "Indietro" da "Modifica spesa" torna qui di default (Inserimento
+  // costi e ricavi); lo Scadenziario lo sposta su se stesso quando apre
+  // "Modifica spesa" da una riga già evasa
+  const [spesaRitornoView, setSpesaRitornoView] = useState("inserimentocostiricavi");
   const [loading, setLoading] = useState(true);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
@@ -27599,8 +27855,12 @@ export default function App() {
   }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
-  function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
-  function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); apriViewProtetta("spesaform"); }
+  function apriScadenziario() { apriViewProtetta("scadenziario"); }
+  function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
+  function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
+  // "Modifica spesa" aperta da una riga già evasa nello Scadenziario: al
+  // salvataggio "Indietro" deve tornare lì, non a Inserimento costi e ricavi
+  function apriModificaSpesaDaScadenziario(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("scadenziario"); apriViewProtetta("spesaform"); }
   function apriNuovaSpesaPerClasse(classeId, categoriaId, sottocategoriaId) {
     setSpesaInModifica(null);
     setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
@@ -27900,6 +28160,19 @@ export default function App() {
           onApriImpostazioni={apriImpostazioni}
           onApriInserimentoCostiRicavi={apriInserimentoCostiRicavi}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
+          onApriScadenziario={apriScadenziario}
+        />
+      )}
+
+      {view === "scadenziario" && (
+        <PaginaScadenziario
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
+          assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva}
+          spese={spese} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
+          ricarica={fetchDati}
+          onBack={() => setView("erp")}
+          onApriModificaSpesa={apriModificaSpesaDaScadenziario}
         />
       )}
 
@@ -28028,7 +28301,7 @@ export default function App() {
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
-          onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView("inserimentocostiricavi"); } }}
+          onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView(spesaRitornoView); } }}
         />
       )}
 
@@ -28199,7 +28472,7 @@ export default function App() {
       )}
 
       {view === "statisticavenditori" && (
-        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} venditori={venditori} onBack={() => setView("statistiche")} />
+        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} venditori={venditori} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("statistiche")} />
       )}
 
       {view === "ultimeiscrizioni" && (
