@@ -13128,8 +13128,8 @@ function BottonePulsanteScheda({ p }) {
       onClick={p.onClick}
       disabled={p.disabled}
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: p.primario ? 14 : 13, display: "flex", alignItems: "center", gap: p.primario ? 10 : 8,
-        padding: p.primario ? "22px 20px" : "10px 6px",
+        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 6,
+        padding: p.primario ? "10px 8px" : "10px 14px",
         borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
         background: p.attivo ? NAVY : p.primario ? BG_CHIARO : "transparent",
         color: p.attivo ? "#fff" : NAVY, opacity: p.disabled ? 0.5 : 1,
@@ -13137,7 +13137,7 @@ function BottonePulsanteScheda({ p }) {
         flex: p.primario ? "1 1 0" : "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={p.primario ? 22 : 18} color={p.attivo ? "#fff" : p.primario ? NAVY : GOLD} />
+      <p.Icona size={16} color={p.attivo ? "#fff" : p.primario ? NAVY : GOLD} />
       <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "left", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
@@ -14655,7 +14655,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </div>
         </div>
       )}
-      <div style={{ position: "relative", overflow: "hidden", background: "#FEFCF8", border: `1px solid ${CREAM_BORDER}`, borderRadius: 24, padding: "28px 26px", marginBottom: 0, boxShadow: "0 30px 54px -30px rgba(14,27,51,0.18)" }}>
+      <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 24, padding: "28px 26px", marginBottom: 0 }}>
         <DecorazioneOndeHero />
         <div style={{ ...fontBody, position: "relative", fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>
           {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
@@ -14682,7 +14682,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
           ].filter(Boolean);
           return (
-            <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px", boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+            <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px" }}>
               <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
                 {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
                   <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
@@ -14750,11 +14750,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
         return (
           <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
-            <div style={{ background: "#fff", borderRadius: 22, padding: "14px 16px 16px", boxShadow: "0 22px 40px -10px rgba(14,27,51,0.22)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 32, flexWrap: "wrap", marginBottom: 16 }}>
+            <div style={{ background: "#fff", borderRadius: 22, padding: "10px 10px 8px", boxShadow: "0 22px 40px -10px rgba(14,27,51,0.22)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
                 {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
               </div>
-              <div style={{ display: "flex", alignItems: "stretch", gap: 16, flexWrap: "nowrap" }}>
+              <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexWrap: "nowrap" }}>
                 {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
               </div>
             </div>
