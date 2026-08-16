@@ -13131,7 +13131,7 @@ function BottonePulsanteScheda({ p }) {
         ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 6,
         padding: p.primario ? "10px 8px" : "10px 14px",
         borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
-        background: p.attivo ? NAVY : p.primario ? GOLD : "transparent",
+        background: p.attivo ? NAVY : p.primario ? BG_CHIARO : "transparent",
         color: p.attivo ? "#fff" : NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
         flex: p.primario ? "1 1 0" : "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
@@ -14750,7 +14750,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
         return (
           <div style={{ position: "relative", marginTop: -36, marginBottom: 32, zIndex: 2, padding: "0 6px" }}>
-            <div style={{ background: "#fff", borderRadius: 22, padding: "10px 10px 8px", boxShadow: "0 18px 34px -14px rgba(14,27,51,0.32)" }}>
+            <div style={{ background: "#fff", borderRadius: 22, padding: "10px 10px 8px", boxShadow: "0 22px 40px -10px rgba(14,27,51,0.22)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 6 }}>
                 {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
               </div>
