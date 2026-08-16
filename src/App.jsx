@@ -19999,7 +19999,19 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const paginaClamp = Math.min(pagina, totalePagine - 1);
   const listaPagina = listaFiltrata.slice(paginaClamp * PER_PAGINA, paginaClamp * PER_PAGINA + PER_PAGINA);
 
-  const selezionato = (master || []).find((m) => m.id === selezionatoId);
+  // sovrascrittura ottimistica dei campi del master selezionato: "ricarica"
+  // rifà l'intero fetchDati (40+ tabelle), troppo lento per sentirsi
+  // immediato su un cambio tendina/checkbox — il valore cambia subito sullo
+  // schermo, salvataggio e refetch completo restano in corsa dietro le quinte
+  const [masterOverride, setMasterOverride] = useState({});
+  const selezionatoBase = (master || []).find((m) => m.id === selezionatoId);
+  const selezionato = selezionatoBase ? { ...selezionatoBase, ...(masterOverride[selezionatoId] || {}) } : null;
+  async function salvaCampoMaster(campo, valore) {
+    setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), [campo]: valore } }));
+    const { error } = await supabase.from("master").update({ [campo]: valore }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
 
   useEffect(() => {
     setNote(selezionato?.note || "");
@@ -20029,21 +20041,15 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     if (error) { window.alert("Errore: " + error.message); return; }
     setSelezionatoId(null); setMenuAzioni(false); ricarica();
   }
-  async function toggleFirmato(checked) {
-    const { error } = await supabase.from("master").update({ diploma_gia_firmato: checked }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
+  function toggleFirmato(checked) { return salvaCampoMaster("diploma_gia_firmato", checked); }
   async function salvaContatti() {
-    const { error } = await supabase.from("master").update({ email: emailMod.trim() || null, telefono: telefonoMod.trim() || null }).eq("id", selezionatoId);
+    const campi = { email: emailMod.trim() || null, telefono: telefonoMod.trim() || null };
+    setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
+    const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     setModificaContatti(false); ricarica();
   }
-  async function salvaRegimeFiscale(valore) {
-    const { error } = await supabase.from("master").update({ regime_fiscale: valore || null }).eq("id", selezionatoId);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica();
-  }
+  function salvaRegimeFiscale(valore) { return salvaCampoMaster("regime_fiscale", valore || null); }
   async function caricaFoto(file) {
     if (!file || !selezionatoId) return;
     setCaricandoFoto(true);
@@ -20075,7 +20081,15 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
   }
+  // sovrascrittura ottimistica delle fasce: senza, ogni onBlur di ogni
+  // singolo campo (da/a/compenso) aspettava il refetch completo per
+  // aggiornare lo schermo — con più di due fasce, un refetch lento poteva
+  // arrivare DOPO che l'utente aveva già iniziato a scrivere nel campo
+  // successivo e sovrascrivergli quello che stava scrivendo (il campo
+  // "si cancellava da solo")
+  const [fasceOverride, setFasceOverride] = useState({});
   async function salvaFasce(assegnazioneId, fasce) {
+    setFasceOverride((m) => ({ ...m, [assegnazioneId]: fasce }));
     const { error } = await supabase.from("master_corsi").update({ fasce_compenso: fasce }).eq("id", assegnazioneId);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
@@ -20083,7 +20097,9 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   // "Gestione compensi": il compenso di default di un corso (vedi
   // aggiungiCorso sopra, che lo copia quando quel corso viene associato
   // a un master) — vista generale, non legata al master selezionato
+  const [fasceCorsoOverride, setFasceCorsoOverride] = useState({});
   async function salvaFasceCorso(corsoId, fasce) {
+    setFasceCorsoOverride((m) => ({ ...m, [corsoId]: fasce }));
     const { error } = await supabase.from("corsi").update({ fasce_compenso_default: fasce }).eq("id", corsoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica();
@@ -20303,7 +20319,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                           </div>
                           {espanso && (
                             <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                              <EditorFasceCompenso fasce={a.fasce_compenso} onCambia={(fasce) => salvaFasce(a.id, fasce)} />
+                              <EditorFasceCompenso fasce={fasceOverride[a.id] ?? a.fasce_compenso} onCambia={(fasce) => salvaFasce(a.id, fasce)} />
                             </div>
                           )}
                         </div>
@@ -20425,7 +20441,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso definito ancora.</div>
             ) : [...(corsi || [])].sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => {
               const espanso = corsoCompensiEspansoId === c.id;
-              const fasce = c.fasce_compenso_default || [];
+              const fasce = fasceCorsoOverride[c.id] ?? (c.fasce_compenso_default || []);
               return (
                 <div key={c.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
