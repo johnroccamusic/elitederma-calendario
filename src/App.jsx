@@ -13133,15 +13133,15 @@ function BottonePulsanteScheda({ p }) {
         onClick={p.onClick}
         disabled={p.disabled}
         style={{
-          ...fontDisplay, fontWeight: 700, fontSize: 12.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-          padding: "18px 12px", borderRadius: 16, border: "none", cursor: p.disabled ? "default" : "pointer",
+          ...fontDisplay, fontWeight: 700, fontSize: 11.5, display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+          padding: "10px 10px", borderRadius: 14, border: "none", cursor: p.disabled ? "default" : "pointer",
           background: "transparent", color: NAVY, opacity: p.disabled ? 0.5 : 1,
           textTransform: "uppercase", letterSpacing: 0.3,
           flex: "1 1 0", minWidth: 0, boxSizing: "border-box",
         }}
       >
-        <span style={{ width: 52, height: 52, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <p.Icona size={22} color={p.attivo ? "#fff" : NAVY} />
+        <span style={{ width: 38, height: 38, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <p.Icona size={17} color={p.attivo ? "#fff" : NAVY} />
         </span>
         <span style={{ whiteSpace: "normal", lineHeight: 1.2, textAlign: "center" }}>{p.etichetta}</span>
       </button>
@@ -13152,16 +13152,16 @@ function BottonePulsanteScheda({ p }) {
       onClick={p.onClick}
       disabled={p.disabled}
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8,
-        padding: "10px 4px",
-        borderRadius: 18, border: "none", cursor: p.disabled ? "default" : "pointer",
+        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 6,
+        padding: "4px 4px",
+        borderRadius: 16, border: "none", cursor: p.disabled ? "default" : "pointer",
         background: "transparent",
         color: NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
         flex: "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={17} color={GOLD} />
+      <p.Icona size={15} color={GOLD} />
       <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "left", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
@@ -14721,17 +14721,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         ];
 
         return (
-          <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 24, padding: "28px 26px", marginBottom: 32 }}>
+          <div style={{ position: "relative", overflow: "hidden", background: "#FFFFFF", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "18px 22px", marginBottom: 22 }}>
             <DecorazioneOndeHero />
-            <div style={{ ...fontBody, position: "relative", fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 10 }}>
+            <div style={{ ...fontBody, position: "relative", fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 6 }}>
               {mostraGestione ? "Contabilità classe" : "Gestione iscrizioni"}
             </div>
-            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 22 }}>
-              <div style={{ ...fontHero, fontSize: 40, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+              <div style={{ ...fontHero, fontSize: 28, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
               {loc?.nome && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 7, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 20, padding: "7px 16px", flexShrink: 0 }}>
-                  <IconaPin size={18} color={GOLD} />
-                  <span style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 18, padding: "4px 12px", flexShrink: 0 }}>
+                  <IconaPin size={15} color={GOLD} />
+                  <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
                 </div>
               )}
             </div>
@@ -14748,14 +14748,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
               ].filter(Boolean);
               return (
-                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "18px 20px", marginBottom: 20 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 14 }}>
+                <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 14px", marginBottom: 12 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
                     {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
-                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                        <Icona size={26} color={GOLD} />
+                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, paddingLeft: idx > 0 ? 10 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
+                        <Icona size={19} color={GOLD} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
-                          <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                          <div style={{ ...fontBody, fontSize: 10, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
+                          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
                         </div>
                       </div>
                     ))}
@@ -14769,11 +14769,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               </div>
             ) : (
               <>
-                <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: 16 }} />
-                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 28, flexWrap: "wrap", marginBottom: 16 }}>
+                <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: 10 }} />
+                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", marginBottom: 10 }}>
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
-                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "nowrap" }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, flexWrap: "nowrap" }}>
                   {primari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
               </>
