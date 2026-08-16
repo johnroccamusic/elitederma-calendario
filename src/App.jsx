@@ -13341,12 +13341,19 @@ const ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI = "00000000-0000-0000-0000-000000000003"
 const SPAZI_ISCRIZIONI_DEFAULT = {
   paddingTop: 18, paddingBottom: 18,
   dopoEyebrow: 6, dopoTitolo: 12, dopoDateBox: 12, dopoDivider: 10, dopoSecondari: 28,
+  titoloFontSize: 28, pillolaFontSize: 16,
 };
-const SPAZIO_VERTICALE_MIN = 0;
-const SPAZIO_VERTICALE_MAX = 80;
-// maniglia trascinabile stile "ridimensiona colonna" di Excel, ma in
-// verticale: una striscia sottile con una linea tratteggiata, visibile
-// solo quando ruoloUtente === "programmatore" nel chiamante
+// min/max per ciascuna chiave regolabile: gli spazi verticali vanno da 0
+// a 80px, i due font (titolo/pillola città) hanno un range proprio
+const LIMITI_SPAZI_ISCRIZIONI = {
+  paddingTop: [0, 80], paddingBottom: [0, 80],
+  dopoEyebrow: [0, 80], dopoTitolo: [0, 80], dopoDateBox: [0, 80], dopoDivider: [0, 80], dopoSecondari: [0, 80],
+  titoloFontSize: [18, 64], pillolaFontSize: [10, 36],
+};
+// maniglia trascinabile stile "ridimensiona colonna" di Excel: in
+// verticale (striscia con linea tratteggiata orizzontale) per gli spazi,
+// in orizzontale (pallino) per i font — visibili solo quando
+// ruoloUtente === "programmatore" nel chiamante
 function ManigliaSpazioVerticale({ onPointerDown, onPointerMove, onPointerUp }) {
   return (
     <div
@@ -13359,6 +13366,22 @@ function ManigliaSpazioVerticale({ onPointerDown, onPointerMove, onPointerUp }) 
     >
       <div style={{ width: "100%", borderTop: "1px dashed #4A5FBF", opacity: 0.55 }} />
     </div>
+  );
+}
+function ManigliaRidimensionaOrizzontale({ onPointerDown, onPointerMove, onPointerUp }) {
+  return (
+    <span
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      title="Trascina per ingrandire/rimpicciolire (salvato per tutti)"
+      style={{
+        width: 14, height: 14, borderRadius: "50%", border: "1px dashed #4A5FBF", background: "#fff",
+        opacity: 0.7, cursor: "ew-resize", flexShrink: 0, touchAction: "none",
+        display: "inline-block", verticalAlign: "middle", position: "relative", zIndex: 6,
+      }}
+    />
   );
 }
 function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
@@ -14706,15 +14729,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setSpaziIscrizioni({ ...SPAZI_ISCRIZIONI_DEFAULT, ...(layoutIscrizioni?.spazi || {}) });
   }, [layoutIscrizioni]);
   const ridimensionamentoSpazioRef = React.useRef(null);
-  function iniziaRidimensionamentoSpazio(e, chiave) {
+  function iniziaRidimensionamentoSpazio(e, chiave, asse = "y") {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
-    ridimensionamentoSpazioRef.current = { chiave, pointerId: e.pointerId, startY: e.clientY, startValore: spaziIscrizioni[chiave] };
+    ridimensionamentoSpazioRef.current = { chiave, asse, pointerId: e.pointerId, start: asse === "x" ? e.clientX : e.clientY, startValore: spaziIscrizioni[chiave] };
   }
   function muoviRidimensionamentoSpazio(e) {
     const r = ridimensionamentoSpazioRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
-    const nuovoValore = Math.min(SPAZIO_VERTICALE_MAX, Math.max(SPAZIO_VERTICALE_MIN, r.startValore + (e.clientY - r.startY)));
+    const attuale = r.asse === "x" ? e.clientX : e.clientY;
+    const [min, max] = LIMITI_SPAZI_ISCRIZIONI[r.chiave] || [0, 80];
+    const nuovoValore = Math.min(max, Math.max(min, r.startValore + (attuale - r.start)));
     setSpaziIscrizioni((prev) => ({ ...prev, [r.chiave]: nuovoValore }));
   }
   async function fineRidimensionamentoSpazio() {
@@ -14729,6 +14754,16 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     return (
       <ManigliaSpazioVerticale
         onPointerDown={(e) => iniziaRidimensionamentoSpazio(e, chiave)}
+        onPointerMove={muoviRidimensionamentoSpazio}
+        onPointerUp={fineRidimensionamentoSpazio}
+      />
+    );
+  }
+  function manigliaRidimensiona(chiave) {
+    if (ruoloUtente !== "programmatore") return null;
+    return (
+      <ManigliaRidimensionaOrizzontale
+        onPointerDown={(e) => iniziaRidimensionamentoSpazio(e, chiave, "x")}
         onPointerMove={muoviRidimensionamentoSpazio}
         onPointerUp={fineRidimensionamentoSpazio}
       />
@@ -14795,11 +14830,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
             {manigliaSpazio("dopoEyebrow")}
             <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoTitolo }}>
-              <div style={{ ...fontHero, fontSize: 28, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <div style={{ ...fontHero, fontSize: spaziIscrizioni.titoloFontSize, color: NAVY, lineHeight: 1.05 }}>{(corso?.nome || "").toUpperCase()}</div>
+                {manigliaRidimensiona("titoloFontSize")}
+              </div>
               {loc?.nome && (
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: 18, padding: "4px 12px", flexShrink: 0 }}>
-                  <IconaPin size={15} color={GOLD} />
-                  <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${Math.round(spaziIscrizioni.pillolaFontSize * 0.25)}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0 }}>
+                    <IconaPin size={Math.round(spaziIscrizioni.pillolaFontSize * 0.94)} color={GOLD} />
+                    <span style={{ ...fontBody, fontSize: spaziIscrizioni.pillolaFontSize, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
+                  </div>
+                  {manigliaRidimensiona("pillolaFontSize")}
                 </div>
               )}
             </div>
