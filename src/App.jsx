@@ -21152,6 +21152,17 @@ function PaginaGestioneHotel({ hotel, ricarica, onBack }) {
                       <input type="number" min="0" step="0.01" defaultValue={selezionato.costo_notte_fattura ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (selezionato.costo_notte_fattura ?? null)) salvaCampo("costo_notte_fattura", v); }} style={inputStyle} placeholder="0,00" />
                     </Field>
                   </div>
+                  <div style={{ flex: "1 1 160px" }}>
+                    <Field label="Di cui IVA">
+                      <select value={selezionato.iva_percentuale_notte_fattura ?? ""} onChange={(e) => salvaCampo("iva_percentuale_notte_fattura", e.target.value === "" ? null : Number(e.target.value))} style={inputStyle}>
+                        <option value="">—</option>
+                        <option value="0">0%</option>
+                        <option value="4">4%</option>
+                        <option value="10">10%</option>
+                        <option value="22">22%</option>
+                      </select>
+                    </Field>
+                  </div>
                 </div>
               </React.Fragment>
             )}
