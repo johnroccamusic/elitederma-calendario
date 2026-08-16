@@ -2645,6 +2645,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   // non con il bordo della cella: quella casella comincia
                   // dopo l'etichetta fissa (Master/Assistente/Leva) + il gap
                   paddingLeft: etichetta === "Docenti" ? 8 + etichettaTipoStyle.width + 6 : celStyle.paddingLeft,
+                  // separatore tra le intestazioni: senza, due etichette
+                  // corte in colonne strette (es. "Avvisata"/"Note") sembrano
+                  // incollate anche quando ciascuna sta nella sua colonna
+                  borderLeft: i > 0 ? `1px solid ${CREAM_BORDER}` : "none",
                 }}>
                   {COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)
                     ? COLONNE_HEADER_SU_DUE_RIGHE.get(etichetta).map((riga, r) => <div key={r}>{riga}</div>)
