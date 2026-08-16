@@ -2689,7 +2689,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
                       {selectBonificoCash(valoreCampo(cd, "pagamento_sede"), (v) => salvaCampo(cd.id, "pagamento_sede", v))}
                     </td>
-                    <td style={{ ...cellaGruppo, verticalAlign: "top" }}>
+                    <td style={{ ...cellaGruppo, verticalAlign: "top", paddingTop: 3 }}>
                       <div>
                         <span style={etichettaTipoStyle}>Master</span>
                       </div>
@@ -2747,7 +2747,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   </tr>
                   {docenti.map((riga) => (
                     <tr key={riga.id}>
-                      <td style={{ ...cellaGruppo, verticalAlign: "top" }}>
+                      <td style={{ ...cellaGruppo, verticalAlign: "top", paddingTop: 3 }}>
                         <div>
                           <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
                         </div>
