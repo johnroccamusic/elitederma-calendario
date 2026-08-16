@@ -2896,7 +2896,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           {caricoAssegnazioni.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assegnazione ancora.</div>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gridTemplateRows: `repeat(${Math.ceil(caricoAssegnazioni.length / 4)}, auto)`, gridAutoFlow: "column", gap: 10 }}>
               {caricoAssegnazioni.map((p) => (
                 <div key={p.nome} style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "6px 8px", background: "#fff" }}>
                   <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
