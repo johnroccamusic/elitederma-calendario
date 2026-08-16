@@ -2471,10 +2471,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // scegliere che tipo di docente extra aggiungere (era prima i tre
   // pulsanti M/A/L, ora un'unica finestra con una tendina)
   const pulsantePiuDocenteStyle = { ...fontScheda, fontSize: 26, fontWeight: 800, color: "#000", background: "none", border: "none", cursor: "pointer", padding: "0 4px", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, lineHeight: 1 };
-  // larghezza fissa uguale su ogni riga (master principale ed extra),
-  // così le caselle "Master/Assistente/Leva" iniziano sempre alla
-  // stessa X qualunque sia la lunghezza dell'etichetta
-  const etichettaTipoStyle = { ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, whiteSpace: "nowrap", flexShrink: 0, width: 58 };
+  // etichetta "Master/Assistente/Leva" sopra la relativa casella persona,
+  // non più a fianco
+  const etichettaTipoStyle = { ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, marginBottom: 4 };
   const semaforo = (attivo, onClick, size = "normale") => (
     <button
       onClick={onClick}
@@ -2655,10 +2654,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   ...thStyle, position: "relative",
                   textAlign: (etichetta === "Sede OK?" || etichetta === "Pagato" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
                   lineHeight: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? 1.25 : thStyle.lineHeight,
-                  // allineata con l'inizio della casella di scelta persona,
-                  // non con il bordo della cella: quella casella comincia
-                  // dopo l'etichetta fissa (Master/Assistente/Leva) + il gap
-                  paddingLeft: etichetta === "Docenti" ? 8 + etichettaTipoStyle.width + 6 : celStyle.paddingLeft,
                   // separatore tra le intestazioni: senza, due etichette
                   // corte in colonne strette (es. "Avvisata"/"Note") sembrano
                   // incollate anche quando ciascuna sta nella sua colonna
@@ -2707,8 +2702,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       {selectBonificoCash(valoreCampo(cd, "pagamento_sede"), (v) => salvaCampo(cd.id, "pagamento_sede", v))}
                     </td>
                     <td style={cellaGruppo}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <div>
                         <span style={etichettaTipoStyle}>Master</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(cd, "master_id") || ""} onChange={(e) => salvaCampo(cd.id, "master_id", e.target.value || null)}>
                           <option value="">—</option>
                           {master.map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
@@ -2763,8 +2760,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                   {docenti.map((riga) => (
                     <tr key={riga.id}>
                       <td style={cellaGruppo}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div>
                           <span style={etichettaTipoStyle}>{ETICHETTA_TIPO_DOCENTE[riga.tipo]}</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <select style={{ ...campoStyle, flex: 1, minWidth: 0 }} value={valoreCampo(riga, "persona_id") || ""} onChange={(e) => impostaPersonaDocente(riga, e.target.value)}>
                             <option value="">—</option>
                             {opzioniPersonaDocente(cd, riga).map((o) => <option key={o.id} value={o.id}>{o.nome.toUpperCase()}</option>)}
