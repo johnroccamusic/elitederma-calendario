@@ -2868,8 +2868,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {caricoAssegnazioni.map((p) => (
                 <div key={p.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 6px", background: "#fff" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ ...fontScheda, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
-                    <span style={{ ...fontScheda, fontSize: 10.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
+                    <span style={{ ...fontScheda, fontSize: 13.5, fontWeight: 700, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome.toUpperCase()}</span>
+                    <span style={{ ...fontScheda, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 5, width: 24, height: 24, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.n}</span>
                   </div>
                   {p.dettaglio.length > 0 && (
                     <div style={{ ...fontBody, fontSize: 9.5, color: MUTED, marginTop: 1, lineHeight: 1.15 }}>
