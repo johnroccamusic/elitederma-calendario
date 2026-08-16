@@ -13294,15 +13294,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
-  async function aggiungiRigaCostoClasse() {
-    const prima = CAMPI_RIEPILOGO_AMMINISTRATIVO[0];
+  async function aggiungiRigaCostoClasse(categoriaId, sottocategoriaId, descrizione) {
     const { data, error } = await supabase.from("spese").insert({
       tipo_ambito: "classe", classe_id: corsoData.id,
-      categoria_id: prima.categoriaId, sottocategoria_id: prima.sottocategoriaId,
-      descrizione: prima.etichetta, imponibile: 0, totale: 0,
+      categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
+      descrizione: descrizione || null, imponibile: 0, totale: 0,
     }).select().single();
     if (error) { setMsg("Errore: " + error.message); return; }
     setSpeseClasseNuove((prev) => [...prev, data]);
+    setSceltaCategoriaCosto(false);
     ricarica();
   }
   async function rimuoviRigaCostoClasse(id) {
@@ -13480,16 +13480,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
   // solo da "+ Nuova operazione" nella dashboard)
   const categorieRiepilogo = (costiCategorie || []).filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.id)).sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
-  // il "+" apre una tendina con TUTTE le sotto-voci di "Costi operativi"
-  // (raggruppate per categoria, come nel form "Nuova uscita"): la voce si
-  // crea già taggata con categoria+sottovoce, così confluisce nella riga
-  // giusta del drill-down invece che in un generico "extra" di categoria
-  function aggiungiVoceCosto(valoreCombinato) {
-    const [categoria, sottovoce] = valoreCombinato.split("::");
-    setCostiExtra((prev) => [...prev, { titolo: "", valore: "", categoria, sottovoce }]);
-    setCostiAperto(true);
-    setSceltaCategoriaCosto(false);
-  }
+  // le voci "libere" (costiExtra) restano visibili/modificabili se già
+  // esistenti, ma non se ne creano più di nuove: "Aggiungi spesa" (sotto)
+  // crea direttamente una riga vera nella tabella "Costi della classe",
+  // con categoria/sotto-categoria già scelta dal menu invece di un
+  // titolo scritto a mano
   function modificaVoceCosto(idx, campo, valore) {
     setCostiExtra((prev) => prev.map((c, i) => (i === idx ? { ...c, [campo]: valore } : c)));
   }
@@ -14638,38 +14633,6 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-              {costiAperto && (
-                <div style={{ position: "relative" }}>
-                  <button
-                    title="Aggiungi voce di costo"
-                    onClick={(e) => { e.stopPropagation(); setSceltaCategoriaCosto((v) => !v); }}
-                    style={{ width: 26, height: 26, borderRadius: "50%", border: `1px solid ${NAVY}`, background: "#fff", color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0 }}
-                  >
-                    +
-                  </button>
-                  {sceltaCategoriaCosto && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 260, maxHeight: 320, overflowY: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)" }}
-                    >
-                      {categorieRiepilogo.map((cat) => (
-                        <div key={cat.id}>
-                          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.nome}</div>
-                          {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v) => (
-                            <button
-                              key={v.id}
-                              onClick={() => aggiungiVoceCosto(`${cat.id}::${v.id}`)}
-                              style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", color: NAVY }}
-                            >
-                              {v.nome}
-                            </button>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: costiAperto ? "rotate(180deg)" : "none" }}>
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -14766,12 +14729,35 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10 }}>
                 <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Costi della classe</div>
-                <button
-                  type="button" onClick={aggiungiRigaCostoClasse}
-                  style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
-                >
-                  + Aggiungi riga
-                </button>
+                <div style={{ position: "relative" }}>
+                  <button
+                    type="button" onClick={() => setSceltaCategoriaCosto((v) => !v)}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}
+                  >
+                    Aggiungi spesa
+                  </button>
+                  {sceltaCategoriaCosto && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 10, width: 260, maxHeight: 320, overflowY: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, boxShadow: "0 12px 28px -12px rgba(14,27,51,0.3)" }}
+                    >
+                      {categorieRiepilogo.map((cat) => (
+                        <div key={cat.id}>
+                          <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 12px 4px", background: BG }}>{cat.nome}</div>
+                          {sottocategorieDiCategoria(costiSottocategorie, cat.id).map((v) => (
+                            <button
+                              key={v.id}
+                              onClick={() => aggiungiRigaCostoClasse(cat.id, v.id, v.nome)}
+                              style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, padding: "8px 12px", border: "none", background: "transparent", cursor: "pointer", color: NAVY }}
+                            >
+                              {v.nome}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <div style={{ maxWidth: 220, marginBottom: 10 }}>
                 <Field label="Quota venditore">
@@ -21139,14 +21125,14 @@ function PaginaGestioneHotel({ hotel, ricarica, onBack }) {
             {!selezionato ? (
               <div style={{ textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun hotel selezionato.</div>
             ) : (
-              <>
+              <React.Fragment key={selezionato.id}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
                   <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
                   <button onClick={eliminaHotel} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 14px", cursor: "pointer" }}>Elimina hotel</button>
                 </div>
 
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 260px" }}><Field label="Nome"><input defaultValue={selezionato.nome || ""} onBlur={(e) => { if (e.target.value.trim() && e.target.value !== selezionato.nome) salvaCampo("nome", e.target.value.trim().toUpperCase()); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "1 1 260px" }}><Field label="Persona di riferimento"><input defaultValue={selezionato.nome_referente || ""} onBlur={(e) => { if (e.target.value !== (selezionato.nome_referente || "")) salvaCampo("nome_referente", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
                   <div style={{ flex: "1 1 200px" }}><Field label="Telefono"><input defaultValue={selezionato.telefono || ""} onBlur={(e) => { if (e.target.value !== (selezionato.telefono || "")) salvaCampo("telefono", e.target.value.trim() || null); }} style={inputStyle} placeholder="+39 ..." /></Field></div>
                   <div style={{ flex: "1 1 240px" }}><Field label="Email"><input defaultValue={selezionato.email || ""} onBlur={(e) => { if (e.target.value !== (selezionato.email || "")) salvaCampo("email", e.target.value.trim() || null); }} style={inputStyle} placeholder="info@hotel.it" /></Field></div>
                 </div>
@@ -21167,7 +21153,7 @@ function PaginaGestioneHotel({ hotel, ricarica, onBack }) {
                     </Field>
                   </div>
                 </div>
-              </>
+              </React.Fragment>
             )}
           </div>
         </div>

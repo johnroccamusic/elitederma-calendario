@@ -2470,3 +2470,13 @@ alter table public.location add column if not exists costo_giornaliero_bonifico 
 alter table public.corsi_date add column if not exists tipo_pagamento_location text;
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 92) Gestione Hotel: il campo "Nome" nel form era ridondante col
+-- titolo della scheda (già il nome dell'hotel) — sostituito da
+-- "Persona di riferimento" (referente da contattare per quell'hotel).
+-- ---------------------------------------------------------
+alter table public.hotel add column if not exists nome_referente text;
+
+notify pgrst, 'reload schema';
