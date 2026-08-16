@@ -163,10 +163,13 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 80, 90, 95, 65, 140];
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Richiesta fattura", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
+// intestazioni che vanno a capo su due righe invece di restare su una
+// sola (colonne strette, per non occupare spazio in larghezza)
+const COLONNE_HEADER_SU_DUE_RIGHE = new Set(["Richiesta fattura", "Pattuito a notte", "Pattuito per periodo", "Notti prenotate"]);
 // etichetta del tipo mostrata a sinistra della tendina persona di una
 // riga "docente extra" (Aggiungi docenti), e lista di riferimento
 // (master/assistente/leva) da cui pesca le opzioni. L'ordine fisso con
@@ -2379,12 +2382,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     </button>
   );
 
-  // flag "Avvisata": verde quando quella persona (master, assistente o
-  // leva su questa riga) è stata avvisata del corso, clic per cambiare
-  const flagAvvisata = (attivo, onClick) => (
+  // flag generico verde/bianco con segno di spunta — usato per Avvisata,
+  // Richiesta fattura e Pagato: stesso comportamento, etichetta diversa
+  const flagSemplice = (attivo, onClick, titoloAttivo, titoloInattivo) => (
     <button
       onClick={onClick}
-      title={attivo ? "Avvisata" : "Non ancora avvisata"}
+      title={attivo ? titoloAttivo : titoloInattivo}
       style={{
         width: 22, height: 22, borderRadius: 6, border: `1px solid ${attivo ? "#2E7D32" : CREAM_BORDER}`,
         background: attivo ? "#2E7D32" : "#fff", color: attivo ? "#fff" : "transparent",
@@ -2394,6 +2397,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
     </button>
   );
+  const flagAvvisata = (attivo, onClick) => flagSemplice(attivo, onClick, "Avvisata", "Non ancora avvisata");
+  const flagRichiestaFattura = (attivo, onClick) => flagSemplice(attivo, onClick, "Fattura richiesta", "Fattura non richiesta");
+  const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Pagato", "Non ancora pagato");
 
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
   // in Excel) afferrando la giunzione tra due colonne nell'intestazione;
@@ -2531,7 +2537,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
                 <th key={i} style={{
                   ...thStyle, position: "relative",
-                  textAlign: etichetta === "Sede OK?" ? "center" : thStyle.textAlign,
+                  textAlign: (etichetta === "Sede OK?" || etichetta === "Pagato" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
+                  whiteSpace: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? "normal" : thStyle.whiteSpace,
+                  lineHeight: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? 1.25 : thStyle.lineHeight,
                   // allineata con l'inizio della casella di scelta persona,
                   // non con il bordo della cella: quella casella comincia
                   // dopo l'etichetta fissa (Master/Assistente/Leva) + il gap
@@ -2617,6 +2625,21 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                       </select>
                     </td>
+                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
+                      {flagRichiestaFattura(!!valoreCampo(cd, "richiesta_fattura"), () => salvaCampo(cd.id, "richiesta_fattura", !valoreCampo(cd, "richiesta_fattura")))}
+                    </td>
+                    <td style={cellaGruppo}>
+                      <input type="number" min="0" style={{ ...campoStyle, textAlign: "center" }} defaultValue={cd.notti_prenotate ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (v !== (cd.notti_prenotate ?? null)) salvaCampo(cd.id, "notti_prenotate", v); }} />
+                    </td>
+                    <td style={cellaGruppo}>
+                      <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={cd.pattuito_a_notte ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (cd.pattuito_a_notte ?? null)) salvaCampo(cd.id, "pattuito_a_notte", v); }} />
+                    </td>
+                    <td style={cellaGruppo}>
+                      <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={cd.pattuito_periodo ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (cd.pattuito_periodo ?? null)) salvaCampo(cd.id, "pattuito_periodo", v); }} />
+                    </td>
+                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
+                      {flagPagato(!!valoreCampo(cd, "pagato"), () => salvaCampo(cd.id, "pagato", !valoreCampo(cd, "pagato")))}
+                    </td>
                     <td style={cellaGruppo}>
                       <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
                     </td>
@@ -2651,6 +2674,21 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           <option value="">—</option>
                           {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
                         </select>
+                      </td>
+                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
+                        {flagRichiestaFattura(!!valoreCampo(riga, "richiesta_fattura"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "richiesta_fattura", !valoreCampo(riga, "richiesta_fattura")))}
+                      </td>
+                      <td style={cellaGruppo}>
+                        <input type="number" min="0" style={{ ...campoStyle, textAlign: "center" }} defaultValue={riga.notti_prenotate ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (v !== (riga.notti_prenotate ?? null)) salvaCampoGenerico("corsi_date_docenti", riga.id, "notti_prenotate", v); }} />
+                      </td>
+                      <td style={cellaGruppo}>
+                        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={riga.pattuito_a_notte ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (riga.pattuito_a_notte ?? null)) salvaCampoGenerico("corsi_date_docenti", riga.id, "pattuito_a_notte", v); }} />
+                      </td>
+                      <td style={cellaGruppo}>
+                        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={riga.pattuito_periodo ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (riga.pattuito_periodo ?? null)) salvaCampoGenerico("corsi_date_docenti", riga.id, "pattuito_periodo", v); }} />
+                      </td>
+                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
+                        {flagPagato(!!valoreCampo(riga, "pagato"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "pagato", !valoreCampo(riga, "pagato")))}
                       </td>
                       <td style={cellaGruppo}>
                         {riga.tipo !== "leva" && (
