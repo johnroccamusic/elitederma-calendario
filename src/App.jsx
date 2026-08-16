@@ -13349,16 +13349,53 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // che l'amministratore compili qualunque altro campo del pannello
   const quoteVenditoreClasse = round2(listaIscritti.reduce((s, i) => s + (i.quota_venditore || 0), 0));
 
-  // Incassi lordo/netto: il "lordo" è l'importo di sempre (contanti+pos
-  // incassati al corso), il "netto" scorpora l'IVA al 22% — stessa
-  // aliquota fissa usata ovunque nel Riepilogo. "Di cui" applica lo
-  // stesso scorporo a ciascun metodo, così le due voci tornano a sommare
-  const IVA_RIEPILOGO = 22;
-  const scorpora = (v) => round2(v / (1 + IVA_RIEPILOGO / 100));
-  const incassoLordoClasse = daIncassareClasse;
-  const incassoNettoClasse = scorpora(incassoLordoClasse);
-  const contantiNettoClasse = scorpora(contantiClasse);
-  const contoCorrenteNettoClasse = scorpora(posClasse);
+  // Incassi lordo/netto/di cui: non più uno scorporo IVA generico, ma la
+  // somma dei VERI campi "totale" (con IVA) e "imponibile" (senza IVA)
+  // già presenti sulla scheda di ogni allievo, per tutte e tre le fasi
+  // di pagamento (acconto, pre corso, saldo) e le loro righe extra —
+  // stesso principio già usato da totQuota() per acconto/precorso.
+  // "Cash"/"Cash prima del corso" e "Conto corrente" leggono il metodo
+  // di ciascuna fase: "Contanti" e "Cash no iva" sono la famiglia cash,
+  // tutto il resto (Sito/Bonifico/Pos/Rate) è conto corrente.
+  const METODI_CASH_RIEPILOGO = new Set(["Contanti", "Cash no iva"]);
+  function quotePagateDi(i) {
+    const quote = [];
+    ["acconto", "precorso", "saldo"].forEach((prefisso) => {
+      const metodo = i[`${prefisso}_metodo`];
+      if (!metodo) return;
+      quote.push({ fase: prefisso, totale: totQuota(i, prefisso), imponibile: i[`${prefisso}_imponibile`] || 0, metodo });
+    });
+    (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r) => {
+      if (!r.metodo) return;
+      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      quote.push({ fase: "acconto", totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
+    });
+    (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r) => {
+      if (!r.metodo) return;
+      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      quote.push({ fase: "precorso", totale: round2((r.totale || 0) + interessi), imponibile: r.imponibile || 0, metodo: r.metodo });
+    });
+    return quote;
+  }
+  const tutteLeQuoteClasse = listaIscritti.flatMap(quotePagateDi);
+  // il "totale con iva" di ogni fase è un dato vero della scheda; per
+  // modelle e "altri incassi al corso" non esiste un imponibile tracciato
+  // separatamente, quindi restano dentro il lordo ma non vengono
+  // scorporati nel netto (evita di inventare un numero non tracciato)
+  const incassoLordoClasse = round2(
+    tutteLeQuoteClasse.reduce((s, q) => s + q.totale, 0)
+    + listaIscritti.reduce((s, i) => s + modelleTotaleDi(i), 0)
+    + incassiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
+  );
+  const incassoNettoClasse = round2(tutteLeQuoteClasse.reduce((s, q) => s + q.imponibile, 0));
+  const ivaClasse = round2(incassoLordoClasse - incassoNettoClasse);
+  const cashPrimaDelCorsoClasse = round2(
+    tutteLeQuoteClasse.filter((q) => q.fase !== "saldo" && METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)
+  );
+  const contoCorrenteClasse = round2(
+    tutteLeQuoteClasse.filter((q) => !METODI_CASH_RIEPILOGO.has(q.metodo)).reduce((s, q) => s + q.totale, 0)
+    + incassiExtraPos
+  );
 
   // sovrascrittura ottimistica dello split Bonifico/Cash di una riga
   // (master/location/assistente): "ricarica" rifà l'intero fetchDati,
@@ -13461,12 +13498,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     costiExtra.reduce((s, c) => s + parseNum(c.valore), 0)
   );
   const risultatoClasse = round2(daIncassareClasse - totaleCostiClasse);
-  // Cassa Contanti: incasso netto in contanti meno tutte le uscite cash
-  // della tabella spese (master/location/assistenti + spese reali) —
-  // la stessa idea di "Cash netto" di prima, ora coerente con lo
-  // schizzo: incasso cash - spese cash
+  // Cassa Contanti: tutto il cash incassato (prima del corso + al corso)
+  // meno tutte le uscite cash della tabella spese (master/location/
+  // assistenti/venditore + spese reali) — coerente con lo schizzo:
+  // incasso cash - spese cash
   const cassaContantiClasse = round2(
-    contantiNettoClasse
+    contantiClasse + cashPrimaDelCorsoClasse
     - righeSpeseTutte.reduce((s, r) => s + (r.cash || 0), 0)
     - speseClasse.reduce((s, x) => s + (x.importo_pagato_cash || 0), 0)
   );
@@ -14637,7 +14674,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           {costiAperto && (
             <div style={{ padding: "0 20px 20px" }}>
               <div style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>Incassi</div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(120px, 1fr))", gap: 14, marginBottom: 22, overflowX: "auto" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 14, overflowX: "auto" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
                   <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaPortafoglio /></div>
                   <div style={{ minWidth: 0 }}>
@@ -14653,17 +14690,34 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaLibroContabile /></div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Di cui c/c</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contoCorrenteNettoClasse}</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>IVA</div>
+                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {ivaClasse}</div>
                   </div>
                 </div>
+              </div>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Di cui</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 14, marginBottom: 22, overflowX: "auto" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaCartaPos /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Conto corrente</div>
+                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contoCorrenteClasse}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Contanti pagati fisicamente al corso">
                   <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Di cui cash</div>
-                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contantiNettoClasse}</div>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash al corso</div>
+                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }} title="Acconti o quote pre corso pagati in contanti">
+                  <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: 10, background: BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}><IconaBanconota /></div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash prima del corso</div>
+                    <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {cashPrimaDelCorsoClasse}</div>
                   </div>
                 </div>
               </div>
