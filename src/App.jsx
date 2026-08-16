@@ -993,13 +993,6 @@ function IconaSpuntaCerchio({ size = 16, color = "currentColor" }) {
     </svg>
   );
 }
-function IconaInfoCerchio({ size = 16, color = "currentColor" }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" /><path d="M12 11v5.5" /><path d="M12 7.6h.01" />
-    </svg>
-  );
-}
 function IconaGrigliaTabella({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -2258,19 +2251,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [corsiDate, stagioneVista]);
 
-  // una data appena creata per una stagione diversa da quella qui in
-  // vista sparirebbe silenziosamente (filtrata sotto, riga "righe"): senza
-  // questo avviso sembra che "il calendario non si sincronizzi", mentre il
-  // dato c'è già, è solo filtrato per stagione — capita spesso vicino al
-  // cambio di stagione (fine agosto/inizio settembre)
-  const stagioniFuoriVista = useMemo(() => {
-    const set = new Set();
-    corsiDate
-      .filter((cd) => cd.data_fine >= dataOggiStr() && !inStagioneVista(cd.data_inizio))
-      .forEach((cd) => set.add(annoStagioneDaData(cd.data_inizio)));
-    return Array.from(set).sort((a, b) => a - b);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [corsiDate, stagioneVista, includiAgostoPrecedente]);
 
   function bloccaStagioneDiDefault() {
     try { localStorage.setItem(CHIAVE_STAGIONE_BLOCCATA, String(stagioneVista)); } catch { /* ignora */ }
@@ -2870,26 +2850,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
             )}
           </div>
         </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#EEF1FA", border: "1px solid #D9DEF2", borderRadius: 10, padding: "11px 16px", ...fontBody, fontSize: 13, color: NAVY, marginBottom: stagioniFuoriVista.length > 0 ? 10 : 24 }}>
-          <IconaInfoCerchio size={16} color="#4A5FBF" />
-          Solo le edizioni future · Le modifiche vengono salvate automaticamente
-        </div>
-
-        {stagioniFuoriVista.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: "#FBF1D9", border: "1px solid #F0DDA3", borderRadius: 10, padding: "11px 16px", ...fontBody, fontSize: 13, color: "#7A5B00", marginBottom: 24 }}>
-            <span>⚠️ Ci sono corsi futuri fuori da questa stagione (non spariti: solo filtrati) —</span>
-            {stagioniFuoriVista.map((s) => (
-              <button
-                key={s}
-                onClick={() => setStagioneVista(s)}
-                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#7A5B00", background: "#fff", border: "1px solid #F0DDA3", borderRadius: 8, padding: "5px 10px", cursor: "pointer" }}
-              >
-                Vedi {etichettaStagione(s)}
-              </button>
-            ))}
-          </div>
-        )}
 
         <div style={{ ...cardStyle, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.15)", marginBottom: 24 }}>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>Carico assegnazioni</div>
