@@ -19858,6 +19858,16 @@ function abbreviazioneCorso(nome) {
   return parole.slice(0, 3).map((p) => p[0]).join("").toUpperCase();
 }
 
+// regime fiscale del master: determina se il compenso impostato nelle
+// fasce è già l'imponibile (forfettario/occasionale, esenti IVA) oppure
+// va scorporato dell'IVA per ottenere l'imponibile (ordinario, dove il
+// compenso in fascia è inteso IVA inclusa)
+const REGIMI_FISCALI_MASTER = [
+  { chiave: "forfettario", etichetta: "Regime forfettario esente IVA" },
+  { chiave: "ordinario", etichetta: "Regime ordinario con IVA" },
+  { chiave: "occasionale", etichetta: "Prestazione occasionale esente IVA" },
+];
+
 // tabella "Struttura compensi" di un corso associato a una master
 // (es. "1-2 allievi: 300€", "3-5: 350€", "6 in su: 400€") — solo
 // l'ultima fascia può restare aperta ("a" vuoto = "oltre N allievi"),
@@ -20028,6 +20038,11 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     const { error } = await supabase.from("master").update({ email: emailMod.trim() || null, telefono: telefonoMod.trim() || null }).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     setModificaContatti(false); ricarica();
+  }
+  async function salvaRegimeFiscale(valore) {
+    const { error } = await supabase.from("master").update({ regime_fiscale: valore || null }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
   }
   async function caricaFoto(file) {
     if (!file || !selezionatoId) return;
@@ -20242,6 +20257,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
 
                 <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 18, overflowX: "auto" }}>
                   <button onClick={() => setTab("corsi")} style={tabStyle(tab === "corsi")}>Corsi associati</button>
+                  <button onClick={() => setTab("regime")} style={tabStyle(tab === "regime")}>Regime fiscale</button>
                   <button onClick={() => setTab("compensi")} style={tabStyle(tab === "compensi")}>Compensi</button>
                   <button onClick={() => setTab("calendario")} style={tabStyle(tab === "calendario")}>Calendario</button>
                   <button onClick={() => setTab("note")} style={tabStyle(tab === "note")}>Note e documenti</button>
@@ -20303,13 +20319,31 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                   </div>
                 )}
 
+                {tab === "regime" && (
+                  <div style={{ maxWidth: 360 }}>
+                    <Field label="Regime fiscale">
+                      <select value={selezionato.regime_fiscale || ""} onChange={(e) => salvaRegimeFiscale(e.target.value)} style={inputStyle}>
+                        <option value="">— non impostato —</option>
+                        {REGIMI_FISCALI_MASTER.map((r) => <option key={r.chiave} value={r.chiave}>{r.etichetta}</option>)}
+                      </select>
+                    </Field>
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 10, lineHeight: 1.5 }}>
+                      Con "Forfettario" e "Prestazione occasionale" il compenso impostato nelle fasce è già l'imponibile, esente IVA. Con "Ordinario" il compenso è inteso IVA inclusa: l'imponibile (mostrato nel tab "Compensi") viene scorporato al 22%.
+                    </div>
+                  </div>
+                )}
+
                 {tab === "compensi" && (
                   <div>
+                    {!selezionato.regime_fiscale && (
+                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, fontStyle: "italic" }}>Regime fiscale non impostato (tab "Regime fiscale") — i compensi qui sotto sono mostrati senza scorporo IVA.</div>
+                    )}
                     {assegnazioni.length === 0 ? (
                       <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso associato — le fasce di compenso compariranno qui una volta aggiunto un corso.</div>
                     ) : assegnazioni.map((a) => {
                       const c = corsoById[a.corso_id];
                       const fasce = a.fasce_compenso || [];
+                      const ivaInclusa = selezionato.regime_fiscale === "ordinario";
                       return (
                         <div key={a.id} style={{ marginBottom: 18 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -20321,9 +20355,14 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                           ) : (
                             <div style={{ marginLeft: 16, display: "flex", flexDirection: "column", gap: 4 }}>
                               {fasce.map((f, i) => (
-                                <div key={i} style={{ display: "flex", justifyContent: "space-between", maxWidth: 320, ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", maxWidth: 320, ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
                                   <span>Da {f.da ?? "—"} a {f.a == null ? "∞" : f.a} allievi</span>
-                                  <span style={{ fontWeight: 700 }}>{f.compenso != null ? fmtEuroErp2(f.compenso) : "—"}</span>
+                                  <span style={{ textAlign: "right" }}>
+                                    <span style={{ fontWeight: 700, display: "block" }}>{f.compenso != null ? fmtEuroErp2(f.compenso) : "—"}{ivaInclusa && f.compenso != null && <span style={{ fontWeight: 400, color: MUTED }}> iva incl.</span>}</span>
+                                    {ivaInclusa && f.compenso != null && (
+                                      <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Imponibile: {fmtEuroErp2(round2(f.compenso / 1.22))}</span>
+                                    )}
+                                  </span>
                                 </div>
                               ))}
                             </div>

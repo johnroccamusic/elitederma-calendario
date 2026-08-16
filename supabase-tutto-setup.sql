@@ -2403,3 +2403,16 @@ drop table if exists public.strutture_compensi;
 alter table public.corsi add column if not exists fasce_compenso_default jsonb not null default '[]';
 
 notify pgrst, 'reload schema';
+
+
+-- ---------------------------------------------------------
+-- 87) Regime fiscale del master (Gestione Master → scheda master →
+-- tab "Regime fiscale"): determina come leggere il compenso impostato
+-- nelle fasce (tab "Compensi"). "forfettario"/"occasionale" sono
+-- esenti IVA — il compenso in fascia È l'imponibile. "ordinario" è
+-- inteso IVA inclusa — l'imponibile si scorpora al 22% solo in
+-- visualizzazione, il valore salvato in fasce_compenso non cambia.
+-- ---------------------------------------------------------
+alter table public.master add column if not exists regime_fiscale text;
+
+notify pgrst, 'reload schema';
