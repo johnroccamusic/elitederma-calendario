@@ -8318,7 +8318,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8337,7 +8337,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [costoCashLoc, setCostoCashLoc] = useState("");
   const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
-  const [categoriaSpesaLoc, setCategoriaSpesaLoc] = useState(null);
   const [msg, setMsg] = useState("");
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
@@ -8400,7 +8399,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
   const [modCostoCashLoc, setModCostoCashLoc] = useState("");
   const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
-  const [modCategoriaSpesaLoc, setModCategoriaSpesaLoc] = useState(null);
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
@@ -8557,7 +8555,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
     setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
     setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
-    setModCategoriaSpesaLoc(l.categoria_spesa_id || null);
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
@@ -8566,7 +8563,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
       costo_giornaliero_cash: modCostoCashLoc === "" ? null : Number(modCostoCashLoc),
       costo_giornaliero_bonifico: modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc),
-      categoria_spesa_id: modCategoriaSpesaLoc || null,
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
@@ -8610,10 +8606,9 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
       costo_giornaliero_cash: costoCashLoc === "" ? null : Number(costoCashLoc),
       costo_giornaliero_bonifico: costoBonificoLoc === "" ? null : Number(costoBonificoLoc),
-      categoria_spesa_id: categoriaSpesaLoc || null,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setCategoriaSpesaLoc(null); setMsg("Location aggiunta.");
+    setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setMsg("Location aggiunta.");
     ricarica();
   }
   async function toggleMagazzinoLocale(locationId, valore) {
@@ -8866,6 +8861,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
       {showLocModal && (
         <Modal title="Location" onClose={() => setShowLocModal(false)}>
+          <SelettoreCategoriaGruppo campo="location_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
+
           <div style={hStyle}>Aggiungi location</div>
           <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
           <Field label="Città">
@@ -8879,9 +8876,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           </Field>
           <Field label="Costo giornaliero Bonifico (opzionale)">
             <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
-          </Field>
-          <Field label="Associa categoria di spesa">
-            <SelectCategoriaSpesa value={categoriaSpesaLoc} onChange={setCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
           </Field>
           <Button onClick={aggiungiLocation}>Aggiungi location</Button>
 
@@ -8909,9 +8903,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                   </Field>
                   <Field label="Costo giornaliero Bonifico (opzionale)">
                     <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
-                  </Field>
-                  <Field label="Associa categoria di spesa">
-                    <SelectCategoriaSpesa value={modCategoriaSpesaLoc} onChange={setModCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
                   </Field>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
@@ -9302,6 +9293,25 @@ function SelectCategoriaSpesa({ value, onChange, costiCategorie, costiSottocateg
         </optgroup>
       ))}
     </select>
+  );
+}
+
+// riga singola fissa: "Associa il gruppo a una categoria di spesa" è
+// un'unica scelta per l'intero gruppo (tutte le assistenti, tutte le
+// master, ecc.), non per singolo record — un solo id, sempre lo stesso
+const ID_IMPOSTAZIONI_CATEGORIE_GRUPPI = "00000000-0000-0000-0000-000000000001";
+function SelettoreCategoriaGruppo({ campo, categorieGruppi, costiCategorie, costiSottocategorie, ricarica }) {
+  async function salva(valore) {
+    const { error } = await supabase.from("impostazioni_categorie_gruppi").update({ [campo]: valore }).eq("id", ID_IMPOSTAZIONI_CATEGORIE_GRUPPI);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica();
+  }
+  return (
+    <div style={{ maxWidth: 320, marginBottom: 20 }}>
+      <Field label="Associa il gruppo a una categoria di spesa">
+        <SelectCategoriaSpesa value={categorieGruppi?.[campo]} onChange={salva} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
+      </Field>
+    </div>
   );
 }
 
@@ -20174,7 +20184,7 @@ function EditorFasceCompenso({ fasce, onCambia }) {
 // associati/Compensi/Calendario/Note e documenti. Sostituisce il vecchio
 // modale "Master" — è la pagina che si apre da Impostazioni > Definisci
 // Master.
-function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDateDocenti, costiCategorie, costiSottocategorie, ricarica, onBack }) {
+function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDateDocenti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [filtro, setFiltro] = useState("tutti");
@@ -20381,6 +20391,8 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Master</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Associa i master ai corsi e definisci i compensi in base al numero di allievi.</div>
 
+        <SelettoreCategoriaGruppo campo="master_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
+
         <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 20 }}>
           <button onClick={() => setVistaGestione("master")} style={tabStyle(vistaGestione === "master")}>Master</button>
           <button onClick={() => setVistaGestione("compensi")} style={tabStyle(vistaGestione === "compensi")}>Gestione compensi</button>
@@ -20481,16 +20493,6 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                       <input type="checkbox" checked={!!selezionato.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 15, height: 15 }} />
                       <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
                     </label>
-                    <div style={{ marginTop: 10, maxWidth: 280 }}>
-                      <Field label="Associa categoria di spesa">
-                        <SelectCategoriaSpesa
-                          value={selezionato.categoria_spesa_id}
-                          onChange={(v) => salvaCampoMaster("categoria_spesa_id", v)}
-                          costiCategorie={costiCategorie}
-                          costiSottocategorie={costiSottocategorie}
-                        />
-                      </Field>
-                    </div>
                   </div>
 
                   <div style={{ position: "relative", flexShrink: 0 }}>
@@ -20721,7 +20723,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
 // corsi_date_docenti (assegnata da Assegnazione Master) — non esiste un
 // concetto di "associazione al corso" per le leve, solo la storia di
 // dove hanno fatto assistenza.
-function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDocenti, associazioniCorsi, costiCategorie, costiSottocategorie, ricarica, onBack }) {
+function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDocenti, associazioniCorsi, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const isAssistente = tabella === "assistente";
   // tipo con cui questa persona compare nelle righe "docenti extra" di
@@ -20941,6 +20943,10 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>{sottotitolo}</div>
 
+        {isAssistente && (
+          <SelettoreCategoriaGruppo campo="assistenti_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
+        )}
+
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi {nomeSingolare}</button>
           <div style={{ flex: 1, minWidth: isMobile ? "100%" : 220, maxWidth: 320 }}>
@@ -21029,18 +21035,6 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                         <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
                         <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
                         <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
-                      </div>
-                    )}
-                    {isAssistente && (
-                      <div style={{ marginTop: 10, maxWidth: 280 }}>
-                        <Field label="Associa categoria di spesa">
-                          <SelectCategoriaSpesa
-                            value={selezionato.categoria_spesa_id}
-                            onChange={(v) => salvaCampo("categoria_spesa_id", v)}
-                            costiCategorie={costiCategorie}
-                            costiSottocategorie={costiSottocategorie}
-                          />
-                        </Field>
                       </div>
                     )}
                   </div>
@@ -21169,7 +21163,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
 // (spesso diversi fra pagamento cash e fattura). Se un hotel è
 // associato a un'edizione, i suoi dati compaiono nella Dashboard
 // Master sotto al relativo corso (vedi CardDataMaster).
-function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, ricarica, onBack }) {
+function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [selezionatoId, setSelezionatoId] = useState(null);
@@ -21215,6 +21209,8 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, ricar
 
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Hotel</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Anagrafica degli hotel usati come alloggio per le edizioni dei corsi.</div>
+
+        <SelettoreCategoriaGruppo campo="hotel_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
           <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi Hotel</button>
@@ -21293,16 +21289,6 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, ricar
                       </select>
                     </Field>
                   </div>
-                </div>
-                <div style={{ maxWidth: 280 }}>
-                  <Field label="Associa categoria di spesa">
-                    <SelectCategoriaSpesa
-                      value={selezionato.categoria_spesa_id}
-                      onChange={(v) => salvaCampo("categoria_spesa_id", v)}
-                      costiCategorie={costiCategorie}
-                      costiSottocategorie={costiSottocategorie}
-                    />
-                  </Field>
                 </div>
               </React.Fragment>
             )}
@@ -26955,6 +26941,7 @@ export default function App() {
   const [diplomaEccezioni, setDiplomaEccezioni] = useState([]); // diplomi "eccezione" caricabili sul singolo iscritto, al posto del template del corso
   const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
   const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
+  const [categorieGruppi, setCategorieGruppi] = useState(null); // riga singola: "Associa il gruppo a una categoria di spesa" per assistenti/master/hotel/location
   const [loghiCategorie, setLoghiCategorie] = useState([]); // le 10 categorie fisse (corsi x Artist/Expert + Master Assistant + Master)
   // "Analisi costi di gestione": catalogo categorie/sotto-categorie (amministrabile), registro spese, ripartizioni multi-ambito, budget, soglie di allerta, ambiti evento/fornitore
   const [costiCategorie, setCostiCategorie] = useState([]);
@@ -27059,7 +27046,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -27116,6 +27103,7 @@ export default function App() {
       supabase.from("corsi_date_docenti").select("*"),
       supabase.from("voci_shop_classificazione").select("*"),
       supabase.from("coupon").select("*").order("created_at", { ascending: false }),
+      supabase.from("impostazioni_categorie_gruppi").select("*").limit(1),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -27183,6 +27171,7 @@ export default function App() {
     setCorsiDateDocenti(cdd.data || []);
     setVociShopClassificazione(vsc.data || []);
     setCoupon(cpn.data || []);
+    setCategorieGruppi(icg.data?.[0] || null);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -27820,7 +27809,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
@@ -28136,7 +28125,7 @@ export default function App() {
       {view === "gestionemaster" && (
         <PaginaGestioneMaster
           master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
-          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
@@ -28151,13 +28140,13 @@ export default function App() {
       {view === "gestioneassistenti" && (
         <PaginaGestioneTeam
           tabella="assistente" elementi={assistente} corsi={corsi} corsiDate={corsiDate} associazioniCorsi={assistenteCorsi} corsiDateDocenti={corsiDateDocenti}
-          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
 
       {view === "gestionehotel" && (
-        <PaginaGestioneHotel hotel={hotel} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <PaginaGestioneHotel hotel={hotel} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "crmallievi" && (
