@@ -164,7 +164,12 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
 const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 130, 90, 100, 150, 110, 70, 80, 90, 95, 76, 140];
-const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne";
+// "_v2": versione della chiave cambiata quando le colonne sono cambiate
+// di numero/default — senza, chi aveva già una larghezza salvata da
+// prima (es. "Pagato" più stretto di adesso) continua a vedere le
+// intestazioni sovrapposte anche dopo aver corretto i default, perché
+// il valore vecchio in localStorage vince sempre su quello nuovo
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v2";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Richiesta fattura", "Notti prenotate", "Pattuito a notte", "Pattuito per periodo", "Pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
@@ -2113,6 +2118,71 @@ function Gate({ onOk }) {
   }
 }
 
+// tre caselle di "Assegnazione Master" (notti prenotate, pattuito a
+// notte, pattuito per periodo) legate tra loro: "pattuito per periodo"
+// si ricalcola da solo (notti × pattuito a notte) ogni volta che uno
+// dei due fattori cambia; se invece è "pattuito per periodo" che viene
+// toccato direttamente, resta quello scritto a mano finché non si
+// tocca di nuovo uno dei due fattori. Componente separato (non una
+// funzione locale) perché serve stato locale controllato: con i soliti
+// defaultValue+onBlur non controllati, il ricalcolo di un campo non
+// aggiornerebbe il valore MOSTRATO nella casella vicina
+function CelleNottiPattuito({ riga, salva, cellaGruppo, campoStyle }) {
+  const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
+  const [aNotte, setANotte] = useState(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
+  const [periodo, setPeriodo] = useState(riga.pattuito_periodo != null ? String(riga.pattuito_periodo) : "");
+
+  useEffect(() => {
+    setNotti(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
+    setANotte(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
+    setPeriodo(riga.pattuito_periodo != null ? String(riga.pattuito_periodo) : "");
+  }, [riga.notti_prenotate, riga.pattuito_a_notte, riga.pattuito_periodo]);
+
+  function commitNotti() {
+    const v = notti === "" ? null : Number(notti);
+    if (v === (riga.notti_prenotate ?? null)) return;
+    const aNotteNum = aNotte === "" ? null : parseNum(aNotte);
+    const campi = { notti_prenotate: v };
+    if (v != null && aNotteNum != null) {
+      const nuovoPeriodo = round2(v * aNotteNum);
+      setPeriodo(String(nuovoPeriodo));
+      campi.pattuito_periodo = nuovoPeriodo;
+    }
+    salva(campi);
+  }
+  function commitANotte() {
+    const v = aNotte === "" ? null : parseNum(aNotte);
+    if (v === (riga.pattuito_a_notte ?? null)) return;
+    const nottiNum = notti === "" ? null : Number(notti);
+    const campi = { pattuito_a_notte: v };
+    if (v != null && nottiNum != null) {
+      const nuovoPeriodo = round2(nottiNum * v);
+      setPeriodo(String(nuovoPeriodo));
+      campi.pattuito_periodo = nuovoPeriodo;
+    }
+    salva(campi);
+  }
+  function commitPeriodo() {
+    const v = periodo === "" ? null : parseNum(periodo);
+    if (v === (riga.pattuito_periodo ?? null)) return;
+    salva({ pattuito_periodo: v });
+  }
+
+  return (
+    <>
+      <td style={cellaGruppo}>
+        <input type="number" min="0" style={{ ...campoStyle, textAlign: "center" }} value={notti} onChange={(e) => setNotti(e.target.value)} onBlur={commitNotti} />
+      </td>
+      <td style={cellaGruppo}>
+        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} value={aNotte} onChange={(e) => setANotte(e.target.value)} onBlur={commitANotte} />
+      </td>
+      <td style={cellaGruppo}>
+        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} value={periodo} onChange={(e) => setPeriodo(e.target.value)} onBlur={commitPeriodo} />
+      </td>
+    </>
+  );
+}
+
 // ---------- Assegnazione Master ----------
 // tabella orizzontale con una riga per ogni data futura: sede confermata,
 // note libere, la master principale sui campi diretti di corsi_date
@@ -2302,6 +2372,23 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     ricarica();
   }
   function salvaCampo(id, campo, valore) { return salvaCampoGenerico("corsi_date", id, campo, valore); }
+  // variante multi-campo: serve a "Pattuito per periodo" che si
+  // ricalcola da notti×a notte e va salvato insieme al campo appena
+  // toccato, in un solo giro (non due update separati)
+  async function salvaCampiGenerico(tabella, id, campi) {
+    setOverrideCampi((m) => {
+      const next = { ...m };
+      for (const c of Object.keys(campi)) next[`${id}:${c}`] = campi[c];
+      return next;
+    });
+    const { error } = await supabase.from(tabella).update(campi).eq("id", id);
+    if (error) {
+      window.alert("Errore: " + error.message);
+      setOverrideCampi((m) => { const copia = { ...m }; for (const c of Object.keys(campi)) delete copia[`${id}:${c}`]; return copia; });
+      return;
+    }
+    ricarica();
+  }
   const [overrideCampi, setOverrideCampi] = useState({});
   function valoreCampo(oggetto, campo) {
     const chiave = `${oggetto.id}:${campo}`;
@@ -2644,15 +2731,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
                       {flagRichiestaFattura(!!valoreCampo(cd, "richiesta_fattura"), () => salvaCampo(cd.id, "richiesta_fattura", !valoreCampo(cd, "richiesta_fattura")))}
                     </td>
-                    <td style={cellaGruppo}>
-                      <input type="number" min="0" style={{ ...campoStyle, textAlign: "center" }} defaultValue={cd.notti_prenotate ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (v !== (cd.notti_prenotate ?? null)) salvaCampo(cd.id, "notti_prenotate", v); }} />
-                    </td>
-                    <td style={cellaGruppo}>
-                      <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={cd.pattuito_a_notte ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (cd.pattuito_a_notte ?? null)) salvaCampo(cd.id, "pattuito_a_notte", v); }} />
-                    </td>
-                    <td style={cellaGruppo}>
-                      <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={cd.pattuito_periodo ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (cd.pattuito_periodo ?? null)) salvaCampo(cd.id, "pattuito_periodo", v); }} />
-                    </td>
+                    <CelleNottiPattuito riga={cd} salva={(campi) => salvaCampiGenerico("corsi_date", cd.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
                       {flagPagato(!!valoreCampo(cd, "pagato"), () => salvaCampo(cd.id, "pagato", !valoreCampo(cd, "pagato")))}
                     </td>
@@ -2694,15 +2773,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
                         {flagRichiestaFattura(!!valoreCampo(riga, "richiesta_fattura"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "richiesta_fattura", !valoreCampo(riga, "richiesta_fattura")))}
                       </td>
-                      <td style={cellaGruppo}>
-                        <input type="number" min="0" style={{ ...campoStyle, textAlign: "center" }} defaultValue={riga.notti_prenotate ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : Number(e.target.value); if (v !== (riga.notti_prenotate ?? null)) salvaCampoGenerico("corsi_date_docenti", riga.id, "notti_prenotate", v); }} />
-                      </td>
-                      <td style={cellaGruppo}>
-                        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={riga.pattuito_a_notte ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (riga.pattuito_a_notte ?? null)) salvaCampoGenerico("corsi_date_docenti", riga.id, "pattuito_a_notte", v); }} />
-                      </td>
-                      <td style={cellaGruppo}>
-                        <input type="number" min="0" step="0.01" style={{ ...campoStyle, textAlign: "center" }} defaultValue={riga.pattuito_periodo ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (riga.pattuito_periodo ?? null)) salvaCampoGenerico("corsi_date_docenti", riga.id, "pattuito_periodo", v); }} />
-                      </td>
+                      <CelleNottiPattuito riga={riga} salva={(campi) => salvaCampiGenerico("corsi_date_docenti", riga.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
                         {flagPagato(!!valoreCampo(riga, "pagato"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "pagato", !valoreCampo(riga, "pagato")))}
                       </td>
