@@ -14762,21 +14762,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Totale</div>
                     <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Bonifico</div>
                     <div style={{ flex: "1 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Cash</div>
+                    <div style={{ flex: "0 1 90px", minWidth: 0, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Giorni</div>
                   </div>
                   {righeSpeseTutte.map((r) => {
                     const campoBonifico = r.tipo === "location" ? "location_bonifico" : r.tipo === "venditore" ? "quota_venditore_bonifico" : "quota_bonifico";
                     const campoCash = r.tipo === "location" ? "location_cash" : r.tipo === "venditore" ? "quota_venditore_cash" : "quota_cash";
                     return (
                       <div key={r.tipo + "_" + r.rigaId} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
-                        <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{r.nome}</div>
-                          {r.giorni != null && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                              <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>−</button>
-                              <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 44, textAlign: "center", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
-                              <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>+</button>
-                            </div>
-                          )}
+                        <div style={{ flex: "2 1 170px", minWidth: 0 }}>
+                          <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</div>
                         </div>
                         <div style={{ flex: "1 1 90px", minWidth: 0 }}>
                           <div style={{ ...campoCompattoStyle, background: "#EFEFEF", color: MUTED }}>€ {r.totale}</div>
@@ -14786,6 +14780,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                         </div>
                         <div style={{ flex: "1 1 90px", minWidth: 0 }}>
                           <input style={campoCompattoStyle} inputMode="decimal" defaultValue={r.cash || ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (r.cash || null)) salvaSplitRiga(r.tabella, r.rigaId, { [campoCash]: v }); }} />
+                        </div>
+                        <div style={{ flex: "0 1 90px", minWidth: 0 }}>
+                          {r.giorni != null && (
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, Math.max(0, r.giorni - 1))} title="Un giorno in meno" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>−</button>
+                              <span style={{ ...fontBody, fontSize: 10.5, color: MUTED, minWidth: 26, textAlign: "center", whiteSpace: "nowrap" }}>{r.giorni}gg</span>
+                              <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
