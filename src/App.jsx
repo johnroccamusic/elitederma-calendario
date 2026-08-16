@@ -13341,14 +13341,15 @@ const ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI = "00000000-0000-0000-0000-000000000003"
 const SPAZI_ISCRIZIONI_DEFAULT = {
   paddingTop: 18, paddingBottom: 18,
   dopoEyebrow: 6, dopoTitolo: 12, dopoDateBox: 12, dopoDivider: 10, dopoSecondari: 28,
-  titoloFontSize: 28, pillolaFontSize: 16,
+  titoloFontSize: 28, pillolaFontSize: 16, pillolaPaddingV: 4,
 };
 // min/max per ciascuna chiave regolabile: gli spazi verticali vanno da 0
-// a 80px, i due font (titolo/pillola città) hanno un range proprio
+// a 80px, i due font (titolo/pillola città) hanno un range proprio,
+// l'altezza della pillola (padding verticale) un altro ancora
 const LIMITI_SPAZI_ISCRIZIONI = {
   paddingTop: [0, 80], paddingBottom: [0, 80],
   dopoEyebrow: [0, 80], dopoTitolo: [0, 80], dopoDateBox: [0, 80], dopoDivider: [0, 80], dopoSecondari: [0, 80],
-  titoloFontSize: [18, 64], pillolaFontSize: [10, 36],
+  titoloFontSize: [18, 64], pillolaFontSize: [10, 36], pillolaPaddingV: [2, 40],
 };
 // maniglia trascinabile stile "ridimensiona colonna" di Excel: in
 // verticale (striscia con linea tratteggiata orizzontale) per gli spazi,
@@ -13368,7 +13369,7 @@ function ManigliaSpazioVerticale({ onPointerDown, onPointerMove, onPointerUp }) 
     </div>
   );
 }
-function ManigliaRidimensionaOrizzontale({ onPointerDown, onPointerMove, onPointerUp }) {
+function ManigliaRidimensionaOrizzontale({ cursore = "ew-resize", onPointerDown, onPointerMove, onPointerUp }) {
   return (
     <span
       onPointerDown={onPointerDown}
@@ -13378,7 +13379,7 @@ function ManigliaRidimensionaOrizzontale({ onPointerDown, onPointerMove, onPoint
       title="Trascina per ingrandire/rimpicciolire (salvato per tutti)"
       style={{
         width: 14, height: 14, borderRadius: "50%", border: "1px dashed #4A5FBF", background: "#fff",
-        opacity: 0.7, cursor: "ew-resize", flexShrink: 0, touchAction: "none",
+        opacity: 0.7, cursor: cursore, flexShrink: 0, touchAction: "none",
         display: "inline-block", verticalAlign: "middle", position: "relative", zIndex: 6,
       }}
     />
@@ -14759,11 +14760,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       />
     );
   }
-  function manigliaRidimensiona(chiave) {
+  function manigliaRidimensiona(chiave, asse = "x") {
     if (ruoloUtente !== "programmatore") return null;
     return (
       <ManigliaRidimensionaOrizzontale
-        onPointerDown={(e) => iniziaRidimensionamentoSpazio(e, chiave, "x")}
+        cursore={asse === "x" ? "ew-resize" : "ns-resize"}
+        onPointerDown={(e) => iniziaRidimensionamentoSpazio(e, chiave, asse)}
         onPointerMove={muoviRidimensionamentoSpazio}
         onPointerUp={fineRidimensionamentoSpazio}
       />
@@ -14836,11 +14838,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               </div>
               {loc?.nome && (
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${Math.round(spaziIscrizioni.pillolaFontSize * 0.25)}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0 }}>
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: BG_CHIARO, border: `1px solid ${GOLD}`, borderRadius: Math.round(spaziIscrizioni.pillolaFontSize * 1.125), padding: `${spaziIscrizioni.pillolaPaddingV}px ${Math.round(spaziIscrizioni.pillolaFontSize * 0.75)}px`, flexShrink: 0 }}>
                     <IconaPin size={Math.round(spaziIscrizioni.pillolaFontSize * 0.94)} color={GOLD} />
                     <span style={{ ...fontBody, fontSize: spaziIscrizioni.pillolaFontSize, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>{loc.nome}</span>
                   </div>
                   {manigliaRidimensiona("pillolaFontSize")}
+                  {manigliaRidimensiona("pillolaPaddingV", "y")}
                 </div>
               )}
             </div>
