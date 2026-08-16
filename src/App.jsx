@@ -2493,9 +2493,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // tendina Bonifico/Cash, usata sia per "Tipo di pagamento" (l'alloggio di
   // una riga docente) sia per "Pagamento sede" (il costo location
   // dell'edizione): il Riepilogo Amministrativo la legge per decidere in
-  // quale colonna, Bonifico o Cash, mettere il relativo costo
+  // quale colonna, Bonifico o Cash, mettere il relativo costo. Nessun
+  // default a vista: se non è stata fatta una scelta (es. alloggio non
+  // selezionato) resta vuota — "Bonifico" non deve sembrare già scelto
   const selectBonificoCash = (valore, onChange) => (
-    <select style={campoStyle} value={valore || "bonifico"} onChange={(e) => onChange(e.target.value)}>
+    <select style={campoStyle} value={valore || ""} onChange={(e) => onChange(e.target.value || null)}>
+      <option value="">—</option>
       <option value="bonifico">Bonifico</option>
       <option value="cash">Cash</option>
     </select>
