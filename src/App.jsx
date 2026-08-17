@@ -2837,8 +2837,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
                       {valoreCampo(cd, "sede_confermata") ? (
-                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 12, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                          Avvisata
+                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}>
+                          {loc?.nome_sede ? toTitleCase(loc.nome_sede) : (loc?.nome ? toTitleCase(loc.nome) : "Sede")}
+                          <span title="Sede avvisata" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
                         </button>
                       ) : (
                         <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
