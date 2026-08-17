@@ -2704,3 +2704,13 @@ values ('00000000-0000-0000-0000-000000000003')
 on conflict (id) do nothing;
 
 notify pgrst, 'reload schema';
+
+-- ---------------------------------------------------------
+-- 104) Dati fiscali sulla scheda hotel (Gestione Hotel), subito dopo Città
+-- ---------------------------------------------------------
+alter table public.hotel add column if not exists partita_iva text;
+alter table public.hotel add column if not exists codice_destinatario text;
+alter table public.hotel add column if not exists pec text;
+alter table public.hotel add column if not exists iban text;
+
+notify pgrst, 'reload schema';

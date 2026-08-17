@@ -21660,6 +21660,12 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
                   <div style={{ flex: "1 1 180px" }}><Field label="Città"><input defaultValue={selezionato.citta || ""} onBlur={(e) => { if (e.target.value !== (selezionato.citta || "")) salvaCampo("citta", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
                 </div>
                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 200px" }}><Field label="Partita IVA"><input defaultValue={selezionato.partita_iva || ""} onBlur={(e) => { if (e.target.value !== (selezionato.partita_iva || "")) salvaCampo("partita_iva", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "1 1 160px" }}><Field label="Codice destinatario"><input defaultValue={selezionato.codice_destinatario || ""} onBlur={(e) => { if (e.target.value !== (selezionato.codice_destinatario || "")) salvaCampo("codice_destinatario", e.target.value.trim().toUpperCase() || null); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "1 1 220px" }}><Field label="PEC"><input defaultValue={selezionato.pec || ""} onBlur={(e) => { if (e.target.value !== (selezionato.pec || "")) salvaCampo("pec", e.target.value.trim() || null); }} style={inputStyle} /></Field></div>
+                  <div style={{ flex: "1 1 240px" }}><Field label="IBAN"><input defaultValue={selezionato.iban || ""} onBlur={(e) => { if (e.target.value !== (selezionato.iban || "")) salvaCampo("iban", e.target.value.trim().toUpperCase() || null); }} style={inputStyle} /></Field></div>
+                </div>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                   <div style={{ flex: "1 1 200px" }}>
                     <Field label="Costo a notte — Cash">
                       <input type="number" min="0" step="0.01" defaultValue={selezionato.costo_notte_cash ?? ""} onBlur={(e) => { const v = e.target.value === "" ? null : parseNum(e.target.value); if (v !== (selezionato.costo_notte_cash ?? null)) salvaCampo("costo_notte_cash", v); }} style={inputStyle} placeholder="0,00" />
