@@ -13378,6 +13378,9 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     gestita: corsoData.pagamento_sede != null,
     fornitore: locSedeClasse?.nome_sede || (locSedeClasse?.nome ? toTitleCase(locSedeClasse.nome) : "—"),
     iban: locSedeClasse?.iban || null,
+    // categoria di spesa della SEDE specifica (non più un'unica categoria
+    // condivisa da tutte le location, vedi PaginaGestioneLocation)
+    categoriaSpesaId: locSedeClasse?.categoria_spesa_id || null,
   } : null;
 
   // righe "Costo Alloggio": una per ogni persona (master, assistente o
@@ -18216,7 +18219,11 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       // non deve comparire nemmeno come impegno, solo come costo previsto
       // nel Riepilogo del corso
       if (conScadenza && !r.gestita) return;
-      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi), fornitore: r.fornitore || null, iban: r.iban || null };
+      // la location ha una categoria di spesa propria per sede (non più
+      // un'unica categoria condivisa da tutte, come invece restano
+      // master/alloggio/assistente/venditore)
+      const sottocategoriaId = r.tipo === "location" ? (r.categoriaSpesaId || null) : categoriaGruppoPer(r.tipo, categorieGruppi);
+      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId, fornitore: r.fornitore || null, iban: r.iban || null };
       if (conScadenza) {
         impegni.push(base);
         return;
@@ -22425,7 +22432,7 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
 // Città (l'elenco a cui fanno riferimento i calendari, per evitare
 // doppioni di battitura) e Sedi (una o più per città, con capienza/costi/
 // IBAN)
-function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategorie, costiSottocategorie, ricarica, onBack }) {
+function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocategorie, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [msg, setMsg] = useState("");
 
@@ -22472,6 +22479,9 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
   const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
   const [sedeCentraleLoc, setSedeCentraleLoc] = useState(false);
   const [ibanLoc, setIbanLoc] = useState("");
+  // categoria di spesa: propria per ciascuna sede, non più un'unica
+  // categoria condivisa da tutte le location (vedi calcolaVociScadenziario)
+  const [categoriaSpesaLoc, setCategoriaSpesaLoc] = useState(null);
 
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeSedeLoc, setModNomeSedeLoc] = useState("");
@@ -22481,6 +22491,7 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
   const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
   const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
   const [modIbanLoc, setModIbanLoc] = useState("");
+  const [modCategoriaSpesaLoc, setModCategoriaSpesaLoc] = useState(null);
 
   const gruppiLocationPerCitta = useMemo(() => {
     const mappa = {};
@@ -22498,9 +22509,10 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
       costo_giornaliero_bonifico: sedeCentraleLoc ? null : (costoBonificoLoc === "" ? null : Number(costoBonificoLoc)),
       sede_centrale: sedeCentraleLoc,
       iban: ibanLoc.trim() || null,
+      categoria_spesa_id: categoriaSpesaLoc,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setMostraFormSede(false); setMsg("Sede aggiunta.");
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setMostraFormSede(false); setMsg("Sede aggiunta.");
     ricarica(["location"]);
   }
   function apriModificaLocation(l) {
@@ -22512,6 +22524,7 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
     setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
     setModSedeCentraleLoc(!!l.sede_centrale);
     setModIbanLoc(l.iban || "");
+    setModCategoriaSpesaLoc(l.categoria_spesa_id || null);
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
@@ -22523,6 +22536,7 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
       costo_giornaliero_bonifico: modSedeCentraleLoc ? null : (modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc)),
       sede_centrale: modSedeCentraleLoc,
       iban: modIbanLoc.trim() || null,
+      categoria_spesa_id: modCategoriaSpesaLoc,
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null); setMsg("Sede aggiornata.");
@@ -22549,10 +22563,6 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
             <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Location</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginTop: 2 }}>Gestisci città e sedi accademiche</div>
           </div>
-        </div>
-
-        <div style={{ marginBottom: 20 }}>
-          <SelettoreCategoriaGruppo campo="location_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
         </div>
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>{msg}</div>}
@@ -22586,7 +22596,7 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
                 <div key={c.id}>
                   <RigaEliminabile label={c.nome.toUpperCase()} onModifica={() => apriModificaCitta(c)} onDelete={() => eliminaCitta(c.id)} />
                   {cittaInModifica === c.id && (
-                    <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ padding: 14, marginTop: 4, background: BG_CHIARO, borderRadius: 10 }}>
                       <Field label="Nome">
                         <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCitta} onChange={(e) => setModNomeCitta(e.target.value.toUpperCase())} />
                       </Field>
@@ -22647,6 +22657,9 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
                 <Field label="IBAN (opzionale)">
                   <input style={inputStyle} value={ibanLoc} onChange={(e) => setIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
                 </Field>
+                <Field label="Categoria di spesa (opzionale)">
+                  <SelectCategoriaSpesa value={categoriaSpesaLoc} onChange={setCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
+                </Field>
                 <div style={{ display: "flex", gap: 8 }}>
                   <Button onClick={aggiungiLocation}>Aggiungi sede</Button>
                   <Button variant="ghost" onClick={() => setMostraFormSede(false)}>Annulla</Button>
@@ -22665,12 +22678,16 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
                     <div key={l.id} style={{ ...cardStyle, padding: "10px 14px", marginBottom: 8 }}>
                       <RigaEliminabile
                         label={`Sede: ${l.nome_sede || "senza nome"}`}
-                        dettaglio={[l.posti_max != null ? `Capienza sede: ${l.posti_max}` : "Nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
+                        dettaglio={[
+                          l.posti_max != null ? `Capienza sede: ${l.posti_max}` : "Nessun tetto sui posti",
+                          l.sede_centrale ? "sede centrale — corsi gratuiti" : null,
+                          l.categoria_spesa_id ? `categoria: ${sottocategoriaCostoDi(costiSottocategorie, l.categoria_spesa_id)?.nome || "—"}` : "categoria di spesa non impostata",
+                        ].filter(Boolean).join(" · ")}
                         onModifica={() => apriModificaLocation(l)}
                         onDelete={() => eliminaLocation(l.id)}
                       />
                       {locInModifica === l.id && (
-                        <div style={{ padding: "10px 0 4px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                        <div style={{ padding: "14px", margin: "10px -14px -10px", background: BG_CHIARO, borderTop: `1px solid ${CREAM_BORDER}`, borderBottomLeftRadius: 12, borderBottomRightRadius: 12 }}>
                           <Field label="Nome sede (opzionale)">
                             <input style={inputStyle} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value)} />
                           </Field>
@@ -22699,6 +22716,9 @@ function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategor
                           )}
                           <Field label="IBAN (opzionale)">
                             <input style={inputStyle} value={modIbanLoc} onChange={(e) => setModIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
+                          </Field>
+                          <Field label="Categoria di spesa (opzionale)">
+                            <SelectCategoriaSpesa value={modCategoriaSpesaLoc} onChange={setModCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
                           </Field>
                           <div style={{ display: "flex", gap: 8 }}>
                             <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
@@ -28678,7 +28698,7 @@ export default function App() {
     gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
-    gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie"],
     crmallievi: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
@@ -29727,7 +29747,7 @@ export default function App() {
       )}
 
       {view === "gestionelocation" && (
-        <PaginaGestioneLocation location={location} citta={citta} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <PaginaGestioneLocation location={location} citta={citta} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "crmallievi" && (
