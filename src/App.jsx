@@ -9089,17 +9089,19 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           <div style={{ ...hStyle, marginTop: 24 }}>Sedi esistenti</div>
           <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
           {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna sede ancora.</div>}
-          {gruppiLocationPerCitta.map(([citta, sedi]) => (
+          {gruppiLocationPerCitta.map(([citta, sedi]) => {
+            const mostraGruppo = sedi.length > 1 || sedi.some((l) => l.nome_sede);
+            return (
             <div key={citta} style={{ marginTop: 14 }}>
-              {sedi.length > 1 && (
+              {mostraGruppo && (
                 <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
                   {toTitleCase(citta)}
                 </div>
               )}
               {sedi.map((l) => (
-                <div key={l.id} style={sedi.length > 1 ? { paddingLeft: 14, borderLeft: `2px solid ${CREAM_BORDER}` } : undefined}>
+                <div key={l.id} style={mostraGruppo ? { paddingLeft: 14, borderLeft: `2px solid ${CREAM_BORDER}` } : undefined}>
                   <RigaEliminabile
-                    label={sedi.length > 1 ? `Sede: ${l.nome_sede || "senza nome"}` : (l.nome_sede ? `${l.nome_sede} — ${toTitleCase(citta)}` : toTitleCase(citta))}
+                    label={mostraGruppo ? `Sede: ${l.nome_sede || "senza nome"}` : toTitleCase(citta)}
                     dettaglio={[l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
                     onModifica={() => apriModificaLocation(l)}
                     onDelete={() => eliminaLocation(l.id)}
@@ -9134,7 +9136,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                 </div>
               ))}
             </div>
-          ))}
+            );
+          })}
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
         </Modal>
       )}
