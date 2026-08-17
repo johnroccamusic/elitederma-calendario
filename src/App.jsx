@@ -13133,7 +13133,7 @@ const TASTI_HOME = [
   { chiave: "gestionedate", etichetta: "Gestione corsi" },
   { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
   { chiave: "dashboardmaster", etichetta: "Dashboard master" },
-  { chiave: "erp", etichetta: "Contabilità" },
+  { chiave: "erp", etichetta: "Amministrazione" },
   { chiave: "magazzinoshop", etichetta: "Gestione magazzino e shop" },
   { chiave: "pos", etichetta: "POS Vendita diretta" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
@@ -17264,10 +17264,10 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // Magazzino/CRM/Contabilità generale/Report non esistono ancora come
 // moduli dati: le voci di navigazione e i pulsanti che li richiederebbero
 // restano visibili ma disattivati, invece di inventare numeri finti
-// hub d'ingresso di "Contabilità": griglia di tasti stile Home (stesso
+// hub d'ingresso di "Amministrazione": griglia di tasti stile Home (stesso
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
-// restano solo le due aree propriamente di contabilità
+// restano solo le due aree propriamente amministrative
 function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti }) {
   const isMobile = useIsMobile();
   return (
@@ -17278,7 +17278,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCa
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 26, width: "auto", filter: "invert(1) brightness(1.8)" }} />
           </button>
           <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: "#fff", letterSpacing: 0.5 }}>ELITEDERMA</div>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>CONTABILITÀ</div>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 6, padding: "2px 6px" }}>AMMINISTRAZIONE</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginLeft: "auto" }}>
           <button onClick={onApriImpostazioni} title="Impostazioni" style={{ background: "transparent", border: "none", cursor: "pointer", color: "#fff", opacity: 0.85, display: "flex" }}>
@@ -17288,10 +17288,10 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCa
       </div>
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Contabilità</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Amministrazione</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi e le categorie di spesa usate per classificarli.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
-          <TileHome title="Amministrazione" descrizione="Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo." Icona={IconaTileCostiRicavi} onClick={onApriAmministrazione} />
+          <TileHome title="Contabilità" descrizione="Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo." Icona={IconaTileCostiRicavi} onClick={onApriAmministrazione} />
           <TileHome title="Categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Prima nota cassa." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
         </div>
       </div>
@@ -18694,7 +18694,9 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
   );
 }
 
-// "Amministrazione": Prima nota cassa in evidenza più quattro schede —
+// "Contabilità" (nome della pagina, non della funzione — la funzione resta
+// PaginaAmministrazione perché è così che è nota nel resto del codice):
+// Prima nota cassa in evidenza più quattro schede —
 // Quadro impegni, Registro documenti fornitore, Scadenziario Passivo (i
 // bonifici dovuti a fornitori: Compenso Master, Costo Location, Costo
 // Alloggio, Quota venditore, Commissione ricerca modelle, su tutti i
@@ -18865,9 +18867,9 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Amministrazione</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Contabilità</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
 
         <TabsAmministrazione
@@ -19173,7 +19175,7 @@ function PaginaInserimentoCostiRicavi({
             <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
               <IconaFrecciaSinistra size={20} />
             </button>
-            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
@@ -27147,7 +27149,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Gestisci categorie di spesa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Aggiungi, rinomina, riordina o disattiva le categorie e le sotto-voci di "Analisi costi di gestione".</div>
@@ -27421,7 +27423,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
 
@@ -27651,7 +27653,7 @@ function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricar
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>Budget</div>
 
@@ -29121,7 +29123,7 @@ export default function App() {
             <TileHome title="Dashboard venditori" descrizione="Monitora vendite, performance e obiettivi del team" Icona={IconaTileVenditori} attivo={tastoAbilitato("dashboardvenditori")} onClick={apriLoginVenditore} />
             <TileHome title="Dashboard master" descrizione="Gestisci master, specializzazioni e valutazioni" Icona={IconaTileMaster} attivo={tastoAbilitato("dashboardmaster")} onClick={apriDashboardMaster} />
             <TileHome title="Agenda" descrizione="Visualizza calendario, impegni e promemoria" Icona={IconaCalendarioCard} attivo={haAccessoAgenda()} onClick={apriAgenda} />
-            <TileHome title="Contabilità" descrizione="Costi, ricavi e categorie di spesa" Icona={IconaTileCostiRicavi} attivo={tastoAbilitato("erp")} onClick={apriErp} />
+            <TileHome title="Amministrazione" descrizione="Finanziaria e organizzativa" Icona={IconaTileCostiRicavi} attivo={tastoAbilitato("erp")} onClick={apriErp} />
             <TileHome title="Gestione magazzino e shop" descrizione="Prodotti, scorte, shop online e relative vendite" Icona={IconaTileGestioneMagazzino} attivo={tastoAbilitato("magazzinoshop")} onClick={apriMagazzinoShop} />
             <TileHome title="POS Vendita diretta" descrizione="Vendita al banco con scarico automatico dal magazzino" Icona={IconaTilePos} attivo={tastoAbilitato("pos")} onClick={apriPos} />
             <TileHome title="Logistica prodotti" descrizione="Spedizioni, tracciamenti e documenti" Icona={IconaTileLogistica} attivo={tastoAbilitato("logisticaprodotti")} onClick={apriLogisticaProdotti} />
