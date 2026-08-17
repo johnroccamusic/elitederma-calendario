@@ -163,15 +163,15 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 130, 90, 100, 150, 110, 100, 80, 90, 82, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 110, 130, 90, 100, 150, 110, 82, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
 // intestazioni sovrapposte anche dopo aver corretto i default, perché
 // il valore vecchio in localStorage vince sempre su quello nuovo
-const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v7";
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v8";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Tipo di pagamento", "Notti prenotate", "Pattuito a notte", "Hotel pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Scadenza sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -180,9 +180,7 @@ const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagame
 // mai a capo da solo
 const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
   ["Pagamento sede", ["Pagamento", "sede"]],
-  ["Tipo di pagamento", ["Tipo di", "pagamento"]],
-  ["Notti prenotate", ["Notti", "prenotate"]],
-  ["Pattuito a notte", ["Pattuito", "a notte"]],
+  ["Scadenza sede", ["Scadenza", "sede"]],
   ["Hotel pagato", ["Hotel", "pagato"]],
 ]);
 // etichetta del tipo mostrata a sinistra della tendina persona di una
@@ -2116,53 +2114,91 @@ function Gate({ onOk }) {
   }
 }
 
-// tre caselle di "Assegnazione Master" (notti prenotate, pattuito a
-// notte, pattuito per periodo) legate tra loro: "pattuito per periodo"
-// si ricalcola da solo (notti × pattuito a notte) ogni volta che uno
-// dei due fattori cambia; se invece è "pattuito per periodo" che viene
-// toccato direttamente, resta quello scritto a mano finché non si
-// tocca di nuovo uno dei due fattori. Componente separato (non una
-// funzione locale) perché serve stato locale controllato: con i soliti
-// defaultValue+onBlur non controllati, il ricalcolo di un campo non
-// aggiornerebbe il valore MOSTRATO nella casella vicina
-function CelleNottiPattuito({ riga, salva, cellaGruppo, campoStyle }) {
+// scheda "Gestisci" dell'alloggio di una riga (master principale o
+// docente extra): hotel, notti prenotate, pattuito a notte (precompilato
+// dalla tariffa dell'hotel corrispondente al Tipo di pagamento scelto,
+// modificabile), Tipo di pagamento e Scadenza pagamento — quest'ultima
+// è il cuore della differenza tra "Quadro impegni" (bonifico prenotato
+// ma senza ancora una fattura/scadenza) e "Scadenziario Passivo" (la
+// scadenza è nota, il pagamento è schedulabile): se il tipo è Cash resta
+// sempre sola lettura = fine corso, perché il cash si chiude comunque in
+// "Cash pulito in busta" a fine corso, non passa da qui.
+function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }) {
+  const [hotelId, setHotelId] = useState(riga.alloggio_id || "");
   const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
-  const [aNotte, setANotte] = useState(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
+  const [pattuitoANotte, setPattuitoANotte] = useState(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
+  const [tipoPagamento, setTipoPagamento] = useState(riga.tipo_pagamento_alloggio || "bonifico");
+  const [scadenza, setScadenza] = useState(riga.scadenza_pagamento_alloggio || "");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
 
+  // precompila "Pattuito a notte" dalla tariffa dell'hotel scelto (cash o
+  // fattura secondo il Tipo di pagamento), solo se il campo è ancora
+  // vuoto — non sovrascrive un valore già inserito a mano
   useEffect(() => {
-    setNotti(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
-    setANotte(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
-  }, [riga.notti_prenotate, riga.pattuito_a_notte]);
+    if (pattuitoANotte !== "") return;
+    const h = (hotel || []).find((x) => x.id === hotelId);
+    if (!h) return;
+    const tariffa = tipoPagamento === "cash" ? (h.costo_notte_cash ?? h.costo_notte_fattura) : (h.costo_notte_fattura ?? h.costo_notte_cash);
+    if (tariffa != null) setPattuitoANotte(String(tariffa));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelId, tipoPagamento]);
 
-  // "Pattuito per periodo" (notti × pattuito a notte) non è più una colonna
-  // a vista: resta calcolato e salvato qui dietro le quinte perché il
-  // Riepilogo Amministrativo lo usa come Totale della riga "Costo Alloggio"
-  function commitNotti() {
-    const v = notti === "" ? null : Number(notti);
-    if (v === (riga.notti_prenotate ?? null)) return;
-    const aNotteNum = aNotte === "" ? null : parseNum(aNotte);
-    const campi = { notti_prenotate: v };
-    if (v != null && aNotteNum != null) campi.pattuito_periodo = round2(v * aNotteNum);
-    salva(campi);
-  }
-  function commitANotte() {
-    const v = aNotte === "" ? null : parseNum(aNotte);
-    if (v === (riga.pattuito_a_notte ?? null)) return;
+  async function salva() {
+    setSalvando(true);
     const nottiNum = notti === "" ? null : Number(notti);
-    const campi = { pattuito_a_notte: v };
-    if (v != null && nottiNum != null) campi.pattuito_periodo = round2(nottiNum * v);
-    salva(campi);
+    const aNotteNum = pattuitoANotte === "" ? null : parseNum(pattuitoANotte);
+    const periodo = nottiNum != null && aNotteNum != null ? round2(nottiNum * aNotteNum) : null;
+    const campi = {
+      alloggio_id: hotelId || null,
+      notti_prenotate: nottiNum,
+      pattuito_a_notte: aNotteNum,
+      pattuito_periodo: periodo,
+      tipo_pagamento_alloggio: tipoPagamento || null,
+      scadenza_pagamento_alloggio: tipoPagamento === "cash" ? null : (scadenza || null),
+    };
+    const { error } = await supabase.from(tabella).update(campi).eq("id", riga.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    onSalvato();
   }
 
   return (
-    <>
-      <td style={cellaGruppo}>
-        <input type="text" inputMode="numeric" style={{ ...campoStyle, textAlign: "center" }} value={notti} onChange={(e) => setNotti(e.target.value)} onBlur={commitNotti} />
-      </td>
-      <td style={cellaGruppo}>
-        <input type="text" inputMode="decimal" style={{ ...campoStyle, textAlign: "center" }} value={aNotte} onChange={(e) => setANotte(e.target.value)} onBlur={commitANotte} />
-      </td>
-    </>
+    <Modal title="Gestisci alloggio" onClose={onClose} maxWidth={480}>
+      <Field label="Hotel">
+        <select style={inputStyle} value={hotelId} onChange={(e) => setHotelId(e.target.value)}>
+          <option value="">— nessuno —</option>
+          {(hotel || []).map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
+        </select>
+      </Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Notti prenotate">
+            <input type="text" inputMode="numeric" style={inputStyle} value={notti} onChange={(e) => setNotti(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Pattuito a notte">
+            <input type="text" inputMode="decimal" style={inputStyle} value={pattuitoANotte} onChange={(e) => setPattuitoANotte(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <Field label="Tipo di pagamento">
+        <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
+          <option value="cash">Cash</option>
+          <option value="bonifico">Bonifico con fattura</option>
+        </select>
+      </Field>
+      <Field label={tipoPagamento === "cash" ? "Scadenza pagamento (Cash — pagato a fine corso)" : "Scadenza pagamento (vuota finché non arriva la fattura)"}>
+        {tipoPagamento === "cash" ? (
+          <input type="date" style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={cd.data_fine || ""} disabled />
+        ) : (
+          <input type="date" style={inputStyle} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
+        )}
+      </Field>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : "Salva"}</Button>
+    </Modal>
   );
 }
 
@@ -2216,6 +2252,12 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // il corso su cui si sta aggiungendo, null quando è chiusa
   const [corsoDataAggiungiDocente, setCorsoDataAggiungiDocente] = useState(null);
   const [tipoDocenteScelto, setTipoDocenteScelto] = useState("master");
+  // scheda "Gestisci alloggio": { cd, riga, tabella } della riga aperta,
+  // null quando è chiusa — riga === cd per la master principale
+  const [gestisciAlloggio, setGestisciAlloggio] = useState(null);
+  function hotelNomeDi(id) {
+    return (hotel || []).find((h) => h.id === id)?.nome?.toUpperCase() || null;
+  }
   // agosto è tecnicamente l'ultimo mese della stagione PRECEDENTE (la
   // stagione va da settembre ad agosto), ma è anche il mese in cui si
   // organizza la stagione che sta per iniziare: questa spunta mostra anche
@@ -2703,6 +2745,13 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
                       {selectBonificoCash(valoreCampo(cd, "pagamento_sede"), (v) => salvaCampo(cd.id, "pagamento_sede", v))}
                     </td>
+                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
+                      {valoreCampo(cd, "pagamento_sede") === "cash" ? (
+                        <input type="date" style={{ ...campoStyle, background: "#EFEFEF", color: MUTED }} value={cd.data_fine || ""} disabled title="Cash: pagato a fine corso in Cash pulito in busta" />
+                      ) : (
+                        <input type="date" style={campoStyle} defaultValue={valoreCampo(cd, "scadenza_pagamento_location") || ""} onBlur={(e) => { if (e.target.value !== (valoreCampo(cd, "scadenza_pagamento_location") || "")) salvaCampo(cd.id, "scadenza_pagamento_location", e.target.value || null); }} />
+                      )}
+                    </td>
                     <td style={{ ...cellaGruppo, verticalAlign: "top", paddingTop: 3 }}>
                       <div>
                         <span style={etichettaTipoStyle}>Master</span>
@@ -2743,15 +2792,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       {cellaViaggio("corsi_date", cd, "viaggio_stato", "viaggio_file")}
                     </td>
                     <td style={cellaGruppo}>
-                      <select style={campoStyle} value={valoreCampo(cd, "alloggio_id") || ""} onChange={(e) => salvaCampo(cd.id, "alloggio_id", e.target.value || null)}>
-                        <option value="">—</option>
-                        {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
-                      </select>
+                      <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) ? `Gestisci — ${hotelNomeDi(valoreCampo(cd, "alloggio_id"))}` : "Gestisci"}
+                      </button>
                     </td>
-                    <td style={cellaGruppo}>
-                      {selectBonificoCash(valoreCampo(cd, "tipo_pagamento_alloggio"), (v) => salvaCampo(cd.id, "tipo_pagamento_alloggio", v))}
-                    </td>
-                    <CelleNottiPattuito riga={cd} salva={(campi) => salvaCampiGenerico("corsi_date", cd.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
                       {flagPagato(!!valoreCampo(cd, "pagato"), () => salvaCampo(cd.id, "pagato", !valoreCampo(cd, "pagato")))}
                     </td>
@@ -2785,15 +2829,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         {cellaViaggio("corsi_date_docenti", riga, "viaggio_stato", "viaggio_file")}
                       </td>
                       <td style={cellaGruppo}>
-                        <select style={campoStyle} value={valoreCampo(riga, "alloggio_id") || ""} onChange={(e) => salvaCampoGenerico("corsi_date_docenti", riga.id, "alloggio_id", e.target.value || null)}>
-                          <option value="">—</option>
-                          {hotel.map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
-                        </select>
+                        <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                          {hotelNomeDi(valoreCampo(riga, "alloggio_id")) ? `Gestisci — ${hotelNomeDi(valoreCampo(riga, "alloggio_id"))}` : "Gestisci"}
+                        </button>
                       </td>
-                      <td style={cellaGruppo}>
-                        {selectBonificoCash(valoreCampo(riga, "tipo_pagamento_alloggio"), (v) => salvaCampoGenerico("corsi_date_docenti", riga.id, "tipo_pagamento_alloggio", v))}
-                      </td>
-                      <CelleNottiPattuito riga={riga} salva={(campi) => salvaCampiGenerico("corsi_date_docenti", riga.id, campi)} cellaGruppo={cellaGruppo} campoStyle={campoStyle} />
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
                         {flagPagato(!!valoreCampo(riga, "pagato"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "pagato", !valoreCampo(riga, "pagato")))}
                       </td>
@@ -2944,6 +2983,16 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           </div>
         ))}
       </div>
+      {gestisciAlloggio && (
+        <ModaleGestisciAlloggio
+          cd={gestisciAlloggio.cd}
+          riga={gestisciAlloggio.riga}
+          tabella={gestisciAlloggio.tabella}
+          hotel={hotel}
+          onClose={() => setGestisciAlloggio(null)}
+          onSalvato={() => { setGestisciAlloggio(null); ricarica(); }}
+        />
+      )}
     </div>
   );
 }
@@ -13242,6 +13291,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse,
     bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
     cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
+    scadenza: corsoData.scadenza_pagamento_location || null,
   } : null;
 
   // righe "Costo Alloggio": una per ogni persona (master, assistente o
@@ -13254,8 +13304,8 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // Come per "Costo location", non è uno split libero: segue in blocco
   // la tendina "Tipo di pagamento" di quella riga.
   const righeAlloggioBase = [
-    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, nottiPrenotate: corsoData.notti_prenotate, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato },
-    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, nottiPrenotate: d.notti_prenotate, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato })),
+    { rigaId: corsoData.id, tabella: "corsi_date", personaTipo: "master", personaId: corsoData.master_id, alloggioId: corsoData.alloggio_id, pattuitoPeriodo: corsoData.pattuito_periodo, nottiPrenotate: corsoData.notti_prenotate, tipoPagamento: corsoData.tipo_pagamento_alloggio, pagato: corsoData.pagato, scadenza: corsoData.scadenza_pagamento_alloggio },
+    ...(corsiDateDocenti || []).filter((d) => d.corso_data_id === corsoData.id).map((d) => ({ rigaId: d.id, tabella: "corsi_date_docenti", personaTipo: d.tipo, personaId: d.persona_id, alloggioId: d.alloggio_id, pattuitoPeriodo: d.pattuito_periodo, nottiPrenotate: d.notti_prenotate, tipoPagamento: d.tipo_pagamento_alloggio, pagato: d.pagato, scadenza: d.scadenza_pagamento_alloggio })),
   ];
   const righeAlloggioClasse = righeAlloggioBase
     .filter((r) => r.alloggioId && (r.pattuitoPeriodo || r.nottiPrenotate))
@@ -13278,7 +13328,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
       // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
       // ma qui aggiunge solo un'indicazione visiva (pallino verde)
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato };
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null };
     })
     .filter(Boolean);
 
@@ -18045,6 +18095,42 @@ const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
   assistente: "Gestione Assistenti", venditore: "Statistiche venditori",
 };
 
+// righe "virtuali" (non ancora una spesa vera) dello Scadenziario Passivo,
+// calcolate una volta sola e riusate sia dalla pagina Scadenziario Passivo
+// sia da "Costi" (che mostra solo quelle "da pagare", non gli impegni):
+// - Alloggio/Location: un bonifico prenotato senza ancora una scadenza
+//   (fattura non arrivata) è un "impegno" — compare da subito, anche per
+//   un corso futuro, su TUTTI i corsi. Appena la scadenza è compilata
+//   (fattura arrivata) diventa "da pagare", a prescindere che il corso
+//   sia concluso o no: la scadenza reale conta più della data del corso.
+// - Master/Quota venditore/Commissione modelle: invariato, nessun
+//   concetto di "impegno" — dritti "da pagare" solo a corso concluso.
+function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese }) {
+  const oggiStr = dataOggiStr();
+  const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
+  const impegni = [];
+  const daPagare = [];
+  (corsiDate || []).forEach((cd) => {
+    const concluso = cd.data_fine <= oggiStr;
+    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel });
+    righeSpeseTutte.forEach((r) => {
+      if (!(r.bonifico > 0)) return;
+      const chiave = `${r.tipo}_${r.rigaId}`;
+      if (spesePerChiave.has(chiave)) return;
+      const conScadenza = r.tipo === "alloggio" || r.tipo === "location";
+      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) };
+      if (conScadenza && !r.scadenza) {
+        impegni.push(base);
+        return;
+      }
+      if (conScadenza ? true : concluso) {
+        daPagare.push({ ...base, scadenza: r.scadenza || null });
+      }
+    });
+  });
+  return { impegni, daPagareVirtuali: daPagare };
+}
+
 async function caricaRicevutaSpesa(file) {
   const nomeFile = `${Date.now()}-${sanitizzaNomeFile(file.name)}`;
   const { error } = await supabase.storage.from("spese-allegati").upload(nomeFile, file);
@@ -18088,17 +18174,49 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, totale, categoriaNome, dis
   );
 }
 
-// "Scadenziario": tutti i bonifici che il Riepilogo Amministrativo segna
-// come da pagare, su TUTTI i corsi conclusi, in un solo elenco — invece di
+// piccola riga di "Quadro impegni": importo e corso/persona, con un campo
+// data + tasto per compilare la scadenza appena arriva la fattura — da
+// quel momento la riga sparisce da qui e ricompare in "Da pagare"
+function RigaQuadroImpegni({ nome, corsoLabel, totale, onSalvaScadenza }) {
+  const [scadenza, setScadenza] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  async function salva() {
+    if (!scadenza) return;
+    setSalvando(true);
+    await onSalvaScadenza(scadenza);
+    setSalvando(false);
+  }
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nome}</div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{corsoLabel}</div>
+      </div>
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
+      <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
+      <button onClick={salva} disabled={salvando || !scadenza} title="Fattura arrivata: compila la scadenza per spostarla in Da pagare" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando || !scadenza ? 0.6 : 1, flexShrink: 0 }}>
+        {salvando ? "Salvo…" : "Segna scadenza"}
+      </button>
+    </div>
+  );
+}
+
+// "Scadenziario Passivo": tutti i bonifici dovuti a fornitori (Compenso
+// Master, Costo Location, Costo Alloggio, Quota venditore, Commissione
+// ricerca modelle), su tutti i corsi, in un solo elenco — invece di
 // doverli andare a cercare corso per corso. Riusa lo stesso calcolo del
-// Riepilogo (calcolaRigheSpeseCorso, sopra SchedaData) così i due punti
-// non possono mai raccontare numeri diversi. "Pagato" scrive una spesa
-// vera in contabilità (tabella "spese"), già classificata per sede e
-// categoria in base a "Associa il gruppo a una categoria di spesa"
-// (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
+// Riepilogo (calcolaVociScadenziario/calcolaRigheSpeseCorso, sopra
+// SchedaData) così i vari punti non possono mai raccontare numeri
+// diversi. Un bonifico ad Alloggio/Location senza ancora una scadenza
+// (fattura non arrivata) è solo un "impegno preso" — vive nella scheda
+// "Quadro impegni" finché non si compila la scadenza, poi passa in "Da
+// pagare". "Pagato" scrive una spesa vera in contabilità (tabella
+// "spese"), già classificata per sede e categoria in base a "Associa il
+// gruppo a una categoria di spesa" (Gestione Master/Assistenti/Hotel/
+// Location, Statistiche venditori).
 function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriModificaSpesa }) {
   const isMobile = useIsMobile();
-  const [tab, setTab] = useState("dapagare");
+  const [tab, setTab] = useState("impegni");
   const [msg, setMsg] = useState("");
 
   const oggiStr = dataOggiStr();
@@ -18112,19 +18230,7 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
 
   function bonificoDiSpesaReale(s) { return round2((s.totale || 0) - (s.importo_pagato_cash || 0)); }
 
-  const corsiConclusi = (corsiDate || []).filter((cd) => cd.data_fine <= oggiStr);
-  const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
-
-  const righeVirtuali = [];
-  corsiConclusi.forEach((cd) => {
-    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel });
-    righeSpeseTutte.forEach((r) => {
-      if (!(r.bonifico > 0)) return;
-      const chiave = `${r.tipo}_${r.rigaId}`;
-      if (spesePerChiave.has(chiave)) return;
-      righeVirtuali.push({ key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) });
-    });
-  });
+  const { impegni, daPagareVirtuali } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
 
   const righeReali = (spese || [])
     .filter((s) => s.tipo_ambito === "classe" && !s.origine_scadenziario_chiave && s.stato !== "pagata")
@@ -18136,7 +18242,7 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
       totale: bonificoDiSpesaReale(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
     }));
 
-  const daPagare = [...righeVirtuali, ...righeReali].sort((a, b) => (a.corsoData.data_fine || "").localeCompare(b.corsoData.data_fine || ""));
+  const daPagare = [...daPagareVirtuali, ...righeReali].sort((a, b) => (a.corsoData.data_fine || "").localeCompare(b.corsoData.data_fine || ""));
 
   const speseEvase = (spese || [])
     .filter((s) => s.tipo_ambito === "classe" && s.stato === "pagata")
@@ -18144,6 +18250,13 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
     .filter((x) => x.bonifico > 0)
     .sort((a, b) => (b.spesa.data_pagamento || "").localeCompare(a.spesa.data_pagamento || ""));
 
+  async function salvaScadenzaImpegno(item, scadenza) {
+    setMsg("");
+    const campo = item.tipo === "location" ? "scadenza_pagamento_location" : "scadenza_pagamento_alloggio";
+    const { error } = await supabase.from(item.tabella).update({ [campo]: scadenza }).eq("id", item.rigaId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica();
+  }
   async function segnaPagataVirtuale(item, { file, dataPagamento }) {
     setMsg("");
     let allegatoPath = null;
@@ -18190,15 +18303,31 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Scadenziario</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Bonifici da pagare su tutti i corsi conclusi, ricevuta e stato in un unico elenco.</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Scadenziario Passivo</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Impegni presi, bonifici da pagare e spese evase, in un unico posto.</div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <TabPillola attivo={tab === "impegni"} onClick={() => setTab("impegni")}>Quadro impegni ({impegni.length})</TabPillola>
           <TabPillola attivo={tab === "dapagare"} onClick={() => setTab("dapagare")}>Da pagare ({daPagare.length})</TabPillola>
           <TabPillola attivo={tab === "evase"} onClick={() => setTab("evase")}>Evase ({speseEvase.length})</TabPillola>
         </div>
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
+
+        {tab === "impegni" && (
+          <div style={{ ...cardStyle }}>
+            {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno in attesa di fattura.</div>}
+            {impegni.map((item) => (
+              <RigaQuadroImpegni
+                key={item.key}
+                nome={item.nome}
+                corsoLabel={etichettaCorso(item.corsoData)}
+                totale={item.totale}
+                onSalvaScadenza={(scadenza) => salvaScadenzaImpegno(item, scadenza)}
+              />
+            ))}
+          </div>
+        )}
 
         {tab === "dapagare" && (
           <div style={{ ...cardStyle }}>
@@ -18305,33 +18434,26 @@ function PaginaInserimentoCostiRicavi({
     };
   }
 
-  // voci "Da pagare" generate dai corsi conclusi (Compenso Master, Costo
+  // voci "Da pagare" dello Scadenziario Passivo (Compenso Master, Costo
   // Location, Costo Alloggio, Quota venditore, Commissione ricerca
-  // modelle): stesso calcolo dello Scadenziario, così questa lista mostra
-  // subito ogni bonifico dovuto appena il corso finisce, senza dover
-  // andare a cercarlo altrove — restano "Da pagare" (rosso) finché non
-  // vengono evase da lì
-  const oggiStr = dataOggiStr();
-  const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
-  const righeVirtualiDaPagare = [];
-  (corsiDate || []).filter((cd) => cd.data_fine <= oggiStr).forEach((cd) => {
-    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel });
-    righeSpeseTutte.forEach((r) => {
-      if (!(r.bonifico > 0)) return;
-      const chiave = `${r.tipo}_${r.rigaId}`;
-      if (spesePerChiave.has(chiave)) return;
-      const sottocategoriaId = categoriaGruppoPer(r.tipo, categorieGruppi);
-      const sottocategoria = sottocategoriaId ? costiSottocategorieById[sottocategoriaId] : null;
-      const corso = corsiById[cd.corso_id];
-      const loc = locationById[cd.location_id];
-      righeVirtualiDaPagare.push({
-        id: `virtuale_${chiave}`, virtuale: true, dataDocumento: cd.data_fine,
-        descrizione: r.nome,
-        sottotitolo: [corso?.nome, loc?.nome ? toTitleCase(loc.nome) : null].filter(Boolean).join(" · "),
-        chips: [sottocategoria ? sottocategoria.nome : "Categoria non impostata"],
-        importo: r.bonifico,
-      });
-    });
+  // modelle): stesso calcolo, riusato da calcolaVociScadenziario, così
+  // questa lista mostra sempre gli stessi bonifici — mai gli "impegni"
+  // di Alloggio/Location ancora senza scadenza (quelli restano nel
+  // Quadro impegni dello Scadenziario Passivo, non sono ancora "da
+  // pagare"). La data di riferimento è la scadenza quando c'è, altrimenti
+  // la fine del corso (Compenso Master/Quota venditore/Modelle).
+  const { daPagareVirtuali } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+  const righeVirtualiDaPagare = daPagareVirtuali.map((item) => {
+    const sottocategoria = item.sottocategoriaId ? costiSottocategorieById[item.sottocategoriaId] : null;
+    const corso = corsiById[item.corsoData.corso_id];
+    const loc = locationById[item.corsoData.location_id];
+    return {
+      id: `virtuale_${item.chiave}`, virtuale: true, dataDocumento: item.scadenza || item.corsoData.data_fine,
+      descrizione: item.nome,
+      sottotitolo: [corso?.nome, loc?.nome ? toTitleCase(loc.nome) : null].filter(Boolean).join(" · "),
+      chips: [sottocategoria ? sottocategoria.nome : "Categoria non impostata"],
+      importo: item.totale,
+    };
   });
 
   const speseRealiFiltrate = (spese || [])
