@@ -18159,6 +18159,7 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
       sottocategoria_id: item.sottocategoriaId,
       tipo_ambito: "classe", classe_id: item.corsoData.id, sede_id: item.corsoData.location_id, corso_id: item.corsoData.corso_id,
       imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: item.totale,
+      data_documento: item.corsoData.data_fine,
       stato: "pagata", data_pagamento: dataPagamento || null, metodo_pagamento: "Bonifico",
       allegato_path: allegatoPath, origine: "automatico",
       origine_scadenziario_chiave: item.chiave,
@@ -18271,7 +18272,11 @@ function ChipSpesa({ children }) {
   );
 }
 const SPESE_PAGINA_INIZIALE = 10;
-function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategorie, fornitori, ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget }) {
+function PaginaInserimentoCostiRicavi({
+  spese, costiCategorie, costiSottocategorie, fornitori,
+  corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
+  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriScadenziario,
+}) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("ultimomese");
   const [customDa, setCustomDa] = useState(dataOggiStr());
@@ -18284,13 +18289,60 @@ function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategor
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
   const costiSottocategorieById = Object.fromEntries((costiSottocategorie || []).map((v) => [v.id, v]));
+  const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
-  const speseFiltrate = (spese || [])
+  function normalizzaRigaReale(s) {
+    const categoria = costiCategorieById[s.categoria_id];
+    const fornitore = s.fornitore_id ? fornitoriById[s.fornitore_id] : null;
+    const sottocategoria = costiSottocategorieById[s.sottocategoria_id];
+    return {
+      id: s.id, virtuale: false, dataDocumento: s.data_documento,
+      descrizione: s.descrizione || sottocategoria?.nome || "Spesa",
+      sottotitolo: (categoria?.nome || "—") + (fornitore ? ` · ${fornitore.nome}` : ""),
+      chips: [sottocategoria?.nome, fornitore?.nome].filter(Boolean),
+      importo: s.totale, spesaReale: s,
+    };
+  }
+
+  // voci "Da pagare" generate dai corsi conclusi (Compenso Master, Costo
+  // Location, Costo Alloggio, Quota venditore, Commissione ricerca
+  // modelle): stesso calcolo dello Scadenziario, così questa lista mostra
+  // subito ogni bonifico dovuto appena il corso finisce, senza dover
+  // andare a cercarlo altrove — restano "Da pagare" (rosso) finché non
+  // vengono evase da lì
+  const oggiStr = dataOggiStr();
+  const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
+  const righeVirtualiDaPagare = [];
+  (corsiDate || []).filter((cd) => cd.data_fine <= oggiStr).forEach((cd) => {
+    const { righeSpeseTutte } = calcolaRigheSpeseCorso(cd, { iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel });
+    righeSpeseTutte.forEach((r) => {
+      if (!(r.bonifico > 0)) return;
+      const chiave = `${r.tipo}_${r.rigaId}`;
+      if (spesePerChiave.has(chiave)) return;
+      const sottocategoriaId = categoriaGruppoPer(r.tipo, categorieGruppi);
+      const sottocategoria = sottocategoriaId ? costiSottocategorieById[sottocategoriaId] : null;
+      const corso = corsiById[cd.corso_id];
+      const loc = locationById[cd.location_id];
+      righeVirtualiDaPagare.push({
+        id: `virtuale_${chiave}`, virtuale: true, dataDocumento: cd.data_fine,
+        descrizione: r.nome,
+        sottotitolo: [corso?.nome, loc?.nome ? toTitleCase(loc.nome) : null].filter(Boolean).join(" · "),
+        chips: [sottocategoria ? sottocategoria.nome : "Categoria non impostata"],
+        importo: r.bonifico,
+      });
+    });
+  });
+
+  const speseRealiFiltrate = (spese || [])
     .filter((s) => s.data_documento && s.data_documento >= range.inizio && s.data_documento <= range.fine)
     .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-  const speseVisibili = mostraTutte ? speseFiltrate : speseFiltrate.slice(0, SPESE_PAGINA_INIZIALE);
+  const righeReali = speseRealiFiltrate.map(normalizzaRigaReale);
+  const righeVirtualiFiltrate = righeVirtualiDaPagare.filter((r) => r.dataDocumento >= range.inizio && r.dataDocumento <= range.fine);
+  const righeUnite = [...righeReali, ...righeVirtualiFiltrate].sort((a, b) => (b.dataDocumento || "").localeCompare(a.dataDocumento || ""));
+  const righeVisibili = mostraTutte ? righeUnite : righeUnite.slice(0, SPESE_PAGINA_INIZIALE);
 
-  const totaleSpese = round2(speseFiltrate.reduce((s, sp) => s + (sp.totale || 0), 0));
+  const totaleSpese = round2(righeUnite.reduce((s, r) => s + (r.importo || 0), 0));
 
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
@@ -18311,7 +18363,7 @@ function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategor
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
-            <button onClick={() => esportaCsvSpese(speseFiltrate.map((s) => ({ spesa: s, importo: s.totale })), costiCategorieById, costiSottocategorieById)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
+            <button onClick={() => esportaCsvSpese(speseRealiFiltrate.map((s) => ({ spesa: s, importo: s.totale })), costiCategorieById, costiSottocategorieById)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
             <button onClick={() => window.print()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta PDF</button>
             <button onClick={onApriBudget} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Budget</button>
             <button onClick={onApriNuovaSpesa} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "10px 16px", borderRadius: 20, border: "none", background: NAVY, color: "#fff", cursor: "pointer" }}>+ Nuova spesa</button>
@@ -18349,7 +18401,7 @@ function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategor
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
             <div>
               <div style={{ ...fontHero, fontSize: 26, color: NAVY }}>Spese</div>
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{speseFiltrate.length} vo{speseFiltrate.length === 1 ? "ce" : "ci"}</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{righeUnite.length} vo{righeUnite.length === 1 ? "ce" : "ci"}</div>
             </div>
             <div style={{ textAlign: "right" }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Totale spese</div>
@@ -18357,7 +18409,7 @@ function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategor
             </div>
           </div>
 
-          {speseFiltrate.length === 0 ? (
+          {righeUnite.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>
           ) : (
             <>
@@ -18370,47 +18422,55 @@ function PaginaInserimentoCostiRicavi({ spese, costiCategorie, costiSottocategor
                   <div style={{ flex: "0 0 60px" }} />
                 </div>
               )}
-              {speseVisibili.map((spesa) => {
-                const [anno, mese, giorno] = (spesa.data_documento || "").split("-").map(Number);
-                const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
-                const sottocategoria = costiSottocategorieById[spesa.sottocategoria_id];
-                const categoria = costiCategorieById[spesa.categoria_id];
-                const fornitore = spesa.fornitore_id ? fornitoriById[spesa.fornitore_id] : null;
+              {righeVisibili.map((riga) => {
+                const [anno, mese, giorno] = (riga.dataDocumento || "").split("-").map(Number);
+                const stato = riga.virtuale ? null : (COLORE_STATO_SPESA[riga.spesaReale.stato] || COLORE_STATO_SPESA.preventivata);
                 return (
-                  <div key={spesa.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: isMobile ? "wrap" : "nowrap" }}>
+                  <div key={riga.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: isMobile ? "wrap" : "nowrap" }}>
                     <div style={{ flex: "0 0 56px", textAlign: "center" }}>
                       <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
                       {mese && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>{MESI_ABBR[mese - 1]}</div>}
                       {anno && <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{anno}</div>}
                     </div>
                     <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-                      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY }}>{spesa.descrizione || sottocategoria?.nome || "Spesa"}</div>
-                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>
-                        {categoria?.nome || "—"}{fornitore ? ` · ${fornitore.nome}` : ""}
-                      </div>
+                      <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY }}>{riga.descrizione}</div>
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{riga.sottotitolo}</div>
                       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
-                        {sottocategoria && <ChipSpesa>{sottocategoria.nome}</ChipSpesa>}
-                        {fornitore && <ChipSpesa>{fornitore.nome}</ChipSpesa>}
+                        {riga.chips.map((c) => <ChipSpesa key={c}>{c}</ChipSpesa>)}
                       </div>
                     </div>
-                    <div style={{ flex: isMobile ? "1 1 auto" : "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp(spesa.totale)}</div>
+                    <div style={{ flex: isMobile ? "1 1 auto" : "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp(riga.importo)}</div>
                     <div style={{ flex: isMobile ? "1 1 auto" : "0 0 120px" }}>
-                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
-                        {etichettaOpzione(STATI_SPESA, spesa.stato)}
-                      </span>
+                      {riga.virtuale ? (
+                        <button
+                          onClick={onApriScadenziario}
+                          title="Apri lo Scadenziario per completare il pagamento"
+                          style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "none", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap", cursor: "pointer" }}
+                        >
+                          Da pagare
+                        </button>
+                      ) : (
+                        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                          {etichettaOpzione(STATI_SPESA, riga.spesaReale.stato)}
+                        </span>
+                      )}
                     </div>
                     <div style={{ flex: "0 0 60px", display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                      <button onClick={() => onApriModificaSpesa(spesa.id)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                      </button>
-                      <button onClick={() => eliminaSpesa(spesa.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex" }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
-                      </button>
+                      {!riga.virtuale && (
+                        <>
+                          <button onClick={() => onApriModificaSpesa(riga.id)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                          </button>
+                          <button onClick={() => eliminaSpesa(riga.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex" }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
               })}
-              {!mostraTutte && speseFiltrate.length > SPESE_PAGINA_INIZIALE && (
+              {!mostraTutte && righeUnite.length > SPESE_PAGINA_INIZIALE && (
                 <div style={{ textAlign: "center", marginTop: 14 }}>
                   <button onClick={() => setMostraTutte(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
                     Mostra altre spese
@@ -28265,8 +28325,13 @@ export default function App() {
         <PaginaInserimentoCostiRicavi
           spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
+          corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
+          master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
+          assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
+          categorieGruppi={categorieGruppi}
           ricarica={fetchDati} onBack={() => setView("erp")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
+          onApriScadenziario={apriScadenziario}
         />
       )}
 
