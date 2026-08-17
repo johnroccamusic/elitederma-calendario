@@ -2237,14 +2237,21 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const sedeCentrale = !!loc?.sede_centrale;
+
   async function salva() {
     setSalvando(true);
     const campi = {
       location_id: locationIdScelta || null,
-      costo_giorno_sede_cash: costoGiornoCash === "" ? null : parseNum(costoGiornoCash),
-      costo_giorno_sede_bonifico: costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico),
+      costo_giorno_sede_cash: sedeCentrale ? null : (costoGiornoCash === "" ? null : parseNum(costoGiornoCash)),
+      costo_giorno_sede_bonifico: sedeCentrale ? null : (costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico)),
+      // "pagamento_sede" resta valorizzato anche per una sede centrale
+      // (ignorato nel calcolo dei costi, vedi calcolaRigheSpeseCorso): è
+      // il segnale che la scheda è stata aperta e salvata almeno una
+      // volta, usato in Assegnazione Master per decidere se mostrare
+      // ancora "Gestisci" o già nome sede + pallino
       pagamento_sede: tipoPagamento || null,
-      scadenza_pagamento_location: tipoPagamento === "cash" ? null : (scadenza || null),
+      scadenza_pagamento_location: sedeCentrale ? null : (tipoPagamento === "cash" ? null : (scadenza || null)),
       sede_confermata: avvisata,
     };
     const { error } = await supabase.from("corsi_date").update(campi).eq("id", cd.id);
@@ -2274,31 +2281,39 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
           {loc?.nome ? toTitleCase(loc.nome) : "—"}
         </div>
       </Field>
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Costo a giorno Cash">
-            <input type="text" inputMode="decimal" style={inputStyle} value={costoGiornoCash} onChange={(e) => setCostoGiornoCash(e.target.value)} />
-          </Field>
+      {sedeCentrale ? (
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#E8F5E9", color: "#2E7D32", border: "1px solid #C8E6C9", borderRadius: 20, padding: "8px 16px", marginBottom: 16, ...fontBody, fontSize: 13, fontWeight: 700 }}>
+          Sede Centrale
         </div>
-        <div style={{ flex: 1 }}>
-          <Field label="Costo a giorno Bonifico">
-            <input type="text" inputMode="decimal" style={inputStyle} value={costoGiornoBonifico} onChange={(e) => setCostoGiornoBonifico(e.target.value)} />
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Costo a giorno Cash">
+                <input type="text" inputMode="decimal" style={inputStyle} value={costoGiornoCash} onChange={(e) => setCostoGiornoCash(e.target.value)} />
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Costo a giorno Bonifico">
+                <input type="text" inputMode="decimal" style={inputStyle} value={costoGiornoBonifico} onChange={(e) => setCostoGiornoBonifico(e.target.value)} />
+              </Field>
+            </div>
+          </div>
+          <Field label="Tipo di pagamento">
+            <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
+              <option value="cash">Cash</option>
+              <option value="bonifico">Bonifico con fattura</option>
+            </select>
           </Field>
-        </div>
-      </div>
-      <Field label="Tipo di pagamento">
-        <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
-          <option value="cash">Cash</option>
-          <option value="bonifico">Bonifico con fattura</option>
-        </select>
-      </Field>
-      <Field label={tipoPagamento === "cash" ? "Scadenza pagamento (Cash — pagato a fine corso)" : "Scadenza pagamento (vuota finché non arriva la fattura)"}>
-        {tipoPagamento === "cash" ? (
-          <input type="date" style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={cd.data_fine || ""} disabled />
-        ) : (
-          <input type="date" style={inputStyle} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
-        )}
-      </Field>
+          <Field label={tipoPagamento === "cash" ? "Scadenza pagamento (Cash — pagato a fine corso)" : "Scadenza pagamento (vuota finché non arriva la fattura)"}>
+            {tipoPagamento === "cash" ? (
+              <input type="date" style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={cd.data_fine || ""} disabled />
+            ) : (
+              <input type="date" style={inputStyle} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
+            )}
+          </Field>
+        </>
+      )}
       <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 16 }}>
         <input type="checkbox" checked={avvisata} onChange={(e) => setAvvisata(e.target.checked)} style={{ width: 18, height: 18 }} />
         <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede avvisata</span>
