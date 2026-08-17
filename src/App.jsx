@@ -18680,15 +18680,8 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Amministrazione</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
 
-        <button onClick={onApriPrimaNotaCassa} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", textAlign: "left", ...cardStyle, padding: "16px 20px", marginBottom: 18, cursor: "pointer" }}>
-          <div>
-            <div style={{ ...fontHero, fontSize: 18, color: NAVY }}>Prima nota cassa</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
-          </div>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
-
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <TabPillola attivo={false} onClick={onApriPrimaNotaCassa}>Prima nota cassa</TabPillola>
           <TabPillola attivo={tab === "impegni"} onClick={() => setTab("impegni")}>Quadro impegni ({impegni.length})</TabPillola>
           <TabPillola attivo={tab === "documenti"} onClick={() => setTab("documenti")}>Registro documenti fornitore ({documentiFornitore.length})</TabPillola>
           <TabPillola attivo={tab === "passivo"} onClick={() => setTab("passivo")}>Scadenziario Passivo ({daPagare.length})</TabPillola>
