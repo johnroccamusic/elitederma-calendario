@@ -18471,6 +18471,38 @@ async function caricaRicevutaSpesa(file) {
   return { url: data.publicUrl };
 }
 
+// intestazione di mese, centrata, ripetuta ogni volta che cambia il mese
+// scorrendo una delle lunghe liste di Amministrazione — le spezza in
+// blocchi leggibili invece di un unico elenco indistinto
+function IntestazioneMeseLista({ mese, anno }) {
+  return (
+    <div style={{ textAlign: "center", padding: "24px 0 12px", ...fontDisplay, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 1.5 }}>
+      {mese} {anno}
+    </div>
+  );
+}
+// interpone una IntestazioneMeseLista ogni volta che, scorrendo "righe"
+// nell'ordine in cui sono già arrivate (qualunque esso sia: le liste di
+// Amministrazione hanno ciascuna il proprio ordinamento, che non tocchiamo
+// qui), il mese di "dataDi(riga)" cambia rispetto alla riga precedente —
+// stessa funzione per tutte le liste della pagina, cambia solo quale data
+// guardare e come disegnare la riga
+function elencoConIntestazioniMese(righe, dataDi, renderRiga) {
+  let meseAttuale = null;
+  const elementi = [];
+  righe.forEach((riga, idx) => {
+    const data = dataDi(riga);
+    const chiaveMese = data ? data.slice(0, 7) : null;
+    if (chiaveMese && chiaveMese !== meseAttuale) {
+      const [anno, mese] = chiaveMese.split("-").map(Number);
+      elementi.push(<IntestazioneMeseLista key={`mese-${chiaveMese}-${idx}`} mese={MESI[mese - 1]} anno={anno} />);
+      meseAttuale = chiaveMese;
+    }
+    elementi.push(renderRiga(riga, idx));
+  });
+  return elementi;
+}
+
 // riga standard delle liste di Amministrazione (Quadro impegni, Registro
 // documenti fornitore, Scadenziario Passivo/Attivo): stesso ordine
 // d'impaginazione di Prima Nota Cassa — data in evidenza a sinistra
@@ -18750,7 +18782,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         {tab === "impegni" && (
           <div style={{ ...cardStyle }}>
             {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno in attesa di fattura.</div>}
-            {impegni.map((item) => (
+            {elencoConIntestazioniMese(impegni, (item) => item.corsoData?.data_fine || null, (item) => (
               <RigaQuadroImpegni
                 key={item.key}
                 nome={item.nome}
@@ -18770,7 +18802,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         {tab === "documenti" && (
           <div style={{ ...cardStyle }}>
             {documentiFornitore.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura registrata ancora.</div>}
-            {documentiFornitore.map((spesa) => {
+            {elencoConIntestazioniMese(documentiFornitore, (spesa) => spesa.data_documento || null, (spesa) => {
               const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
               const chips = [
                 spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? fornitoriById[spesa.fornitore_id].nome : null,
@@ -18807,7 +18839,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {subTabPassivo === "dapagare" && (
               <div style={{ ...cardStyle }}>
                 {daPagare.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun bonifico da pagare al momento.</div>}
-                {daPagare.map((item) => (
+                {elencoConIntestazioniMese(daPagare, (item) => item.dataDebito || item.corsoData?.data_fine || null, (item) => (
                   <RigaScadenziarioDaPagare
                     key={item.key}
                     nome={item.nome}
@@ -18829,7 +18861,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {subTabPassivo === "evase" && (
               <div style={{ ...cardStyle }}>
                 {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
-                {speseEvase.map(({ spesa, bonifico, corsoData }) => {
+                {elencoConIntestazioniMese(speseEvase, ({ spesa }) => spesa.data_pagamento || null, ({ spesa, bonifico, corsoData }) => {
                   const chips = [
                     locationById[spesa.sede_id] ? toTitleCase(locationById[spesa.sede_id].nome) : null,
                     sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome,
@@ -18860,7 +18892,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         {tab === "attivo" && (
           <div style={{ ...cardStyle }}>
             {scadenziarioAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo in sospeso.</div>}
-            {scadenziarioAttivo.map((item) => (
+            {elencoConIntestazioniMese(scadenziarioAttivo, (item) => item.scadenza || null, (item) => (
               <RigaAmministrazione
                 key={item.key}
                 data={item.scadenza}
