@@ -2799,7 +2799,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     </td>
                     <td style={cellaGruppo}>
                       <button onClick={() => setGestisciAlloggio({ cd, riga: cd, tabella: "corsi_date" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
-                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) ? `Gestisci — ${hotelNomeDi(valoreCampo(cd, "alloggio_id"))}` : "Gestisci"}
+                        {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
                       </button>
                     </td>
                     <td style={{ ...cellaGruppo, textAlign: "center" }}>
@@ -2836,7 +2836,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       </td>
                       <td style={cellaGruppo}>
                         <button onClick={() => setGestisciAlloggio({ cd, riga, tabella: "corsi_date_docenti" })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
-                          {hotelNomeDi(valoreCampo(riga, "alloggio_id")) ? `Gestisci — ${hotelNomeDi(valoreCampo(riga, "alloggio_id"))}` : "Gestisci"}
+                          {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
                         </button>
                       </td>
                       <td style={{ ...cellaGruppo, textAlign: "center" }}>
