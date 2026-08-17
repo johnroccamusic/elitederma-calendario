@@ -2259,7 +2259,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
         <Field label="Sede">
           <select style={inputStyle} value={locationIdScelta} onChange={(e) => setLocationIdScelta(e.target.value)}>
             {sediStessaCitta.map((l) => (
-              <option key={l.id} value={l.id}>{l.nome_sede ? l.nome_sede.toUpperCase() : l.nome.toUpperCase()}</option>
+              <option key={l.id} value={l.id}>{l.nome_sede || l.nome.toUpperCase()}</option>
             ))}
           </select>
         </Field>
@@ -8591,6 +8591,16 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
+  // "Sedi esistenti" raggruppate per città (una città può avere più
+  // sedi, es. Roma): la città in testa una volta sola, poi le sedi che
+  // le appartengono sotto — così anche visivamente si capisce quali
+  // sedi condividono la stessa città sul calendario
+  const gruppiLocationPerCitta = useMemo(() => {
+    const mappa = {};
+    (location || []).forEach((l) => { (mappa[l.nome] ||= []).push(l); });
+    return Object.entries(mappa).sort(([a], [b]) => a.localeCompare(b));
+  }, [location]);
+
   // "Nessuna riga selezionata" per un corso = nessuna restrizione: nei
   // selettori "tipo modella" compaiono comunque tutti i tipi del catalogo
   const nomiTipiModella = (tipiModella || []).map((t) => t.nome);
@@ -8740,7 +8750,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
   function apriModificaLocation(l) {
     setLocInModifica(l.id);
-    setModNomeSedeLoc(l.nome_sede ? l.nome_sede.toUpperCase() : "");
+    setModNomeSedeLoc(l.nome_sede || "");
     setModNomeLoc(l.nome.toUpperCase());
     setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
     setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
@@ -9060,7 +9070,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           <div style={hStyle}>Aggiungi location</div>
           <div style={subStyle}>Aggiungi una sede in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default. I calendari continuano a fare riferimento alla città, non al nome della sede.</div>
           <Field label="Nome sede (opzionale)">
-            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value.toUpperCase())} placeholder="es. STUDIO CENTRALE" />
+            <input style={inputStyle} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value)} placeholder="es. Studio Centrale" />
           </Field>
           <Field label="Città">
             <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
@@ -9079,41 +9089,50 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           <div style={{ ...hStyle, marginTop: 24 }}>Sedi esistenti</div>
           <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
           {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna sede ancora.</div>}
-          {location.map((l) => (
-            <div key={l.id}>
-              <RigaEliminabile
-                label={l.nome_sede ? `${l.nome_sede.toUpperCase()} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}
-                dettaglio={[l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
-                onModifica={() => apriModificaLocation(l)}
-                onDelete={() => eliminaLocation(l.id)}
-              />
-              {locInModifica === l.id && (
-                <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <Field label="Nome sede (opzionale)">
-                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value.toUpperCase())} />
-                  </Field>
-                  <Field label="Città">
-                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
-                  </Field>
-                  <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
-                    <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
-                  </Field>
-                  <Field label="Costo giornaliero Cash (opzionale)">
-                    <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
-                  </Field>
-                  <Field label="Costo giornaliero Bonifico (opzionale)">
-                    <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
-                  </Field>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
-                    <input type="checkbox" checked={modSedeCentraleLoc} onChange={(e) => setModSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
-                    <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
-                  </label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
-                    <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
-                  </div>
+          {gruppiLocationPerCitta.map(([citta, sedi]) => (
+            <div key={citta} style={{ marginTop: 14 }}>
+              {sedi.length > 1 && (
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+                  {toTitleCase(citta)}
                 </div>
               )}
+              {sedi.map((l) => (
+                <div key={l.id} style={sedi.length > 1 ? { paddingLeft: 14, borderLeft: `2px solid ${CREAM_BORDER}` } : undefined}>
+                  <RigaEliminabile
+                    label={sedi.length > 1 ? `Sede: ${l.nome_sede || "senza nome"}` : (l.nome_sede ? `${l.nome_sede} — ${toTitleCase(citta)}` : toTitleCase(citta))}
+                    dettaglio={[l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
+                    onModifica={() => apriModificaLocation(l)}
+                    onDelete={() => eliminaLocation(l.id)}
+                  />
+                  {locInModifica === l.id && (
+                    <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <Field label="Nome sede (opzionale)">
+                        <input style={inputStyle} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value)} />
+                      </Field>
+                      <Field label="Città">
+                        <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
+                      </Field>
+                      <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
+                        <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
+                      </Field>
+                      <Field label="Costo giornaliero Cash (opzionale)">
+                        <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
+                      </Field>
+                      <Field label="Costo giornaliero Bonifico (opzionale)">
+                        <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
+                      </Field>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                        <input type="checkbox" checked={modSedeCentraleLoc} onChange={(e) => setModSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
+                        <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
+                      </label>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
+                        <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           ))}
           {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
@@ -12511,7 +12530,7 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
         <Field label="Sede">
           <select style={inputStyle} value={locSel} onChange={(e) => setLocSel(e.target.value)}>
             <option value="">Seleziona sede</option>
-            {location.map((l) => <option key={l.id} value={l.id}>{l.nome_sede ? `${l.nome_sede.toUpperCase()} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}</option>)}
+            {location.map((l) => <option key={l.id} value={l.id}>{l.nome_sede ? `${l.nome_sede} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}</option>)}
           </select>
         </Field>
       )}
