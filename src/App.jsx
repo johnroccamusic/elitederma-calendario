@@ -163,15 +163,15 @@ const fontCondensato = { fontFamily: "'Inter',sans-serif", fontWeight: 700, colo
 
 // larghezze di default delle colonne della tabella "Assegnazione Master"
 // (l'utente può trascinarle: la scelta resta salvata in localStorage)
-const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 60, 100, 110, 130, 90, 100, 150, 110, 82, 140];
+const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 100, 130, 90, 100, 150, 110, 82, 140];
 // "_v2": versione della chiave cambiata quando le colonne sono cambiate
 // di numero/default — senza, chi aveva già una larghezza salvata da
 // prima (es. "Pagato" più stretto di adesso) continua a vedere le
 // intestazioni sovrapposte anche dopo aver corretto i default, perché
 // il valore vecchio in localStorage vince sempre su quello nuovo
-const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v8";
+const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v9";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
-const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagamento sede", "Scadenza sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
+const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
 // ritorno a capo è forzato qui (non lasciato al wrap automatico del
@@ -179,8 +179,6 @@ const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede OK?", "Pagame
 // localStorage il testo ci starebbe su una riga sola e non andrebbe
 // mai a capo da solo
 const COLONNE_HEADER_SU_DUE_RIGHE = new Map([
-  ["Pagamento sede", ["Pagamento", "sede"]],
-  ["Scadenza sede", ["Scadenza", "sede"]],
   ["Hotel pagato", ["Hotel", "pagato"]],
 ]);
 // etichetta del tipo mostrata a sinistra della tendina persona di una
@@ -2208,6 +2206,87 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }
   );
 }
 
+// scheda "Gestisci sede": stesso meccanismo di "Gestisci alloggio" ma per
+// la location dell'edizione (fissa, non scelta qui — la Città si assegna
+// altrove). Il costo a giorno Cash/Bonifico precompila dalle condizioni
+// generali della location (Impostazioni → Location) solo se il campo è
+// ancora vuoto; "Sede avvisata" è lo stesso sede_confermata di sempre,
+// ora spostato dentro la scheda invece di un semaforo in tabella — appena
+// spuntato il tasto in Assegnazione Master diventa verde
+function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
+  const loc = (location || []).find((l) => l.id === cd.location_id);
+  const [costoGiornoCash, setCostoGiornoCash] = useState(cd.costo_giorno_sede_cash != null ? String(cd.costo_giorno_sede_cash) : "");
+  const [costoGiornoBonifico, setCostoGiornoBonifico] = useState(cd.costo_giorno_sede_bonifico != null ? String(cd.costo_giorno_sede_bonifico) : "");
+  const [tipoPagamento, setTipoPagamento] = useState(cd.pagamento_sede === "cash" ? "cash" : "bonifico");
+  const [scadenza, setScadenza] = useState(cd.scadenza_pagamento_location || "");
+  const [avvisata, setAvvisata] = useState(!!cd.sede_confermata);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    if (!loc) return;
+    if (costoGiornoCash === "" && loc.costo_giornaliero_cash != null) setCostoGiornoCash(String(loc.costo_giornaliero_cash));
+    if (costoGiornoBonifico === "" && loc.costo_giornaliero_bonifico != null) setCostoGiornoBonifico(String(loc.costo_giornaliero_bonifico));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function salva() {
+    setSalvando(true);
+    const campi = {
+      costo_giorno_sede_cash: costoGiornoCash === "" ? null : parseNum(costoGiornoCash),
+      costo_giorno_sede_bonifico: costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico),
+      pagamento_sede: tipoPagamento || null,
+      scadenza_pagamento_location: tipoPagamento === "cash" ? null : (scadenza || null),
+      sede_confermata: avvisata,
+    };
+    const { error } = await supabase.from("corsi_date").update(campi).eq("id", cd.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    onSalvato();
+  }
+
+  return (
+    <Modal title="Gestisci sede" onClose={onClose} maxWidth={480}>
+      <Field label="Città">
+        <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
+          {loc?.nome ? toTitleCase(loc.nome) : "—"}
+        </div>
+      </Field>
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Costo a giorno Cash">
+            <input type="text" inputMode="decimal" style={inputStyle} value={costoGiornoCash} onChange={(e) => setCostoGiornoCash(e.target.value)} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Costo a giorno Bonifico">
+            <input type="text" inputMode="decimal" style={inputStyle} value={costoGiornoBonifico} onChange={(e) => setCostoGiornoBonifico(e.target.value)} />
+          </Field>
+        </div>
+      </div>
+      <Field label="Tipo di pagamento">
+        <select style={inputStyle} value={tipoPagamento} onChange={(e) => { setTipoPagamento(e.target.value); if (e.target.value === "cash") setScadenza(""); }}>
+          <option value="cash">Cash</option>
+          <option value="bonifico">Bonifico con fattura</option>
+        </select>
+      </Field>
+      <Field label={tipoPagamento === "cash" ? "Scadenza pagamento (Cash — pagato a fine corso)" : "Scadenza pagamento (vuota finché non arriva la fattura)"}>
+        {tipoPagamento === "cash" ? (
+          <input type="date" style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={cd.data_fine || ""} disabled />
+        ) : (
+          <input type="date" style={inputStyle} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
+        )}
+      </Field>
+      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 16 }}>
+        <input type="checkbox" checked={avvisata} onChange={(e) => setAvvisata(e.target.checked)} style={{ width: 18, height: 18 }} />
+        <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede avvisata</span>
+      </label>
+      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+      <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : "Salva"}</Button>
+    </Modal>
+  );
+}
+
 // ---------- Assegnazione Master ----------
 // tabella orizzontale con una riga per ogni data futura: sede confermata,
 // note libere, la master principale sui campi diretti di corsi_date
@@ -2261,6 +2340,9 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // scheda "Gestisci alloggio": { cd, riga, tabella } della riga aperta,
   // null quando è chiusa — riga === cd per la master principale
   const [gestisciAlloggio, setGestisciAlloggio] = useState(null);
+  // scheda "Gestisci sede": { cd } dell'edizione aperta, null quando è
+  // chiusa — la location è fissa (quella del corso), non si sceglie qui
+  const [gestisciSede, setGestisciSede] = useState(null);
   function hotelNomeDi(id) {
     return (hotel || []).find((h) => h.id === id)?.nome?.toUpperCase() || null;
   }
@@ -2495,20 +2577,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   // etichetta "Master/Assistente/Leva" sopra la relativa casella persona,
   // non più a fianco
   const etichettaTipoStyle = { ...fontScheda, fontSize: 10, fontWeight: 700, color: MUTED, marginBottom: 4 };
-  const semaforo = (attivo, onClick, size = "normale") => (
-    <button
-      onClick={onClick}
-      style={{
-        ...fontScheda, fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer",
-        border: "none", borderRadius: 8,
-        padding: size === "piccolo" ? "5px 12px" : "6px 14px",
-        background: attivo ? "#E8F5E9" : "#FDECEC", color: attivo ? "#2E7D32" : "#C0392B",
-      }}
-    >
-      {attivo ? "Sì" : "NO"}
-    </button>
-  );
-
   // flag generico verde/bianco con segno di spunta — usato per Avvisata
   // e Pagato: stesso comportamento, etichetta diversa
   const flagSemplice = (attivo, onClick, titoloAttivo, titoloInattivo) => (
@@ -2526,19 +2594,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   );
   const flagAvvisata = (attivo, onClick) => flagSemplice(attivo, onClick, "Avvisata", "Non ancora avvisata");
   const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Hotel pagato", "Hotel non ancora pagato");
-  // tendina Bonifico/Cash, usata sia per "Tipo di pagamento" (l'alloggio di
-  // una riga docente) sia per "Pagamento sede" (il costo location
-  // dell'edizione): il Riepilogo Amministrativo la legge per decidere in
-  // quale colonna, Bonifico o Cash, mettere il relativo costo. Nessun
-  // default a vista: se non è stata fatta una scelta (es. alloggio non
-  // selezionato) resta vuota — "Bonifico" non deve sembrare già scelto
-  const selectBonificoCash = (valore, onChange) => (
-    <select style={campoStyle} value={valore || ""} onChange={(e) => onChange(e.target.value || null)}>
-      <option value="">—</option>
-      <option value="bonifico">Bonifico</option>
-      <option value="cash">Cash</option>
-    </select>
-  );
 
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
   // in Excel) afferrando la giunzione tra due colonne nell'intestazione;
@@ -2702,7 +2757,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
               {ETICHETTE_COLONNE_MASTER.map((etichetta, i) => (
                 <th key={i} style={{
                   ...thStyle, position: "relative",
-                  textAlign: (etichetta === "Sede OK?" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
+                  textAlign: (etichetta === "Sede" || COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta)) ? "center" : thStyle.textAlign,
                   lineHeight: COLONNE_HEADER_SU_DUE_RIGHE.has(etichetta) ? 1.25 : thStyle.lineHeight,
                   // separatore tra le intestazioni: senza, due etichette
                   // corte in colonne strette (es. "Avvisata"/"Note") sembrano
@@ -2745,17 +2800,15 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                       {corso?.nome?.toUpperCase() || "?"}
                     </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, textAlign: "center", verticalAlign: "top" }}>
-                      {semaforo(valoreCampo(cd, "sede_confermata"), () => salvaCampo(cd.id, "sede_confermata", !valoreCampo(cd, "sede_confermata")), "piccolo")}
-                    </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
-                      {selectBonificoCash(valoreCampo(cd, "pagamento_sede"), (v) => salvaCampo(cd.id, "pagamento_sede", v))}
-                    </td>
-                    <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
-                      {valoreCampo(cd, "pagamento_sede") === "cash" ? (
-                        <input type="date" style={{ ...campoStyle, background: "#EFEFEF", color: MUTED }} value={cd.data_fine || ""} disabled title="Cash: pagato a fine corso in Cash pulito in busta" />
+                      {valoreCampo(cd, "sede_confermata") ? (
+                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#fff", background: "#2E7D32", border: "none", borderRadius: 12, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                          Avvisata
+                        </button>
                       ) : (
-                        <input type="date" style={campoStyle} defaultValue={valoreCampo(cd, "scadenza_pagamento_location") || ""} onBlur={(e) => { if (e.target.value !== (valoreCampo(cd, "scadenza_pagamento_location") || "")) salvaCampo(cd.id, "scadenza_pagamento_location", e.target.value || null); }} />
+                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                          Gestisci
+                        </button>
                       )}
                     </td>
                     <td style={{ ...cellaGruppo, verticalAlign: "top", paddingTop: 3 }}>
@@ -2997,6 +3050,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
           hotel={hotel}
           onClose={() => setGestisciAlloggio(null)}
           onSalvato={() => { setGestisciAlloggio(null); ricarica(); }}
+        />
+      )}
+      {gestisciSede && (
+        <ModaleGestisciSede
+          cd={gestisciSede.cd}
+          location={location}
+          onClose={() => setGestisciSede(null)}
+          onSalvato={() => { setGestisciSede(null); ricarica(); }}
         />
       )}
     </div>
@@ -13281,17 +13342,19 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   });
 
   // riga "Costo location": costo giornaliero pattuito sulla sede
-  // (Impostazioni → Location) moltiplicato per i giorni del corso. Quale
-  // tariffa usare — cash o bonifico — non è più uno split libero: segue
-  // la tendina "Pagamento sede" scelta in Assegnazione Master, che decide
-  // in blocco se l'intero importo va in Bonifico o in Cash (con
-  // ripiego sull'altra tariffa se quella scelta non è impostata sulla
-  // location).
+  // moltiplicato per i giorni del corso. Il costo a giorno scritto in
+  // "Gestisci sede" (Assegnazione Master) ha sempre la priorità; se non è
+  // stato compilato si scende sulle condizioni generali della location
+  // (Impostazioni → Location). Quale tariffa usare — cash o bonifico —
+  // non è uno split libero: segue la tendina "Tipo di pagamento" scelta
+  // in "Gestisci sede", che decide in blocco se l'intero importo va in
+  // Bonifico o in Cash (con ripiego sull'altra tariffa se quella scelta
+  // non è impostata).
   const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
   const pagamentoSedeClasse = corsoData.pagamento_sede === "cash" ? "cash" : "bonifico";
   const costoGiornalieroLocation = pagamentoSedeClasse === "cash"
-    ? (locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
-    : (locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null);
+    ? (corsoData.costo_giorno_sede_cash ?? locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
+    : (corsoData.costo_giorno_sede_bonifico ?? locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null);
   const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
   const rigaLocationClasse = costoGiornalieroLocation != null ? {
     rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse,
