@@ -8559,7 +8559,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8574,19 +8574,9 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
   const [ricercaCorsi, setRicercaCorsi] = useState("");
   const [tipiModellaSelCorso, setTipiModellaSelCorso] = useState([]);
   const [tipiModellaSelCorsoModifica, setTipiModellaSelCorsoModifica] = useState([]);
-  const [nomeSedeLoc, setNomeSedeLoc] = useState("");
-  const [nomeLoc, setNomeLoc] = useState("");
-  const [postiMaxLoc, setPostiMaxLoc] = useState("");
-  const [costoCashLoc, setCostoCashLoc] = useState("");
-  const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
-  const [sedeCentraleLoc, setSedeCentraleLoc] = useState(false);
-  const [ibanLoc, setIbanLoc] = useState("");
   const [msg, setMsg] = useState("");
-  const [msgCitta, setMsgCitta] = useState("");
-  const [mostraFormAggiungiLoc, setMostraFormAggiungiLoc] = useState(false);
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
-  const [showLocModal, setShowLocModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
   const [showVenditoriModal, setShowVenditoriModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
@@ -8602,7 +8592,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
     if (vistaCorsiModal !== "griglia") { registraInterceptaIndietro(() => setVistaCorsiModal("griglia")); return () => registraInterceptaIndietro(null); }
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
-      [showLocModal, setShowLocModal], [showMagazziniModal, setShowMagazziniModal],
+      [showMagazziniModal, setShowMagazziniModal],
       [showVenditoriModal, setShowVenditoriModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
@@ -8611,7 +8601,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
     registraInterceptaIndietro(null);
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
-    showCorsoModal, showTipiModellaModal, showLocModal, showMagazziniModal,
+    showCorsoModal, showTipiModellaModal, showMagazziniModal,
     showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
   ]);
   // cellulare ed email vivono in colonne a sé, interrogate solo qui (non
@@ -8640,26 +8630,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
   const [diplomaCorsoModifica, setDiplomaCorsoModifica] = useState(null); // File scelto per sostituire il diploma di un corso esistente
   const [salvandoCorso, setSalvandoCorso] = useState(false);
 
-  const [locInModifica, setLocInModifica] = useState(null);
-  const [modNomeSedeLoc, setModNomeSedeLoc] = useState("");
-  const [modNomeLoc, setModNomeLoc] = useState("");
-  const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
-  const [modCostoCashLoc, setModCostoCashLoc] = useState("");
-  const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
-  const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
-  const [modIbanLoc, setModIbanLoc] = useState("");
-
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
-
-  // "Sedi esistenti" raggruppate per città (una città può avere più
-  // sedi, es. Roma): la città in testa una volta sola, poi le sedi che
-  // le appartengono sotto — così anche visivamente si capisce quali
-  // sedi condividono la stessa città sul calendario
-  const gruppiLocationPerCitta = useMemo(() => {
-    const mappa = {};
-    (location || []).forEach((l) => { (mappa[l.nome] ||= []).push(l); });
-    return Object.entries(mappa).sort(([a], [b]) => a.localeCompare(b));
-  }, [location]);
 
   // "Nessuna riga selezionata" per un corso = nessuna restrizione: nei
   // selettori "tipo modella" compaiono comunque tutti i tipi del catalogo
@@ -8710,13 +8681,6 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
     if (error) { setMsg("Errore: " + error.message); return; }
     setMsg("Corso eliminato.");
     ricarica(["corsi"]);
-  }
-  async function eliminaLocation(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare questo dato?")) return;
-    const { error } = await supabase.from("location").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setMsg("Città eliminata.");
-    ricarica(["location"]);
   }
   function apriModificaCorso(c) {
     setCorsoInModifica(c.id);
@@ -8808,33 +8772,6 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
     setMsg("Corso aggiornato.");
   }
 
-  function apriModificaLocation(l) {
-    setLocInModifica(l.id);
-    setModNomeSedeLoc(l.nome_sede || "");
-    setModNomeLoc(l.nome.toUpperCase());
-    setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
-    setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
-    setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
-    setModSedeCentraleLoc(!!l.sede_centrale);
-    setModIbanLoc(l.iban || "");
-  }
-  async function salvaModificaLocation(id) {
-    if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
-    const { error } = await supabase.from("location").update({
-      nome_sede: modNomeSedeLoc.trim() || null,
-      nome: modNomeLoc.trim().toUpperCase(),
-      posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
-      costo_giornaliero_cash: modSedeCentraleLoc ? null : (modCostoCashLoc === "" ? null : Number(modCostoCashLoc)),
-      costo_giornaliero_bonifico: modSedeCentraleLoc ? null : (modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc)),
-      sede_centrale: modSedeCentraleLoc,
-      iban: modIbanLoc.trim() || null,
-    }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setLocInModifica(null);
-    setMsg("Sede aggiornata.");
-    ricarica(["location"]);
-  }
-
   async function aggiungiCorso() {
     if (!nomeCorso.trim()) return;
     if (coloriUsati.includes(colore.toLowerCase())) {
@@ -8864,21 +8801,6 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
     ricarica(["corsi"]);
   }
 
-  async function aggiungiLocation() {
-    if (!nomeLoc.trim()) return;
-    const { error } = await supabase.from("location").insert({
-      nome_sede: nomeSedeLoc.trim() || null,
-      nome: nomeLoc.trim().toUpperCase(),
-      posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
-      costo_giornaliero_cash: sedeCentraleLoc ? null : (costoCashLoc === "" ? null : Number(costoCashLoc)),
-      costo_giornaliero_bonifico: sedeCentraleLoc ? null : (costoBonificoLoc === "" ? null : Number(costoBonificoLoc)),
-      sede_centrale: sedeCentraleLoc,
-      iban: ibanLoc.trim() || null,
-    });
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setMsg("Sede aggiunta.");
-    ricarica(["location"]);
-  }
   async function toggleMagazzinoLocale(locationId, valore) {
     // aggiorna lo stato locale invece di ricaricare tutti i dati
     // dell'app: è un solo flag booleano, senza nessuna chiamata esterna
@@ -8908,7 +8830,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
         { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
         { etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
         { etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
-        { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
+        { etichetta: "Definisci Location", Icona: IconaPin, onClick: onApriGestioneLocation },
         { etichetta: "Definisci magazzini distaccati", Icona: IconaPin, onClick: () => setShowMagazziniModal(true) },
       ],
     },
@@ -9125,127 +9047,6 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
         </Modal>
         );
       })()}
-
-      {showLocModal && (
-        <Modal title="Location" onClose={() => setShowLocModal(false)}>
-          <SelettoreCategoriaGruppo campo="location_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
-
-          <div style={{ paddingBottom: 18, marginBottom: 18, borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <div style={subStyle}>Elenco delle città a cui l'app fa riferimento per i calendari e tutto ciò che è già collegato alla città. Aggiungine di nuove qui: sotto, in "Città" di ogni sede, si sceglierà solo da questo elenco — niente più doppioni per errori di battitura.</div>
-            <GestioneListaSemplice
-              nomeSingolare="Città" nomeArticolo="una" tabella="citta"
-              elementi={citta} ricarica={ricarica} msg={msgCitta} setMsg={setMsgCitta}
-              placeholder="es. MILANO"
-            />
-          </div>
-
-          {!mostraFormAggiungiLoc ? (
-            <Button onClick={() => setMostraFormAggiungiLoc(true)}>+ Aggiungi location</Button>
-          ) : (
-            <>
-              <div style={hStyle}>Aggiungi location</div>
-              <div style={subStyle}>Aggiungi una sede in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default. I calendari continuano a fare riferimento alla città, non al nome della sede.</div>
-              <Field label="Nome sede (opzionale)">
-                <input style={inputStyle} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value)} placeholder="es. Studio Centrale" />
-              </Field>
-              <Field label="Città">
-                <select style={inputStyle} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value)}>
-                  <option value="">— scegli città —</option>
-                  {citta.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-                </select>
-              </Field>
-              <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
-                <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
-              </Field>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
-                <input type="checkbox" checked={sedeCentraleLoc} onChange={(e) => setSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
-                <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
-              </label>
-              {!sedeCentraleLoc && (
-                <>
-                  <Field label="Costo giornaliero Cash (opzionale)">
-                    <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
-                  </Field>
-                  <Field label="Costo giornaliero Bonifico (opzionale)">
-                    <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
-                  </Field>
-                </>
-              )}
-              <Field label="IBAN (opzionale)">
-                <input style={inputStyle} value={ibanLoc} onChange={(e) => setIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
-              </Field>
-              <div style={{ display: "flex", gap: 8 }}>
-                <Button onClick={aggiungiLocation}>Aggiungi location</Button>
-                <Button variant="ghost" onClick={() => setMostraFormAggiungiLoc(false)}>Annulla</Button>
-              </div>
-            </>
-          )}
-
-          <div style={{ ...hStyle, marginTop: 24 }}>Sedi esistenti</div>
-          <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
-          {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna sede ancora.</div>}
-          {gruppiLocationPerCitta.map(([nomeCitta, sedi]) => {
-            const mostraGruppo = sedi.length > 1 || sedi.some((l) => l.nome_sede);
-            return (
-            <div key={nomeCitta} style={{ marginTop: 14 }}>
-              {mostraGruppo && (
-                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
-                  {toTitleCase(nomeCitta)}
-                </div>
-              )}
-              {sedi.map((l) => (
-                <div key={l.id} style={mostraGruppo ? { paddingLeft: 14, borderLeft: `2px solid ${CREAM_BORDER}` } : undefined}>
-                  <RigaEliminabile
-                    label={mostraGruppo ? `Sede: ${l.nome_sede || "senza nome"}` : toTitleCase(nomeCitta)}
-                    dettaglio={[l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
-                    onModifica={() => apriModificaLocation(l)}
-                    onDelete={() => eliminaLocation(l.id)}
-                  />
-                  {locInModifica === l.id && (
-                    <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                      <Field label="Nome sede (opzionale)">
-                        <input style={inputStyle} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value)} />
-                      </Field>
-                      <Field label="Città">
-                        <select style={inputStyle} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value)}>
-                          <option value="">— scegli città —</option>
-                          {citta.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
-                        </select>
-                      </Field>
-                      <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
-                        <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
-                      </Field>
-                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
-                        <input type="checkbox" checked={modSedeCentraleLoc} onChange={(e) => setModSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
-                        <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
-                      </label>
-                      {!modSedeCentraleLoc && (
-                        <>
-                          <Field label="Costo giornaliero Cash (opzionale)">
-                            <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
-                          </Field>
-                          <Field label="Costo giornaliero Bonifico (opzionale)">
-                            <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
-                          </Field>
-                        </>
-                      )}
-                      <Field label="IBAN (opzionale)">
-                        <input style={inputStyle} value={modIbanLoc} onChange={(e) => setModIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
-                      </Field>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
-                        <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            );
-          })}
-          {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
-        </Modal>
-      )}
 
       {showMagazziniModal && (
         <Modal title="Magazzini distaccati" onClose={() => setShowMagazziniModal(false)}>
@@ -22619,6 +22420,304 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
   );
 }
 
+// "Gestione Location": prima un modale agganciato all'header di
+// Impostazioni ("Definisci Location"), ora una pagina a sé — due pannelli,
+// Città (l'elenco a cui fanno riferimento i calendari, per evitare
+// doppioni di battitura) e Sedi (una o più per città, con capienza/costi/
+// IBAN)
+function PaginaGestioneLocation({ location, citta, categorieGruppi, costiCategorie, costiSottocategorie, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [msg, setMsg] = useState("");
+
+  // --- Città ---
+  const [mostraFormCitta, setMostraFormCitta] = useState(false);
+  const [nomeCittaNuova, setNomeCittaNuova] = useState("");
+  const [cittaInModifica, setCittaInModifica] = useState(null);
+  const [modNomeCitta, setModNomeCitta] = useState("");
+
+  const cittaOrdinate = useMemo(() => [...(citta || [])].sort((a, b) => a.nome.localeCompare(b.nome)), [citta]);
+
+  async function aggiungiCitta() {
+    if (!nomeCittaNuova.trim()) return;
+    const { error } = await supabase.from("citta").insert({ nome: nomeCittaNuova.trim().toUpperCase() });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNomeCittaNuova(""); setMostraFormCitta(false); setMsg("Città aggiunta.");
+    ricarica(["citta"]);
+  }
+  function apriModificaCitta(c) {
+    setCittaInModifica(c.id);
+    setModNomeCitta(c.nome.toUpperCase());
+  }
+  async function salvaModificaCitta(id) {
+    if (!modNomeCitta.trim()) { setMsg("Il nome non può essere vuoto."); return; }
+    const { error } = await supabase.from("citta").update({ nome: modNomeCitta.trim().toUpperCase() }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setCittaInModifica(null); setMsg("Città aggiornata.");
+    ricarica(["citta"]);
+  }
+  async function eliminaCitta(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questa città?")) return;
+    const { error } = await supabase.from("citta").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Città eliminata.");
+    ricarica(["citta"]);
+  }
+
+  // --- Sedi (location) ---
+  const [mostraFormSede, setMostraFormSede] = useState(false);
+  const [nomeSedeLoc, setNomeSedeLoc] = useState("");
+  const [nomeLoc, setNomeLoc] = useState("");
+  const [postiMaxLoc, setPostiMaxLoc] = useState("");
+  const [costoCashLoc, setCostoCashLoc] = useState("");
+  const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
+  const [sedeCentraleLoc, setSedeCentraleLoc] = useState(false);
+  const [ibanLoc, setIbanLoc] = useState("");
+
+  const [locInModifica, setLocInModifica] = useState(null);
+  const [modNomeSedeLoc, setModNomeSedeLoc] = useState("");
+  const [modNomeLoc, setModNomeLoc] = useState("");
+  const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
+  const [modCostoCashLoc, setModCostoCashLoc] = useState("");
+  const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
+  const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
+  const [modIbanLoc, setModIbanLoc] = useState("");
+
+  const gruppiLocationPerCitta = useMemo(() => {
+    const mappa = {};
+    (location || []).forEach((l) => { (mappa[l.nome] ||= []).push(l); });
+    return Object.entries(mappa).sort(([a], [b]) => a.localeCompare(b));
+  }, [location]);
+
+  async function aggiungiLocation() {
+    if (!nomeLoc.trim()) return;
+    const { error } = await supabase.from("location").insert({
+      nome_sede: nomeSedeLoc.trim() || null,
+      nome: nomeLoc.trim().toUpperCase(),
+      posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
+      costo_giornaliero_cash: sedeCentraleLoc ? null : (costoCashLoc === "" ? null : Number(costoCashLoc)),
+      costo_giornaliero_bonifico: sedeCentraleLoc ? null : (costoBonificoLoc === "" ? null : Number(costoBonificoLoc)),
+      sede_centrale: sedeCentraleLoc,
+      iban: ibanLoc.trim() || null,
+    });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setMostraFormSede(false); setMsg("Sede aggiunta.");
+    ricarica(["location"]);
+  }
+  function apriModificaLocation(l) {
+    setLocInModifica(l.id);
+    setModNomeSedeLoc(l.nome_sede || "");
+    setModNomeLoc(l.nome.toUpperCase());
+    setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
+    setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
+    setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
+    setModSedeCentraleLoc(!!l.sede_centrale);
+    setModIbanLoc(l.iban || "");
+  }
+  async function salvaModificaLocation(id) {
+    if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
+    const { error } = await supabase.from("location").update({
+      nome_sede: modNomeSedeLoc.trim() || null,
+      nome: modNomeLoc.trim().toUpperCase(),
+      posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
+      costo_giornaliero_cash: modSedeCentraleLoc ? null : (modCostoCashLoc === "" ? null : Number(modCostoCashLoc)),
+      costo_giornaliero_bonifico: modSedeCentraleLoc ? null : (modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc)),
+      sede_centrale: modSedeCentraleLoc,
+      iban: modIbanLoc.trim() || null,
+    }).eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setLocInModifica(null); setMsg("Sede aggiornata.");
+    ricarica(["location"]);
+  }
+  async function eliminaLocation(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questa sede? Rimuove anche le date collegate a quella città.")) return;
+    const { error } = await supabase.from("location").delete().eq("id", id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Sede eliminata.");
+    ricarica(["location"]);
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 22 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaPin size={26} color={NAVY} />
+          </div>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Location</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginTop: 2 }}>Gestisci città e sedi accademiche</div>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 20 }}>
+          <SelettoreCategoriaGruppo campo="location_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
+        </div>
+
+        {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>{msg}</div>}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "320px 1fr", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ ...cardStyle, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconaPin size={18} color={GOLD} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Città esistenti</div>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 12, padding: "3px 10px" }}>{cittaOrdinate.length}</div>
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Elenco delle città dove operiamo.</div>
+
+            {!mostraFormCitta ? (
+              <Button onClick={() => setMostraFormCitta(true)}>+ Aggiungi città</Button>
+            ) : (
+              <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+                <input autoFocus style={{ ...inputStyle, textTransform: "uppercase", flex: "1 1 140px" }} value={nomeCittaNuova} onChange={(e) => setNomeCittaNuova(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && aggiungiCitta()} placeholder="es. MILANO" />
+                <Button onClick={aggiungiCitta}>Salva</Button>
+                <Button variant="ghost" onClick={() => { setMostraFormCitta(false); setNomeCittaNuova(""); }}>Annulla</Button>
+              </div>
+            )}
+
+            <div style={{ marginTop: 4 }}>
+              {cittaOrdinate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora.</div>}
+              {cittaOrdinate.map((c) => (
+                <div key={c.id}>
+                  <RigaEliminabile label={c.nome.toUpperCase()} onModifica={() => apriModificaCitta(c)} onDelete={() => eliminaCitta(c.id)} />
+                  {cittaInModifica === c.id && (
+                    <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <Field label="Nome">
+                        <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeCitta} onChange={(e) => setModNomeCitta(e.target.value.toUpperCase())} />
+                      </Field>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <Button onClick={() => salvaModificaCitta(c.id)}>Salva</Button>
+                        <Button variant="ghost" onClick={() => setCittaInModifica(null)}>Annulla</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, padding: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconaGruppoSediCorsi size={18} color={GOLD} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Sedi esistenti</div>
+                <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: BG_CHIARO, borderRadius: 12, padding: "3px 10px" }}>{(location || []).length}</div>
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Elenco delle sedi accademiche per città.</div>
+
+            {!mostraFormSede ? (
+              <Button onClick={() => setMostraFormSede(true)}>+ Aggiungi sede</Button>
+            ) : (
+              <div style={{ ...cardStyle, background: BG_CHIARO, padding: 16, marginBottom: 16 }}>
+                <div style={subStyle}>Aggiungi una sede in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default. I calendari continuano a fare riferimento alla città, non al nome della sede.</div>
+                <Field label="Nome sede (opzionale)">
+                  <input style={inputStyle} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value)} placeholder="es. Studio Centrale" />
+                </Field>
+                <Field label="Città">
+                  <select style={inputStyle} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value)}>
+                    <option value="">— scegli città —</option>
+                    {cittaOrdinate.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                  </select>
+                </Field>
+                <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
+                  <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
+                </Field>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                  <input type="checkbox" checked={sedeCentraleLoc} onChange={(e) => setSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
+                </label>
+                {!sedeCentraleLoc && (
+                  <>
+                    <Field label="Costo giornaliero Cash (opzionale)">
+                      <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
+                    </Field>
+                    <Field label="Costo giornaliero Bonifico (opzionale)">
+                      <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
+                    </Field>
+                  </>
+                )}
+                <Field label="IBAN (opzionale)">
+                  <input style={inputStyle} value={ibanLoc} onChange={(e) => setIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
+                </Field>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Button onClick={aggiungiLocation}>Aggiungi sede</Button>
+                  <Button variant="ghost" onClick={() => setMostraFormSede(false)}>Annulla</Button>
+                </div>
+              </div>
+            )}
+
+            {(location || []).length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna sede ancora.</div>}
+            <div style={{ columnCount: isMobile ? 1 : 2, columnGap: 20 }}>
+              {gruppiLocationPerCitta.map(([nomeCitta, sedi]) => (
+                <div key={nomeCitta} style={{ breakInside: "avoid", marginBottom: 14 }}>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+                    {toTitleCase(nomeCitta)}
+                  </div>
+                  {sedi.map((l) => (
+                    <div key={l.id} style={{ ...cardStyle, padding: "10px 14px", marginBottom: 8 }}>
+                      <RigaEliminabile
+                        label={`Sede: ${l.nome_sede || "senza nome"}`}
+                        dettaglio={[l.posti_max != null ? `Capienza sede: ${l.posti_max}` : "Nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
+                        onModifica={() => apriModificaLocation(l)}
+                        onDelete={() => eliminaLocation(l.id)}
+                      />
+                      {locInModifica === l.id && (
+                        <div style={{ padding: "10px 0 4px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                          <Field label="Nome sede (opzionale)">
+                            <input style={inputStyle} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value)} />
+                          </Field>
+                          <Field label="Città">
+                            <select style={inputStyle} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value)}>
+                              <option value="">— scegli città —</option>
+                              {cittaOrdinate.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                            </select>
+                          </Field>
+                          <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
+                            <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
+                          </Field>
+                          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                            <input type="checkbox" checked={modSedeCentraleLoc} onChange={(e) => setModSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
+                            <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
+                          </label>
+                          {!modSedeCentraleLoc && (
+                            <>
+                              <Field label="Costo giornaliero Cash (opzionale)">
+                                <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
+                              </Field>
+                              <Field label="Costo giornaliero Bonifico (opzionale)">
+                                <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
+                              </Field>
+                            </>
+                          )}
+                          <Field label="IBAN (opzionale)">
+                            <input style={inputStyle} value={modIbanLoc} onChange={(e) => setModIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
+                          </Field>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
+                            <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------- CRM Allievi ----------
 // "iscritti" è "una riga per ogni corso comprato", non un'anagrafica
 // persona (niente id stabile, niente email/città): questa chiave
@@ -28540,7 +28639,7 @@ export default function App() {
   const TABELLE_PER_VIEW = {
     home: [], erp: [], magazzinoshop: [], statistiche: [],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "citta", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
@@ -28579,6 +28678,7 @@ export default function App() {
     gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     crmallievi: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
@@ -28938,6 +29038,7 @@ export default function App() {
   function apriGestioneLeve() { setView("gestioneleve"); }
   function apriGestioneAssistenti() { setView("gestioneassistenti"); }
   function apriGestioneHotel() { setView("gestionehotel"); }
+  function apriGestioneLocation() { setView("gestionelocation"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
@@ -29263,7 +29364,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} citta={citta} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
@@ -29623,6 +29724,10 @@ export default function App() {
 
       {view === "gestionehotel" && (
         <PaginaGestioneHotel hotel={hotel} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+      )}
+
+      {view === "gestionelocation" && (
+        <PaginaGestioneLocation location={location} citta={citta} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "crmallievi" && (
