@@ -8504,7 +8504,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8525,6 +8525,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [costoCashLoc, setCostoCashLoc] = useState("");
   const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
   const [msg, setMsg] = useState("");
+  const [msgCitta, setMsgCitta] = useState("");
+  const [mostraFormAggiungiLoc, setMostraFormAggiungiLoc] = useState(false);
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
@@ -9067,24 +9069,45 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
         <Modal title="Location" onClose={() => setShowLocModal(false)}>
           <SelettoreCategoriaGruppo campo="location_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
 
-          <div style={hStyle}>Aggiungi location</div>
-          <div style={subStyle}>Aggiungi una sede in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default. I calendari continuano a fare riferimento alla città, non al nome della sede.</div>
-          <Field label="Nome sede (opzionale)">
-            <input style={inputStyle} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value)} placeholder="es. Studio Centrale" />
-          </Field>
-          <Field label="Città">
-            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
-          </Field>
-          <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
-            <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
-          </Field>
-          <Field label="Costo giornaliero Cash (opzionale)">
-            <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
-          </Field>
-          <Field label="Costo giornaliero Bonifico (opzionale)">
-            <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
-          </Field>
-          <Button onClick={aggiungiLocation}>Aggiungi location</Button>
+          <div style={{ paddingBottom: 18, marginBottom: 18, borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div style={subStyle}>Elenco delle città a cui l'app fa riferimento per i calendari e tutto ciò che è già collegato alla città. Aggiungine di nuove qui: sotto, in "Città" di ogni sede, si sceglierà solo da questo elenco — niente più doppioni per errori di battitura.</div>
+            <GestioneListaSemplice
+              nomeSingolare="Città" nomeArticolo="una" tabella="citta"
+              elementi={citta} ricarica={ricarica} msg={msgCitta} setMsg={setMsgCitta}
+              placeholder="es. MILANO"
+            />
+          </div>
+
+          {!mostraFormAggiungiLoc ? (
+            <Button onClick={() => setMostraFormAggiungiLoc(true)}>+ Aggiungi location</Button>
+          ) : (
+            <>
+              <div style={hStyle}>Aggiungi location</div>
+              <div style={subStyle}>Aggiungi una sede in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default. I calendari continuano a fare riferimento alla città, non al nome della sede.</div>
+              <Field label="Nome sede (opzionale)">
+                <input style={inputStyle} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value)} placeholder="es. Studio Centrale" />
+              </Field>
+              <Field label="Città">
+                <select style={inputStyle} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value)}>
+                  <option value="">— scegli città —</option>
+                  {citta.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                </select>
+              </Field>
+              <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
+                <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
+              </Field>
+              <Field label="Costo giornaliero Cash (opzionale)">
+                <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
+              </Field>
+              <Field label="Costo giornaliero Bonifico (opzionale)">
+                <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
+              </Field>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Button onClick={aggiungiLocation}>Aggiungi location</Button>
+                <Button variant="ghost" onClick={() => setMostraFormAggiungiLoc(false)}>Annulla</Button>
+              </div>
+            </>
+          )}
 
           <div style={{ ...hStyle, marginTop: 24 }}>Sedi esistenti</div>
           <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
@@ -9112,7 +9135,10 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                         <input style={inputStyle} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value)} />
                       </Field>
                       <Field label="Città">
-                        <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
+                        <select style={inputStyle} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value)}>
+                          <option value="">— scegli città —</option>
+                          {citta.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                        </select>
                       </Field>
                       <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
                         <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
@@ -27775,6 +27801,7 @@ export default function App() {
   const [schedeAffiancateIscritti, setSchedeAffiancateIscritti] = useState([]);
   const [corsi, setCorsi] = useState([]);
   const [location, setLocation] = useState([]);
+  const [citta, setCitta] = useState([]);
   const [corsiDate, setCorsiDate] = useState([]);
   const [iscritti, setIscritti] = useState([]);
   const [master, setMaster] = useState([]);
@@ -27896,7 +27923,7 @@ export default function App() {
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
   async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg, ilam, ilis] = await Promise.all([
+    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg, ilam, ilis, ctt] = await Promise.all([
       supabase.from("corsi").select("*").order("nome"),
       supabase.from("location").select("*").order("nome"),
       supabase.from("corsi_date").select("*").order("data_inizio"),
@@ -27956,6 +27983,7 @@ export default function App() {
       supabase.from("impostazioni_categorie_gruppi").select("*").limit(1),
       supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1),
       supabase.from("impostazioni_layout_iscrizioni").select("*").limit(1),
+      supabase.from("citta").select("*").order("nome"),
     ]);
     setCorsi(ordinaCorsi(c.data));
     setLocation(l.data || []);
@@ -28026,6 +28054,7 @@ export default function App() {
     setCategorieGruppi(icg.data?.[0] || null);
     setLayoutAssegnazioneMaster(ilam.data?.[0] || null);
     setLayoutIscrizioni(ilis.data?.[0] || null);
+    setCitta(ctt.data || []);
   }
 
   async function eliminaDataArchiviata(id) {
@@ -28684,7 +28713,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} citta={citta} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
