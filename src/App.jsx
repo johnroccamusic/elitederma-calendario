@@ -2879,7 +2879,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           <span title={valoreCampo(cd, "sede_confermata") ? "Sede avvisata" : "Sede non ancora avvisata"} style={{ width: 13, height: 13, borderRadius: "50%", background: valoreCampo(cd, "sede_confermata") ? "#2E7D32" : "#C0392B", flexShrink: 0 }} />
                         </button>
                       ) : (
-                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
                           Gestisci
                         </button>
                       )}
