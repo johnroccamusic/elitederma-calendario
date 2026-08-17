@@ -8780,8 +8780,8 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
       nome_sede: modNomeSedeLoc.trim() || null,
       nome: modNomeLoc.trim().toUpperCase(),
       posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
-      costo_giornaliero_cash: modCostoCashLoc === "" ? null : Number(modCostoCashLoc),
-      costo_giornaliero_bonifico: modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc),
+      costo_giornaliero_cash: modSedeCentraleLoc ? null : (modCostoCashLoc === "" ? null : Number(modCostoCashLoc)),
+      costo_giornaliero_bonifico: modSedeCentraleLoc ? null : (modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc)),
       sede_centrale: modSedeCentraleLoc,
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -9158,16 +9158,20 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
                       <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
                         <input type="number" min="1" style={inputStyle} value={modPostiMaxLoc} onChange={(e) => setModPostiMaxLoc(e.target.value)} />
                       </Field>
-                      <Field label="Costo giornaliero Cash (opzionale)">
-                        <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
-                      </Field>
-                      <Field label="Costo giornaliero Bonifico (opzionale)">
-                        <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
-                      </Field>
                       <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
                         <input type="checkbox" checked={modSedeCentraleLoc} onChange={(e) => setModSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
                         <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
                       </label>
+                      {!modSedeCentraleLoc && (
+                        <>
+                          <Field label="Costo giornaliero Cash (opzionale)">
+                            <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoCashLoc} onChange={(e) => setModCostoCashLoc(e.target.value)} />
+                          </Field>
+                          <Field label="Costo giornaliero Bonifico (opzionale)">
+                            <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
+                          </Field>
+                        </>
+                      )}
                       <div style={{ display: "flex", gap: 8 }}>
                         <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
                         <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
