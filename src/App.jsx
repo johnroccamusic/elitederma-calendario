@@ -8496,6 +8496,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [ricercaCorsi, setRicercaCorsi] = useState("");
   const [tipiModellaSelCorso, setTipiModellaSelCorso] = useState([]);
   const [tipiModellaSelCorsoModifica, setTipiModellaSelCorsoModifica] = useState([]);
+  const [nomeSedeLoc, setNomeSedeLoc] = useState("");
   const [nomeLoc, setNomeLoc] = useState("");
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [costoCashLoc, setCostoCashLoc] = useState("");
@@ -8558,10 +8559,12 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [salvandoCorso, setSalvandoCorso] = useState(false);
 
   const [locInModifica, setLocInModifica] = useState(null);
+  const [modNomeSedeLoc, setModNomeSedeLoc] = useState("");
   const [modNomeLoc, setModNomeLoc] = useState("");
   const [modPostiMaxLoc, setModPostiMaxLoc] = useState("");
   const [modCostoCashLoc, setModCostoCashLoc] = useState("");
   const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
+  const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
@@ -8714,22 +8717,26 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
   function apriModificaLocation(l) {
     setLocInModifica(l.id);
+    setModNomeSedeLoc(l.nome_sede ? l.nome_sede.toUpperCase() : "");
     setModNomeLoc(l.nome.toUpperCase());
     setModPostiMaxLoc(l.posti_max != null ? String(l.posti_max) : "");
     setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
     setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
+    setModSedeCentraleLoc(!!l.sede_centrale);
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
     const { error } = await supabase.from("location").update({
+      nome_sede: modNomeSedeLoc.trim() || null,
       nome: modNomeLoc.trim().toUpperCase(),
       posti_max: modPostiMaxLoc === "" ? null : Number(modPostiMaxLoc),
       costo_giornaliero_cash: modCostoCashLoc === "" ? null : Number(modCostoCashLoc),
       costo_giornaliero_bonifico: modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc),
+      sede_centrale: modSedeCentraleLoc,
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
-    setMsg("Città aggiornata.");
+    setMsg("Sede aggiornata.");
     ricarica();
   }
 
@@ -8765,13 +8772,14 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   async function aggiungiLocation() {
     if (!nomeLoc.trim()) return;
     const { error } = await supabase.from("location").insert({
+      nome_sede: nomeSedeLoc.trim() || null,
       nome: nomeLoc.trim().toUpperCase(),
       posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
       costo_giornaliero_cash: costoCashLoc === "" ? null : Number(costoCashLoc),
       costo_giornaliero_bonifico: costoBonificoLoc === "" ? null : Number(costoBonificoLoc),
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setMsg("Location aggiunta.");
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setMsg("Sede aggiunta.");
     ricarica();
   }
   async function toggleMagazzinoLocale(locationId, valore) {
@@ -9027,7 +9035,10 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           <SelettoreCategoriaGruppo campo="location_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
 
           <div style={hStyle}>Aggiungi location</div>
-          <div style={subStyle}>Aggiungi una città in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default.</div>
+          <div style={subStyle}>Aggiungi una sede in cui si terranno i corsi. La "Capienza sede" è il tetto assoluto: nessun corso in quella città potrà mai superarlo, anche se prevede più posti di default. I calendari continuano a fare riferimento alla città, non al nome della sede.</div>
+          <Field label="Nome sede (opzionale)">
+            <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeSedeLoc} onChange={(e) => setNomeSedeLoc(e.target.value.toUpperCase())} placeholder="es. STUDIO CENTRALE" />
+          </Field>
           <Field label="Città">
             <input style={{ ...inputStyle, textTransform: "uppercase" }} value={nomeLoc} onChange={(e) => setNomeLoc(e.target.value.toUpperCase())} placeholder="es. MILANO" />
           </Field>
@@ -9042,20 +9053,23 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
           </Field>
           <Button onClick={aggiungiLocation}>Aggiungi location</Button>
 
-          <div style={{ ...hStyle, marginTop: 24 }}>Città esistenti</div>
+          <div style={{ ...hStyle, marginTop: 24 }}>Sedi esistenti</div>
           <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
-          {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna città ancora.</div>}
+          {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna sede ancora.</div>}
           {location.map((l) => (
             <div key={l.id}>
               <RigaEliminabile
-                label={l.nome.toUpperCase()}
-                dettaglio={l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti"}
+                label={l.nome_sede ? `${l.nome_sede.toUpperCase()} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}
+                dettaglio={[l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
                 onModifica={() => apriModificaLocation(l)}
                 onDelete={() => eliminaLocation(l.id)}
               />
               {locInModifica === l.id && (
                 <div style={{ padding: "10px 0 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <Field label="Nome città">
+                  <Field label="Nome sede (opzionale)">
+                    <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeSedeLoc} onChange={(e) => setModNomeSedeLoc(e.target.value.toUpperCase())} />
+                  </Field>
+                  <Field label="Città">
                     <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modNomeLoc} onChange={(e) => setModNomeLoc(e.target.value.toUpperCase())} />
                   </Field>
                   <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
@@ -9067,6 +9081,10 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                   <Field label="Costo giornaliero Bonifico (opzionale)">
                     <input type="number" min="0" step="0.01" style={inputStyle} value={modCostoBonificoLoc} onChange={(e) => setModCostoBonificoLoc(e.target.value)} />
                   </Field>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                    <input type="checkbox" checked={modSedeCentraleLoc} onChange={(e) => setModSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
+                    <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
+                  </label>
                   <div style={{ display: "flex", gap: 8 }}>
                     <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
                     <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
@@ -12465,10 +12483,10 @@ function PopupNuovaData({ corsi, location, master, cittaFissa, dataClic, onSalva
         </select>
       </Field>
       {!cittaFissa && (
-        <Field label="Città">
+        <Field label="Sede">
           <select style={inputStyle} value={locSel} onChange={(e) => setLocSel(e.target.value)}>
-            <option value="">Seleziona città</option>
-            {location.map((l) => <option key={l.id} value={l.id}>{l.nome.toUpperCase()}</option>)}
+            <option value="">Seleziona sede</option>
+            {location.map((l) => <option key={l.id} value={l.id}>{l.nome_sede ? `${l.nome_sede.toUpperCase()} — ${l.nome.toUpperCase()}` : l.nome.toUpperCase()}</option>)}
           </select>
         </Field>
       )}
@@ -13387,9 +13405,13 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
   // non è impostata).
   const locSedeClasse = (location || []).find((l) => l.id === corsoData.location_id);
   const pagamentoSedeClasse = corsoData.pagamento_sede === "cash" ? "cash" : "bonifico";
-  const costoGiornalieroLocation = pagamentoSedeClasse === "cash"
+  // una sede centrale (di proprietà) non ha un affitto da pagare: nessuna
+  // riga "Costo Location" per i corsi lì, a prescindere dalle tariffe
+  // impostate — gli altri costi del corso (Master, Alloggio, Assistenti…)
+  // restano invariati
+  const costoGiornalieroLocation = locSedeClasse?.sede_centrale ? null : (pagamentoSedeClasse === "cash"
     ? (corsoData.costo_giorno_sede_cash ?? locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
-    : (corsoData.costo_giorno_sede_bonifico ?? locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null);
+    : (corsoData.costo_giorno_sede_bonifico ?? locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null));
   const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
   const rigaLocationClasse = costoGiornalieroLocation != null ? {
     rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse,
