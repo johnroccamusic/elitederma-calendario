@@ -18595,23 +18595,48 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
 // che apre numero/data fattura + scadenza (pre-compilata se già nota da
 // Assegnazione Master → Gestisci) + copia fattura opzionale — al salvataggio
 // nasce la spesa vera (stato "Fatturata") e la riga sparisce da qui
-function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, onRegistraFattura }) {
+function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, altriCumulabili, onRegistraFattura }) {
   const [aperto, setAperto] = useState(false);
   const [numeroFattura, setNumeroFattura] = useState("");
   const [dataFattura, setDataFattura] = useState(dataOggiStr());
   const [scadenza, setScadenza] = useState(scadenzaSuggerita || "");
   const [file, setFile] = useState(null);
   const [salvando, setSalvando] = useState(false);
+  // "Cumula altri impegni": la stessa fattura può coprire più righe dello
+  // stesso fornitore (es. un hotel che fattura in blocco più soggiorni) —
+  // ciascuna resta comunque una spesa a sé (stessa tracciabilità di oggi
+  // su edizione/persona), condividono solo numero fattura/data/scadenza/
+  // allegato. Ogni riga qui è un impegno con lo stesso tipo e fornitore
+  // di questa, già escluso quello corrente (vedi calcolo in
+  // PaginaAmministrazione)
+  const [cumulaAperto, setCumulaAperto] = useState(false);
+  const [selezionati, setSelezionati] = useState(() => new Set());
+  const [ricercaCumulo, setRicercaCumulo] = useState("");
   const pronto = numeroFattura.trim() && dataFattura && scadenza;
+  const elencoCumulo = (altriCumulabili || []);
+  const elencoCumuloFiltrato = elencoCumulo.filter((x) => {
+    const q = ricercaCumulo.trim().toLowerCase();
+    if (!q) return true;
+    return `${x.nome} ${x.corsoLabel}`.toLowerCase().includes(q);
+  });
+  const altriSelezionati = elencoCumulo.filter((x) => selezionati.has(x.key));
+  const totaleComplessivo = totale + altriSelezionati.reduce((s, x) => s + (x.totale || 0), 0);
+  function toggleSelezionato(key) {
+    setSelezionati((prev) => {
+      const copia = new Set(prev);
+      if (copia.has(key)) copia.delete(key); else copia.add(key);
+      return copia;
+    });
+  }
   async function salva() {
     if (!pronto) return;
     setSalvando(true);
-    await onRegistraFattura({ numeroFattura: numeroFattura.trim(), dataFattura, scadenza, file });
+    await onRegistraFattura({ numeroFattura: numeroFattura.trim(), dataFattura, scadenza, file }, altriSelezionati);
     setSalvando(false);
   }
   return (
     <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <RigaAmministrazione data={dataCreazione} titolo={nome} sottotitolo={corsoLabel} chips={categoriaNome ? [categoriaNome] : []} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
+      <RigaAmministrazione data={dataCreazione} titolo={nome} sottotitolo={corsoLabel} chips={[fornitore, categoriaNome].filter(Boolean)} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
         {disabilitato ? (
           <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
         ) : !aperto ? (
@@ -18621,14 +18646,48 @@ function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilita
         ) : null}
       </RigaAmministrazione>
       {aperto && !disabilitato && (
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-          <input type="text" placeholder="Numero fattura" style={{ ...inputStyle, flex: "1 1 130px" }} value={numeroFattura} onChange={(e) => setNumeroFattura(e.target.value)} />
-          <input type="date" title="Data fattura" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataFattura} onChange={(e) => setDataFattura(e.target.value)} />
-          <input type="date" title="Scadenza pagamento" style={{ ...inputStyle, flex: "0 0 148px" }} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
-          <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
-          <button onClick={salva} disabled={salvando || !pronto} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando || !pronto ? 0.6 : 1, flexShrink: 0 }}>
-            {salvando ? "Salvo…" : "Conferma"}
-          </button>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="text" placeholder="Numero fattura" style={{ ...inputStyle, flex: "1 1 130px" }} value={numeroFattura} onChange={(e) => setNumeroFattura(e.target.value)} />
+            <input type="date" title="Data fattura" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataFattura} onChange={(e) => setDataFattura(e.target.value)} />
+            <input type="date" title="Scadenza pagamento" style={{ ...inputStyle, flex: "0 0 148px" }} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
+            <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
+            <button onClick={salva} disabled={salvando || !pronto} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando || !pronto ? 0.6 : 1, flexShrink: 0 }}>
+              {salvando ? "Salvo…" : "Conferma"}
+            </button>
+          </div>
+          {elencoCumulo.length > 0 && (
+            <div style={{ marginTop: 10 }}>
+              <button onClick={() => setCumulaAperto((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>
+                {cumulaAperto ? "Nascondi altri impegni" : `Cumula altri impegni (${elencoCumulo.length} disponibili)`}
+              </button>
+              {altriSelezionati.length > 0 && (
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, marginLeft: 10 }}>
+                  {altriSelezionati.length} selezionat{altriSelezionati.length === 1 ? "o" : "i"} · totale complessivo {fmtEuroErp(totaleComplessivo)}
+                </span>
+              )}
+              {cumulaAperto && (
+                <div style={{ marginTop: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10, background: BG_CHIARO }}>
+                  <input
+                    type="text" placeholder="Cerca per corso, città, persona…"
+                    style={{ ...inputStyle, width: "100%", marginBottom: 8 }}
+                    value={ricercaCumulo} onChange={(e) => setRicercaCumulo(e.target.value)}
+                  />
+                  {elencoCumuloFiltrato.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "6px 2px" }}>Nessun altro impegno dello stesso fornitore trovato.</div>
+                  ) : (
+                    elencoCumuloFiltrato.map((x) => (
+                      <label key={x.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 2px", cursor: "pointer" }}>
+                        <input type="checkbox" checked={selezionati.has(x.key)} onChange={() => toggleSelezionato(x.key)} style={{ width: 16, height: 16, flexShrink: 0 }} />
+                        <span style={{ ...fontBody, fontSize: 12.5, color: NAVY, flex: "1 1 auto", minWidth: 0 }}>{x.nome} <span style={{ color: MUTED }}>· {x.corsoLabel}</span></span>
+                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flexShrink: 0 }}>{fmtEuroErp(x.totale)}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -18730,7 +18789,13 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const scadenziarioAttivo = calcolaScadenziarioAttivo({ iscritti, corsiDate });
   const scadenziarioAttivoStorico = calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate: true });
 
-  async function registraFattura(item, { numeroFattura, dataFattura, scadenza, file }) {
+  // registra una fattura per uno o più impegni insieme ("Cumula altri
+  // impegni" in RigaQuadroImpegni): stesso fornitore/tipo, stesso numero
+  // fattura/data/scadenza/allegato, ma una riga di spesa per ciascuno —
+  // ognuno resta tracciabile sulla propria edizione/persona come oggi
+  // (es. Assegnazione Master continua a sapere se QUELLA riga alloggio è
+  // stata pagata), la fattura è solo il documento che le copre insieme
+  async function registraFattura(item, { numeroFattura, dataFattura, scadenza, file }, altriSelezionati = []) {
     setMsg("");
     let allegatoPath = null;
     if (file) {
@@ -18738,18 +18803,21 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
       if (errore) { setMsg("Errore allegato: " + errore); return; }
       allegatoPath = url;
     }
-    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
-    const { error } = await supabase.from("spese").insert({
-      descrizione: item.nome,
-      categoria_id: sottocat?.categoria_id || null,
-      sottocategoria_id: item.sottocategoriaId,
-      tipo_ambito: "classe", classe_id: item.corsoData.id, sede_id: item.corsoData.location_id, corso_id: item.corsoData.corso_id,
-      imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: item.totale,
-      numero_documento: numeroFattura, data_documento: dataFattura, scadenza_pagamento: scadenza,
-      stato: "fatturata", metodo_pagamento: "Bonifico",
-      allegato_path: allegatoPath, origine: "automatico",
-      origine_scadenziario_chiave: item.chiave,
+    const righe = [item, ...altriSelezionati].map((it) => {
+      const sottocat = sottocategoriaCostoDi(costiSottocategorie, it.sottocategoriaId);
+      return {
+        descrizione: it.nome,
+        categoria_id: sottocat?.categoria_id || null,
+        sottocategoria_id: it.sottocategoriaId,
+        tipo_ambito: "classe", classe_id: it.corsoData.id, sede_id: it.corsoData.location_id, corso_id: it.corsoData.corso_id,
+        imponibile: round2(it.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: it.totale,
+        numero_documento: numeroFattura, data_documento: dataFattura, scadenza_pagamento: scadenza,
+        stato: "fatturata", metodo_pagamento: "Bonifico",
+        allegato_path: allegatoPath, origine: "automatico",
+        origine_scadenziario_chiave: it.chiave,
+      };
     });
+    const { error } = await supabase.from("spese").insert(righe);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["spese"]);
   }
@@ -18828,13 +18896,17 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                     key={item.key}
                     nome={item.nome}
                     corsoLabel={etichettaCorso(item.corsoData)}
+                    fornitore={item.fornitore}
                     totale={item.totale}
                     categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
                     disabilitato={!item.sottocategoriaId}
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     dataCreazione={item.corsoData?.data_fine || null}
                     scadenzaSuggerita={item.scadenzaSuggerita}
-                    onRegistraFattura={(dati) => registraFattura(item, dati)}
+                    altriCumulabili={impegni
+                      .filter((x) => x.key !== item.key && x.tipo === item.tipo && x.fornitore && x.fornitore === item.fornitore)
+                      .map((x) => ({ ...x, corsoLabel: etichettaCorso(x.corsoData) }))}
+                    onRegistraFattura={(dati, altriSelezionati) => registraFattura(item, dati, altriSelezionati)}
                   />
                 ))}
               </div>
