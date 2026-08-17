@@ -27999,139 +27999,97 @@ export default function App() {
 
   // fetch "silenzioso": ricarica i dati senza mostrare la schermata di caricamento
   // (usato dopo ogni modifica, così l'app non "sparisce" per un attimo)
-  async function fetchDati() {
-    const [c, l, cd, i, m, h, a, lv, fd, de, sg, li, lc, cc, cs, ev, fo, sp, sa, cb, csa, em, vs, cp, ps, pc, pi, cg, tm, ctm, ve, pm, ua, ckp, lke, kd, ag, av, invs, pam, ans, adv, tvp, mlc, iam, sped, mc, acrm, ac, cdd, vsc, cpn, icg, ilam, ilis, ctt] = await Promise.all([
-      supabase.from("corsi").select("*").order("nome"),
-      supabase.from("location").select("*").order("nome"),
-      supabase.from("corsi_date").select("*").order("data_inizio"),
-      supabase.from("iscritti").select("*").order("ts"),
-      supabase.from("master").select("*").order("nome"),
-      supabase.from("hotel").select("*").order("nome"),
-      supabase.from("assistente").select("*").order("nome"),
-      supabase.from("leva").select("*").order("nome"),
-      supabase.from("font_diplomi").select("*").limit(1),
-      supabase.from("diploma_eccezioni").select("*").order("nome"),
-      supabase.from("segnaposti_config").select("*").limit(1),
-      supabase.from("loghi_impostazioni").select("*").limit(1),
-      supabase.from("loghi_categorie").select("*"),
-      supabase.from("costi_categorie").select("*").order("ordine"),
-      supabase.from("costi_sottocategorie").select("*").order("ordine"),
-      supabase.from("eventi").select("*").order("data_inizio", { ascending: false }),
-      supabase.from("fornitori").select("*").order("nome"),
-      supabase.from("spese").select("*").order("data_documento", { ascending: false }),
-      supabase.from("spese_attribuzioni").select("*"),
-      supabase.from("costi_budget").select("*"),
-      supabase.from("costi_soglie_allerta").select("*"),
-      supabase.from("entrate_manuali").select("*").order("data", { ascending: false }),
-      supabase.from("vendite_shop").select("*").order("data_ordine", { ascending: false }),
-      supabase.from("categorie_prodotti").select("*").order("nome"),
-      supabase.from("prodotti_shop").select("*").order("nome"),
-      supabase.from("prodotti_categorie").select("*"),
-      supabase.from("prodotti_immagini").select("*"),
-      supabase.from("corsi_giorni").select("*").order("numero_giorno"),
-      supabase.from("tipi_modella").select("*").order("nome"),
-      supabase.from("corsi_tipi_modella").select("*"),
-      // niente "telefono" qui: è una colonna a sé (Setting > Gestione
-      // venditori la interroga da sola) — se in un futuro dovesse mai
-      // mancare/dare errore, non deve poter svuotare l'elenco venditori
-      // usato ovunque per login e selezione "Tutor"
-      supabase.from("venditori").select("id, nome, ts, permessi, password").order("nome"),
-      supabase.from("password_menu").select("*"),
-      supabase.from("utenti_app").select("*").order("nome"),
-      supabase.from("corsi_kit_prodotti").select("*"),
-      supabase.from("logistica_kit_edizioni").select("*"),
-      supabase.from("kit_definizioni").select("*").order("nome"),
-      supabase.from("agende").select("*").order("nome"),
-      supabase.from("agenda_voci").select("*"),
-      supabase.from("inventario_sede").select("*"),
-      supabase.from("prodotti_aperti_magazzino").select("*"),
-      supabase.from("agenda_note_settimanali").select("*"),
-      supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false }),
-      supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false }),
-      supabase.from("magazzino_locale_consumabili").select("*"),
-      supabase.from("inventario_ammanchi").select("*"),
-      supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false }),
-      supabase.from("master_corsi").select("*"),
-      supabase.from("allievi_crm").select("*"),
-      supabase.from("assistente_corsi").select("*"),
-      supabase.from("corsi_date_docenti").select("*"),
-      supabase.from("voci_shop_classificazione").select("*"),
-      supabase.from("coupon").select("*").order("created_at", { ascending: false }),
-      supabase.from("impostazioni_categorie_gruppi").select("*").limit(1),
-      supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1),
-      supabase.from("impostazioni_layout_iscrizioni").select("*").limit(1),
-      supabase.from("citta").select("*").order("nome"),
-    ]);
-    setCorsi(ordinaCorsi(c.data));
-    setLocation(l.data || []);
-    setCorsiDate(cd.data || []);
-    setIscritti(i.data || []);
-    setMaster(m.data || []);
-    setHotel(h.data || []);
-    setAssistente(a.data || []);
-    setLeva(lv.data || []);
-    setFontDiplomi(fd.data?.[0] || null);
-    setDiplomaEccezioni(de.data || []);
-    setSegnaposti(sg.data?.[0] || null);
-    setLoghiImpostazioni(li.data?.[0] || null);
-    setLoghiCategorie(lc.data || []);
-    setCostiCategorie(cc.data || []);
-    setCostiSottocategorie(cs.data || []);
-    setEventi(ev.data || []);
-    setFornitori(fo.data || []);
-    setSpese(sp.data || []);
-    setSpeseAttribuzioni(sa.data || []);
-    setCostiBudget(cb.data || []);
-    setCostiSoglieAllerta(csa.data || []);
-    setEntrateManuali(em.data || []);
-    setVenditeShop(vs.data || []);
-    setCategorieProdotti(cp.data || []);
-    setProdottiShop(ps.data || []);
-    setProdottiCategorie(pc.data || []);
-    setProdottiImmagini(pi.data || []);
-    setCorsiGiorni(cg.data || []);
-    setTipiModella(tm.data || []);
-    setCorsiTipiModella(ctm.data || []);
-    // L'elenco venditori è usato ovunque (login alla Dashboard venditori,
-    // selezione "Tutor" in iscrizione, classifiche): se la select con le
-    // colonne opzionali "permessi"/"password" fallisce perché una di quelle
-    // colonne non è ancora stata creata su questo database (ultimi file SQL
-    // non ancora eseguiti), NON deve sparire tutto l'elenco. In quel caso
-    // ricarico con le sole colonne sempre presenti e riempio le opzionali
-    // con i valori di default, così i venditori restano visibili e
-    // utilizzabili — esattamente come già facciamo per "telefono".
-    let venditoriData = ve.data;
-    if (ve.error) {
-      let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
-      if (alt.error) alt = await supabase.from("venditori").select("id, nome, ts").order("nome");
-      venditoriData = (alt.data || []).map((v) => ({ permessi: [], password: "0000", ...v }));
-    }
-    setVenditori(venditoriData || []);
-    setPasswordMenu(pm.data || []);
-    setUtentiApp(ua.data || []);
-    setCorsiKitProdotti(ckp.data || []);
-    setLogisticaKitEdizioni(lke.data || []);
-    setKitDefinizioni(kd.data || []);
-    setAgende(ag.data || []);
-    setAgendaVoci(av.data || []);
-    setAgendaNoteSettimanali(ans.data || []);
-    setAccontiDaVerificare(adv.data || []);
-    setInventarioSede(invs.data || []);
-    setProdottiApertiMagazzino(pam.data || []);
-    setTargetVenditeProdotti(tvp.data || []);
-    setMagazzinoLocaleConsumabili(mlc.data || []);
-    setInventarioAmmanchi(iam.data || []);
-    setSpedizioniPos(sped.data || []);
-    setMasterCorsi(mc.data || []);
-    setAllieviCrm(acrm.data || []);
-    setAssistenteCorsi(ac.data || []);
-    setCorsiDateDocenti(cdd.data || []);
-    setVociShopClassificazione(vsc.data || []);
-    setCoupon(cpn.data || []);
-    setCategorieGruppi(icg.data?.[0] || null);
-    setLayoutAssegnazioneMaster(ilam.data?.[0] || null);
-    setLayoutIscrizioni(ilis.data?.[0] || null);
-    setCitta(ctt.data || []);
+  // un caricatore per tabella, così un salvataggio può ricaricare solo
+  // le tabelle che ha davvero toccato invece di rifare tutte le query di
+  // fetchDati (vedi sotto) — stesso select/order di sempre, solo spostato
+  // qui in modo che sia richiamabile singolarmente
+  const CARICATORI_TABELLA = {
+    corsi: async () => setCorsi(ordinaCorsi((await supabase.from("corsi").select("*").order("nome")).data)),
+    location: async () => setLocation((await supabase.from("location").select("*").order("nome")).data || []),
+    corsi_date: async () => setCorsiDate((await supabase.from("corsi_date").select("*").order("data_inizio")).data || []),
+    iscritti: async () => setIscritti((await supabase.from("iscritti").select("*").order("ts")).data || []),
+    master: async () => setMaster((await supabase.from("master").select("*").order("nome")).data || []),
+    hotel: async () => setHotel((await supabase.from("hotel").select("*").order("nome")).data || []),
+    assistente: async () => setAssistente((await supabase.from("assistente").select("*").order("nome")).data || []),
+    leva: async () => setLeva((await supabase.from("leva").select("*").order("nome")).data || []),
+    font_diplomi: async () => setFontDiplomi((await supabase.from("font_diplomi").select("*").limit(1)).data?.[0] || null),
+    diploma_eccezioni: async () => setDiplomaEccezioni((await supabase.from("diploma_eccezioni").select("*").order("nome")).data || []),
+    segnaposti_config: async () => setSegnaposti((await supabase.from("segnaposti_config").select("*").limit(1)).data?.[0] || null),
+    loghi_impostazioni: async () => setLoghiImpostazioni((await supabase.from("loghi_impostazioni").select("*").limit(1)).data?.[0] || null),
+    loghi_categorie: async () => setLoghiCategorie((await supabase.from("loghi_categorie").select("*")).data || []),
+    costi_categorie: async () => setCostiCategorie((await supabase.from("costi_categorie").select("*").order("ordine")).data || []),
+    costi_sottocategorie: async () => setCostiSottocategorie((await supabase.from("costi_sottocategorie").select("*").order("ordine")).data || []),
+    eventi: async () => setEventi((await supabase.from("eventi").select("*").order("data_inizio", { ascending: false })).data || []),
+    fornitori: async () => setFornitori((await supabase.from("fornitori").select("*").order("nome")).data || []),
+    spese: async () => setSpese((await supabase.from("spese").select("*").order("data_documento", { ascending: false })).data || []),
+    spese_attribuzioni: async () => setSpeseAttribuzioni((await supabase.from("spese_attribuzioni").select("*")).data || []),
+    costi_budget: async () => setCostiBudget((await supabase.from("costi_budget").select("*")).data || []),
+    costi_soglie_allerta: async () => setCostiSoglieAllerta((await supabase.from("costi_soglie_allerta").select("*")).data || []),
+    entrate_manuali: async () => setEntrateManuali((await supabase.from("entrate_manuali").select("*").order("data", { ascending: false })).data || []),
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("*").order("data_ordine", { ascending: false })).data || []),
+    categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
+    prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
+    prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
+    prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
+    corsi_giorni: async () => setCorsiGiorni((await supabase.from("corsi_giorni").select("*").order("numero_giorno")).data || []),
+    tipi_modella: async () => setTipiModella((await supabase.from("tipi_modella").select("*").order("nome")).data || []),
+    corsi_tipi_modella: async () => setCorsiTipiModella((await supabase.from("corsi_tipi_modella").select("*")).data || []),
+    // niente "telefono" qui: è una colonna a sé (Setting > Gestione
+    // venditori la interroga da sola) — se in un futuro dovesse mai
+    // mancare/dare errore, non deve poter svuotare l'elenco venditori
+    // usato ovunque per login e selezione "Tutor". L'elenco venditori è
+    // usato ovunque (login alla Dashboard venditori, selezione "Tutor" in
+    // iscrizione, classifiche): se la select con le colonne opzionali
+    // "permessi"/"password" fallisce perché una di quelle colonne non è
+    // ancora stata creata su questo database (ultimi file SQL non ancora
+    // eseguiti), NON deve sparire tutto l'elenco. In quel caso ricarico
+    // con le sole colonne sempre presenti e riempio le opzionali con i
+    // valori di default, così i venditori restano visibili e utilizzabili.
+    venditori: async () => {
+      const ve = await supabase.from("venditori").select("id, nome, ts, permessi, password").order("nome");
+      let venditoriData = ve.data;
+      if (ve.error) {
+        let alt = await supabase.from("venditori").select("id, nome, ts, password").order("nome");
+        if (alt.error) alt = await supabase.from("venditori").select("id, nome, ts").order("nome");
+        venditoriData = (alt.data || []).map((v) => ({ permessi: [], password: "0000", ...v }));
+      }
+      setVenditori(venditoriData || []);
+    },
+    password_menu: async () => setPasswordMenu((await supabase.from("password_menu").select("*")).data || []),
+    utenti_app: async () => setUtentiApp((await supabase.from("utenti_app").select("*").order("nome")).data || []),
+    corsi_kit_prodotti: async () => setCorsiKitProdotti((await supabase.from("corsi_kit_prodotti").select("*")).data || []),
+    logistica_kit_edizioni: async () => setLogisticaKitEdizioni((await supabase.from("logistica_kit_edizioni").select("*")).data || []),
+    kit_definizioni: async () => setKitDefinizioni((await supabase.from("kit_definizioni").select("*").order("nome")).data || []),
+    agende: async () => setAgende((await supabase.from("agende").select("*").order("nome")).data || []),
+    agenda_voci: async () => setAgendaVoci((await supabase.from("agenda_voci").select("*")).data || []),
+    inventario_sede: async () => setInventarioSede((await supabase.from("inventario_sede").select("*")).data || []),
+    prodotti_aperti_magazzino: async () => setProdottiApertiMagazzino((await supabase.from("prodotti_aperti_magazzino").select("*")).data || []),
+    agenda_note_settimanali: async () => setAgendaNoteSettimanali((await supabase.from("agenda_note_settimanali").select("*")).data || []),
+    acconti_da_verificare: async () => setAccontiDaVerificare((await supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false })).data || []),
+    target_vendite_prodotti: async () => setTargetVenditeProdotti((await supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false })).data || []),
+    magazzino_locale_consumabili: async () => setMagazzinoLocaleConsumabili((await supabase.from("magazzino_locale_consumabili").select("*")).data || []),
+    inventario_ammanchi: async () => setInventarioAmmanchi((await supabase.from("inventario_ammanchi").select("*")).data || []),
+    spedizioni_pos: async () => setSpedizioniPos((await supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false })).data || []),
+    master_corsi: async () => setMasterCorsi((await supabase.from("master_corsi").select("*")).data || []),
+    allievi_crm: async () => setAllieviCrm((await supabase.from("allievi_crm").select("*")).data || []),
+    assistente_corsi: async () => setAssistenteCorsi((await supabase.from("assistente_corsi").select("*")).data || []),
+    corsi_date_docenti: async () => setCorsiDateDocenti((await supabase.from("corsi_date_docenti").select("*")).data || []),
+    voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
+    coupon: async () => setCoupon((await supabase.from("coupon").select("*").order("created_at", { ascending: false })).data || []),
+    impostazioni_categorie_gruppi: async () => setCategorieGruppi((await supabase.from("impostazioni_categorie_gruppi").select("*").limit(1)).data?.[0] || null),
+    impostazioni_layout_assegnazione_master: async () => setLayoutAssegnazioneMaster((await supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1)).data?.[0] || null),
+    impostazioni_layout_iscrizioni: async () => setLayoutIscrizioni((await supabase.from("impostazioni_layout_iscrizioni").select("*").limit(1)).data?.[0] || null),
+    citta: async () => setCitta((await supabase.from("citta").select("*").order("nome")).data || []),
+  };
+
+  // "ricarica" (passata come prop dappertutto): senza argomenti rifà
+  // tutto (usato solo dal caricamento iniziale), con un elenco di nomi
+  // tabella ricarica solo quelle — un salvataggio in una scheda hotel non
+  // deve più riscaricare magazzino, prodotti e configurazione tema. Vedi
+  // il piano "Ridurre l'egress Supabase" per il contesto di questa scelta.
+  async function fetchDati(tabelle) {
+    const nomi = tabelle && tabelle.length ? tabelle : Object.keys(CARICATORI_TABELLA);
+    await Promise.all(nomi.map((nome) => (CARICATORI_TABELLA[nome] ? CARICATORI_TABELLA[nome]() : Promise.resolve())));
   }
 
   async function eliminaDataArchiviata(id) {
