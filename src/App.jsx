@@ -13520,6 +13520,11 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
     cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
     scadenza: corsoData.scadenza_pagamento_location || null,
+    // "gestita" = "Gestisci sede" è stata aperta e salvata almeno una
+    // volta per questo corso (corsoData.pagamento_sede valorizzato) — non
+    // basta che la sede/hotel abbia una tariffa di default: finché
+    // nessuno l'ha confermata qui, non deve comparire nel Quadro impegni
+    gestita: corsoData.pagamento_sede != null,
   } : null;
 
   // righe "Costo Alloggio": una per ogni persona (master, assistente o
@@ -13556,7 +13561,11 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       // "pagato" (spunta "Hotel pagato" in Assegnazione Master) non cambia
       // dove va il costo — resta Bonifico/Cash secondo "Tipo di pagamento" —
       // ma qui aggiunge solo un'indicazione visiva (pallino verde)
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null };
+      // "gestita" = "Gestisci alloggio" è stata aperta e salvata almeno
+      // una volta per questa riga (tipoPagamento valorizzato) — finché
+      // resta solo la tariffa di default dell'hotel, senza conferma, non
+      // deve comparire nel Quadro impegni
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento };
     })
     .filter(Boolean);
 
@@ -18348,6 +18357,11 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       const chiave = `${r.tipo}_${r.rigaId}`;
       if (spesePerChiave.has(chiave)) return;
       const conScadenza = r.tipo === "alloggio" || r.tipo === "location";
+      // un alloggio/location non ancora gestito in Assegnazione Master
+      // (mai aperto "Gestisci alloggio"/"Gestisci sede") non è confermato:
+      // non deve comparire nemmeno come impegno, solo come costo previsto
+      // nel Riepilogo del corso
+      if (conScadenza && !r.gestita) return;
       const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) };
       if (conScadenza) {
         impegni.push(base);
