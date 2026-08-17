@@ -18471,6 +18471,37 @@ async function caricaRicevutaSpesa(file) {
   return { url: data.publicUrl };
 }
 
+// riga standard delle liste di Amministrazione (Quadro impegni, Registro
+// documenti fornitore, Scadenziario Passivo/Attivo): stesso ordine
+// d'impaginazione di Prima Nota Cassa — data in evidenza a sinistra
+// (giorno/mese/anno impilati), poi titolo/sottotitolo/tag, importo a
+// destra — così tutte le liste della pagina si leggono allo stesso modo.
+// "children" è lo spazio per ciò che cambia da lista a lista (pillola di
+// stato, bottoni) sulla stessa riga, dopo l'importo
+function RigaAmministrazione({ data, titolo, sottotitolo, chips, importo, coloreImporto, bordoSotto = true, senzaPadding = false, children }) {
+  const [anno, mese, giorno] = (data || "").split("-").map(Number);
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: senzaPadding ? 0 : "14px 0", borderBottom: bordoSotto ? `1px solid ${CREAM_BORDER}` : "none", flexWrap: "wrap" }}>
+      <div style={{ flex: "0 0 56px", textAlign: "center" }}>
+        <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{giorno ? String(giorno).padStart(2, "0") : "—"}</div>
+        {mese ? <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>{MESI_ABBR[mese - 1]}</div> : null}
+        {anno ? <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{anno}</div> : null}
+      </div>
+      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+        <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 600, color: NAVY }}>{titolo}</div>
+        {sottotitolo ? <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>{sottotitolo}</div> : null}
+        {chips && chips.length > 0 && (
+          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 5 }}>
+            {chips.map((c, idx) => <ChipSpesa key={idx}>{c}</ChipSpesa>)}
+          </div>
+        )}
+      </div>
+      <div style={{ flex: "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: coloreImporto || NAVY }}>{importo}</div>
+      {children}
+    </div>
+  );
+}
+
 // riga di "Da pagare": data del debito, scadenza, fornitore, oggetto,
 // importo (IVA inclusa) e IBAN — poi upload ricevuta + data pagamento +
 // tasto "Pagato". Stesso componente sia per le righe virtuali (master/
@@ -18486,23 +18517,14 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
     await onConferma({ file, dataPagamento });
     setSalvando(false);
   }
+  const chips = [categoriaNome, scadenza ? `Scade ${fmtData(scadenza)}` : null, iban ? `IBAN ${iban}` : null].filter(Boolean);
   return (
     <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ flex: "2 1 240px", minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{fornitore || nome}</div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{oggetto || corsoLabel}{categoriaNome ? ` · ${categoriaNome}` : ""}</div>
-          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 2 }}>
-            {dataDebito ? `Debito: ${fmtData(dataDebito)}` : ""}
-            {scadenza ? `${dataDebito ? " · " : ""}Scadenza: ${fmtData(scadenza)}` : ""}
-            {iban ? `${dataDebito || scadenza ? " · " : ""}IBAN: ${iban}` : ""}
-          </div>
-        </div>
-        <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
+      <RigaAmministrazione data={dataDebito} titolo={fornitore || nome} sottotitolo={oggetto || corsoLabel} chips={chips} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
         {disabilitato && (
           <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
         )}
-      </div>
+      </RigaAmministrazione>
       {!disabilitato && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
           <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
@@ -18536,12 +18558,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilita
   }
   return (
     <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nome}</div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{corsoLabel}{categoriaNome ? ` · ${categoriaNome}` : ""}</div>
-        </div>
-        <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
+      <RigaAmministrazione data={scadenzaSuggerita} titolo={nome} sottotitolo={corsoLabel} chips={categoriaNome ? [categoriaNome] : []} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
         {disabilitato ? (
           <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
         ) : !aperto ? (
@@ -18549,7 +18566,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilita
             Registra fattura
           </button>
         ) : null}
-      </div>
+      </RigaAmministrazione>
       {aperto && !disabilitato && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
           <input type="text" placeholder="Numero fattura" style={{ ...inputStyle, flex: "1 1 130px" }} value={numeroFattura} onChange={(e) => setNumeroFattura(e.target.value)} />
@@ -18754,22 +18771,24 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {documentiFornitore.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura registrata ancora.</div>}
             {documentiFornitore.map((spesa) => {
               const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
+              const chips = [
+                spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? fornitoriById[spesa.fornitore_id].nome : null,
+                spesa.scadenza_pagamento ? `Scade ${fmtData(spesa.scadenza_pagamento)}` : null,
+              ].filter(Boolean);
               return (
-                <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
-                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                      Fattura n. {spesa.numero_documento}{spesa.data_documento ? ` · ${fmtData(spesa.data_documento)}` : ""}
-                      {spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? ` · ${fornitoriById[spesa.fornitore_id].nome}` : ""}
-                      {spesa.scadenza_pagamento ? ` · scade ${fmtData(spesa.scadenza_pagamento)}` : ""}
-                    </div>
-                  </div>
-                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(spesa.totale)}</div>
+                <RigaAmministrazione
+                  key={spesa.id}
+                  data={spesa.data_documento}
+                  titolo={spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}
+                  sottotitolo={`Fattura n. ${spesa.numero_documento}`}
+                  chips={chips}
+                  importo={fmtEuroErp(spesa.totale)}
+                >
                   <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
                     {etichettaOpzione(STATI_SPESA, spesa.stato)}
                   </span>
                   <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
-                </div>
+                </RigaAmministrazione>
               );
             })}
           </div>
@@ -18809,26 +18828,29 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {subTabPassivo === "evase" && (
               <div style={{ ...cardStyle }}>
                 {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
-                {speseEvase.map(({ spesa, bonifico, corsoData }) => (
-                  <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                    <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{fornitoriById[spesa.fornitore_id]?.nome || spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
-                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                        {oggettoDiSpesa(spesa, corsoData)}
-                        {" · "}{spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"}
-                        {locationById[spesa.sede_id] ? ` · ${toTitleCase(locationById[spesa.sede_id].nome)}` : ""}
-                        {sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id) ? ` · ${sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id).nome}` : ""}
-                      </div>
-                    </div>
-                    <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(bonifico)}</div>
-                    {spesa.allegato_path && (
-                      <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ display: "flex", color: NAVY }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                      </a>
-                    )}
-                    <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
-                  </div>
-                ))}
+                {speseEvase.map(({ spesa, bonifico, corsoData }) => {
+                  const chips = [
+                    locationById[spesa.sede_id] ? toTitleCase(locationById[spesa.sede_id].nome) : null,
+                    sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome,
+                  ].filter(Boolean);
+                  return (
+                    <RigaAmministrazione
+                      key={spesa.id}
+                      data={spesa.data_pagamento}
+                      titolo={fornitoriById[spesa.fornitore_id]?.nome || spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}
+                      sottotitolo={oggettoDiSpesa(spesa, corsoData)}
+                      chips={chips}
+                      importo={fmtEuroErp(bonifico)}
+                    >
+                      {spesa.allegato_path && (
+                        <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ display: "flex", color: NAVY }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                        </a>
+                      )}
+                      <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
+                    </RigaAmministrazione>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -18838,14 +18860,15 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           <div style={{ ...cardStyle }}>
             {scadenziarioAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo in sospeso.</div>}
             {scadenziarioAttivo.map((item) => (
-              <div key={item.key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{item.iscritto.nome} {item.iscritto.cognome}</div>
-                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{item.fase} · {etichettaCorso(item.corsoData)}{item.scadenza ? ` · scade ${fmtData(item.scadenza)}` : ""}</div>
-                </div>
-                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(item.importo)}</div>
+              <RigaAmministrazione
+                key={item.key}
+                data={item.scadenza}
+                titolo={`${item.iscritto.nome} ${item.iscritto.cognome}`}
+                sottotitolo={`${item.fase} · ${etichettaCorso(item.corsoData)}`}
+                importo={fmtEuroErp(item.importo)}
+              >
                 <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
-              </div>
+              </RigaAmministrazione>
             ))}
           </div>
         )}
