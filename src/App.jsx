@@ -16978,7 +16978,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente di contabilità
-function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, onApriCatalogoCategorieCosti, onApriScadenziario }) {
+function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -17001,9 +17001,8 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriInserimentoCostiRicavi, o
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Contabilità</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi e le categorie di spesa usate per classificarli.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
-          <TileHome title="Inserimento costi e ricavi" descrizione="Registra e gestisci costi, ricavi e altri movimenti contabili." Icona={IconaTileCostiRicavi} onClick={onApriInserimentoCostiRicavi} />
-          <TileHome title="Gestisci categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Costi e ricavi." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
-          <TileHome title="Scadenziario" descrizione="Bonifici da pagare su tutti i corsi conclusi, con ricevute e archivio spese evase." Icona={IconaTileCostiRicavi} onClick={onApriScadenziario} />
+          <TileHome title="Amministrazione" descrizione="Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo." Icona={IconaTileCostiRicavi} onClick={onApriAmministrazione} />
+          <TileHome title="Categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Prima nota cassa." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
         </div>
       </div>
     </div>
@@ -18095,14 +18094,17 @@ const PAGINA_CATEGORIA_GRUPPO_PER_TIPO = {
   assistente: "Gestione Assistenti", venditore: "Statistiche venditori",
 };
 
-// righe "virtuali" (non ancora una spesa vera) dello Scadenziario Passivo,
-// calcolate una volta sola e riusate sia dalla pagina Scadenziario Passivo
-// sia da "Costi" (che mostra solo quelle "da pagare", non gli impegni):
-// - Alloggio/Location: un bonifico prenotato senza ancora una scadenza
-//   (fattura non arrivata) è un "impegno" — compare da subito, anche per
-//   un corso futuro, su TUTTI i corsi. Appena la scadenza è compilata
-//   (fattura arrivata) diventa "da pagare", a prescindere che il corso
-//   sia concluso o no: la scadenza reale conta più della data del corso.
+// righe "virtuali" (non ancora una spesa vera) di Amministrazione,
+// calcolate una volta sola e riusate sia dalla pagina Amministrazione
+// sia da "Prima nota cassa" (che mostra solo quelle "da pagare", non gli
+// impegni):
+// - Alloggio/Location: un bonifico prenotato è un "impegno" finché non
+//   esiste ancora una spesa vera collegata (fattura non registrata) —
+//   compare da subito, anche per un corso futuro, su TUTTI i corsi. Appena
+//   si registra la fattura ("Registra fattura" nel Quadro impegni) nasce
+//   la spesa vera (stato "fatturata") e la riga virtuale sparisce da qui:
+//   da quel momento è la spesa reale a comparire in "Da pagare" (con la
+//   sua scadenza) e nel Registro documenti fornitore.
 // - Master/Quota venditore/Commissione modelle: invariato, nessun
 //   concetto di "impegno" — dritti "da pagare" solo a corso concluso.
 function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese }) {
@@ -18118,17 +18120,52 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       const chiave = `${r.tipo}_${r.rigaId}`;
       if (spesePerChiave.has(chiave)) return;
       const conScadenza = r.tipo === "alloggio" || r.tipo === "location";
-      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) };
-      if (conScadenza && !r.scadenza) {
+      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) };
+      if (conScadenza) {
         impegni.push(base);
         return;
       }
-      if (conScadenza ? true : concluso) {
-        daPagare.push({ ...base, scadenza: r.scadenza || null });
-      }
+      if (concluso) daPagare.push(base);
     });
   });
   return { impegni, daPagareVirtuali: daPagare };
+}
+
+// "Scadenziario Attivo": rate/saldi non ancora incassati dagli allievi, su
+// tutti i corsi — l'incasso si registra come sempre sulla scheda
+// dell'iscritto (checkbox Incassato, "pagato" sulle rate), qui è solo la
+// vista aggregata di sola lettura. Nessuna scadenza vera in anagrafica:
+// l'Acconto è dovuto da subito (data di iscrizione), Pre corso e Saldo
+// alla data di inizio del corso.
+function calcolaScadenziarioAttivo({ iscritti, corsiDate }) {
+  const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const righe = [];
+  (iscritti || []).forEach((i) => {
+    const cd = corsiDateById[i.corso_data_id];
+    if (!cd) return;
+    const scadenzaAcconto = (i.ts || "").slice(0, 10) || null;
+    if ((i.acconto_totale || 0) > 0 && i.acconto_metodo && !i.acconto_pagato) {
+      righe.push({ key: `acconto_${i.id}`, iscritto: i, corsoData: cd, fase: "Acconto", importo: totQuota(i, "acconto"), scadenza: scadenzaAcconto });
+    }
+    (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r, idx) => {
+      if (!r.metodo || r.pagato) return;
+      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      righe.push({ key: `accontoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Acconto (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: scadenzaAcconto });
+    });
+    if ((i.precorso_totale || 0) > 0 && i.precorso_metodo && !i.precorso_pagato) {
+      righe.push({ key: `precorso_${i.id}`, iscritto: i, corsoData: cd, fase: "Pre corso", importo: totQuota(i, "precorso"), scadenza: cd.data_inizio });
+    }
+    (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r, idx) => {
+      if (!r.metodo || r.pagato) return;
+      const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
+      righe.push({ key: `precorsoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Pre corso (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: cd.data_inizio });
+    });
+    const saldoDaIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
+    if (!i.incassato && saldoDaIncassare > 0) {
+      righe.push({ key: `saldo_${i.id}`, iscritto: i, corsoData: cd, fase: "Saldo", importo: saldoDaIncassare, scadenza: cd.data_inizio });
+    }
+  });
+  return righe.sort((a, b) => (a.scadenza || "").localeCompare(b.scadenza || ""));
 }
 
 async function caricaRicevutaSpesa(file) {
@@ -18174,54 +18211,79 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, totale, categoriaNome, dis
   );
 }
 
-// piccola riga di "Quadro impegni": importo e corso/persona, con un campo
-// data + tasto per compilare la scadenza appena arriva la fattura — da
-// quel momento la riga sparisce da qui e ricompare in "Da pagare"
-function RigaQuadroImpegni({ nome, corsoLabel, totale, onSalvaScadenza }) {
-  const [scadenza, setScadenza] = useState("");
+// riga di "Quadro impegni": importo e corso/persona, con "Registra fattura"
+// che apre numero/data fattura + scadenza (pre-compilata se già nota da
+// Assegnazione Master → Gestisci) + copia fattura opzionale — al salvataggio
+// nasce la spesa vera (stato "Fatturata") e la riga sparisce da qui
+function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilitato, motivoDisabilitato, scadenzaSuggerita, onRegistraFattura }) {
+  const [aperto, setAperto] = useState(false);
+  const [numeroFattura, setNumeroFattura] = useState("");
+  const [dataFattura, setDataFattura] = useState(dataOggiStr());
+  const [scadenza, setScadenza] = useState(scadenzaSuggerita || "");
+  const [file, setFile] = useState(null);
   const [salvando, setSalvando] = useState(false);
+  const pronto = numeroFattura.trim() && dataFattura && scadenza;
   async function salva() {
-    if (!scadenza) return;
+    if (!pronto) return;
     setSalvando(true);
-    await onSalvaScadenza(scadenza);
+    await onRegistraFattura({ numeroFattura: numeroFattura.trim(), dataFattura, scadenza, file });
     setSalvando(false);
   }
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nome}</div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{corsoLabel}</div>
+    <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nome}</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{corsoLabel}{categoriaNome ? ` · ${categoriaNome}` : ""}</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
+        {disabilitato ? (
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
+        ) : !aperto ? (
+          <button onClick={() => setAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", flexShrink: 0 }}>
+            Registra fattura
+          </button>
+        ) : null}
       </div>
-      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
-      <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
-      <button onClick={salva} disabled={salvando || !scadenza} title="Fattura arrivata: compila la scadenza per spostarla in Da pagare" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando || !scadenza ? 0.6 : 1, flexShrink: 0 }}>
-        {salvando ? "Salvo…" : "Segna scadenza"}
-      </button>
+      {aperto && !disabilitato && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+          <input type="text" placeholder="Numero fattura" style={{ ...inputStyle, flex: "1 1 130px" }} value={numeroFattura} onChange={(e) => setNumeroFattura(e.target.value)} />
+          <input type="date" title="Data fattura" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataFattura} onChange={(e) => setDataFattura(e.target.value)} />
+          <input type="date" title="Scadenza pagamento" style={{ ...inputStyle, flex: "0 0 148px" }} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
+          <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
+          <button onClick={salva} disabled={salvando || !pronto} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando || !pronto ? 0.6 : 1, flexShrink: 0 }}>
+            {salvando ? "Salvo…" : "Conferma"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// "Scadenziario Passivo": tutti i bonifici dovuti a fornitori (Compenso
-// Master, Costo Location, Costo Alloggio, Quota venditore, Commissione
-// ricerca modelle), su tutti i corsi, in un solo elenco — invece di
-// doverli andare a cercare corso per corso. Riusa lo stesso calcolo del
-// Riepilogo (calcolaVociScadenziario/calcolaRigheSpeseCorso, sopra
-// SchedaData) così i vari punti non possono mai raccontare numeri
-// diversi. Un bonifico ad Alloggio/Location senza ancora una scadenza
-// (fattura non arrivata) è solo un "impegno preso" — vive nella scheda
-// "Quadro impegni" finché non si compila la scadenza, poi passa in "Da
-// pagare". "Pagato" scrive una spesa vera in contabilità (tabella
-// "spese"), già classificata per sede e categoria in base a "Associa il
-// gruppo a una categoria di spesa" (Gestione Master/Assistenti/Hotel/
-// Location, Statistiche venditori).
-function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriModificaSpesa }) {
+// "Amministrazione": Prima nota cassa in evidenza più quattro schede —
+// Quadro impegni, Registro documenti fornitore, Scadenziario Passivo (i
+// bonifici dovuti a fornitori: Compenso Master, Costo Location, Costo
+// Alloggio, Quota venditore, Commissione ricerca modelle, su tutti i
+// corsi) e Scadenziario Attivo (rate/saldi non ancora incassati dagli
+// allievi). Riusa lo stesso calcolo del Riepilogo
+// (calcolaVociScadenziario/calcolaRigheSpeseCorso, sopra SchedaData) così
+// i vari punti non possono mai raccontare numeri diversi. Un bonifico ad
+// Alloggio/Location è un "impegno preso" finché non si registra la
+// fattura (Quadro impegni → "Registra fattura"): da lì nasce la spesa
+// vera (stato "Fatturata"), visibile subito nel Registro documenti
+// fornitore e in Scadenziario Passivo → Da pagare, già classificata per
+// sede e categoria in base a "Associa il gruppo a una categoria di spesa"
+// (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, fornitori, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("impegni");
+  const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
   const [msg, setMsg] = useState("");
 
   const oggiStr = dataOggiStr();
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   function etichettaCorso(cd) {
     const c = corsiById[cd.corso_id];
     const l = locationById[cd.location_id];
@@ -18232,10 +18294,14 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
 
   const { impegni, daPagareVirtuali } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
 
+  // una spesa nata da "Registra fattura" (origine_scadenziario_chiave
+  // valorizzata) è già una fattura vera con la sua scadenza: compare qui
+  // anche a corso non concluso. Le spese inserite a mano restano invece
+  // gated dalla fine del corso, come sempre.
   const righeReali = (spese || [])
-    .filter((s) => s.tipo_ambito === "classe" && !s.origine_scadenziario_chiave && s.stato !== "pagata")
+    .filter((s) => s.tipo_ambito === "classe" && s.stato !== "pagata")
     .map((s) => ({ spesa: s, corsoData: (corsiDate || []).find((cd) => cd.id === s.classe_id) }))
-    .filter((x) => x.corsoData && x.corsoData.data_fine <= oggiStr && bonificoDiSpesaReale(x.spesa) > 0)
+    .filter((x) => x.corsoData && bonificoDiSpesaReale(x.spesa) > 0 && (x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr))
     .map((x) => ({
       key: `reale_${x.spesa.id}`, tipo: "reale", corsoData: x.corsoData, spesaReale: x.spesa,
       nome: x.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, x.spesa.sottocategoria_id)?.nome || "Spesa",
@@ -18250,10 +18316,32 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
     .filter((x) => x.bonifico > 0)
     .sort((a, b) => (b.spesa.data_pagamento || "").localeCompare(a.spesa.data_pagamento || ""));
 
-  async function salvaScadenzaImpegno(item, scadenza) {
+  const documentiFornitore = (spese || [])
+    .filter((s) => s.numero_documento)
+    .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+
+  const scadenziarioAttivo = calcolaScadenziarioAttivo({ iscritti, corsiDate });
+
+  async function registraFattura(item, { numeroFattura, dataFattura, scadenza, file }) {
     setMsg("");
-    const campo = item.tipo === "location" ? "scadenza_pagamento_location" : "scadenza_pagamento_alloggio";
-    const { error } = await supabase.from(item.tabella).update({ [campo]: scadenza }).eq("id", item.rigaId);
+    let allegatoPath = null;
+    if (file) {
+      const { errore, url } = await caricaRicevutaSpesa(file);
+      if (errore) { setMsg("Errore allegato: " + errore); return; }
+      allegatoPath = url;
+    }
+    const sottocat = sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId);
+    const { error } = await supabase.from("spese").insert({
+      descrizione: item.nome,
+      categoria_id: sottocat?.categoria_id || null,
+      sottocategoria_id: item.sottocategoriaId,
+      tipo_ambito: "classe", classe_id: item.corsoData.id, sede_id: item.corsoData.location_id, corso_id: item.corsoData.corso_id,
+      imponibile: round2(item.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100)), iva_percentuale: ALIQUOTA_IVA_RIEPILOGO_CLASSE, totale: item.totale,
+      numero_documento: numeroFattura, data_documento: dataFattura, scadenza_pagamento: scadenza,
+      stato: "fatturata", metodo_pagamento: "Bonifico",
+      allegato_path: allegatoPath, origine: "automatico",
+      origine_scadenziario_chiave: item.chiave,
+    });
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica();
   }
@@ -18303,13 +18391,22 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Contabilità</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Scadenziario Passivo</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Impegni presi, bonifici da pagare e spese evase, in un unico posto.</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Amministrazione</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
+
+        <button onClick={onApriPrimaNotaCassa} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", textAlign: "left", ...cardStyle, padding: "16px 20px", marginBottom: 18, cursor: "pointer" }}>
+          <div>
+            <div style={{ ...fontHero, fontSize: 18, color: NAVY }}>Prima nota cassa</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
+          </div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
           <TabPillola attivo={tab === "impegni"} onClick={() => setTab("impegni")}>Quadro impegni ({impegni.length})</TabPillola>
-          <TabPillola attivo={tab === "dapagare"} onClick={() => setTab("dapagare")}>Da pagare ({daPagare.length})</TabPillola>
-          <TabPillola attivo={tab === "evase"} onClick={() => setTab("evase")}>Evase ({speseEvase.length})</TabPillola>
+          <TabPillola attivo={tab === "documenti"} onClick={() => setTab("documenti")}>Registro documenti fornitore ({documentiFornitore.length})</TabPillola>
+          <TabPillola attivo={tab === "passivo"} onClick={() => setTab("passivo")}>Scadenziario Passivo ({daPagare.length})</TabPillola>
+          <TabPillola attivo={tab === "attivo"} onClick={() => setTab("attivo")}>Scadenziario Attivo ({scadenziarioAttivo.length})</TabPillola>
         </div>
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
@@ -18323,50 +18420,103 @@ function PaginaScadenziario({ corsi, location, corsiDate, iscritti, master, mast
                 nome={item.nome}
                 corsoLabel={etichettaCorso(item.corsoData)}
                 totale={item.totale}
-                onSalvaScadenza={(scadenza) => salvaScadenzaImpegno(item, scadenza)}
-              />
-            ))}
-          </div>
-        )}
-
-        {tab === "dapagare" && (
-          <div style={{ ...cardStyle }}>
-            {daPagare.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun bonifico da pagare al momento.</div>}
-            {daPagare.map((item) => (
-              <RigaScadenziarioDaPagare
-                key={item.key}
-                nome={item.nome}
-                corsoLabel={etichettaCorso(item.corsoData)}
-                totale={item.totale}
                 categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
                 disabilitato={!item.sottocategoriaId}
-                motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Gestisci categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
-                onConferma={(dati) => confermaPagato(item, dati)}
+                motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
+                scadenzaSuggerita={item.scadenzaSuggerita}
+                onRegistraFattura={(dati) => registraFattura(item, dati)}
               />
             ))}
           </div>
         )}
 
-        {tab === "evase" && (
+        {tab === "documenti" && (
           <div style={{ ...cardStyle }}>
-            {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
-            {speseEvase.map(({ spesa, bonifico }) => (
-              <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
-                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                    {spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"}
-                    {locationById[spesa.sede_id] ? ` · ${toTitleCase(locationById[spesa.sede_id].nome)}` : ""}
-                    {sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id) ? ` · ${sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id).nome}` : ""}
+            {documentiFornitore.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura registrata ancora.</div>}
+            {documentiFornitore.map((spesa) => {
+              const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
+              return (
+                <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                      Fattura n. {spesa.numero_documento}{spesa.data_documento ? ` · ${fmtData(spesa.data_documento)}` : ""}
+                      {spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? ` · ${fornitoriById[spesa.fornitore_id].nome}` : ""}
+                      {spesa.scadenza_pagamento ? ` · scade ${fmtData(spesa.scadenza_pagamento)}` : ""}
+                    </div>
                   </div>
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(spesa.totale)}</div>
+                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                    {etichettaOpzione(STATI_SPESA, spesa.stato)}
+                  </span>
+                  <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
                 </div>
-                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(bonifico)}</div>
-                {spesa.allegato_path && (
-                  <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ display: "flex", color: NAVY }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                  </a>
-                )}
-                <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "passivo" && (
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <TabPillola attivo={subTabPassivo === "dapagare"} onClick={() => setSubTabPassivo("dapagare")}>Da pagare ({daPagare.length})</TabPillola>
+              <TabPillola attivo={subTabPassivo === "evase"} onClick={() => setSubTabPassivo("evase")}>Evase ({speseEvase.length})</TabPillola>
+            </div>
+            {subTabPassivo === "dapagare" && (
+              <div style={{ ...cardStyle }}>
+                {daPagare.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun bonifico da pagare al momento.</div>}
+                {daPagare.map((item) => (
+                  <RigaScadenziarioDaPagare
+                    key={item.key}
+                    nome={item.nome}
+                    corsoLabel={etichettaCorso(item.corsoData)}
+                    totale={item.totale}
+                    categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
+                    disabilitato={!item.sottocategoriaId}
+                    motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
+                    onConferma={(dati) => confermaPagato(item, dati)}
+                  />
+                ))}
+              </div>
+            )}
+            {subTabPassivo === "evase" && (
+              <div style={{ ...cardStyle }}>
+                {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
+                {speseEvase.map(({ spesa, bonifico }) => (
+                  <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
+                      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+                        {spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"}
+                        {locationById[spesa.sede_id] ? ` · ${toTitleCase(locationById[spesa.sede_id].nome)}` : ""}
+                        {sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id) ? ` · ${sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id).nome}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(bonifico)}</div>
+                    {spesa.allegato_path && (
+                      <a href={spesa.allegato_path} target="_blank" rel="noreferrer" title="Apri ricevuta" style={{ display: "flex", color: NAVY }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                      </a>
+                    )}
+                    <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "attivo" && (
+          <div style={{ ...cardStyle }}>
+            {scadenziarioAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo in sospeso.</div>}
+            {scadenziarioAttivo.map((item) => (
+              <div key={item.key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ flex: "2 1 220px", minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{item.iscritto.nome} {item.iscritto.cognome}</div>
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{item.fase} · {etichettaCorso(item.corsoData)}{item.scadenza ? ` · scade ${fmtData(item.scadenza)}` : ""}</div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(item.importo)}</div>
+                <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
               </div>
             ))}
           </div>
@@ -18404,7 +18554,7 @@ const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriScadenziario,
+  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazione,
 }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("ultimomese");
@@ -18494,7 +18644,7 @@ function PaginaInserimentoCostiRicavi({
         {importCsvAperto && (
           <PannelloImportCsv costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} onClose={() => setImportCsvAperto(false)} ricarica={ricarica} />
         )}
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Costi</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prima nota cassa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
 
         <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
@@ -18565,8 +18715,8 @@ function PaginaInserimentoCostiRicavi({
                     <div style={{ flex: isMobile ? "1 1 auto" : "0 0 120px" }}>
                       {riga.virtuale ? (
                         <button
-                          onClick={onApriScadenziario}
-                          title="Apri lo Scadenziario per completare il pagamento"
+                          onClick={onApriAmministrazione}
+                          title="Apri Amministrazione per completare il pagamento"
                           style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "none", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap", cursor: "pointer" }}
                         >
                           Da pagare
@@ -28087,12 +28237,12 @@ export default function App() {
   }
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
-  function apriScadenziario() { apriViewProtetta("scadenziario"); }
+  function apriAmministrazione() { apriViewProtetta("amministrazione"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
   function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
-  // "Modifica spesa" aperta da una riga già evasa nello Scadenziario: al
-  // salvataggio "Indietro" deve tornare lì, non a Inserimento costi e ricavi
-  function apriModificaSpesaDaScadenziario(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("scadenziario"); apriViewProtetta("spesaform"); }
+  // "Modifica spesa" aperta da una riga già in Amministrazione: al
+  // salvataggio "Indietro" deve tornare lì, non a Prima nota cassa
+  function apriModificaSpesaDaAmministrazione(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("amministrazione"); apriViewProtetta("spesaform"); }
   function apriNuovaSpesaPerClasse(classeId, categoriaId, sottocategoriaId) {
     setSpesaInModifica(null);
     setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
@@ -28390,21 +28540,22 @@ export default function App() {
         <PaginaErp
           onBack={() => setView("home")}
           onApriImpostazioni={apriImpostazioni}
-          onApriInserimentoCostiRicavi={apriInserimentoCostiRicavi}
+          onApriAmministrazione={apriAmministrazione}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
-          onApriScadenziario={apriScadenziario}
         />
       )}
 
-      {view === "scadenziario" && (
-        <PaginaScadenziario
+      {view === "amministrazione" && (
+        <PaginaAmministrazione
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
-          spese={spese} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
+          spese={spese} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
           ricarica={fetchDati}
           onBack={() => setView("erp")}
-          onApriModificaSpesa={apriModificaSpesaDaScadenziario}
+          onApriModificaSpesa={apriModificaSpesaDaAmministrazione}
+          onApriPrimaNotaCassa={apriInserimentoCostiRicavi}
+          onApriIscritto={apriIscritto}
         />
       )}
 
@@ -28457,9 +28608,9 @@ export default function App() {
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           categorieGruppi={categorieGruppi}
-          ricarica={fetchDati} onBack={() => setView("erp")}
+          ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
-          onApriScadenziario={apriScadenziario}
+          onApriAmministrazione={apriAmministrazione}
         />
       )}
 
