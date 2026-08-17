@@ -18474,6 +18474,24 @@ async function caricaRicevutaSpesa(file) {
   return { url: data.publicUrl };
 }
 
+// riga di tasti per passare fra le pagine di Amministrazione (Prima nota
+// cassa è una pagina a sé, le altre quattro sono schede della stessa
+// pagina) — condivisa fra PaginaAmministrazione (dove sceglie la scheda
+// locale) e PaginaInserimentoCostiRicavi/Prima nota cassa (da dove riapre
+// Amministrazione già sulla scheda scelta): senza, da Prima nota cassa non
+// si poteva più saltare direttamente alle altre
+function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, passivoCount, attivoCount }) {
+  return (
+    <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <TabPillola attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa}>Prima nota cassa</TabPillola>
+      <TabPillola attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")}>Quadro impegni ({impegniCount})</TabPillola>
+      <TabPillola attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")}>Registro documenti fornitore ({documentiCount})</TabPillola>
+      <TabPillola attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")}>Scadenziario Passivo ({passivoCount})</TabPillola>
+      <TabPillola attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")}>Scadenziario Attivo ({attivoCount})</TabPillola>
+    </div>
+  );
+}
+
 // intestazione di mese, centrata, ripetuta ogni volta che cambia il mese
 // scorrendo una delle lunghe liste di Amministrazione — le spezza in
 // blocchi leggibili invece di un unico elenco indistinto
@@ -18631,9 +18649,9 @@ function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilita
 // fornitore e in Scadenziario Passivo → Da pagare, già classificata per
 // sede e categoria in base a "Associa il gruppo a una categoria di spesa"
 // (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, fornitori, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, fornitori, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, tabIniziale }) {
   const isMobile = useIsMobile();
-  const [tab, setTab] = useState("impegni");
+  const [tab, setTab] = useState(tabIniziale || "impegni");
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
   const [subTabImpegni, setSubTabImpegni] = useState("attivi");
   const [subTabAttivo, setSubTabAttivo] = useState("attive");
@@ -18784,13 +18802,15 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Amministrazione</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-          <TabPillola attivo={false} onClick={onApriPrimaNotaCassa}>Prima nota cassa</TabPillola>
-          <TabPillola attivo={tab === "impegni"} onClick={() => setTab("impegni")}>Quadro impegni ({impegni.length})</TabPillola>
-          <TabPillola attivo={tab === "documenti"} onClick={() => setTab("documenti")}>Registro documenti fornitore ({documentiFornitore.length})</TabPillola>
-          <TabPillola attivo={tab === "passivo"} onClick={() => setTab("passivo")}>Scadenziario Passivo ({daPagare.length})</TabPillola>
-          <TabPillola attivo={tab === "attivo"} onClick={() => setTab("attivo")}>Scadenziario Attivo ({scadenziarioAttivo.length})</TabPillola>
-        </div>
+        <TabsAmministrazione
+          schedaAttiva={tab}
+          onApriPrimaNotaCassa={onApriPrimaNotaCassa}
+          onApriScheda={setTab}
+          impegniCount={impegni.length}
+          documentiCount={documentiFornitore.length}
+          passivoCount={daPagare.length}
+          attivoCount={scadenziarioAttivo.length}
+        />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
 
@@ -19008,7 +19028,7 @@ const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget,
+  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("ultimomese");
@@ -19051,6 +19071,21 @@ function PaginaInserimentoCostiRicavi({
 
   const totaleSpese = round2(righeUnite.reduce((s, r) => s + (r.importo || 0), 0));
 
+  // conteggi per la riga di tasti verso le altre schede di Amministrazione
+  // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
+  // i numeri non possono mai divergere
+  const { impegni: impegniPerConteggio, daPagareVirtuali: daPagareVirtualiPerConteggio } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+  const oggiStrConteggio = dataOggiStr();
+  const daPagareRealiPerConteggio = (spese || [])
+    .filter((s) => s.stato !== "pagata")
+    .filter((s) => {
+      const corsoDataSpesa = s.classe_id ? (corsiDate || []).find((cd) => cd.id === s.classe_id) : null;
+      const bonifico = round2((s.totale || 0) - (s.importo_pagato_cash || 0));
+      return bonifico > 0 && (!corsoDataSpesa || s.origine_scadenziario_chiave || corsoDataSpesa.data_fine <= oggiStrConteggio);
+    }).length;
+  const documentiFornitorePerConteggio = (spese || []).filter((s) => s.numero_documento).length;
+  const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
+
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
     const { error } = await supabase.from("spese").delete().eq("id", id);
@@ -19081,6 +19116,16 @@ function PaginaInserimentoCostiRicavi({
         )}
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prima nota cassa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutte le spese inserite manualmente, con modifica ed eliminazione.</div>
+
+        <TabsAmministrazione
+          schedaAttiva="primanota"
+          onApriPrimaNotaCassa={() => {}}
+          onApriScheda={onApriAmministrazioneTab}
+          impegniCount={impegniPerConteggio.length}
+          documentiCount={documentiFornitorePerConteggio}
+          passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio}
+          attivoCount={scadenziarioAttivoPerConteggio}
+        />
 
         <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: periodo === "personalizzato" ? 10 : 0 }}>
@@ -28139,6 +28184,11 @@ export default function App() {
   // costi e ricavi); lo Scadenziario lo sposta su se stesso quando apre
   // "Modifica spesa" da una riga già evasa
   const [spesaRitornoView, setSpesaRitornoView] = useState("inserimentocostiricavi");
+  // quale scheda di Amministrazione mostrare al prossimo ingresso — la
+  // riga di tasti Prima nota/Quadro impegni/Registro documenti/Scadenziari
+  // compare anche dentro Prima nota cassa (pagina separata), da lì un clic
+  // deve portare dritto sulla scheda scelta, non sempre su "Quadro impegni"
+  const [amministrazioneTabIniziale, setAmministrazioneTabIniziale] = useState("impegni");
   const [loading, setLoading] = useState(true);
   // nomi delle tabelle già caricate in questa sessione (caricamento su
   // richiesta per sezione, vedi TABELLE_PER_VIEW) e se una schermata sta
@@ -28738,6 +28788,13 @@ export default function App() {
   function apriCatalogoCategorieCosti() { apriViewProtetta("catalogocategoriecosti"); }
   function apriBudgetCosti() { apriViewProtetta("budgetcosti"); }
   function apriAmministrazione() { apriViewProtetta("amministrazione"); }
+  // dalla riga di tasti Prima nota/Quadro impegni/Registro documenti/
+  // Scadenziari, presente anche dentro Prima nota cassa: apre Amministrazione
+  // già sulla scheda scelta invece che sempre su "Quadro impegni"
+  function apriAmministrazioneTab(tab) {
+    setAmministrazioneTabIniziale(tab);
+    apriViewProtetta("amministrazione");
+  }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
   function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
   // "Modifica spesa" aperta da una riga già in Amministrazione: al
@@ -29093,6 +29150,7 @@ export default function App() {
           onApriPrimaNotaCassa={apriInserimentoCostiRicavi}
           onApriIscritto={apriIscritto}
           onApriNuovaSpesaDaPagare={apriNuovaSpesaDaPagare}
+          tabIniziale={amministrazioneTabIniziale}
         />
       )}
 
@@ -29147,6 +29205,7 @@ export default function App() {
           categorieGruppi={categorieGruppi}
           ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
+          onApriAmministrazioneTab={apriAmministrazioneTab}
         />
       )}
 
