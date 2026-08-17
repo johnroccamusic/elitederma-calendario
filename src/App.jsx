@@ -2858,10 +2858,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
-                      {loc ? (
-                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}>
+                      {loc && valoreCampo(cd, "pagamento_sede") ? (
+                        <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 7 }}>
                           {loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome)}
-                          <span title={valoreCampo(cd, "sede_confermata") ? "Sede avvisata" : "Sede non ancora avvisata"} style={{ width: 8, height: 8, borderRadius: "50%", background: valoreCampo(cd, "sede_confermata") ? "#2E7D32" : "#C0392B", flexShrink: 0 }} />
+                          <span title={valoreCampo(cd, "sede_confermata") ? "Sede avvisata" : "Sede non ancora avvisata"} style={{ width: 13, height: 13, borderRadius: "50%", background: valoreCampo(cd, "sede_confermata") ? "#2E7D32" : "#C0392B", flexShrink: 0 }} />
                         </button>
                       ) : (
                         <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
