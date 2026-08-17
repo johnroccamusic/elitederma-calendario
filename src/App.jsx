@@ -18542,7 +18542,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
 // che apre numero/data fattura + scadenza (pre-compilata se già nota da
 // Assegnazione Master → Gestisci) + copia fattura opzionale — al salvataggio
 // nasce la spesa vera (stato "Fatturata") e la riga sparisce da qui
-function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilitato, motivoDisabilitato, scadenzaSuggerita, onRegistraFattura }) {
+function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilitato, motivoDisabilitato, dataCreazione, scadenzaSuggerita, onRegistraFattura }) {
   const [aperto, setAperto] = useState(false);
   const [numeroFattura, setNumeroFattura] = useState("");
   const [dataFattura, setDataFattura] = useState(dataOggiStr());
@@ -18558,7 +18558,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilita
   }
   return (
     <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <RigaAmministrazione data={scadenzaSuggerita} titolo={nome} sottotitolo={corsoLabel} chips={categoriaNome ? [categoriaNome] : []} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
+      <RigaAmministrazione data={dataCreazione} titolo={nome} sottotitolo={corsoLabel} chips={categoriaNome ? [categoriaNome] : []} importo={fmtEuroErp(totale)} bordoSotto={false} senzaPadding>
         {disabilitato ? (
           <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
         ) : !aperto ? (
@@ -18759,6 +18759,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                 categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
                 disabilitato={!item.sottocategoriaId}
                 motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
+                dataCreazione={item.corsoData?.data_fine || null}
                 scadenzaSuggerita={item.scadenzaSuggerita}
                 onRegistraFattura={(dati) => registraFattura(item, dati)}
               />
