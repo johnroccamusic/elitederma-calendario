@@ -18431,32 +18431,35 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
 // dell'iscritto (checkbox Incassato, "pagato" sulle rate), qui è solo la
 // vista aggregata di sola lettura. Nessuna scadenza vera in anagrafica:
 // l'Acconto è dovuto da subito (data di iscrizione), Pre corso e Saldo
-// alla data di inizio del corso.
-function calcolaScadenziarioAttivo({ iscritti, corsiDate }) {
+// alla data di inizio del corso. "soloIncassate" inverte i tre filtri
+// "non pagato/incassato": è lo Storico, le stesse identiche righe ma già
+// evase — non esiste una data di incasso in anagrafica, quindi restano
+// raggruppate sulla scadenza originaria anche lì
+function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false }) {
   const corsiDateById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
   const righe = [];
   (iscritti || []).forEach((i) => {
     const cd = corsiDateById[i.corso_data_id];
     if (!cd) return;
     const scadenzaAcconto = (i.ts || "").slice(0, 10) || null;
-    if ((i.acconto_totale || 0) > 0 && i.acconto_metodo && !i.acconto_pagato) {
+    if ((i.acconto_totale || 0) > 0 && i.acconto_metodo && !!i.acconto_pagato === soloIncassate) {
       righe.push({ key: `acconto_${i.id}`, iscritto: i, corsoData: cd, fase: "Acconto", importo: totQuota(i, "acconto"), scadenza: scadenzaAcconto });
     }
     (Array.isArray(i.acconto_extra) ? i.acconto_extra : []).forEach((r, idx) => {
-      if (!r.metodo || r.pagato) return;
+      if (!r.metodo || !!r.pagato !== soloIncassate) return;
       const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
       righe.push({ key: `accontoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Acconto (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: scadenzaAcconto });
     });
-    if ((i.precorso_totale || 0) > 0 && i.precorso_metodo && !i.precorso_pagato) {
+    if ((i.precorso_totale || 0) > 0 && i.precorso_metodo && !!i.precorso_pagato === soloIncassate) {
       righe.push({ key: `precorso_${i.id}`, iscritto: i, corsoData: cd, fase: "Pre corso", importo: totQuota(i, "precorso"), scadenza: cd.data_inizio });
     }
     (Array.isArray(i.precorso_extra) ? i.precorso_extra : []).forEach((r, idx) => {
-      if (!r.metodo || r.pagato) return;
+      if (!r.metodo || !!r.pagato !== soloIncassate) return;
       const interessi = r.metodo === "Rate" ? (r.interessi || 0) : 0;
       righe.push({ key: `precorsoextra_${i.id}_${idx}`, iscritto: i, corsoData: cd, fase: "Pre corso (rata aggiuntiva)", importo: round2((r.totale || 0) + interessi), scadenza: cd.data_inizio });
     });
     const saldoDaIncassare = round2((i.saldo_totale || 0) + modelleTotaleDi(i));
-    if (!i.incassato && saldoDaIncassare > 0) {
+    if (!!i.incassato === soloIncassate && saldoDaIncassare > 0) {
       righe.push({ key: `saldo_${i.id}`, iscritto: i, corsoData: cd, fase: "Saldo", importo: saldoDaIncassare, scadenza: cd.data_inizio });
     }
   });
@@ -18632,6 +18635,8 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("impegni");
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
+  const [subTabImpegni, setSubTabImpegni] = useState("attivi");
+  const [subTabAttivo, setSubTabAttivo] = useState("attive");
   const [msg, setMsg] = useState("");
 
   const oggiStr = dataOggiStr();
@@ -18654,6 +18659,15 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   }
 
   const { impegni, daPagareVirtuali } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
+
+  // "Storico" di Quadro impegni: un impegno (alloggio/location) sparisce
+  // da lì appena si registra la fattura — solo i due tipi che passano da
+  // un "impegno" (mai master/venditore/assistente/modelle, che vanno
+  // dritti in Scadenziario Passivo a corso concluso, senza questa fase)
+  const storicoImpegni = (spese || [])
+    .filter((s) => s.origine_scadenziario_chiave && (s.origine_scadenziario_chiave.startsWith("location_") || s.origine_scadenziario_chiave.startsWith("alloggio_")))
+    .map((s) => ({ spesa: s, corsoData: s.classe_id ? (corsiDate || []).find((cd) => cd.id === s.classe_id) : null }))
+    .sort((a, b) => (b.spesa.data_documento || "").localeCompare(a.spesa.data_documento || ""));
 
   // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
   // (stato diverso da "pagata") resta qui finché non viene segnata
@@ -18696,6 +18710,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
 
   const scadenziarioAttivo = calcolaScadenziarioAttivo({ iscritti, corsiDate });
+  const scadenziarioAttivoStorico = calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate: true });
 
   async function registraFattura(item, { numeroFattura, dataFattura, scadenza, file }) {
     setMsg("");
@@ -18780,22 +18795,53 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
 
         {tab === "impegni" && (
-          <div style={{ ...cardStyle }}>
-            {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno in attesa di fattura.</div>}
-            {elencoConIntestazioniMese(impegni, (item) => item.corsoData?.data_fine || null, (item) => (
-              <RigaQuadroImpegni
-                key={item.key}
-                nome={item.nome}
-                corsoLabel={etichettaCorso(item.corsoData)}
-                totale={item.totale}
-                categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
-                disabilitato={!item.sottocategoriaId}
-                motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
-                dataCreazione={item.corsoData?.data_fine || null}
-                scadenzaSuggerita={item.scadenzaSuggerita}
-                onRegistraFattura={(dati) => registraFattura(item, dati)}
-              />
-            ))}
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <TabPillola attivo={subTabImpegni === "attivi"} onClick={() => setSubTabImpegni("attivi")}>Impegni ({impegni.length})</TabPillola>
+              <TabPillola attivo={subTabImpegni === "storico"} onClick={() => setSubTabImpegni("storico")}>Storico ({storicoImpegni.length})</TabPillola>
+            </div>
+            {subTabImpegni === "attivi" && (
+              <div style={{ ...cardStyle }}>
+                {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno in attesa di fattura.</div>}
+                {elencoConIntestazioniMese(impegni, (item) => item.corsoData?.data_fine || null, (item) => (
+                  <RigaQuadroImpegni
+                    key={item.key}
+                    nome={item.nome}
+                    corsoLabel={etichettaCorso(item.corsoData)}
+                    totale={item.totale}
+                    categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
+                    disabilitato={!item.sottocategoriaId}
+                    motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
+                    dataCreazione={item.corsoData?.data_fine || null}
+                    scadenzaSuggerita={item.scadenzaSuggerita}
+                    onRegistraFattura={(dati) => registraFattura(item, dati)}
+                  />
+                ))}
+              </div>
+            )}
+            {subTabImpegni === "storico" && (
+              <div style={{ ...cardStyle }}>
+                {storicoImpegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno registrato ancora.</div>}
+                {elencoConIntestazioniMese(storicoImpegni, ({ spesa }) => spesa.data_documento || null, ({ spesa, corsoData }) => {
+                  const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
+                  return (
+                    <RigaAmministrazione
+                      key={spesa.id}
+                      data={spesa.data_documento}
+                      titolo={spesa.descrizione || "Spesa"}
+                      sottotitolo={corsoData ? etichettaCorso(corsoData) : null}
+                      chips={spesa.numero_documento ? [`Fattura n. ${spesa.numero_documento}`] : []}
+                      importo={fmtEuroErp(spesa.totale)}
+                    >
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                        {etichettaOpzione(STATI_SPESA, spesa.stato)}
+                      </span>
+                      <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
+                    </RigaAmministrazione>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -18890,19 +18936,43 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         )}
 
         {tab === "attivo" && (
-          <div style={{ ...cardStyle }}>
-            {scadenziarioAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo in sospeso.</div>}
-            {elencoConIntestazioniMese(scadenziarioAttivo, (item) => item.scadenza || null, (item) => (
-              <RigaAmministrazione
-                key={item.key}
-                data={item.scadenza}
-                titolo={`${item.iscritto.nome} ${item.iscritto.cognome}`}
-                sottotitolo={`${item.fase} · ${etichettaCorso(item.corsoData)}`}
-                importo={fmtEuroErp(item.importo)}
-              >
-                <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
-              </RigaAmministrazione>
-            ))}
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <TabPillola attivo={subTabAttivo === "attive"} onClick={() => setSubTabAttivo("attive")}>Da incassare ({scadenziarioAttivo.length})</TabPillola>
+              <TabPillola attivo={subTabAttivo === "storico"} onClick={() => setSubTabAttivo("storico")}>Storico ({scadenziarioAttivoStorico.length})</TabPillola>
+            </div>
+            {subTabAttivo === "attive" && (
+              <div style={{ ...cardStyle }}>
+                {scadenziarioAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo in sospeso.</div>}
+                {elencoConIntestazioniMese(scadenziarioAttivo, (item) => item.scadenza || null, (item) => (
+                  <RigaAmministrazione
+                    key={item.key}
+                    data={item.scadenza}
+                    titolo={`${item.iscritto.nome} ${item.iscritto.cognome}`}
+                    sottotitolo={`${item.fase} · ${etichettaCorso(item.corsoData)}`}
+                    importo={fmtEuroErp(item.importo)}
+                  >
+                    <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
+                  </RigaAmministrazione>
+                ))}
+              </div>
+            )}
+            {subTabAttivo === "storico" && (
+              <div style={{ ...cardStyle }}>
+                {scadenziarioAttivoStorico.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo incassato ancora.</div>}
+                {elencoConIntestazioniMese(scadenziarioAttivoStorico, (item) => item.scadenza || null, (item) => (
+                  <RigaAmministrazione
+                    key={item.key}
+                    data={item.scadenza}
+                    titolo={`${item.iscritto.nome} ${item.iscritto.cognome}`}
+                    sottotitolo={`${item.fase} · ${etichettaCorso(item.corsoData)}`}
+                    importo={fmtEuroErp(item.importo)}
+                  >
+                    <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
+                  </RigaAmministrazione>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
