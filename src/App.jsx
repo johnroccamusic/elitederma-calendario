@@ -2465,11 +2465,27 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     setStagioneVista(stagioneCorrente());
   }
 
+  // "Periodo personalizzato": in alternativa alla stagione, un intervallo
+  // di date libero (anche nel passato) — sostituisce sia il filtro di
+  // stagione sia il "solo edizioni non ancora concluse" che vale sempre
+  // per la vista a stagione, altrimenti l'archivio non sarebbe mai
+  // raggiungibile da qui
+  const [periodoPersonalizzatoAttivo, setPeriodoPersonalizzatoAttivo] = useState(false);
+  const [periodoDa, setPeriodoDa] = useState("");
+  const [periodoA, setPeriodoA] = useState("");
+  function inPeriodoVisualizzato(cd) {
+    if (periodoPersonalizzatoAttivo) {
+      if (periodoDa && cd.data_fine < periodoDa) return false;
+      if (periodoA && cd.data_inizio > periodoA) return false;
+      return true;
+    }
+    return cd.data_fine >= dataOggiStr() && inStagioneVista(cd.data_inizio);
+  }
+
   const filtriAttivi = filtroCorso || filtroCitta || filtroMaster || filtroAssistente || filtroLeva;
 
   const righe = corsiDate
-    .filter((cd) => cd.data_fine >= dataOggiStr())
-    .filter((cd) => inStagioneVista(cd.data_inizio))
+    .filter((cd) => inPeriodoVisualizzato(cd))
     .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
     .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
     .filter((cd) => !filtroMaster || cd.master_id === filtroMaster || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "master" && d.persona_id === filtroMaster))
@@ -2515,7 +2531,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     if (nomeCorso) conteggioCarico[nome].perCorso[nomeCorso] = (conteggioCarico[nome].perCorso[nomeCorso] || 0) + 1;
   }
   corsiDate
-    .filter((cd) => cd.data_fine >= dataOggiStr() && inStagioneVista(cd.data_inizio))
+    .filter((cd) => inPeriodoVisualizzato(cd))
     .forEach((cd) => {
       const nomeCorso = corsoById[cd.corso_id]?.nome;
       if (cd.master_id) {
@@ -2994,39 +3010,63 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Organizza il team, gli assistenti e le trasferte per ogni corso</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <select
-              value={stagioneVista}
-              onChange={(e) => setStagioneVista(parseInt(e.target.value, 10))}
-              style={{ ...inputStyle, ...fontBody, fontWeight: 600, width: "auto", borderRadius: 10 }}
-            >
-              {stagioniDisponibili.map((anno) => (
-                <option key={anno} value={anno}>{etichettaStagione(anno)}</option>
-              ))}
-            </select>
-            <label style={{ display: "flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap", cursor: "pointer" }}>
-              <input type="checkbox" checked={includiAgostoPrecedente} onChange={(e) => setIncludiAgostoPrecedente(e.target.checked)} style={{ width: 15, height: 15 }} />
-              Includi agosto precedente
-            </label>
-            {stagioneBloccata === stagioneVista ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 7, background: "#EEF1FA", border: "1px solid #D9DEF2", borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
-                <IconaSpuntaCerchio size={15} color="#2E7D32" /> Stagione di default
-              </div>
+            {!periodoPersonalizzatoAttivo ? (
+              <>
+                <select
+                  value={stagioneVista}
+                  onChange={(e) => setStagioneVista(parseInt(e.target.value, 10))}
+                  style={{ ...inputStyle, ...fontBody, fontWeight: 600, width: "auto", borderRadius: 10 }}
+                >
+                  {stagioniDisponibili.map((anno) => (
+                    <option key={anno} value={anno}>{etichettaStagione(anno)}</option>
+                  ))}
+                </select>
+                <label style={{ display: "flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap", cursor: "pointer" }}>
+                  <input type="checkbox" checked={includiAgostoPrecedente} onChange={(e) => setIncludiAgostoPrecedente(e.target.checked)} style={{ width: 15, height: 15 }} />
+                  Includi agosto precedente
+                </label>
+                {stagioneBloccata === stagioneVista ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, background: "#EEF1FA", border: "1px solid #D9DEF2", borderRadius: 10, padding: "9px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
+                    <IconaSpuntaCerchio size={15} color="#2E7D32" /> Stagione di default
+                  </div>
+                ) : (
+                  <button
+                    onClick={bloccaStagioneDiDefault}
+                    style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    Imposta come default
+                  </button>
+                )}
+                {stagioneBloccata != null && (
+                  <button
+                    onClick={sbloccaStagione}
+                    style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 16px", cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    <IconaLucchetto size={15} color="#fff" /> Sblocca
+                  </button>
+                )}
+              </>
             ) : (
-              <button
-                onClick={bloccaStagioneDiDefault}
-                style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                Imposta come default
-              </button>
+              <>
+                <label style={{ display: "flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
+                  Da
+                  <input type="date" value={periodoDa} onChange={(e) => setPeriodoDa(e.target.value)} style={{ ...inputStyle, ...fontBody, fontSize: 13, width: "auto", padding: "5px 8px" }} />
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 7, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 14px", ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>
+                  A
+                  <input type="date" value={periodoA} onChange={(e) => setPeriodoA(e.target.value)} style={{ ...inputStyle, ...fontBody, fontSize: 13, width: "auto", padding: "5px 8px" }} />
+                </label>
+              </>
             )}
-            {stagioneBloccata != null && (
-              <button
-                onClick={sbloccaStagione}
-                style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 16px", cursor: "pointer", whiteSpace: "nowrap" }}
-              >
-                <IconaLucchetto size={15} color="#fff" /> Sblocca
-              </button>
-            )}
+            <button
+              onClick={() => setPeriodoPersonalizzatoAttivo((v) => !v)}
+              style={{
+                ...fontBody, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer", borderRadius: 10, padding: "9px 14px",
+                color: periodoPersonalizzatoAttivo ? "#fff" : NAVY, background: periodoPersonalizzatoAttivo ? NAVY : "#fff", border: periodoPersonalizzatoAttivo ? "none" : `1px solid ${CREAM_BORDER}`,
+              }}
+            >
+              {periodoPersonalizzatoAttivo ? "Torna alla stagione" : "Periodo personalizzato"}
+            </button>
           </div>
         </div>
 
