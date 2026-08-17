@@ -27908,6 +27908,12 @@ export default function App() {
   // ordini importati automaticamente dallo shop WooCommerce (webhook +
   // import storico una tantum, entrambi via Edge Function)
   const [venditeShop, setVenditeShop] = useState([]);
+  // payload_raw del webhook WooCommerce per riga di vendite_shop: colonna
+  // pesante (l'intero JSON dell'ordine), usata in un solo punto (CRM Shop,
+  // per risalire al customer_id) — tenuta fuori dal caricamento normale di
+  // venditeShop e caricata solo quando si apre quella schermata, poi unita
+  // per id ai record già in memoria (vedi venditeShopConPayloadRaw più sotto)
+  const [venditeShopCrm, setVenditeShopCrm] = useState([]);
   // catalogo prodotti WooCommerce (sincronizzato da woo-sync-catalogo)
   const [categorieProdotti, setCategorieProdotti] = useState([]);
   const [prodottiShop, setProdottiShop] = useState([]);
@@ -27975,6 +27981,11 @@ export default function App() {
   // "Modifica spesa" da una riga già evasa
   const [spesaRitornoView, setSpesaRitornoView] = useState("inserimentocostiricavi");
   const [loading, setLoading] = useState(true);
+  // nomi delle tabelle già caricate in questa sessione (caricamento su
+  // richiesta per sezione, vedi TABELLE_PER_VIEW) e se una schermata sta
+  // aspettando le sue tabelle mancanti
+  const [tabelleCaricate, setTabelleCaricate] = useState(() => new Set());
+  const [caricandoSezione, setCaricandoSezione] = useState(false);
   const [filtroCorsoHome, setFiltroCorsoHome] = useState("");
   const [filtroCittaHome, setFiltroCittaHome] = useState("");
   const [filtroMasterHome, setFiltroMasterHome] = useState("");
@@ -28026,7 +28037,12 @@ export default function App() {
     costi_budget: async () => setCostiBudget((await supabase.from("costi_budget").select("*")).data || []),
     costi_soglie_allerta: async () => setCostiSoglieAllerta((await supabase.from("costi_soglie_allerta").select("*")).data || []),
     entrate_manuali: async () => setEntrateManuali((await supabase.from("entrate_manuali").select("*").order("data", { ascending: false })).data || []),
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("*").order("data_ordine", { ascending: false })).data || []),
+    // niente payload_raw qui: è il JSON grezzo dell'intero ordine
+    // WooCommerce, di gran lunga la colonna più pesante del database, letta
+    // in un solo punto di tutta l'app (CRM Shop). Caricata a parte, vedi
+    // "vendite_shop_crm" sotto
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id").order("data_ordine", { ascending: false })).data || []),
+    vendite_shop_crm: async () => setVenditeShopCrm((await supabase.from("vendite_shop").select("id, payload_raw")).data || []),
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
     prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
@@ -28099,7 +28115,7 @@ export default function App() {
     if (!window.confirm(`Stai per cancellare definitivamente una data GIÀ CONCLUSA (${etichetta}) insieme a ${numIscritti} iscritt${numIscritti === 1 ? "o" : "i"} e a tutti i loro dati di pagamento. L'operazione non è reversibile. Continuare?`)) return;
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
     if (error) { window.alert("Errore: " + error.message); return; }
-    fetchDati();
+    fetchDati(["corsi_date", "iscritti"]);
   }
 
   // il tema colori è cosmetico: viene caricato in parallelo, senza far
@@ -28121,14 +28137,101 @@ export default function App() {
     setTemaVersione((v) => v + 1);
   }
 
+  // tabelle piccole che servono anche da Home, prima ancora di aprire una
+  // sezione: venditori/password_menu/utenti_app decidono l'esito di un
+  // click su un tasto della Home (login venditore, password di una
+  // sotto-sezione) — vedi apriLoginVenditore/apriViewProtetta. Devono
+  // essere già in memoria in quel momento, non caricabili "quando serve"
+  // come le altre, quindi restano nel caricamento che precede la Home
+  const TABELLE_ESSENZIALI = ["venditori", "password_menu", "utenti_app"];
+
+  // quali tabelle servono a ciascuna schermata (view): elenco ricavato
+  // leggendo, per ognuna, esattamente quali dati passa come prop al
+  // componente che la disegna qui sotto. "home"/"erp"/"magazzinoshop"/
+  // "statistiche" sono pagine di sola navigazione, senza bisogno di alcuna
+  // tabella. Vedi il piano "Ridurre il peso del caricamento iniziale" per
+  // il contesto di questa scelta
+  const TABELLE_PER_VIEW = {
+    home: [], erp: [], magazzinoshop: [], statistiche: [],
+    archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
+    impostazioni: ["corsi", "location", "citta", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
+    verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
+    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori"],
+    classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
+    crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
+    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
+    statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
+    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi"],
+    dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
+    venditeshop: ["vendite_shop"],
+    venditealbanco: ["vendite_shop"],
+    omaggi: ["vendite_shop"],
+    prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "prodotti_shop"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
+    pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti"],
+    gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
+    catalogocategoriecosti: ["costi_categorie", "costi_sottocategorie", "spese", "costi_soglie_allerta"],
+    budgetcosti: ["costi_categorie", "location", "corsi", "costi_budget"],
+    spesaform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "spese", "spese_attribuzioni"],
+    fontdiplomi: ["font_diplomi", "diploma_eccezioni", "segnaposti_config"],
+    settingloghi: ["loghi_impostazioni", "loghi_categorie"],
+    generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
+    dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
+    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi"],
+    agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
+    gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
+    logisticaprodotti: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
+    magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
+    spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
+    contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
+    passwordmenu: ["password_menu", "utenti_app", "master", "agende", "venditori"],
+    statisticamaster: ["vendite_shop", "prodotti_shop", "master", "target_vendite_prodotti"],
+    gestionemaster: ["master", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
+    gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    crmallievi: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
+    statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
+    assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master"],
+    calendario: ["corsi", "location", "corsi_date", "iscritti", "master"],
+    cerca: ["corsi", "location", "corsi_date", "iscritti"],
+    cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare"],
+  };
+
   async function caricaIniziale() {
     setLoading(true);
-    await fetchDati();
+    await fetchDati(TABELLE_ESSENZIALI);
+    setTabelleCaricate(new Set(TABELLE_ESSENZIALI));
     setLoading(false);
     caricaTemaColori();
   }
 
   useEffect(() => { if (ok) caricaIniziale(); }, [ok]);
+
+  // dopo il caricamento essenziale, ogni apertura di una schermata (view)
+  // carica solo le tabelle che le servono, la prima volta che si apre in
+  // questa sessione — le riaperture successive sono istantanee perché la
+  // tabella resta in memoria finché qualcosa non la modifica (ricarica
+  // mirata, vedi CARICATORI_TABELLA)
+  useEffect(() => {
+    if (!ok || loading) return;
+    const richieste = TABELLE_PER_VIEW[view] || [];
+    const mancanti = richieste.filter((t) => !tabelleCaricate.has(t));
+    if (mancanti.length === 0) return;
+    let annullato = false;
+    setCaricandoSezione(true);
+    fetchDati(mancanti).then(() => {
+      if (annullato) return;
+      setTabelleCaricate((prev) => new Set([...prev, ...mancanti]));
+      setCaricandoSezione(false);
+    });
+    return () => { annullato = true; };
+  }, [view, ok, loading, tabelleCaricate]);
 
   // timeout di sessione sul dispositivo condiviso (POS Vendite Prodotti):
   // 15 minuti senza alcuna interazione forzano il logout completo, così
@@ -28271,7 +28374,7 @@ export default function App() {
     if (utente?.venditoreId && !utente?.masterId) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.venditoreNome || utente.nome }); setView("dashboardvenditori"); }
   }} /></div>;
 
-  if (loading) {
+  if (loading || caricandoSezione) {
     return (
       <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
         Caricamento…
@@ -28545,6 +28648,13 @@ export default function App() {
     setView("schedeaffiancate");
   }
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
+  // ricongiunge il payload_raw (caricato a parte, vedi vendite_shop_crm)
+  // alle righe di venditeShop solo per il CRM Shop, l'unico punto che lo usa
+  // — calcolato solo quando quella schermata è davvero aperta
+  const venditeShopConPayloadRaw = view !== "crmshop" ? venditeShop : (() => {
+    const mappaPayloadRaw = new Map(venditeShopCrm.map((v) => [v.id, v.payload_raw]));
+    return venditeShop.map((v) => ({ ...v, payload_raw: mappaPayloadRaw.get(v.id) ?? null }));
+  })();
 
   return (
     <div key={temaVersione} style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
@@ -28851,7 +28961,7 @@ export default function App() {
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShop} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} />
       )}
 
       {view === "generacoupon" && (
