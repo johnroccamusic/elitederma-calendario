@@ -9484,10 +9484,12 @@ const CHIAVI_ESCLUSE_RIEPILOGO = ["personale_accademia", "oneri_contributivi", "
 // tendina "Associa categoria di spesa": usata su assistente/master/
 // location/hotel per dire una volta sola a quale sotto-categoria di
 // spesa imputare i costi che generano, così l'app non deve indovinarlo
-// caso per caso. Stesso elenco (categorie legate a un corso, non
-// quelle aziendali) già usato dal "+" del Riepilogo amministrativo.
+// caso per caso. Qui servono TUTTE le categorie, comprese quelle
+// "aziendali" escluse invece dal "+" del Riepilogo amministrativo (quello
+// resta filtrato più sotto, con CHIAVI_ESCLUSE_RIEPILOGO — due elenchi
+// diversi per due usi diversi, non vanno confusi).
 function SelectCategoriaSpesa({ value, onChange, costiCategorie, costiSottocategorie }) {
-  const categorie = (costiCategorie || []).filter((c) => !CHIAVI_ESCLUSE_RIEPILOGO.includes(c.id)).sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+  const categorie = (costiCategorie || []).slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
   return (
     <select style={inputStyle} value={value || ""} onChange={(e) => onChange(e.target.value || null)}>
       <option value="">— nessuna —</option>
