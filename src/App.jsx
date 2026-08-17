@@ -8559,7 +8559,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriAssegnazioneMaster, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8910,7 +8910,6 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
         { etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
         { etichetta: "Definisci Location", Icona: IconaPin, onClick: () => setShowLocModal(true) },
         { etichetta: "Definisci magazzini distaccati", Icona: IconaPin, onClick: () => setShowMagazziniModal(true) },
-        { etichetta: "Assegna Master", Icona: IconaMasterRiga, onClick: onApriAssegnazioneMaster },
       ],
     },
     {
@@ -17268,7 +17267,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti }) {
+function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -17289,10 +17288,11 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCa
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Amministrazione</div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi e le categorie di spesa usate per classificarli.</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi, categorie di spesa e organizzazione operativa dei corsi.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Contabilità" descrizione="Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo." Icona={IconaTileCostiRicavi} onClick={onApriAmministrazione} />
           <TileHome title="Categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Prima nota cassa." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
+          <TileHome title="Operativo corsi" descrizione="Assegna master, assistenti, leve, hotel e sedi a ogni edizione." Icona={IconaTileMaster} onClick={onApriAssegnazioneMaster} />
         </div>
       </div>
     </div>
@@ -29160,7 +29160,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} citta={citta} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriAssegnazioneMaster={() => setView("assegnazionemaster")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} citta={citta} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
@@ -29209,6 +29209,7 @@ export default function App() {
           onApriImpostazioni={apriImpostazioni}
           onApriAmministrazione={apriAmministrazione}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
+          onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
         />
       )}
 
@@ -29537,7 +29538,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("impostazioni")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} />
       )}
 
       {view === "calendario" && (
