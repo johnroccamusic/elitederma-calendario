@@ -2295,7 +2295,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
 // docente extra aggiungere (master/assistente/leva): ognuna diventa
 // una riga propria in corsi_date_docenti, con i propri biglietti di
 // viaggio e il proprio hotel.
-function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, ruoloUtente, layoutCondiviso, ricarica, onBack }) {
+function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -2345,6 +2345,42 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const [gestisciSede, setGestisciSede] = useState(null);
   function hotelNomeDi(id) {
     return (hotel || []).find((h) => h.id === id)?.nome?.toUpperCase() || null;
+  }
+  // stesso importo suggerito che calcolaRigheSpeseCorso userebbe per
+  // questa riga (pattuito per periodo con priorità, altrimenti tariffa a
+  // notte della scheda hotel) — solo per precompilare "Registra spesa",
+  // il conto amministrativo vero resta quello del Riepilogo
+  function totaleAlloggioRiga(r) {
+    if (r.pattuito_periodo != null) return r.pattuito_periodo;
+    if (r.notti_prenotate == null || !r.alloggio_id) return null;
+    const h = (hotel || []).find((x) => x.id === r.alloggio_id);
+    const tipoPag = r.tipo_pagamento_alloggio === "cash" ? "cash" : "bonifico";
+    const tariffa = tipoPag === "cash" ? (h?.costo_notte_cash ?? h?.costo_notte_fattura) : (h?.costo_notte_fattura ?? h?.costo_notte_cash);
+    return tariffa != null ? round2(tariffa * r.notti_prenotate) : null;
+  }
+  // "Hotel pagato": non è più un semplice flag visivo ma la stessa spesa
+  // vera registrata in "Registra spesa", trovata tramite la chiave
+  // "alloggio_<rigaId>" (la stessa usata da calcolaVociScadenziario, per
+  // restare sempre in sync con Amministrazione) — di default una tendina
+  // con solo "Registra", che diventa un tasto colorato con lo stato della
+  // spesa una volta registrata
+  function cellaHotelPagato(riga, classeId) {
+    const chiave = `alloggio_${riga.id}`;
+    const spesaReg = (spese || []).find((s) => s.origine_scadenziario_chiave === chiave);
+    if (spesaReg) {
+      const stile = COLORE_STATO_SPESA[spesaReg.stato] || COLORE_STATO_SPESA.preventivata;
+      return (
+        <button onClick={() => onApriRegistraSpesaAlloggio?.(chiave, classeId, totaleAlloggioRiga(riga))} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stile.colore, background: stile.sfondo, border: "none", borderRadius: 12, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+          {etichettaOpzione(STATI_SPESA, spesaReg.stato)}
+        </button>
+      );
+    }
+    return (
+      <select style={campoStyle} value="" onChange={(e) => { if (e.target.value === "registra") onApriRegistraSpesaAlloggio?.(chiave, classeId, totaleAlloggioRiga(riga)); }}>
+        <option value="">—</option>
+        <option value="registra">Registra</option>
+      </select>
+    );
   }
   // agosto è tecnicamente l'ultimo mese della stagione PRECEDENTE (la
   // stagione va da settembre ad agosto), ma è anche il mese in cui si
@@ -2593,7 +2629,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
     </button>
   );
   const flagAvvisata = (attivo, onClick) => flagSemplice(attivo, onClick, "Avvisata", "Non ancora avvisata");
-  const flagPagato = (attivo, onClick) => flagSemplice(attivo, onClick, "Hotel pagato", "Hotel non ancora pagato");
 
   // larghezza delle colonne della tabella: trascinabile con il mouse (come
   // in Excel) afferrando la giunzione tra due colonne nell'intestazione;
@@ -2855,8 +2890,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                         {hotelNomeDi(valoreCampo(cd, "alloggio_id")) || "Gestisci"}
                       </button>
                     </td>
-                    <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                      {flagPagato(!!valoreCampo(cd, "pagato"), () => salvaCampo(cd.id, "pagato", !valoreCampo(cd, "pagato")))}
+                    <td style={cellaGruppo}>
+                      {cellaHotelPagato(cd, cd.id)}
                     </td>
                     <td style={cellaGruppo}>
                       <input style={campoStyle} defaultValue={cd.note_viaggio || ""} onBlur={(e) => { if (e.target.value !== (cd.note_viaggio || "")) salvaCampo(cd.id, "note_viaggio", e.target.value || null); }} />
@@ -2892,8 +2927,8 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                           {hotelNomeDi(valoreCampo(riga, "alloggio_id")) || "Gestisci"}
                         </button>
                       </td>
-                      <td style={{ ...cellaGruppo, textAlign: "center" }}>
-                        {flagPagato(!!valoreCampo(riga, "pagato"), () => salvaCampoGenerico("corsi_date_docenti", riga.id, "pagato", !valoreCampo(riga, "pagato")))}
+                      <td style={cellaGruppo}>
+                        {cellaHotelPagato(riga, cd.id)}
                       </td>
                       <td style={cellaGruppo}>
                         {riga.tipo !== "leva" && (
@@ -26780,8 +26815,8 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   const [dataPagamento, setDataPagamento] = useState(spesaEsistente?.data_pagamento || "");
   const [competenzaDa, setCompetenzaDa] = useState(spesaEsistente?.competenza_da || "");
   const [competenzaA, setCompetenzaA] = useState(spesaEsistente?.competenza_a || "");
-  const [imponibile, setImponibile] = useState(spesaEsistente?.imponibile != null ? String(spesaEsistente.imponibile) : "");
-  const [totale, setTotale] = useState(spesaEsistente?.totale != null ? String(spesaEsistente.totale) : "");
+  const [imponibile, setImponibile] = useState(spesaEsistente?.imponibile != null ? String(spesaEsistente.imponibile) : (prefill?.totale != null ? String(round2(prefill.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100))) : ""));
+  const [totale, setTotale] = useState(spesaEsistente?.totale != null ? String(spesaEsistente.totale) : (prefill?.totale != null ? String(prefill.totale) : ""));
   const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? 22);
   const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : false);
   const [stato, setStato] = useState(spesaEsistente?.stato || "pagata");
@@ -26887,6 +26922,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       imponibile: imp, iva_percentuale: ivaEffettiva, totale: totale === "" ? imp : round2(parseNum(totale)),
       allegato_path: allegatoPath || null, note: note.trim() || null,
       stato, metodo_pagamento: metodoPagamento || null,
+      origine_scadenziario_chiave: prefill?.origineScadenziarioChiave ?? spesaEsistente?.origine_scadenziario_chiave ?? null,
       tipo_ambito: ripartisci ? "generale" : tipoAmbito,
       sede_id: ripartisci ? null : (tipoAmbito === "sede" ? sedeId || null : null),
       corso_id: ripartisci ? null : (tipoAmbito === "corso" ? corsoId || null : null),
@@ -28326,6 +28362,23 @@ export default function App() {
     setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
     apriViewProtetta("spesaform");
   }
+  // "Hotel pagato" in Assegnazione Master: invece di un semplice flag
+  // visivo, apre la stessa scheda "Registra spesa" già usata altrove,
+  // pre-attribuita al corso e alla categoria giusta (Gestione Hotel →
+  // "Associa il gruppo a una categoria di spesa") — così l'uscita finisce
+  // davvero in Prima nota cassa. La chiave (stessa di
+  // calcolaVociScadenziario, "alloggio_<rigaId>") tiene tutto in sync: se
+  // esiste già una spesa per questa riga si riapre quella, altrimenti se
+  // ne crea una nuova con l'importo calcolato come suggerimento.
+  function apriRegistraSpesaAlloggio(chiave, classeId, totaleSuggerito) {
+    const sottocategoriaId = categoriaGruppoPer("alloggio", categorieGruppi);
+    const sottocat = sottocategoriaId ? sottocategoriaCostoDi(costiSottocategorie, sottocategoriaId) : null;
+    const esistente = (spese || []).find((s) => s.origine_scadenziario_chiave === chiave);
+    setSpesaInModifica(esistente ? esistente.id : null);
+    setSpesaPrefill({ classeId, categoriaId: sottocat?.categoria_id || null, sottocategoriaId, totale: totaleSuggerito, origineScadenziarioChiave: chiave });
+    setSpesaRitornoView("assegnazionemaster");
+    apriViewProtetta("spesaform");
+  }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -28937,7 +28990,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("impostazioni")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} />
       )}
 
       {view === "calendario" && (
