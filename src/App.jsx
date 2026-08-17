@@ -2126,33 +2126,36 @@ function Gate({ onOk }) {
 function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }) {
   const [hotelId, setHotelId] = useState(riga.alloggio_id || "");
   const [notti, setNotti] = useState(riga.notti_prenotate != null ? String(riga.notti_prenotate) : "");
-  const [pattuitoANotte, setPattuitoANotte] = useState(riga.pattuito_a_notte != null ? String(riga.pattuito_a_notte) : "");
+  const [costoNotteCash, setCostoNotteCash] = useState(riga.pattuito_a_notte_cash != null ? String(riga.pattuito_a_notte_cash) : "");
+  const [costoNotteBonifico, setCostoNotteBonifico] = useState(riga.pattuito_a_notte_bonifico != null ? String(riga.pattuito_a_notte_bonifico) : "");
   const [tipoPagamento, setTipoPagamento] = useState(riga.tipo_pagamento_alloggio || "bonifico");
   const [scadenza, setScadenza] = useState(riga.scadenza_pagamento_alloggio || "");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
-  // precompila "Pattuito a notte" dalla tariffa dell'hotel scelto (cash o
-  // fattura secondo il Tipo di pagamento), solo se il campo è ancora
-  // vuoto — non sovrascrive un valore già inserito a mano
+  // precompila i due costi a notte dalla tariffa dell'hotel scelto (cash e
+  // fattura), solo se il campo è ancora vuoto — non sovrascrive un valore
+  // già inserito a mano
   useEffect(() => {
-    if (pattuitoANotte !== "") return;
     const h = (hotel || []).find((x) => x.id === hotelId);
     if (!h) return;
-    const tariffa = tipoPagamento === "cash" ? (h.costo_notte_cash ?? h.costo_notte_fattura) : (h.costo_notte_fattura ?? h.costo_notte_cash);
-    if (tariffa != null) setPattuitoANotte(String(tariffa));
+    if (costoNotteCash === "" && h.costo_notte_cash != null) setCostoNotteCash(String(h.costo_notte_cash));
+    if (costoNotteBonifico === "" && h.costo_notte_fattura != null) setCostoNotteBonifico(String(h.costo_notte_fattura));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotelId, tipoPagamento]);
+  }, [hotelId]);
 
   async function salva() {
     setSalvando(true);
     const nottiNum = notti === "" ? null : Number(notti);
-    const aNotteNum = pattuitoANotte === "" ? null : parseNum(pattuitoANotte);
+    const cashNum = costoNotteCash === "" ? null : parseNum(costoNotteCash);
+    const bonificoNum = costoNotteBonifico === "" ? null : parseNum(costoNotteBonifico);
+    const aNotteNum = tipoPagamento === "cash" ? cashNum : bonificoNum;
     const periodo = nottiNum != null && aNotteNum != null ? round2(nottiNum * aNotteNum) : null;
     const campi = {
       alloggio_id: hotelId || null,
       notti_prenotate: nottiNum,
-      pattuito_a_notte: aNotteNum,
+      pattuito_a_notte_cash: cashNum,
+      pattuito_a_notte_bonifico: bonificoNum,
       pattuito_periodo: periodo,
       tipo_pagamento_alloggio: tipoPagamento || null,
       scadenza_pagamento_alloggio: tipoPagamento === "cash" ? null : (scadenza || null),
@@ -2171,15 +2174,18 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }
           {(hotel || []).map((h) => <option key={h.id} value={h.id}>{h.nome.toUpperCase()}</option>)}
         </select>
       </Field>
+      <Field label="Notti prenotate">
+        <input type="text" inputMode="numeric" style={inputStyle} value={notti} onChange={(e) => setNotti(e.target.value)} />
+      </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
-          <Field label="Notti prenotate">
-            <input type="text" inputMode="numeric" style={inputStyle} value={notti} onChange={(e) => setNotti(e.target.value)} />
+          <Field label="Costo a notte Cash">
+            <input type="text" inputMode="decimal" style={inputStyle} value={costoNotteCash} onChange={(e) => setCostoNotteCash(e.target.value)} />
           </Field>
         </div>
         <div style={{ flex: 1 }}>
-          <Field label="Pattuito a notte">
-            <input type="text" inputMode="decimal" style={inputStyle} value={pattuitoANotte} onChange={(e) => setPattuitoANotte(e.target.value)} />
+          <Field label="Costo a notte Bonifico">
+            <input type="text" inputMode="decimal" style={inputStyle} value={costoNotteBonifico} onChange={(e) => setCostoNotteBonifico(e.target.value)} />
           </Field>
         </div>
       </div>
