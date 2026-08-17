@@ -8540,6 +8540,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
   const [costoCashLoc, setCostoCashLoc] = useState("");
   const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
   const [sedeCentraleLoc, setSedeCentraleLoc] = useState(false);
+  const [ibanLoc, setIbanLoc] = useState("");
   const [msg, setMsg] = useState("");
   const [msgCitta, setMsgCitta] = useState("");
   const [mostraFormAggiungiLoc, setMostraFormAggiungiLoc] = useState(false);
@@ -8606,6 +8607,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
   const [modCostoCashLoc, setModCostoCashLoc] = useState("");
   const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
   const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
+  const [modIbanLoc, setModIbanLoc] = useState("");
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
 
@@ -8774,6 +8776,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
     setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
     setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
     setModSedeCentraleLoc(!!l.sede_centrale);
+    setModIbanLoc(l.iban || "");
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
@@ -8784,6 +8787,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
       costo_giornaliero_cash: modSedeCentraleLoc ? null : (modCostoCashLoc === "" ? null : Number(modCostoCashLoc)),
       costo_giornaliero_bonifico: modSedeCentraleLoc ? null : (modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc)),
       sede_centrale: modSedeCentraleLoc,
+      iban: modIbanLoc.trim() || null,
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null);
@@ -8829,9 +8833,10 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
       costo_giornaliero_cash: sedeCentraleLoc ? null : (costoCashLoc === "" ? null : Number(costoCashLoc)),
       costo_giornaliero_bonifico: sedeCentraleLoc ? null : (costoBonificoLoc === "" ? null : Number(costoBonificoLoc)),
       sede_centrale: sedeCentraleLoc,
+      iban: ibanLoc.trim() || null,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setMsg("Sede aggiunta.");
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setMsg("Sede aggiunta.");
     ricarica();
   }
   async function toggleMagazzinoLocale(locationId, valore) {
@@ -9127,6 +9132,9 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
                   </Field>
                 </>
               )}
+              <Field label="IBAN (opzionale)">
+                <input style={inputStyle} value={ibanLoc} onChange={(e) => setIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
+              </Field>
               <div style={{ display: "flex", gap: 8 }}>
                 <Button onClick={aggiungiLocation}>Aggiungi location</Button>
                 <Button variant="ghost" onClick={() => setMostraFormAggiungiLoc(false)}>Annulla</Button>
@@ -9182,6 +9190,9 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
                           </Field>
                         </>
                       )}
+                      <Field label="IBAN (opzionale)">
+                        <input style={inputStyle} value={modIbanLoc} onChange={(e) => setModIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
+                      </Field>
                       <div style={{ display: "flex", gap: 8 }}>
                         <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
                         <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
@@ -13493,7 +13504,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === r.masterId && mc.corso_id === corsoData.corso_id);
     const persona = (master || []).find((m) => m.id === r.masterId);
     const totale = round2(compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso) * durataGiorniCorso);
-    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: `Costo Master — ${persona?.nome || "—"}`, totale, bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
+    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: `Costo Master — ${persona?.nome || "—"}`, totale, bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0, fornitore: persona?.nome ? `Master ${persona.nome}` : "—", iban: persona?.iban || null };
   });
 
   // riga "Costo location": costo giornaliero pattuito sulla sede
@@ -13525,6 +13536,8 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     // basta che la sede/hotel abbia una tariffa di default: finché
     // nessuno l'ha confermata qui, non deve comparire nel Quadro impegni
     gestita: corsoData.pagamento_sede != null,
+    fornitore: locSedeClasse?.nome_sede || (locSedeClasse?.nome ? toTitleCase(locSedeClasse.nome) : "—"),
+    iban: locSedeClasse?.iban || null,
   } : null;
 
   // righe "Costo Alloggio": una per ogni persona (master, assistente o
@@ -13545,11 +13558,11 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     .map((r) => {
       const listaPersone = r.personaTipo === "master" ? master : r.personaTipo === "assistente" ? assistente : leva;
       const persona = (listaPersone || []).find((p) => p.id === r.personaId);
+      const hotelRiga = (hotel || []).find((h) => h.id === r.alloggioId);
       let totale;
       if (r.pattuitoPeriodo) {
         totale = round2(r.pattuitoPeriodo);
       } else {
-        const hotelRiga = (hotel || []).find((h) => h.id === r.alloggioId);
         const tariffaNotte = r.tipoPagamento === "cash"
           ? (hotelRiga?.costo_notte_cash ?? hotelRiga?.costo_notte_fattura ?? null)
           : (hotelRiga?.costo_notte_fattura ?? hotelRiga?.costo_notte_cash ?? null);
@@ -13565,7 +13578,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       // una volta per questa riga (tipoPagamento valorizzato) — finché
       // resta solo la tariffa di default dell'hotel, senza conferma, non
       // deve comparire nel Quadro impegni
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento };
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", iban: hotelRiga?.iban || null };
     })
     .filter(Boolean);
 
@@ -18362,7 +18375,7 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
       // non deve comparire nemmeno come impegno, solo come costo previsto
       // nel Riepilogo del corso
       if (conScadenza && !r.gestita) return;
-      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi) };
+      const base = { key: chiave, chiave, corsoData: cd, nome: r.nome, totale: r.bonifico, tipo: r.tipo, tabella: r.tabella, rigaId: r.rigaId, scadenzaSuggerita: r.scadenza || null, sottocategoriaId: categoriaGruppoPer(r.tipo, categorieGruppi), fornitore: r.fornitore || null, iban: r.iban || null };
       if (conScadenza) {
         impegni.push(base);
         return;
@@ -18418,11 +18431,13 @@ async function caricaRicevutaSpesa(file) {
   return { url: data.publicUrl };
 }
 
-// riga di "Da pagare": upload ricevuta + data pagamento + tasto "Pagato",
-// stesso componente sia per le righe virtuali (master/location/alloggio/
-// assistente/venditore/modelle) sia per le spese reali già in tabella —
-// l'unica differenza (insert vs update) resta nel gestore passato da fuori
-function RigaScadenziarioDaPagare({ nome, corsoLabel, totale, categoriaNome, disabilitato, motivoDisabilitato, onConferma }) {
+// riga di "Da pagare": data del debito, scadenza, fornitore, oggetto,
+// importo (IVA inclusa) e IBAN — poi upload ricevuta + data pagamento +
+// tasto "Pagato". Stesso componente sia per le righe virtuali (master/
+// location/alloggio/assistente/venditore/modelle) sia per le spese reali
+// già in tabella — l'unica differenza (insert vs update) resta nel
+// gestore passato da fuori
+function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDebito, scadenza, iban, totale, categoriaNome, disabilitato, motivoDisabilitato, onConferma }) {
   const [file, setFile] = useState(null);
   const [dataPagamento, setDataPagamento] = useState(dataOggiStr());
   const [salvando, setSalvando] = useState(false);
@@ -18432,22 +18447,30 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, totale, categoriaNome, dis
     setSalvando(false);
   }
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nome}</div>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{corsoLabel}{categoriaNome ? ` · ${categoriaNome}` : ""}</div>
+    <div style={{ padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: "2 1 240px", minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{fornitore || nome}</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{oggetto || corsoLabel}{categoriaNome ? ` · ${categoriaNome}` : ""}</div>
+          <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 2 }}>
+            {dataDebito ? `Debito: ${fmtData(dataDebito)}` : ""}
+            {scadenza ? `${dataDebito ? " · " : ""}Scadenza: ${fmtData(scadenza)}` : ""}
+            {iban ? `${dataDebito || scadenza ? " · " : ""}IBAN: ${iban}` : ""}
+          </div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
+        {disabilitato && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
+        )}
       </div>
-      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, flex: "0 0 90px" }}>{fmtEuroErp(totale)}</div>
-      {disabilitato ? (
-        <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", flex: "1 1 200px" }}>{motivoDisabilitato}</div>
-      ) : (
-        <>
+      {!disabilitato && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
           <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
           <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
           <button onClick={confermaPagato} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando ? 0.6 : 1, flexShrink: 0 }}>
             {salvando ? "Salvo…" : "Pagato"}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
@@ -18516,7 +18539,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, totale, categoriaNome, disabilita
 // fornitore e in Scadenziario Passivo → Da pagare, già classificata per
 // sede e categoria in base a "Associa il gruppo a una categoria di spesa"
 // (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, fornitori, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, fornitori, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("impegni");
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
@@ -18533,28 +18556,49 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   }
 
   function bonificoDiSpesaReale(s) { return round2((s.totale || 0) - (s.importo_pagato_cash || 0)); }
+  // "Oggetto" di una spesa vera: il corso se è legata a una classe,
+  // altrimenti la descrizione scritta a mano (spese di sede/corso/evento/
+  // generali, es. quelle inserite da "+ Nuova spesa da pagare")
+  function oggettoDiSpesa(s, corsoData) {
+    if (corsoData) return etichettaCorso(corsoData);
+    return s.descrizione || sottocategoriaCostoDi(costiSottocategorie, s.sottocategoria_id)?.nome || "—";
+  }
 
   const { impegni, daPagareVirtuali } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
 
-  // una spesa nata da "Registra fattura" (origine_scadenziario_chiave
-  // valorizzata) è già una fattura vera con la sua scadenza: compare qui
-  // anche a corso non concluso. Le spese inserite a mano restano invece
-  // gated dalla fine del corso, come sempre.
+  // una spesa nata da "Registra fattura" o da "+ Nuova spesa da pagare"
+  // (stato diverso da "pagata") resta qui finché non viene segnata
+  // pagata — quelle legate a una classe restano gated dalla fine del
+  // corso, a meno che non abbiano già una fattura/scadenza propria;
+  // quelle di sede/corso/evento/generali (non legate a una classe)
+  // compaiono da subito, non c'è un corso di cui aspettare la fine
   const righeReali = (spese || [])
-    .filter((s) => s.tipo_ambito === "classe" && s.stato !== "pagata")
-    .map((s) => ({ spesa: s, corsoData: (corsiDate || []).find((cd) => cd.id === s.classe_id) }))
-    .filter((x) => x.corsoData && bonificoDiSpesaReale(x.spesa) > 0 && (x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr))
+    .filter((s) => s.stato !== "pagata")
+    .map((s) => ({ spesa: s, corsoData: s.classe_id ? (corsiDate || []).find((cd) => cd.id === s.classe_id) : null }))
+    .filter((x) => bonificoDiSpesaReale(x.spesa) > 0 && (!x.corsoData || x.spesa.origine_scadenziario_chiave || x.corsoData.data_fine <= oggiStr))
     .map((x) => ({
       key: `reale_${x.spesa.id}`, tipo: "reale", corsoData: x.corsoData, spesaReale: x.spesa,
       nome: x.spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, x.spesa.sottocategoria_id)?.nome || "Spesa",
       totale: bonificoDiSpesaReale(x.spesa), sottocategoriaId: x.spesa.sottocategoria_id,
+      fornitore: fornitoriById[x.spesa.fornitore_id]?.nome || null,
+      iban: fornitoriById[x.spesa.fornitore_id]?.iban || null,
+      oggetto: oggettoDiSpesa(x.spesa, x.corsoData),
+      dataDebito: x.spesa.data_documento || null,
+      scadenza: x.spesa.scadenza_pagamento || null,
     }));
 
-  const daPagare = [...daPagareVirtuali, ...righeReali].sort((a, b) => (a.corsoData.data_fine || "").localeCompare(b.corsoData.data_fine || ""));
+  const daPagare = [...daPagareVirtuali, ...righeReali].sort((a, b) => {
+    const da = a.corsoData?.data_fine || a.dataDebito || "";
+    const db = b.corsoData?.data_fine || b.dataDebito || "";
+    return da.localeCompare(db);
+  });
 
   const speseEvase = (spese || [])
-    .filter((s) => s.tipo_ambito === "classe" && s.stato === "pagata")
-    .map((s) => ({ spesa: s, bonifico: s.origine_scadenziario_chiave ? (s.totale || 0) : bonificoDiSpesaReale(s) }))
+    .filter((s) => s.stato === "pagata")
+    .map((s) => ({
+      spesa: s, bonifico: s.origine_scadenziario_chiave ? (s.totale || 0) : bonificoDiSpesaReale(s),
+      corsoData: s.classe_id ? (corsiDate || []).find((cd) => cd.id === s.classe_id) : null,
+    }))
     .filter((x) => x.bonifico > 0)
     .sort((a, b) => (b.spesa.data_pagamento || "").localeCompare(a.spesa.data_pagamento || ""));
 
@@ -18700,9 +18744,12 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
 
         {tab === "passivo" && (
           <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
               <TabPillola attivo={subTabPassivo === "dapagare"} onClick={() => setSubTabPassivo("dapagare")}>Da pagare ({daPagare.length})</TabPillola>
               <TabPillola attivo={subTabPassivo === "evase"} onClick={() => setSubTabPassivo("evase")}>Evase ({speseEvase.length})</TabPillola>
+              <button onClick={onApriNuovaSpesaDaPagare} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto" }}>
+                + Nuova spesa da pagare
+              </button>
             </div>
             {subTabPassivo === "dapagare" && (
               <div style={{ ...cardStyle }}>
@@ -18712,6 +18759,11 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                     key={item.key}
                     nome={item.nome}
                     corsoLabel={etichettaCorso(item.corsoData)}
+                    fornitore={item.fornitore}
+                    oggetto={item.oggetto || (item.corsoData ? etichettaCorso(item.corsoData) : null)}
+                    dataDebito={item.dataDebito || item.corsoData?.data_fine || null}
+                    scadenza={item.scadenza}
+                    iban={item.iban}
                     totale={item.totale}
                     categoriaNome={sottocategoriaCostoDi(costiSottocategorie, item.sottocategoriaId)?.nome || null}
                     disabilitato={!item.sottocategoriaId}
@@ -18724,12 +18776,13 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {subTabPassivo === "evase" && (
               <div style={{ ...cardStyle }}>
                 {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
-                {speseEvase.map(({ spesa, bonifico }) => (
+                {speseEvase.map(({ spesa, bonifico, corsoData }) => (
                   <div key={spesa.id} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
                     <div style={{ flex: "2 1 220px", minWidth: 0 }}>
-                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
+                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{fornitoriById[spesa.fornitore_id]?.nome || spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}</div>
                       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-                        {spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"}
+                        {oggettoDiSpesa(spesa, corsoData)}
+                        {" · "}{spesa.data_pagamento ? fmtData(spesa.data_pagamento) : "—"}
                         {locationById[spesa.sede_id] ? ` · ${toTitleCase(locationById[spesa.sede_id].nome)}` : ""}
                         {sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id) ? ` · ${sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id).nome}` : ""}
                       </div>
@@ -18796,7 +18849,7 @@ const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazione,
+  ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget,
 }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("ultimomese");
@@ -18826,34 +18879,15 @@ function PaginaInserimentoCostiRicavi({
     };
   }
 
-  // voci "Da pagare" dello Scadenziario Passivo (Compenso Master, Costo
-  // Location, Costo Alloggio, Quota venditore, Commissione ricerca
-  // modelle): stesso calcolo, riusato da calcolaVociScadenziario, così
-  // questa lista mostra sempre gli stessi bonifici — mai gli "impegni"
-  // di Alloggio/Location ancora senza scadenza (quelli restano nel
-  // Quadro impegni dello Scadenziario Passivo, non sono ancora "da
-  // pagare"). La data di riferimento è la scadenza quando c'è, altrimenti
-  // la fine del corso (Compenso Master/Quota venditore/Modelle).
-  const { daPagareVirtuali } = calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master, masterCorsi, assistente, assistenteCorsi, leva, location, hotel, categorieGruppi, spese });
-  const righeVirtualiDaPagare = daPagareVirtuali.map((item) => {
-    const sottocategoria = item.sottocategoriaId ? costiSottocategorieById[item.sottocategoriaId] : null;
-    const corso = corsiById[item.corsoData.corso_id];
-    const loc = locationById[item.corsoData.location_id];
-    return {
-      id: `virtuale_${item.chiave}`, virtuale: true, dataDocumento: item.scadenza || item.corsoData.data_fine,
-      descrizione: item.nome,
-      sottotitolo: [corso?.nome, loc?.nome ? toTitleCase(loc.nome) : null].filter(Boolean).join(" · "),
-      chips: [sottocategoria ? sottocategoria.nome : "Categoria non impostata"],
-      importo: item.totale,
-    };
-  });
-
+  // Prima nota cassa è il libro di cassa vero: solo i movimenti
+  // realmente pagati (stato "pagata"). Tutto il resto — fatture
+  // registrate ma non ancora pagate, impegni presi, spese inserite da
+  // "+ Nuova spesa da pagare" — resta solo in Scadenziario Passivo →
+  // Da pagare, finché non viene segnato "Pagato" lì.
   const speseRealiFiltrate = (spese || [])
-    .filter((s) => s.data_documento && s.data_documento >= range.inizio && s.data_documento <= range.fine)
+    .filter((s) => s.stato === "pagata" && s.data_documento && s.data_documento >= range.inizio && s.data_documento <= range.fine)
     .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-  const righeReali = speseRealiFiltrate.map(normalizzaRigaReale);
-  const righeVirtualiFiltrate = righeVirtualiDaPagare.filter((r) => r.dataDocumento >= range.inizio && r.dataDocumento <= range.fine);
-  const righeUnite = [...righeReali, ...righeVirtualiFiltrate].sort((a, b) => (b.dataDocumento || "").localeCompare(a.dataDocumento || ""));
+  const righeUnite = speseRealiFiltrate.map(normalizzaRigaReale);
   const righeVisibili = mostraTutte ? righeUnite : righeUnite.slice(0, SPESE_PAGINA_INIZIALE);
 
   const totaleSpese = round2(righeUnite.reduce((s, r) => s + (r.importo || 0), 0));
@@ -18938,7 +18972,7 @@ function PaginaInserimentoCostiRicavi({
               )}
               {righeVisibili.map((riga) => {
                 const [anno, mese, giorno] = (riga.dataDocumento || "").split("-").map(Number);
-                const stato = riga.virtuale ? null : (COLORE_STATO_SPESA[riga.spesaReale.stato] || COLORE_STATO_SPESA.preventivata);
+                const stato = COLORE_STATO_SPESA[riga.spesaReale.stato] || COLORE_STATO_SPESA.preventivata;
                 return (
                   <div key={riga.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 0", borderBottom: `1px solid ${CREAM_BORDER}`, flexWrap: isMobile ? "wrap" : "nowrap" }}>
                     <div style={{ flex: "0 0 56px", textAlign: "center" }}>
@@ -18955,31 +18989,19 @@ function PaginaInserimentoCostiRicavi({
                     </div>
                     <div style={{ flex: isMobile ? "1 1 auto" : "0 0 100px", textAlign: "right", ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{fmtEuroErp(riga.importo)}</div>
                     <div style={{ flex: isMobile ? "1 1 auto" : "0 0 120px" }}>
-                      {riga.virtuale ? (
-                        <button
-                          onClick={onApriAmministrazione}
-                          title="Apri Amministrazione per completare il pagamento"
-                          style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", border: "none", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap", cursor: "pointer" }}
-                        >
-                          Da pagare
-                        </button>
-                      ) : (
-                        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
-                          {etichettaOpzione(STATI_SPESA, riga.spesaReale.stato)}
-                        </span>
-                      )}
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                        {etichettaOpzione(STATI_SPESA, riga.spesaReale.stato)}
+                      </span>
                     </div>
                     <div style={{ flex: "0 0 60px", display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
-                      {!riga.virtuale && (
-                        <>
+                      <>
                           <button onClick={() => onApriModificaSpesa(riga.id)} title="Modifica" style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, background: "none", cursor: "pointer", color: NAVY, padding: 6, display: "flex" }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                           </button>
                           <button onClick={() => eliminaSpesa(riga.id)} title="Elimina" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, display: "flex" }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
                           </button>
-                        </>
-                      )}
+                      </>
                     </div>
                   </div>
                 );
@@ -21111,6 +21133,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const [modificaContatti, setModificaContatti] = useState(false);
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
+  const [ibanMod, setIbanMod] = useState("");
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -21158,6 +21181,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     setNote(selezionato?.note || "");
     setEmailMod(selezionato?.email || "");
     setTelefonoMod(selezionato?.telefono || "");
+    setIbanMod(selezionato?.iban || "");
     setTab("corsi");
     setCorsoEspansoId(null);
     setModificaContatti(false);
@@ -21184,7 +21208,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   }
   function toggleFirmato(checked) { return salvaCampoMaster("diploma_gia_firmato", checked); }
   async function salvaContatti() {
-    const campi = { email: emailMod.trim() || null, telefono: telefonoMod.trim() || null };
+    const campi = { email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null };
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -21387,11 +21411,14 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                         {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
                         {" · "}
                         {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
+                        {" · "}
+                        {selezionato.iban || <span style={{ fontStyle: "italic" }}>IBAN non impostato</span>}
                       </div>
                     ) : (
                       <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                         <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
                         <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                        <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />
                         <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
                       </div>
                     )}
@@ -26941,23 +26968,25 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   // aperta da una casella del Riepilogo amministrativo di una classe:
   // categoria/sotto-categoria/ambito sono fissi e non modificabili, per
   // essere certi che la spesa finisca esattamente in quella casella
-  const ambitoBloccato = !!prefill;
+  const ambitoBloccato = !!prefill?.classeId;
 
   const [descrizione, setDescrizione] = useState(spesaEsistente?.descrizione || "");
   const [categoriaId, setCategoriaId] = useState(prefill?.categoriaId || spesaEsistente?.categoria_id || "");
   const [sottocategoriaId, setSottocategoriaId] = useState(prefill?.sottocategoriaId || spesaEsistente?.sottocategoria_id || "");
   const [fornitoreId, setFornitoreId] = useState(spesaEsistente?.fornitore_id || "");
   const [nuovoFornitore, setNuovoFornitore] = useState("");
+  const [ibanFornitore, setIbanFornitore] = useState(() => (fornitori || []).find((f) => f.id === spesaEsistente?.fornitore_id)?.iban || "");
   const [numeroDocumento, setNumeroDocumento] = useState(spesaEsistente?.numero_documento || "");
   const [dataDocumento, setDataDocumento] = useState(spesaEsistente?.data_documento || dataOggiStr());
   const [dataPagamento, setDataPagamento] = useState(spesaEsistente?.data_pagamento || "");
+  const [scadenzaPagamento, setScadenzaPagamento] = useState(spesaEsistente?.scadenza_pagamento || "");
   const [competenzaDa, setCompetenzaDa] = useState(spesaEsistente?.competenza_da || "");
   const [competenzaA, setCompetenzaA] = useState(spesaEsistente?.competenza_a || "");
   const [imponibile, setImponibile] = useState(spesaEsistente?.imponibile != null ? String(spesaEsistente.imponibile) : (prefill?.totale != null ? String(round2(prefill.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100))) : ""));
   const [totale, setTotale] = useState(spesaEsistente?.totale != null ? String(spesaEsistente.totale) : (prefill?.totale != null ? String(prefill.totale) : ""));
   const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? 22);
   const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : false);
-  const [stato, setStato] = useState(spesaEsistente?.stato || "pagata");
+  const [stato, setStato] = useState(spesaEsistente?.stato || prefill?.statoIniziale || "pagata");
   const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || "");
   const [note, setNote] = useState(spesaEsistente?.note || "");
 
@@ -27036,9 +27065,11 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     setSalvando(true);
     let fornitoreIdFinale = fornitoreId;
     if (!fornitoreIdFinale && nuovoFornitore.trim()) {
-      const { data, error } = await supabase.from("fornitori").insert({ nome: nuovoFornitore.trim() }).select().single();
+      const { data, error } = await supabase.from("fornitori").insert({ nome: nuovoFornitore.trim(), iban: ibanFornitore.trim() || null }).select().single();
       if (error) { setMsg("Errore fornitore: " + error.message); setSalvando(false); return; }
       fornitoreIdFinale = data.id;
+    } else if (fornitoreIdFinale) {
+      await supabase.from("fornitori").update({ iban: ibanFornitore.trim() || null }).eq("id", fornitoreIdFinale);
     }
 
     let allegatoPath = allegatoPathEsistente;
@@ -27056,6 +27087,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       fornitore_id: fornitoreIdFinale || null,
       numero_documento: numeroDocumento.trim() || null,
       data_documento: dataDocumento || null, data_pagamento: dataPagamento || null,
+      scadenza_pagamento: scadenzaPagamento || null,
       competenza_da: competenzaDa || null, competenza_a: competenzaA || null,
       imponibile: imp, iva_percentuale: ivaEffettiva, totale: totale === "" ? imp : round2(parseNum(totale)),
       allegato_path: allegatoPath || null, note: note.trim() || null,
@@ -27149,7 +27181,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <Field label="Fornitore">
-                <select style={inputStyle} value={fornitoreId} onChange={(e) => setFornitoreId(e.target.value)}>
+                <select style={inputStyle} value={fornitoreId} onChange={(e) => { setFornitoreId(e.target.value); setIbanFornitore((fornitori || []).find((f) => f.id === e.target.value)?.iban || ""); }}>
                   <option value="">— nessuno —</option>
                   {fornitori.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
@@ -27159,9 +27191,11 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
               <Field label="Nuovo fornitore (opzionale)"><input style={inputStyle} placeholder="Nome fornitore" value={nuovoFornitore} onChange={(e) => setNuovoFornitore(e.target.value)} disabled={!!fornitoreId} /></Field>
             </div>
           </div>
+          <Field label="IBAN fornitore (opzionale, resta associato al fornitore)"><input style={inputStyle} placeholder="es. IT00X0000000000000000000000" value={ibanFornitore} onChange={(e) => setIbanFornitore(e.target.value)} /></Field>
           <Field label="Numero documento/fattura"><input style={inputStyle} value={numeroDocumento} onChange={(e) => setNumeroDocumento(e.target.value)} /></Field>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 140px" }}><Field label="Data documento"><input type="date" style={inputStyle} value={dataDocumento} onChange={(e) => setDataDocumento(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 140px" }}><Field label="Scadenza pagamento"><input type="date" style={inputStyle} value={scadenzaPagamento} onChange={(e) => setScadenzaPagamento(e.target.value)} /></Field></div>
             <div style={{ flex: "1 1 140px" }}><Field label="Data pagamento"><input type="date" style={inputStyle} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} /></Field></div>
             <div style={{ flex: "1 1 140px" }}><Field label="Competenza dal"><input type="date" style={inputStyle} value={competenzaDa} onChange={(e) => setCompetenzaDa(e.target.value)} /></Field></div>
             <div style={{ flex: "1 1 140px" }}><Field label="Competenza al"><input type="date" style={inputStyle} value={competenzaA} onChange={(e) => setCompetenzaA(e.target.value)} /></Field></div>
@@ -28520,6 +28554,18 @@ export default function App() {
     setSpesaRitornoView("assegnazionemaster");
     apriViewProtetta("spesaform");
   }
+  // "+ Nuova spesa da pagare" in Scadenziario Passivo: stessa scheda
+  // completa di "Registra spesa" di Prima nota cassa, ambito libero (non
+  // pre-attribuita a nessuna classe) — l'unica differenza è lo stato di
+  // partenza "fatturata" invece di "pagata", così finché Stefano non
+  // clicca "Pagato" sulla riga resta in Scadenziario Passivo → Da pagare
+  // e non compare ancora in Prima nota cassa (che mostra solo le pagate)
+  function apriNuovaSpesaDaPagare() {
+    setSpesaInModifica(null);
+    setSpesaPrefill({ statoIniziale: "fatturata" });
+    setSpesaRitornoView("amministrazione");
+    apriViewProtetta("spesaform");
+  }
   // apre direttamente la pagina di modifica di un iscritto (non solo
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
@@ -28819,6 +28865,7 @@ export default function App() {
           onApriModificaSpesa={apriModificaSpesaDaAmministrazione}
           onApriPrimaNotaCassa={apriInserimentoCostiRicavi}
           onApriIscritto={apriIscritto}
+          onApriNuovaSpesaDaPagare={apriNuovaSpesaDaPagare}
         />
       )}
 
@@ -28873,7 +28920,6 @@ export default function App() {
           categorieGruppi={categorieGruppi}
           ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
-          onApriAmministrazione={apriAmministrazione}
         />
       )}
 
