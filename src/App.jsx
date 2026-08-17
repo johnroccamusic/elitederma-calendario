@@ -8539,6 +8539,7 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
   const [postiMaxLoc, setPostiMaxLoc] = useState("");
   const [costoCashLoc, setCostoCashLoc] = useState("");
   const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
+  const [sedeCentraleLoc, setSedeCentraleLoc] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgCitta, setMsgCitta] = useState("");
   const [mostraFormAggiungiLoc, setMostraFormAggiungiLoc] = useState(false);
@@ -8825,11 +8826,12 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
       nome_sede: nomeSedeLoc.trim() || null,
       nome: nomeLoc.trim().toUpperCase(),
       posti_max: postiMaxLoc === "" ? null : Number(postiMaxLoc),
-      costo_giornaliero_cash: costoCashLoc === "" ? null : Number(costoCashLoc),
-      costo_giornaliero_bonifico: costoBonificoLoc === "" ? null : Number(costoBonificoLoc),
+      costo_giornaliero_cash: sedeCentraleLoc ? null : (costoCashLoc === "" ? null : Number(costoCashLoc)),
+      costo_giornaliero_bonifico: sedeCentraleLoc ? null : (costoBonificoLoc === "" ? null : Number(costoBonificoLoc)),
+      sede_centrale: sedeCentraleLoc,
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setMsg("Sede aggiunta.");
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setMsg("Sede aggiunta.");
     ricarica();
   }
   async function toggleMagazzinoLocale(locationId, valore) {
@@ -9111,12 +9113,20 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
               <Field label="Capienza sede (opzionale — se vuoto, nessun tetto)">
                 <input type="number" min="1" style={inputStyle} value={postiMaxLoc} onChange={(e) => setPostiMaxLoc(e.target.value)} placeholder="es. 8" />
               </Field>
-              <Field label="Costo giornaliero Cash (opzionale)">
-                <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
-              </Field>
-              <Field label="Costo giornaliero Bonifico (opzionale)">
-                <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
-              </Field>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                <input type="checkbox" checked={sedeCentraleLoc} onChange={(e) => setSedeCentraleLoc(e.target.checked)} style={{ width: 18, height: 18 }} />
+                <span style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600 }}>Sede centrale (corsi qui gratuiti: nessun Costo Location)</span>
+              </label>
+              {!sedeCentraleLoc && (
+                <>
+                  <Field label="Costo giornaliero Cash (opzionale)">
+                    <input type="number" min="0" step="0.01" style={inputStyle} value={costoCashLoc} onChange={(e) => setCostoCashLoc(e.target.value)} placeholder="es. 100" />
+                  </Field>
+                  <Field label="Costo giornaliero Bonifico (opzionale)">
+                    <input type="number" min="0" step="0.01" style={inputStyle} value={costoBonificoLoc} onChange={(e) => setCostoBonificoLoc(e.target.value)} placeholder="es. 120" />
+                  </Field>
+                </>
+              )}
               <div style={{ display: "flex", gap: 8 }}>
                 <Button onClick={aggiungiLocation}>Aggiungi location</Button>
                 <Button variant="ghost" onClick={() => setMostraFormAggiungiLoc(false)}>Annulla</Button>
