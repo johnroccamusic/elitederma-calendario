@@ -2207,14 +2207,21 @@ function ModaleGestisciAlloggio({ cd, riga, tabella, hotel, onClose, onSalvato }
 }
 
 // scheda "Gestisci sede": stesso meccanismo di "Gestisci alloggio" ma per
-// la location dell'edizione (fissa, non scelta qui — la Città si assegna
-// altrove). Il costo a giorno Cash/Bonifico precompila dalle condizioni
-// generali della location (Impostazioni → Location) solo se il campo è
-// ancora vuoto; "Sede avvisata" è lo stesso sede_confermata di sempre,
-// ora spostato dentro la scheda invece di un semaforo in tabella — appena
-// spuntato il tasto in Assegnazione Master diventa verde
+// la location dell'edizione. La Città resta quella del calendario (fissa,
+// non si cambia qui), ma se in quella città ci sono più sedi (es. Roma)
+// si può scegliere quale delle due tra loro — cambia solo il location_id
+// e quindi il nome sede, mai la città del corso. Il costo a giorno
+// Cash/Bonifico precompila dalle condizioni generali della sede scelta
+// (Impostazioni → Location) solo se il campo è ancora vuoto; "Sede
+// avvisata" è lo stesso sede_confermata di sempre, ora dentro la scheda
+// invece di un semaforo in tabella — il pallino fuori diventa verde/rosso
+// di conseguenza
 function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
-  const loc = (location || []).find((l) => l.id === cd.location_id);
+  const locOriginale = (location || []).find((l) => l.id === cd.location_id);
+  const cittaCorrente = locOriginale?.nome || null;
+  const sediStessaCitta = (location || []).filter((l) => l.nome === cittaCorrente);
+  const [locationIdScelta, setLocationIdScelta] = useState(cd.location_id || "");
+  const loc = (location || []).find((l) => l.id === locationIdScelta) || locOriginale;
   const [costoGiornoCash, setCostoGiornoCash] = useState(cd.costo_giorno_sede_cash != null ? String(cd.costo_giorno_sede_cash) : "");
   const [costoGiornoBonifico, setCostoGiornoBonifico] = useState(cd.costo_giorno_sede_bonifico != null ? String(cd.costo_giorno_sede_bonifico) : "");
   const [tipoPagamento, setTipoPagamento] = useState(cd.pagamento_sede === "cash" ? "cash" : "bonifico");
@@ -2233,6 +2240,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
   async function salva() {
     setSalvando(true);
     const campi = {
+      location_id: locationIdScelta || null,
       costo_giorno_sede_cash: costoGiornoCash === "" ? null : parseNum(costoGiornoCash),
       costo_giorno_sede_bonifico: costoGiornoBonifico === "" ? null : parseNum(costoGiornoBonifico),
       pagamento_sede: tipoPagamento || null,
@@ -2247,6 +2255,20 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
 
   return (
     <Modal title="Gestisci sede" onClose={onClose} maxWidth={480}>
+      {sediStessaCitta.length > 1 && (
+        <Field label="Sede">
+          <select style={inputStyle} value={locationIdScelta} onChange={(e) => setLocationIdScelta(e.target.value)}>
+            {sediStessaCitta.map((l) => (
+              <option key={l.id} value={l.id}>{l.nome_sede ? l.nome_sede.toUpperCase() : l.nome.toUpperCase()}</option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label="Nome sede">
+        <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
+          {loc?.nome_sede ? toTitleCase(loc.nome_sede) : "—"}
+        </div>
+      </Field>
       <Field label="Città">
         <div style={{ ...inputStyle, display: "flex", alignItems: "center", background: "#EFEFEF", color: NAVY, fontWeight: 700 }}>
           {loc?.nome ? toTitleCase(loc.nome) : "—"}
@@ -2836,10 +2858,10 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                     </td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, ...fontScheda, fontSize: 12, color: NAVY, verticalAlign: "top" }}>{loc?.nome?.toUpperCase() || "?"}</td>
                     <td rowSpan={rowSpanGruppo} style={{ ...cellaGruppo, verticalAlign: "top" }}>
-                      {valoreCampo(cd, "sede_confermata") ? (
+                      {loc ? (
                         <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left", display: "flex", alignItems: "center", gap: 6 }}>
-                          {loc?.nome_sede ? toTitleCase(loc.nome_sede) : (loc?.nome ? toTitleCase(loc.nome) : "Sede")}
-                          <span title="Sede avvisata" style={{ width: 8, height: 8, borderRadius: "50%", background: "#2E7D32", flexShrink: 0 }} />
+                          {loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome)}
+                          <span title={valoreCampo(cd, "sede_confermata") ? "Sede avvisata" : "Sede non ancora avvisata"} style={{ width: 8, height: 8, borderRadius: "50%", background: valoreCampo(cd, "sede_confermata") ? "#2E7D32" : "#C0392B", flexShrink: 0 }} />
                         </button>
                       ) : (
                         <button onClick={() => setGestisciSede({ cd })} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, textAlign: "left" }}>
