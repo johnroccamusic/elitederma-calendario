@@ -9137,19 +9137,19 @@ function Impostazioni({ corsi, location, setLocation, citta, master, hotel, assi
           <div style={{ ...hStyle, marginTop: 24 }}>Sedi esistenti</div>
           <div style={subStyle}>Clicca la matita per modificare, il cestino per eliminare (rimuove anche le date collegate a quella città).</div>
           {location.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna sede ancora.</div>}
-          {gruppiLocationPerCitta.map(([citta, sedi]) => {
+          {gruppiLocationPerCitta.map(([nomeCitta, sedi]) => {
             const mostraGruppo = sedi.length > 1 || sedi.some((l) => l.nome_sede);
             return (
-            <div key={citta} style={{ marginTop: 14 }}>
+            <div key={nomeCitta} style={{ marginTop: 14 }}>
               {mostraGruppo && (
                 <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
-                  {toTitleCase(citta)}
+                  {toTitleCase(nomeCitta)}
                 </div>
               )}
               {sedi.map((l) => (
                 <div key={l.id} style={mostraGruppo ? { paddingLeft: 14, borderLeft: `2px solid ${CREAM_BORDER}` } : undefined}>
                   <RigaEliminabile
-                    label={mostraGruppo ? `Sede: ${l.nome_sede || "senza nome"}` : toTitleCase(citta)}
+                    label={mostraGruppo ? `Sede: ${l.nome_sede || "senza nome"}` : toTitleCase(nomeCitta)}
                     dettaglio={[l.posti_max != null ? `capienza sede: ${l.posti_max}` : "nessun tetto sui posti", l.sede_centrale ? "sede centrale — corsi gratuiti" : null].filter(Boolean).join(" · ")}
                     onModifica={() => apriModificaLocation(l)}
                     onDelete={() => eliminaLocation(l.id)}
