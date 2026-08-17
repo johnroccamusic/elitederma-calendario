@@ -2751,6 +2751,9 @@ begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'corsi_date' and column_name = 'pattuito_a_notte'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'corsi_date' and column_name = 'pattuito_a_notte_cash'
   ) then
     alter table public.corsi_date rename column pattuito_a_notte to pattuito_a_notte_cash;
   end if;
@@ -2763,6 +2766,9 @@ begin
   if exists (
     select 1 from information_schema.columns
     where table_schema = 'public' and table_name = 'corsi_date_docenti' and column_name = 'pattuito_a_notte'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'corsi_date_docenti' and column_name = 'pattuito_a_notte_cash'
   ) then
     alter table public.corsi_date_docenti rename column pattuito_a_notte to pattuito_a_notte_cash;
   end if;
