@@ -21412,6 +21412,14 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
   const [ibanMod, setIbanMod] = useState("");
+  // dati fiscali (stessa appendice della scheda hotel): compilazione
+  // manuale, nessun valore proposto di default
+  const [indirizzoMod, setIndirizzoMod] = useState("");
+  const [civicoMod, setCivicoMod] = useState("");
+  const [cittaMod, setCittaMod] = useState("");
+  const [partitaIvaMod, setPartitaIvaMod] = useState("");
+  const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
+  const [pecMod, setPecMod] = useState("");
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -21460,6 +21468,12 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     setEmailMod(selezionato?.email || "");
     setTelefonoMod(selezionato?.telefono || "");
     setIbanMod(selezionato?.iban || "");
+    setIndirizzoMod(selezionato?.indirizzo || "");
+    setCivicoMod(selezionato?.civico || "");
+    setCittaMod(selezionato?.citta || "");
+    setPartitaIvaMod(selezionato?.partita_iva || "");
+    setCodiceDestinatarioMod(selezionato?.codice_destinatario || "");
+    setPecMod(selezionato?.pec || "");
     setTab("corsi");
     setCorsoEspansoId(null);
     setModificaContatti(false);
@@ -21486,7 +21500,11 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   }
   function toggleFirmato(checked) { return salvaCampoMaster("diploma_gia_firmato", checked); }
   async function salvaContatti() {
-    const campi = { email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null };
+    const campi = {
+      email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null,
+      indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
+      partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
+    };
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -21685,20 +21703,45 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>MASTER</span>
                     </div>
                     {!modificaContatti ? (
-                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
-                        {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
-                        {" · "}
-                        {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
-                        {" · "}
-                        {selezionato.iban || <span style={{ fontStyle: "italic" }}>IBAN non impostato</span>}
-                      </div>
+                      <>
+                        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+                          {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
+                          {" · "}
+                          {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
+                          {" · "}
+                          {selezionato.iban || <span style={{ fontStyle: "italic" }}>IBAN non impostato</span>}
+                        </div>
+                        {(selezionato.indirizzo || selezionato.citta || selezionato.partita_iva || selezionato.codice_destinatario || selezionato.pec) && (
+                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                            {[
+                              [selezionato.indirizzo, selezionato.civico].filter(Boolean).join(" "),
+                              selezionato.citta,
+                              selezionato.partita_iva && `P.IVA ${selezionato.partita_iva}`,
+                              selezionato.codice_destinatario && `SDI ${selezionato.codice_destinatario}`,
+                              selezionato.pec,
+                            ].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                        <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                        <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                        <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />
-                        <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
-                      </div>
+                      <>
+                        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                          <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                          <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                          <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                          <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
+                        </div>
+                      </>
                     )}
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
                       <input type="checkbox" checked={!!selezionato.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 15, height: 15 }} />
@@ -21970,6 +22013,15 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   const [modificaContatti, setModificaContatti] = useState(false);
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
+  // dati fiscali (stessa appendice della scheda hotel/master): solo per
+  // le assistenti, non per le leve — compilazione manuale
+  const [ibanMod, setIbanMod] = useState("");
+  const [indirizzoMod, setIndirizzoMod] = useState("");
+  const [civicoMod, setCivicoMod] = useState("");
+  const [cittaMod, setCittaMod] = useState("");
+  const [partitaIvaMod, setPartitaIvaMod] = useState("");
+  const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
+  const [pecMod, setPecMod] = useState("");
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -22016,6 +22068,13 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setNote(selezionato?.note || "");
     setEmailMod(selezionato?.email || "");
     setTelefonoMod(selezionato?.telefono || "");
+    setIbanMod(selezionato?.iban || "");
+    setIndirizzoMod(selezionato?.indirizzo || "");
+    setCivicoMod(selezionato?.civico || "");
+    setCittaMod(selezionato?.citta || "");
+    setPartitaIvaMod(selezionato?.partita_iva || "");
+    setCodiceDestinatarioMod(selezionato?.codice_destinatario || "");
+    setPecMod(selezionato?.pec || "");
     setTab(isAssistente ? "corsi" : "calendario");
     setModificaContatti(false);
     setMenuAzioni(false);
@@ -22049,7 +22108,14 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setSelezionatoId(null); setMenuAzioni(false); ricarica([tabella, promuoviConfig.tabellaDestinazione]);
   }
   async function salvaContatti() {
-    const { error } = await supabase.from(tabella).update({ email: emailMod.trim() || null, telefono: telefonoMod.trim() || null }).eq("id", selezionatoId);
+    const campi = { email: emailMod.trim() || null, telefono: telefonoMod.trim() || null };
+    if (isAssistente) {
+      Object.assign(campi, {
+        iban: ibanMod.trim() || null, indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
+        partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
+      });
+    }
+    const { error } = await supabase.from(tabella).update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
     setModificaContatti(false); ricarica([tabella]);
   }
@@ -22236,17 +22302,54 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>{badgeLabel}</span>
                     </div>
                     {!modificaContatti ? (
-                      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
-                        {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
-                        {" · "}
-                        {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
-                      </div>
+                      <>
+                        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
+                          {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
+                          {" · "}
+                          {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
+                          {isAssistente && (
+                            <>
+                              {" · "}
+                              {selezionato.iban || <span style={{ fontStyle: "italic" }}>IBAN non impostato</span>}
+                            </>
+                          )}
+                        </div>
+                        {isAssistente && (selezionato.indirizzo || selezionato.citta || selezionato.partita_iva || selezionato.codice_destinatario || selezionato.pec) && (
+                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
+                            {[
+                              [selezionato.indirizzo, selezionato.civico].filter(Boolean).join(" "),
+                              selezionato.citta,
+                              selezionato.partita_iva && `P.IVA ${selezionato.partita_iva}`,
+                              selezionato.codice_destinatario && `SDI ${selezionato.codice_destinatario}`,
+                              selezionato.pec,
+                            ].filter(Boolean).join(" · ")}
+                          </div>
+                        )}
+                      </>
                     ) : (
-                      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                        <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                        <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                        <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
-                      </div>
+                      <>
+                        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                          <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                          {isAssistente && <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />}
+                          {!isAssistente && <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>}
+                        </div>
+                        {isAssistente && (
+                          <>
+                            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                              <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                              <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
+                              <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                            </div>
+                            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                              <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                              <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
+                              <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                              <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
+                            </div>
+                          </>
+                        )}
+                      </>
                     )}
                   </div>
 
