@@ -9615,9 +9615,20 @@ function classificazionePerPayload(v) {
 }
 function PannelloClassificazioneGestionale({ valori, onChange }) {
   const v = valori || classificazioneVuota();
+  const [aperto, setAperto] = useState(false);
   return (
-    <>
-      <div style={{ ...cardStyle, marginBottom: 14 }}>
+    <div style={{ ...cardStyle, marginBottom: 14 }}>
+      <button
+        type="button"
+        onClick={() => setAperto((a) => !a)}
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+      >
+        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Classificazione gestionale e budget</span>
+        <span style={{ display: "flex", transform: aperto ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}><IconaChevronGiuErp size={16} color={NAVY} /></span>
+      </button>
+      {aperto && (
+      <>
+      <div style={{ marginTop: 14 }}>
         <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Classificazione gestionale</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
           <Field label="Diretto/indiretto"><select style={inputStyle} value={v.direttoIndiretto} onChange={(e) => onChange("direttoIndiretto", e.target.value)}><option value="">—</option>{DIRETTO_INDIRETTO_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
@@ -9637,7 +9648,7 @@ function PannelloClassificazioneGestionale({ valori, onChange }) {
           <input type="checkbox" checked={v.includiAnalisiCosti} onChange={(e) => onChange("includiAnalisiCosti", e.target.checked)} /> Incluso nell'analisi dei costi
         </label>
       </div>
-      <div style={{ ...cardStyle, marginBottom: 14 }}>
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
         <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Budget e controllo</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 160px" }}><Field label="Budget previsto"><input style={inputStyle} inputMode="decimal" value={v.budgetPrevisto} onChange={(e) => onChange("budgetPrevisto", e.target.value)} /></Field></div>
@@ -9645,7 +9656,9 @@ function PannelloClassificazioneGestionale({ valori, onChange }) {
           <div style={{ flex: "1 1 160px" }}><Field label="Responsabile del costo"><input style={inputStyle} value={v.responsabileCosto} onChange={(e) => onChange("responsabileCosto", e.target.value)} /></Field></div>
         </div>
       </div>
-    </>
+      </>
+      )}
+    </div>
   );
 }
 
@@ -22792,7 +22805,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                           l.sede_centrale ? "sede centrale — corsi gratuiti" : null,
                           l.categoria_spesa_id ? `categoria: ${sottocategoriaCostoDi(costiSottocategorie, l.categoria_spesa_id)?.nome || "—"}` : "categoria di spesa non impostata",
                         ].filter(Boolean).join(" · ")}
-                        onModifica={() => apriModificaLocation(l)}
+                        onModifica={() => (locInModifica === l.id ? setLocInModifica(null) : apriModificaLocation(l))}
                         onDelete={() => eliminaLocation(l.id)}
                       />
                       {locInModifica === l.id && (
