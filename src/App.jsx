@@ -17487,56 +17487,76 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     await ricarica([s.tabella]);
   }
 
-  // "Carica documento (bonifico)": legge un PDF in memoria (mai
-  // caricato da nessuna parte, buttato via appena letto), prova a
-  // riconoscere IBAN e fornitore, propone di completare la scheda —
-  // resta un aiuto, non un automatismo: chiede sempre conferma
+  // "Carica documento (bonifico)": legge dei PDF in memoria (mai
+  // caricati da nessuna parte, buttati via appena letti), uno alla
+  // volta come una coda — si può trascinare un intero gruppo di file
+  // sul tasto, poi si scorre e si conferma (o si salta) ciascun
+  // risultato singolarmente, mai in automatico
   const [caricaDocAperto, setCaricaDocAperto] = useState(false);
+  const [trascinandoDoc, setTrascinandoDoc] = useState(false);
+  const [codaFile, setCodaFile] = useState([]); // File[]
+  const [indiceFile, setIndiceFile] = useState(0);
   const [elaborandoDoc, setElaborandoDoc] = useState(false);
   const [erroreDoc, setErroreDoc] = useState("");
-  const [risultatoDoc, setRisultatoDoc] = useState(null); // { iban, candidati }
+  const [risultatoDoc, setRisultatoDoc] = useState(null); // { iban } del file corrente
   const [soggettoSelezionatoId, setSoggettoSelezionatoId] = useState("");
   const [ricercaSoggettoDoc, setRicercaSoggettoDoc] = useState("");
   const [applicandoDoc, setApplicandoDoc] = useState(false);
+  const [riepilogoCoda, setRiepilogoCoda] = useState({ applicati: 0, saltati: 0 });
 
-  async function gestisciFileBonifico(file) {
-    if (!file) return;
-    setElaborandoDoc(true);
-    setErroreDoc("");
-    setRisultatoDoc(null);
-    setSoggettoSelezionatoId("");
-    try {
-      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
-      if (!isPdf) {
-        setErroreDoc("Per ora leggo solo file PDF con testo selezionabile (non foto o scansioni).");
-        return;
+  function avviaCoda(fileList) {
+    const pdf = Array.from(fileList || []).filter((f) => f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf"));
+    if (pdf.length === 0) return;
+    setCodaFile(pdf);
+    setIndiceFile(0);
+    setRiepilogoCoda({ applicati: 0, saltati: 0 });
+    setCaricaDocAperto(true);
+  }
+
+  // elabora automaticamente il file in coda ogni volta che l'indice
+  // cambia (avanzando o all'apertura) — "annullato" evita di scrivere
+  // in stato il risultato di un file già superato, se l'utente avanza
+  // più in fretta di quanto il PDF venga letto
+  useEffect(() => {
+    if (!caricaDocAperto || codaFile.length === 0 || indiceFile >= codaFile.length) return;
+    let annullato = false;
+    (async () => {
+      setElaborandoDoc(true);
+      setErroreDoc("");
+      setRisultatoDoc(null);
+      setSoggettoSelezionatoId("");
+      try {
+        const file = codaFile[indiceFile];
+        const pdfjsLib = await getPdfjsLib();
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        let testo = "";
+        for (let n = 1; n <= pdf.numPages; n++) {
+          const pagina = await pdf.getPage(n);
+          const content = await pagina.getTextContent();
+          testo += " " + content.items.map((it) => it.str).join(" ");
+        }
+        if (annullato) return;
+        if (!testo.trim()) { setErroreDoc("Non trovo testo leggibile in questo PDF: probabilmente è una scansione o una foto."); return; }
+        const iban = estraiIbanDaTesto(testo);
+        const candidati = trovaSoggettiNelTesto(testo, soggetti);
+        if (!iban && candidati.length === 0) { setErroreDoc("Non ho trovato né un IBAN né un fornitore riconoscibile in questo documento."); return; }
+        setRisultatoDoc({ iban });
+        if (candidati.length >= 1) setSoggettoSelezionatoId(candidati[0].id);
+      } catch (e) {
+        if (!annullato) setErroreDoc("Errore nella lettura del PDF: " + e.message);
+      } finally {
+        if (!annullato) setElaborandoDoc(false);
       }
-      const pdfjsLib = await getPdfjsLib();
-      const buffer = await file.arrayBuffer();
-      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-      let testo = "";
-      for (let n = 1; n <= pdf.numPages; n++) {
-        const pagina = await pdf.getPage(n);
-        const content = await pagina.getTextContent();
-        testo += " " + content.items.map((it) => it.str).join(" ");
-      }
-      if (!testo.trim()) {
-        setErroreDoc("Non trovo testo leggibile in questo PDF: probabilmente è una scansione o una foto, non un documento digitale.");
-        return;
-      }
-      const iban = estraiIbanDaTesto(testo);
-      const candidati = trovaSoggettiNelTesto(testo, soggetti);
-      if (!iban && candidati.length === 0) {
-        setErroreDoc("Non ho trovato né un IBAN né un fornitore riconoscibile in questo documento.");
-        return;
-      }
-      setRisultatoDoc({ iban });
-      if (candidati.length >= 1) setSoggettoSelezionatoId(candidati[0].id);
-    } catch (e) {
-      setErroreDoc("Errore nella lettura del PDF: " + e.message);
-    } finally {
-      setElaborandoDoc(false);
-    }
+    })();
+    return () => { annullato = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indiceFile, codaFile, caricaDocAperto]);
+
+  function prossimoFile(applicato) {
+    setRiepilogoCoda((r) => (applicato ? { ...r, applicati: r.applicati + 1 } : { ...r, saltati: r.saltati + 1 }));
+    setIndiceFile((i) => i + 1);
+    setRicercaSoggettoDoc("");
   }
 
   async function applicaIbanDaDocumento() {
@@ -17547,14 +17567,21 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     const { error } = await supabase.from(soggetto.tabella).update({ iban: risultatoDoc.iban }).eq("id", soggetto.recordId);
     setApplicandoDoc(false);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setCaricaDocAperto(false);
-    setRisultatoDoc(null);
     await ricarica([soggetto.tabella]);
+    prossimoFile(true);
+  }
+
+  function chiudiCoda() {
+    setCaricaDocAperto(false);
+    setCodaFile([]);
+    setIndiceFile(0);
+    setRisultatoDoc(null);
   }
 
   const soggettiRicercaDoc = ricercaSoggettoDoc.trim().length >= 2
     ? soggetti.filter((s) => s.nome.toLowerCase().includes(ricercaSoggettoDoc.trim().toLowerCase())).slice(0, 8)
     : [];
+  const codaCompletata = codaFile.length > 0 && indiceFile >= codaFile.length;
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -17578,9 +17605,16 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{elencoFiltrato.length} soggetti</div>
-          <button onClick={() => { setCaricaDocAperto(true); setErroreDoc(""); setRisultatoDoc(null); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "9px 16px", cursor: "pointer" }}>
+          <label
+            onDragOver={(e) => { e.preventDefault(); setTrascinandoDoc(true); }}
+            onDragLeave={() => setTrascinandoDoc(false)}
+            onDrop={(e) => { e.preventDefault(); setTrascinandoDoc(false); avviaCoda(e.dataTransfer.files); }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: trascinandoDoc ? "#fff" : NAVY, background: trascinandoDoc ? NAVY : "#fff", border: `1px dashed ${trascinandoDoc ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "9px 16px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}
+            title="Clicca per scegliere, o trascina qui uno o più PDF"
+          >
             Carica documento (bonifico)
-          </button>
+            <input type="file" accept="application/pdf" multiple style={{ display: "none" }} onChange={(e) => avviaCoda(e.target.files)} />
+          </label>
           <div style={{ flex: "1 1 220px", maxWidth: 320, marginLeft: "auto" }}>
             <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca nome, P.IVA, città…" />
           </div>
@@ -17648,44 +17682,71 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       )}
 
       {caricaDocAperto && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }} onClick={() => setCaricaDocAperto(false)}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }} onClick={chiudiCoda}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 26, width: "100%", maxWidth: 460, maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Carica documento</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>Un bonifico o una fattura in PDF: provo a leggere IBAN e fornitore. Il file resta solo nel browser, non viene mai salvato.</div>
 
-            <input type="file" accept="application/pdf" style={{ ...inputStyle, width: "100%" }} onChange={(e) => gestisciFileBonifico(e.target.files?.[0] || null)} />
+            {!codaCompletata ? (
+              <>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 4 }}>
+                  {codaFile.length > 1 ? `Documento ${indiceFile + 1} di ${codaFile.length}` : "Un bonifico o una fattura in PDF"}
+                </div>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 18, wordBreak: "break-all" }}>{codaFile[indiceFile]?.name}</div>
 
-            {elaborandoDoc && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 14 }}>Leggo il documento…</div>}
-            {erroreDoc && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginTop: 14 }}>{erroreDoc}</div>}
-
-            {risultatoDoc && (
-              <div style={{ marginTop: 16 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>IBAN trovato</div>
-                <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 16 }}>{risultatoDoc.iban || "— non trovato, controllalo a mano —"}</div>
-
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Fornitore</div>
-                {soggettoSelezionatoId && (
-                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 8 }}>
-                    {soggetti.find((s) => s.id === soggettoSelezionatoId)?.nome}
-                  </div>
-                )}
-                <input
-                  style={inputStyle} placeholder="Cerca per cambiare fornitore…"
-                  value={ricercaSoggettoDoc} onChange={(e) => setRicercaSoggettoDoc(e.target.value)}
-                />
-                {soggettiRicercaDoc.length > 0 && (
-                  <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginTop: 6, overflow: "hidden" }}>
-                    {soggettiRicercaDoc.map((s) => (
-                      <button key={s.id} onClick={() => { setSoggettoSelezionatoId(s.id); setRicercaSoggettoDoc(""); }} style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "9px 12px", cursor: "pointer" }}>
-                        {s.nome}
-                      </button>
-                    ))}
+                {elaborandoDoc && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Leggo il documento…</div>}
+                {erroreDoc && (
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 14 }}>{erroreDoc}</div>
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                      <button onClick={chiudiCoda} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Chiudi</button>
+                      <Button onClick={() => prossimoFile(false)}>{indiceFile < codaFile.length - 1 ? "Salta e vai al prossimo" : "Salta"}</Button>
+                    </div>
                   </div>
                 )}
 
-                <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
-                  <button onClick={() => setCaricaDocAperto(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Annulla</button>
-                  <Button onClick={applicaIbanDaDocumento} disabled={applicandoDoc || !risultatoDoc.iban || !soggettoSelezionatoId}>{applicandoDoc ? "Applico…" : "Applica IBAN"}</Button>
+                {risultatoDoc && (
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>IBAN trovato</div>
+                    <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 16 }}>{risultatoDoc.iban || "— non trovato, controllalo a mano —"}</div>
+
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Fornitore</div>
+                    {soggettoSelezionatoId && (
+                      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 8 }}>
+                        {soggetti.find((s) => s.id === soggettoSelezionatoId)?.nome}
+                      </div>
+                    )}
+                    <input
+                      style={inputStyle} placeholder="Cerca per cambiare fornitore…"
+                      value={ricercaSoggettoDoc} onChange={(e) => setRicercaSoggettoDoc(e.target.value)}
+                    />
+                    {soggettiRicercaDoc.length > 0 && (
+                      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginTop: 6, overflow: "hidden" }}>
+                        {soggettiRicercaDoc.map((s) => (
+                          <button key={s.id} onClick={() => { setSoggettoSelezionatoId(s.id); setRicercaSoggettoDoc(""); }} style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "9px 12px", cursor: "pointer" }}>
+                            {s.nome}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+                      <button onClick={chiudiCoda} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Chiudi</button>
+                      <button onClick={() => prossimoFile(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Salta</button>
+                      <Button onClick={applicaIbanDaDocumento} disabled={applicandoDoc || !risultatoDoc.iban || !soggettoSelezionatoId}>
+                        {applicandoDoc ? "Applico…" : indiceFile < codaFile.length - 1 ? "Applica e vai al prossimo" : "Applica"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>
+                <div style={{ ...fontBody, fontSize: 14, color: NAVY, marginBottom: 18 }}>
+                  Fatto: <b>{riepilogoCoda.applicati}</b> {riepilogoCoda.applicati === 1 ? "IBAN applicato" : "IBAN applicati"} su {codaFile.length} {codaFile.length === 1 ? "documento" : "documenti"}
+                  {riepilogoCoda.saltati > 0 ? `, ${riepilogoCoda.saltati} ${riepilogoCoda.saltati === 1 ? "saltato" : "saltati"}` : ""}.
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <Button onClick={chiudiCoda}>Chiudi</Button>
                 </div>
               </div>
             )}
