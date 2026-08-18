@@ -22569,6 +22569,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   // categoria di spesa: propria per ciascuna sede, non più un'unica
   // categoria condivisa da tutte le location (vedi calcolaVociScadenziario)
   const [categoriaSpesaLoc, setCategoriaSpesaLoc] = useState(null);
+  const [applicaCategoriaATutteLoc, setApplicaCategoriaATutteLoc] = useState(false);
   const [classNuova, setClassNuova] = useState(classificazioneVuota());
   function aggiornaClassNuova(campo, valore) { setClassNuova((prev) => ({ ...prev, [campo]: valore })); }
 
@@ -22581,6 +22582,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
   const [modIbanLoc, setModIbanLoc] = useState("");
   const [modCategoriaSpesaLoc, setModCategoriaSpesaLoc] = useState(null);
+  const [modApplicaCategoriaATutteLoc, setModApplicaCategoriaATutteLoc] = useState(false);
   const [classMod, setClassMod] = useState(classificazioneVuota());
   function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
 
@@ -22604,7 +22606,10 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       ...classificazionePerPayload(classNuova),
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setClassNuova(classificazioneVuota()); setMostraFormSede(false); setMsg("Sede aggiunta.");
+    if (applicaCategoriaATutteLoc && categoriaSpesaLoc) {
+      await supabase.from("location").update({ categoria_spesa_id: categoriaSpesaLoc }).not("id", "is", null);
+    }
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setApplicaCategoriaATutteLoc(false); setClassNuova(classificazioneVuota()); setMostraFormSede(false); setMsg("Sede aggiunta.");
     ricarica(["location"]);
   }
   function apriModificaLocation(l) {
@@ -22617,6 +22622,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
     setModSedeCentraleLoc(!!l.sede_centrale);
     setModIbanLoc(l.iban || "");
     setModCategoriaSpesaLoc(l.categoria_spesa_id || null);
+    setModApplicaCategoriaATutteLoc(false);
     setClassMod(classificazioneDaRecord(l));
   }
   async function salvaModificaLocation(id) {
@@ -22633,7 +22639,10 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       ...classificazionePerPayload(classMod),
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
-    setLocInModifica(null); setMsg("Sede aggiornata.");
+    if (modApplicaCategoriaATutteLoc && modCategoriaSpesaLoc) {
+      await supabase.from("location").update({ categoria_spesa_id: modCategoriaSpesaLoc }).neq("id", id);
+    }
+    setLocInModifica(null); setModApplicaCategoriaATutteLoc(false); setMsg("Sede aggiornata.");
     ricarica(["location"]);
   }
   async function eliminaLocation(id) {
@@ -22755,8 +22764,12 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                   <SelectCategoriaSpesa value={categoriaSpesaLoc} onChange={setCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
                 </Field>
                 <PannelloClassificazioneGestionale valori={classNuova} onChange={aggiornaClassNuova} />
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <Button onClick={aggiungiLocation}>Aggiungi sede</Button>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                    <input type="checkbox" checked={applicaCategoriaATutteLoc} onChange={(e) => setApplicaCategoriaATutteLoc(e.target.checked)} style={{ width: 16, height: 16 }} />
+                    <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica categoria di spesa a tutte le sedi</span>
+                  </label>
                   <Button variant="ghost" onClick={() => setMostraFormSede(false)}>Annulla</Button>
                 </div>
               </div>
@@ -22816,8 +22829,12 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                             <SelectCategoriaSpesa value={modCategoriaSpesaLoc} onChange={setModCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
                           </Field>
                           <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
-                          <div style={{ display: "flex", gap: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                             <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
+                            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                              <input type="checkbox" checked={modApplicaCategoriaATutteLoc} onChange={(e) => setModApplicaCategoriaATutteLoc(e.target.checked)} style={{ width: 16, height: 16 }} />
+                              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica categoria di spesa a tutte le sedi</span>
+                            </label>
                             <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
                           </div>
                         </div>
