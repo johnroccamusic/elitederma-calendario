@@ -22406,6 +22406,27 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
 
   const selezionato = (hotel || []).find((h) => h.id === selezionatoId);
 
+  const [classHotel, setClassHotel] = useState(classificazioneVuota());
+  const [applicaClassATuttiHotel, setApplicaClassATuttiHotel] = useState(false);
+  const [msgClassHotel, setMsgClassHotel] = useState("");
+  function aggiornaClassHotel(campo, valore) { setClassHotel((prev) => ({ ...prev, [campo]: valore })); }
+  useEffect(() => {
+    setClassHotel(classificazioneDaRecord(selezionato));
+    setApplicaClassATuttiHotel(false);
+    setMsgClassHotel("");
+  }, [selezionatoId]);
+
+  async function salvaClassificazioneHotel() {
+    const payload = classificazionePerPayload(classHotel);
+    const { error } = await supabase.from("hotel").update(payload).eq("id", selezionatoId);
+    if (error) { setMsgClassHotel("Errore: " + error.message); return; }
+    if (applicaClassATuttiHotel) {
+      await supabase.from("hotel").update(payload).neq("id", selezionatoId);
+    }
+    setMsgClassHotel("Classificazione salvata.");
+    ricarica(["hotel"]);
+  }
+
   async function aggiungiHotel() {
     if (!nomeNuovo.trim()) return;
     const { error } = await supabase.from("hotel").insert({ nome: nomeNuovo.trim().toUpperCase() });
@@ -22518,6 +22539,16 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
                     </Field>
                   </div>
                 </div>
+
+                <PannelloClassificazioneGestionale valori={classHotel} onChange={aggiornaClassHotel} />
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <Button onClick={salvaClassificazioneHotel}>Salva classificazione</Button>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                    <input type="checkbox" checked={applicaClassATuttiHotel} onChange={(e) => setApplicaClassATuttiHotel(e.target.checked)} style={{ width: 16, height: 16 }} />
+                    <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica classificazione a tutti gli hotel</span>
+                  </label>
+                </div>
+                {msgClassHotel && <div style={{ ...fontBody, fontSize: 12.5, color: msgClassHotel.startsWith("Errore") ? "#B3261E" : NAVY, marginTop: 10 }}>{msgClassHotel}</div>}
               </React.Fragment>
             )}
           </div>
