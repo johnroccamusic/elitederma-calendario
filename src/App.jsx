@@ -28322,6 +28322,18 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   const [allegatoPathEsistente, setAllegatoPathEsistente] = useState(spesaEsistente?.allegato_path || "");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  const [caricandoAllegatoFic, setCaricandoAllegatoFic] = useState(false);
+  // "Vedi documento originale" (solo quando si arriva da "Importa come
+  // spesa" su una fattura di Fatture in Cloud): l'URL è temporaneo,
+  // quindi si richiede fresco ad ogni click invece di tenerlo in stato
+  async function vediDocumentoOriginaleFic() {
+    if (!prefill?.ficDocumentoId) return;
+    setCaricandoAllegatoFic(true);
+    const { data, error } = await supabase.functions.invoke("fic-documento-allegato", { body: { ficId: prefill.ficDocumentoId } });
+    setCaricandoAllegatoFic(false);
+    if (error || data?.errore) { window.alert("Errore: " + (data?.errore || error.message)); return; }
+    window.open(data.url, "_blank");
+  }
 
   const ivaBloccata = esenteIva;
   const ivaEffettiva = ivaBloccata ? 0 : iva;
@@ -28494,6 +28506,14 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             </div>
           </div>
           <Field label="IBAN fornitore (opzionale, resta associato al fornitore)"><input style={inputStyle} placeholder="es. IT00X0000000000000000000000" value={ibanFornitore} onChange={(e) => setIbanFornitore(e.target.value)} /></Field>
+          {prefill?.ficDocumentoId && (
+            <div style={{ marginBottom: 14 }}>
+              <button type="button" onClick={vediDocumentoOriginaleFic} disabled={caricandoAllegatoFic} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", opacity: caricandoAllegatoFic ? 0.6 : 1 }}>
+                {caricandoAllegatoFic ? "Carico…" : "Vedi documento originale"}
+              </button>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Utile se Fatture in Cloud non ha registrato numero fattura o altri dati: qui sotto trovi il documento originale.</div>
+            </div>
+          )}
           <Field label="Numero documento/fattura"><input style={inputStyle} value={numeroDocumento} onChange={(e) => setNumeroDocumento(e.target.value)} /></Field>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 140px" }}><Field label="Data documento"><input type="date" style={inputStyle} value={dataDocumento} onChange={(e) => setDataDocumento(e.target.value)} /></Field></div>
@@ -30324,7 +30344,12 @@ export default function App() {
         return ALIQUOTE_IVA_COSTI.reduce((piuVicina, v) => (Math.abs(v - pct) < Math.abs(piuVicina - pct) ? v : piuVicina), ALIQUOTE_IVA_COSTI[0]);
       })(),
       totale: f.totale != null ? Number(f.totale) : null,
+      // due id diversi: fatturaFicId è la riga di fatture_ricevute_fic
+      // (per segnarla "importata" al salvataggio), ficDocumentoId è il
+      // vero id del documento su Fatture in Cloud (per "Vedi documento
+      // originale", che lo passa all'API di Fatture in Cloud)
       fatturaFicId: f.id,
+      ficDocumentoId: f.fic_id,
     });
     setSpesaRitornoView("amministrazione");
     apriViewProtetta("spesaform");

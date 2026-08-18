@@ -1,16 +1,14 @@
-// Edge Function "fic-sync-documenti"
-// Scarica da Fatture in Cloud le fatture di acquisto ricevute
-// (received_documents, tipo "expense") e le allinea in
-// fatture_ricevute_fic — upsert su fic_id, quindi rieseguirla non
-// duplica nulla. Richiamabile dal tasto "Sincronizza da Fatture in
-// Cloud" in Registro documenti fornitore.
+// Edge Function "fic-documento-allegato"
+// Dato il fic_id di un documento già sincronizzato, torna l'URL (temporaneo,
+// firmato da Fatture in Cloud) dell'immagine/PDF originale — richiamata dal
+// tasto "Vedi documento originale" nel form "Nuova spesa" quando si importa
+// una fattura ricevuta, per poter controllare a mano numero fattura/IBAN
+// quando Fatture in Cloud non li ha registrati.
 //
-// Rinnova da solo l'access_token quando è scaduto (o vicino a
-// scadere), usando il refresh_token salvato da fic-oauth-callback —
-// l'utente non deve mai rifare l'autorizzazione a mano. La stessa
-// logica di rinnovo è duplicata (non importata da un file condiviso)
-// in fic-documento-allegato: ogni Edge Function qui va deployata come
-// bundle a sé, niente import relativi fra funzioni diverse.
+// L'URL non viene mai salvato in tabella (è temporaneo, andrebbe presto
+// stantio): si richiede fresco ad ogni click. Stessa logica di rinnovo
+// token di fic-sync-documenti, duplicata qui apposta (niente import
+// relativi fra Edge Function diverse, ognuna va deployata a sé).
 //
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   FIC_CLIENT_ID
@@ -22,9 +20,6 @@ const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
-
-const PER_PAGE = 100;
-const MASSIMO_PAGINE = 100; // tetto di sicurezza: 100 x 100 = 10.000 documenti
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,30 +76,22 @@ async function rinnovaTokenSeServe(config: any) {
   return { accessToken: token.access_token as string, errore: null as string | null };
 }
 
-// da ReceivedDocument (vedi models/schemas/ReceivedDocument.yaml) alla
-// riga di fatture_ricevute_fic
-function mappaDocumento(d: any) {
-  return {
-    fic_id: d.id,
-    tipo: d.type || null,
-    fornitore_nome: d.entity?.name || null,
-    numero_documento: d.invoice_number || null,
-    data_documento: d.date || null,
-    descrizione: d.description || null,
-    categoria: d.category || null,
-    imponibile: d.amount_net ?? null,
-    iva: d.amount_vat ?? null,
-    totale: d.amount_gross ?? null,
-    fattura_elettronica: d.e_invoice ?? null,
-    payload_raw: d,
-  };
-}
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
   const jsonHeaders = { ...corsHeaders, "Content-Type": "application/json" };
+
+  let ficId: number | null = null;
+  try {
+    const body = await req.json();
+    ficId = body?.ficId ?? null;
+  } catch {
+    // corpo mancante o non JSON, gestito sotto
+  }
+  if (!ficId) {
+    return new Response(JSON.stringify({ errore: "Parametro \"ficId\" mancante." }), { status: 400, headers: jsonHeaders });
+  }
 
   const { config, errore: erroreConfig } = await caricaConfigFic();
   if (erroreConfig || !config) {
@@ -119,36 +106,19 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ errore: erroreToken || "Token non disponibile" }), { status: 502, headers: jsonHeaders });
   }
 
-  let pagina = 1;
-  let importati = 0;
-  let completato = false;
-
-  while (pagina <= MASSIMO_PAGINE) {
-    const url = `https://api-v2.fattureincloud.it/c/${config.company_id}/received_documents?type=expense&page=${pagina}&per_page=${PER_PAGE}`;
-    const risposta = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!risposta.ok) {
-      const testo = await risposta.text();
-      return new Response(
-        JSON.stringify({ errore: `Fatture in Cloud ha risposto ${risposta.status} alla pagina ${pagina}`, dettaglio: testo, importati, pagina }),
-        { status: 502, headers: jsonHeaders }
-      );
-    }
-    const corpo = await risposta.json();
-    const documenti = Array.isArray(corpo.data) ? corpo.data : [];
-    if (documenti.length === 0) { completato = true; break; }
-
-    const righe = documenti.map(mappaDocumento);
-    const { error } = await supabase.from("fatture_ricevute_fic").upsert(righe, { onConflict: "fic_id" });
-    if (error) {
-      return new Response(JSON.stringify({ errore: "Errore salvataggio su Supabase: " + error.message, importati, pagina }), { status: 500, headers: jsonHeaders });
-    }
-    importati += righe.length;
-
-    if (!corpo.last_page || pagina >= corpo.last_page) { completato = true; break; }
-    pagina += 1;
+  const risposta = await fetch(`https://api-v2.fattureincloud.it/c/${config.company_id}/received_documents/${ficId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!risposta.ok) {
+    const testo = await risposta.text();
+    return new Response(JSON.stringify({ errore: `Fatture in Cloud ha risposto ${risposta.status}: ${testo}` }), { status: 502, headers: jsonHeaders });
+  }
+  const corpo = await risposta.json();
+  const documento = corpo?.data;
+  const url = documento?.attachment_url || documento?.attachment_preview_url || null;
+  if (!url) {
+    return new Response(JSON.stringify({ errore: "Nessun allegato disponibile per questo documento." }), { status: 404, headers: jsonHeaders });
   }
 
-  await supabase.from("fatture_in_cloud_config").update({ ultima_sincronizzazione: new Date().toISOString() }).eq("id", config.id);
-
-  return new Response(JSON.stringify({ importati, pagineProcessate: pagina, completato }), { status: 200, headers: jsonHeaders });
+  return new Response(JSON.stringify({ url }), { status: 200, headers: jsonHeaders });
 });
