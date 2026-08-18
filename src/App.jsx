@@ -28262,6 +28262,115 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
   );
 }
 
+// "Vedi documento originale" su una fattura elettronica: il file che
+// arriva dallo SdI è sempre XML (FatturaPA), senza foglio di stile —
+// aperto direttamente mostra l'albero XML grezzo, illeggibile. Questa
+// funzione estrae gli stessi campi che servirebbero anche al motore di
+// match (fornitore/P.IVA, righe, totali, pagamento) e li rende come
+// una pagina HTML autonoma, aperta in una nuova scheda via blob: URL.
+function renderaFatturaElettronicaHtml(xmlTesto) {
+  const doc = new DOMParser().parseFromString(xmlTesto, "text/xml");
+  const testo = (tag, radice = doc) => radice.getElementsByTagName(tag)[0]?.textContent?.trim() || "";
+  const euro = (v) => { const n = Number(v); return Number.isFinite(n) ? n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €" : (v || "—"); };
+  const dataIt = (iso) => { if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || "—"; const [a, m, g] = iso.slice(0, 10).split("-"); return `${g}/${m}/${a}`; };
+
+  const cedente = doc.getElementsByTagName("CedentePrestatore")[0];
+  const cessionario = doc.getElementsByTagName("CessionarioCommittente")[0];
+  const fornitoreNome = cedente ? testo("Denominazione", cedente) || `${testo("Nome", cedente)} ${testo("Cognome", cedente)}`.trim() : "";
+  const fornitorePiva = cedente ? testo("IdCodice", cedente.getElementsByTagName("IdFiscaleIVA")[0] || cedente) : "";
+  const fornitoreCf = cedente ? testo("CodiceFiscale", cedente) : "";
+  const sedeCedente = cedente?.getElementsByTagName("Sede")[0];
+  const indirizzoFornitore = sedeCedente ? [testo("Indirizzo", sedeCedente), testo("NumeroCivico", sedeCedente)].filter(Boolean).join(" ") + `, ${testo("CAP", sedeCedente)} ${testo("Comune", sedeCedente)} (${testo("Provincia", sedeCedente)})` : "";
+  const clienteNome = cessionario ? testo("Denominazione", cessionario) : "";
+
+  const datiDoc = doc.getElementsByTagName("DatiGeneraliDocumento")[0];
+  const tipoDoc = testo("TipoDocumento", datiDoc);
+  const numeroDoc = testo("Numero", datiDoc);
+  const dataDoc = testo("Data", datiDoc);
+  const totaleDoc = testo("ImportoTotaleDocumento", datiDoc);
+  const causali = Array.from(datiDoc?.getElementsByTagName("Causale") || []).map((c) => c.textContent.trim()).filter(Boolean);
+
+  const righe = Array.from(doc.getElementsByTagName("DettaglioLinee")).map((r) => ({
+    descrizione: testo("Descrizione", r),
+    quantita: testo("Quantita", r),
+    prezzoTotale: testo("PrezzoTotale", r),
+    aliquotaIva: testo("AliquotaIVA", r),
+  }));
+  const riepiloghiIva = Array.from(doc.getElementsByTagName("DatiRiepilogo")).map((r) => ({
+    aliquota: testo("AliquotaIVA", r),
+    imponibile: testo("ImponibileImporto", r),
+    imposta: testo("Imposta", r),
+  }));
+  const pagamenti = Array.from(doc.getElementsByTagName("DettaglioPagamento")).map((p) => ({
+    modalita: testo("ModalitaPagamento", p),
+    scadenza: testo("DataScadenzaPagamento", p),
+    importo: testo("ImportoPagamento", p),
+    iban: testo("IBAN", p),
+    beneficiario: testo("Beneficiario", p),
+  }));
+  const condizioniPagamento = testo("CondizioniPagamento", doc.getElementsByTagName("DatiPagamento")[0]);
+
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  return `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${esc(fornitoreNome)} — ${esc(numeroDoc)}</title>
+<style>
+  body{font-family:'Roboto',Arial,sans-serif;background:#F7F5EF;color:#0E1B33;margin:0;padding:32px 20px;}
+  .foglio{max-width:760px;margin:0 auto;background:#fff;border:1px solid #E8E3D6;border-radius:14px;padding:32px 36px;}
+  h1{font-family:'Prompt',Arial,sans-serif;font-size:24px;margin:0 0 2px;}
+  .sub{color:#8B8FA3;font-size:13px;margin-bottom:22px;}
+  .riga-campi{display:flex;flex-wrap:wrap;gap:22px;margin-bottom:20px;}
+  .campo{min-width:150px;}
+  .campo .et{font-size:10.5px;font-weight:700;color:#8B8FA3;text-transform:uppercase;letter-spacing:.6px;margin-bottom:2px;}
+  .campo .val{font-size:14.5px;font-weight:600;}
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px;}
+  th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#8B8FA3;padding:6px 8px;border-bottom:1px solid #E8E3D6;}
+  td{padding:7px 8px;border-bottom:1px solid #F1EEE4;}
+  td.num{text-align:right;white-space:nowrap;}
+  .totale{font-size:20px;font-weight:700;text-align:right;margin-top:10px;}
+  .sezione{margin-top:26px;font-family:'Prompt',Arial,sans-serif;font-size:12px;font-weight:700;color:#C9A26D;text-transform:uppercase;letter-spacing:.8px;}
+  .causali{font-size:12px;color:#8B8FA3;margin-top:4px;}
+</style></head>
+<body>
+  <div class="foglio">
+    <div class="sub">${esc(tipoDoc)} · fattura elettronica</div>
+    <h1>${esc(fornitoreNome) || "Fornitore sconosciuto"}</h1>
+    <div class="sub">${esc(indirizzoFornitore)}${fornitorePiva ? ` · P.IVA ${esc(fornitorePiva)}` : ""}${fornitoreCf ? ` · CF ${esc(fornitoreCf)}` : ""}</div>
+
+    <div class="riga-campi">
+      <div class="campo"><div class="et">Numero</div><div class="val">${esc(numeroDoc) || "—"}</div></div>
+      <div class="campo"><div class="et">Data</div><div class="val">${esc(dataIt(dataDoc))}</div></div>
+      <div class="campo"><div class="et">Totale</div><div class="val">${euro(totaleDoc)}</div></div>
+      <div class="campo"><div class="et">Destinatario</div><div class="val">${esc(clienteNome) || "—"}</div></div>
+    </div>
+    ${causali.length ? `<div class="causali">${causali.map(esc).join("<br>")}</div>` : ""}
+
+    ${righe.length ? `
+    <div class="sezione">Righe documento</div>
+    <table>
+      <tr><th>Descrizione</th><th>Qtà</th><th>IVA</th><th style="text-align:right">Importo</th></tr>
+      ${righe.map((r) => `<tr><td>${esc(r.descrizione)}</td><td class="num">${esc(r.quantita)}</td><td class="num">${esc(r.aliquotaIva)}%</td><td class="num">${euro(r.prezzoTotale)}</td></tr>`).join("")}
+    </table>` : ""}
+
+    ${riepiloghiIva.length ? `
+    <div class="sezione">Riepilogo IVA</div>
+    <table>
+      <tr><th>Aliquota</th><th style="text-align:right">Imponibile</th><th style="text-align:right">Imposta</th></tr>
+      ${riepiloghiIva.map((r) => `<tr><td>${esc(r.aliquota)}%</td><td class="num">${euro(r.imponibile)}</td><td class="num">${euro(r.imposta)}</td></tr>`).join("")}
+    </table>` : ""}
+
+    <div class="totale">Totale documento: ${euro(totaleDoc)}</div>
+
+    ${pagamenti.length ? `
+    <div class="sezione">Pagamento</div>
+    <table>
+      <tr><th>Modalità</th><th>Scadenza</th><th>IBAN</th><th style="text-align:right">Importo</th></tr>
+      ${pagamenti.map((p) => `<tr><td>${esc(p.modalita)}</td><td>${esc(dataIt(p.scadenza))}</td><td>${esc(p.iban) || "—"}</td><td class="num">${euro(p.importo)}</td></tr>`).join("")}
+    </table>
+    ${condizioniPagamento ? `<div class="causali">Condizioni: ${esc(condizioniPagamento)}</div>` : ""}` : ""}
+  </div>
+</body></html>`;
+}
+
 // form completo "Nuova spesa"/"Modifica spesa": tutti i campi del
 // brief (identificativi, stato, ambito con ripartizione multi-ambito,
 // classificazione gestionale, ricorrenza, budget/soglia per-spesa,
@@ -28341,6 +28450,12 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
     const { data, error } = await supabase.functions.invoke("fic-documento-allegato", { body: { ficId: prefill.ficDocumentoId } });
     setCaricandoAllegatoFic(false);
     if (error || data?.errore) { window.alert("Errore: " + (data?.errore || error.message)); return; }
+    if (data.tipo === "xml") {
+      const html = renderaFatturaElettronicaHtml(data.xml);
+      const blobUrl = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+      window.open(blobUrl, "_blank");
+      return;
+    }
     window.open(data.url, "_blank");
   }
 

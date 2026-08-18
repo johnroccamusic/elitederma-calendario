@@ -115,10 +115,31 @@ Deno.serve(async (req) => {
   }
   const corpo = await risposta.json();
   const documento = corpo?.data;
-  const url = documento?.attachment_url || documento?.attachment_preview_url || null;
+  // per le fatture elettroniche "attachment_url" è il file originale
+  // ricevuto dallo SdI: XML grezzo, illeggibile senza foglio di stile.
+  // "attachment_preview_url" sarebbe l'anteprima leggibile, ma per i
+  // documenti arrivati via canale elettronico spesso non esiste — si
+  // prova comunque per prima, XML resta il fallback
+  const url = documento?.attachment_preview_url || documento?.attachment_url || null;
   if (!url) {
     return new Response(JSON.stringify({ errore: "Nessun allegato disponibile per questo documento." }), { status: 404, headers: jsonHeaders });
   }
 
-  return new Response(JSON.stringify({ url }), { status: 200, headers: jsonHeaders });
+  // il bucket S3 di Fatture in Cloud non ha CORS abilitato: il browser
+  // non può leggere l'XML con fetch() dal nostro dominio (funziona solo
+  // la navigazione diretta, che però mostra l'albero XML grezzo). Lo
+  // scarichiamo qui lato server — nessun problema di CORS fra server —
+  // e lo passiamo al frontend come testo, che lo formatta per la
+  // lettura (vedi renderaFatturaElettronicaHtml in App.jsx)
+  const percorsoSenzaQuery = url.split("?")[0];
+  if (percorsoSenzaQuery.toLowerCase().endsWith(".xml")) {
+    const rispostaXml = await fetch(url);
+    if (!rispostaXml.ok) {
+      return new Response(JSON.stringify({ errore: `Download dell'allegato fallito: ${rispostaXml.status}` }), { status: 502, headers: jsonHeaders });
+    }
+    const xml = await rispostaXml.text();
+    return new Response(JSON.stringify({ tipo: "xml", xml }), { status: 200, headers: jsonHeaders });
+  }
+
+  return new Response(JSON.stringify({ tipo: "url", url }), { status: 200, headers: jsonHeaders });
 });
