@@ -18486,19 +18486,21 @@ function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false 
   return righe.sort((a, b) => (a.scadenza || "").localeCompare(b.scadenza || ""));
 }
 
-// riepilogo per mese di un elenco già calcolato da
-// calcolaScadenziarioAttivo: quante scadenze e quanto totale cadono in
-// ciascun mese (chiave "yyyy-mm") — la barra dei mesi di Scadenziario
-// Attivo lo usa per i conteggi, l'intestazione del mese selezionato
-// per il totale
-function riepilogoMensileScadenze(righe) {
+// riepilogo per mese di un elenco di scadenze: quante scadenze e
+// quanto totale cadono in ciascun mese (chiave "yyyy-mm") — la barra
+// dei mesi lo usa per i conteggi, l'intestazione del mese selezionato
+// per il totale. dataDi/importoDi sono personalizzabili perché
+// Scadenziario Attivo/Passivo usano nomi di campo diversi per la
+// stessa idea (scadenza/importo vs dataDebito/totale)
+function riepilogoMensileScadenze(righe, dataDi = (r) => r.scadenza, importoDi = (r) => r.importo) {
   const mappa = {};
   (righe || []).forEach((r) => {
-    if (!r.scadenza) return;
-    const chiave = r.scadenza.slice(0, 7);
+    const data = dataDi(r);
+    if (!data) return;
+    const chiave = data.slice(0, 7);
     mappa[chiave] = mappa[chiave] || { count: 0, totale: 0 };
     mappa[chiave].count++;
-    mappa[chiave].totale += r.importo || 0;
+    mappa[chiave].totale += importoDi(r) || 0;
   });
   return mappa;
 }
@@ -18535,12 +18537,12 @@ function IntestazioneGiornoScadenzeAttivo({ data }) {
 // combina le due intestazioni sopra su un elenco di scadenze già
 // ordinato per data — stesso principio di elencoConIntestazioniMese,
 // qui su due livelli invece di uno
-function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga) {
+function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga, dataDi = (r) => r.scadenza) {
   let meseAttuale = null;
   let giornoAttuale = null;
   const elementi = [];
   righe.forEach((riga, idx) => {
-    const data = riga.scadenza;
+    const data = dataDi(riga);
     const chiaveMese = data ? data.slice(0, 7) : null;
     if (chiaveMese && chiaveMese !== meseAttuale) {
       const [anno, mese] = chiaveMese.split("-").map(Number);
@@ -18818,6 +18820,10 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const [meseScadAttivo, setMeseScadAttivo] = useState(Number(oggiStr.slice(5, 7))); // null = "Tutto l'anno"
   const [ricercaScadAttivo, setRicercaScadAttivo] = useState("");
   const [infoScadAttivoAperto, setInfoScadAttivoAperto] = useState(false);
+  // stessa navigazione anno/mese/ricerca anche su Scadenziario Passivo
+  const [annoScadPassivo, setAnnoScadPassivo] = useState(Number(oggiStr.slice(0, 4)));
+  const [meseScadPassivo, setMeseScadPassivo] = useState(Number(oggiStr.slice(5, 7)));
+  const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
@@ -18898,6 +18904,42 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     }))
     .filter((x) => x.bonifico > 0)
     .sort((a, b) => (b.spesa.data_pagamento || "").localeCompare(a.spesa.data_pagamento || ""));
+
+  // Scadenziario Passivo: stessa navigazione anno/mese/ricerca di
+  // Scadenziario Attivo (vedi elencoScadenzeConIntestazioni sopra) —
+  // qui raggruppato sulla data del debito (dataDebito), non sulla
+  // scadenza del pagamento, spesso assente sulle righe virtuali
+  const dataDiPassivoDaPagare = (r) => r.dataDebito || r.corsoData?.data_fine || null;
+  const dataDiPassivoEvase = (r) => r.spesa.data_pagamento || null;
+  const importoDiPassivoDaPagare = (r) => r.totale;
+  const importoDiPassivoEvase = (r) => r.bonifico;
+  const dataDiPassivoAttuale = subTabPassivo === "dapagare" ? dataDiPassivoDaPagare : dataDiPassivoEvase;
+  const importoDiPassivoAttuale = subTabPassivo === "dapagare" ? importoDiPassivoDaPagare : importoDiPassivoEvase;
+  const elencoPassivoBase = subTabPassivo === "dapagare" ? daPagare : speseEvase;
+
+  const meseCorrenteStrPassivo = oggiStr.slice(0, 7);
+  const riepilogoMesePassivo = riepilogoMensileScadenze(elencoPassivoBase, dataDiPassivoAttuale, importoDiPassivoAttuale);
+  // "scadute": stesso principio di Scadenziario Attivo, calcolato
+  // sempre su "Da pagare" indipendentemente da quale sotto-scheda si
+  // sta guardando
+  const riepilogoMeseDaPagarePassivo = riepilogoMensileScadenze(daPagare, dataDiPassivoDaPagare, importoDiPassivoDaPagare);
+  const mesiScadutiPassivo = Object.entries(riepilogoMeseDaPagarePassivo).filter(([chiave]) => chiave < meseCorrenteStrPassivo);
+  const scaduteContoPassivo = mesiScadutiPassivo.reduce((s, [, v]) => s + v.count, 0);
+  const scaduteTotalePassivo = mesiScadutiPassivo.reduce((s, [, v]) => s + v.totale, 0);
+
+  const elencoAnnoPassivo = elencoPassivoBase.filter((r) => { const d = dataDiPassivoAttuale(r); return d && d.slice(0, 4) === String(annoScadPassivo); });
+  const elencoMesePassivo = meseScadPassivo ? elencoAnnoPassivo.filter((r) => Number(dataDiPassivoAttuale(r).slice(5, 7)) === meseScadPassivo) : elencoAnnoPassivo;
+  const elencoFiltratoPassivo = ricercaScadPassivo.trim()
+    ? elencoMesePassivo.filter((r) => {
+        const q = ricercaScadPassivo.trim().toLowerCase();
+        if (subTabPassivo === "dapagare") {
+          return (r.nome || "").toLowerCase().includes(q) || (r.fornitore || "").toLowerCase().includes(q) || (r.oggetto || (r.corsoData ? etichettaCorso(r.corsoData) : "") || "").toLowerCase().includes(q);
+        }
+        const nomeFornitore = fornitoriById[r.spesa.fornitore_id]?.nome || "";
+        return nomeFornitore.toLowerCase().includes(q) || (r.spesa.descrizione || "").toLowerCase().includes(q) || oggettoDiSpesa(r.spesa, r.corsoData).toLowerCase().includes(q);
+      })
+    : elencoMesePassivo;
+  const riepilogoMeseFiltratoPassivo = riepilogoMensileScadenze(elencoFiltratoPassivo, dataDiPassivoAttuale, importoDiPassivoAttuale);
 
   const documentiFornitore = (spese || [])
     .filter((s) => s.numero_documento)
@@ -19157,10 +19199,46 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                 + Nuova spesa da pagare
               </button>
             </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setAnnoScadPassivo((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoScadPassivo}</div>
+                <button onClick={() => setAnnoScadPassivo((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
+              </div>
+              {subTabPassivo === "dapagare" && scaduteContoPassivo > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 16, padding: "6px 12px" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C0392B", display: "inline-block", flexShrink: 0 }} />
+                  {scaduteContoPassivo} {scaduteContoPassivo === 1 ? "scaduta" : "scadute"} · {fmtEuroErp(scaduteTotalePassivo)}
+                </div>
+              )}
+              <button onClick={() => setMeseScadPassivo(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: meseScadPassivo === null ? "#fff" : NAVY, background: meseScadPassivo === null ? NAVY : "#fff", border: `1px solid ${meseScadPassivo === null ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Tutto l'anno</button>
+              <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+                <CampoRicerca value={ricercaScadPassivo} onChange={(e) => setRicercaScadPassivo(e.target.value)} placeholder="Cerca fornitore, corso…" />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+              {MESI_ABBR.map((abbr, idx) => {
+                const m = idx + 1;
+                const chiave = `${annoScadPassivo}-${String(m).padStart(2, "0")}`;
+                const info = riepilogoMesePassivo[chiave];
+                const scaduto = subTabPassivo === "dapagare" && chiave < meseCorrenteStrPassivo && !!(riepilogoMeseDaPagarePassivo[chiave]);
+                const attivoMese = meseScadPassivo === m;
+                return (
+                  <button key={m} onClick={() => setMeseScadPassivo(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoMese ? "#fff" : NAVY, background: attivoMese ? NAVY : "#fff", border: `1px solid ${attivoMese ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
+                    {scaduto && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivoMese ? "#fff" : "#C0392B" }} />}
+                    <div>{abbr}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoMese ? "#fff" : MUTED, marginTop: 2 }}>{info ? info.count : "—"}</div>
+                  </button>
+                );
+              })}
+            </div>
+
             {subTabPassivo === "dapagare" && (
               <div style={{ ...cardStyle }}>
-                {daPagare.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun bonifico da pagare al momento.</div>}
-                {elencoConIntestazioniMese(daPagare, (item) => item.dataDebito || item.corsoData?.data_fine || null, (item) => (
+                {elencoFiltratoPassivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
+                {elencoScadenzeConIntestazioni(elencoFiltratoPassivo, riepilogoMeseFiltratoPassivo, (item) => (
                   <RigaScadenziarioDaPagare
                     key={item.key}
                     nome={item.nome}
@@ -19176,13 +19254,13 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                     motivoDisabilitato={`Categoria di spesa non impostata — vai su ${PAGINA_CATEGORIA_GRUPPO_PER_TIPO[item.tipo] || "Categorie di spesa"} per assegnarla al gruppo, poi torna qui.`}
                     onConferma={(dati) => confermaPagato(item, dati)}
                   />
-                ))}
+                ), dataDiPassivoDaPagare)}
               </div>
             )}
             {subTabPassivo === "evase" && (
               <div style={{ ...cardStyle }}>
-                {speseEvase.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa evasa ancora.</div>}
-                {elencoConIntestazioniMese(speseEvase, ({ spesa }) => spesa.data_pagamento || null, ({ spesa, bonifico, corsoData }) => {
+                {elencoFiltratoPassivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
+                {elencoScadenzeConIntestazioni(elencoFiltratoPassivo, riepilogoMeseFiltratoPassivo, ({ spesa, bonifico, corsoData }) => {
                   const chips = [
                     locationById[spesa.sede_id] ? toTitleCase(locationById[spesa.sede_id].nome) : null,
                     sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome,
@@ -19204,7 +19282,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                       <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
                     </RigaAmministrazione>
                   );
-                })}
+                }, dataDiPassivoEvase)}
               </div>
             )}
           </div>
