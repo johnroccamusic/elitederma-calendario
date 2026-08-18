@@ -9568,6 +9568,18 @@ const AMBITI_SPESA = [
   { chiave: "evento", etichetta: "Evento o fiera" },
 ];
 const RICORRENZA_OPZIONI = ["nessuna", "mensile", "bimestrale", "trimestrale", "semestrale", "annuale", "personalizzata"];
+// periodicità di addebito di un abbonamento/contratto (Contabilità →
+// Abbonamenti e contratti) — concetto diverso dal campo "Ricorrenza"
+// della Classificazione gestionale qui sotto (quello classifica la
+// spesa in generale, questo dice ogni quanto viene addebitato questo
+// contratto specifico)
+const PERIODICITA_ABBONAMENTO_OPZIONI = [
+  { chiave: "giornaliera", etichetta: "Giornaliera" },
+  { chiave: "settimanale", etichetta: "Settimanale" },
+  { chiave: "mensile", etichetta: "Mensile" },
+  { chiave: "annuale", etichetta: "Annuale" },
+];
+const METODI_PAGAMENTO_ABBONAMENTO = ["Paypal", "Carta", "Bonifico", "Contanti", "Cash no iva"];
 const DIRETTO_INDIRETTO_OPZIONI = [{ chiave: "diretto", etichetta: "Diretto" }, { chiave: "indiretto", etichetta: "Indiretto" }];
 const FISSO_VARIABILE_OPZIONI = [{ chiave: "fisso", etichetta: "Fisso" }, { chiave: "variabile", etichetta: "Variabile" }, { chiave: "semivariabile", etichetta: "Semivariabile" }];
 const RICORRENTE_OCCASIONALE_OPZIONI = [{ chiave: "ricorrente", etichetta: "Ricorrente" }, { chiave: "occasionale", etichetta: "Occasionale" }];
@@ -9664,6 +9676,15 @@ function PannelloClassificazioneGestionale({ valori, onChange }) {
 
 function etichettaOpzione(lista, chiave) {
   return lista.find((o) => o.chiave === chiave)?.etichetta || chiave || "—";
+}
+// tranche di importo in vigore oggi per un abbonamento/contratto: quella
+// ancora aperta (valido_fino null) se c'è, altrimenti l'ultima chiusa —
+// non dovrebbe mai capitare di avere zero tranche per un abbonamento
+// esistente, ma la funzione resta difensiva
+function trancheAttivaDi(abbonamentoId, abbonamentiImporti) {
+  const tranche = (abbonamentiImporti || []).filter((t) => t.abbonamento_id === abbonamentoId).sort((a, b) => (a.valido_da || "").localeCompare(b.valido_da || ""));
+  if (tranche.length === 0) return null;
+  return tranche.find((t) => !t.valido_fino) || tranche[tranche.length - 1];
 }
 // scostamento % rispetto al budget: "N/D" se il budget è zero/assente,
 // invece di una percentuale infinita
@@ -18374,7 +18395,7 @@ async function caricaRicevutaSpesa(file) {
 // locale) e PaginaInserimentoCostiRicavi/Prima nota cassa (da dove riapre
 // Amministrazione già sulla scheda scelta): senza, da Prima nota cassa non
 // si poteva più saltare direttamente alle altre
-function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, passivoCount, attivoCount }) {
+function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, passivoCount, attivoCount, abbonamentiCount }) {
   return (
     <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
       <TabPillola attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa}>Prima nota cassa</TabPillola>
@@ -18382,6 +18403,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
       <TabPillola attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")}>Registro documenti fornitore ({documentiCount})</TabPillola>
       <TabPillola attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")}>Scadenziario Passivo ({passivoCount})</TabPillola>
       <TabPillola attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")}>Scadenziario Attivo ({attivoCount})</TabPillola>
+      <TabPillola attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</TabPillola>
     </div>
   );
 }
@@ -18604,7 +18626,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
 // fornitore e in Scadenziario Passivo → Da pagare, già classificata per
 // sede e categoria in base a "Associa il gruppo a una categoria di spesa"
 // (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiSottocategorie, categorieGruppi, fornitori, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, tabIniziale }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, tabIniziale }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
@@ -18616,6 +18638,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
+  const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
   function etichettaCorso(cd) {
     const c = corsiById[cd.corso_id];
     const l = locationById[cd.location_id];
@@ -18774,6 +18797,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           documentiCount={documentiFornitore.length}
           passivoCount={daPagare.length}
           attivoCount={scadenziarioAttivo.length}
+          abbonamentiCount={(abbonamentiContratti || []).length}
         />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
@@ -18963,6 +18987,35 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             )}
           </div>
         )}
+
+        {tab === "abbonamenti" && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+              <Button onClick={onApriNuovoAbbonamento}>+ Nuovo abbonamento</Button>
+            </div>
+            <div style={{ ...cardStyle }}>
+              {(abbonamentiContratti || []).length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun abbonamento o contratto ancora.</div>}
+              {[...(abbonamentiContratti || [])].sort((a, b) => (b.data_inizio || "").localeCompare(a.data_inizio || "")).map((ab) => {
+                const tranche = trancheAttivaDi(ab.id, abbonamentiImporti);
+                const fornitoreNome = fornitoriById[ab.fornitore_id]?.nome || null;
+                const sottocategoriaNome = sottocategoriaCostoDi(costiSottocategorie, ab.sottocategoria_id)?.nome || costiCategorieById[ab.categoria_id]?.nome || null;
+                const scaduto = ab.data_fine && ab.data_fine < oggiStr;
+                return (
+                  <RigaAmministrazione
+                    key={ab.id}
+                    data={ab.data_inizio}
+                    titolo={ab.descrizione || fornitoreNome || "Abbonamento"}
+                    sottotitolo={[fornitoreNome, sottocategoriaNome, ab.periodicita ? etichettaOpzione(PERIODICITA_ABBONAMENTO_OPZIONI, ab.periodicita) : null].filter(Boolean).join(" · ")}
+                    chips={[scaduto ? "Scaduto" : "Attivo", ab.data_fine ? `Fino al ${fmtData(ab.data_fine)}` : "Nessuna scadenza"]}
+                    importo={tranche ? fmtEuroErp(tranche.totale) : "—"}
+                  >
+                    <button onClick={() => onApriModificaAbbonamento(ab.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica</button>
+                  </RigaAmministrazione>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -18996,6 +19049,7 @@ const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
+  abbonamentiContratti,
   ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
@@ -19093,6 +19147,7 @@ function PaginaInserimentoCostiRicavi({
           documentiCount={documentiFornitorePerConteggio}
           passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio}
           attivoCount={scadenziarioAttivoPerConteggio}
+          abbonamentiCount={(abbonamentiContratti || []).length}
         />
 
         <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
@@ -28006,6 +28061,388 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   );
 }
 
+// "Abbonamenti e contratti" (tab di Contabilità): stesso form di "Nuova
+// spesa" (PaginaSpesaForm) ma per spese ricorrenti e identiche nei mesi
+// successivi — canoni SaaS, servizi a contratto. Due differenze
+// strutturali rispetto a una spesa singola:
+// 1) porta con sé i dati anagrafici del fornitore (sito web, account,
+//    indirizzo) oltre all'IBAN già presente su "fornitori";
+// 2) l'importo non è un campo dell'abbonamento ma vive a parte in
+//    abbonamenti_importi, una "tranche" per periodo di validità — così
+//    quando cambia non si riscrive la storia: si chiude la tranche
+//    attiva (valido_fino = giorno prima della nuova data) e se ne apre
+//    una nuova da lì in avanti, con una nota automatica che ricorda
+//    quale fosse il vecchio importo
+function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, abbonamentiContratti, abbonamentiImporti, abbonamentiAttribuzioni, ricarica, onBack }) {
+  const abbonamentoEsistente = abbonamentoId ? (abbonamentiContratti || []).find((a) => a.id === abbonamentoId) : null;
+  const attribuzioniEsistenti = abbonamentoId ? (abbonamentiAttribuzioni || []).filter((a) => a.abbonamento_id === abbonamentoId) : [];
+  const trancheEsistenti = abbonamentoId ? (abbonamentiImporti || []).filter((t) => t.abbonamento_id === abbonamentoId).sort((a, b) => (a.valido_da || "").localeCompare(b.valido_da || "")) : [];
+  const trancheAttiva = trancheEsistenti.find((t) => !t.valido_fino) || trancheEsistenti[trancheEsistenti.length - 1] || null;
+  const trancheStoriche = trancheEsistenti.filter((t) => t.id !== trancheAttiva?.id);
+
+  const [fornitoreId, setFornitoreId] = useState(abbonamentoEsistente?.fornitore_id || "");
+  const [nuovoFornitore, setNuovoFornitore] = useState("");
+  const fornitorePartenza = (fornitori || []).find((f) => f.id === abbonamentoEsistente?.fornitore_id);
+  const [ibanFornitore, setIbanFornitore] = useState(fornitorePartenza?.iban || "");
+  const [sitoWebFornitore, setSitoWebFornitore] = useState(fornitorePartenza?.sito_web || "");
+  const [datiAccountFornitore, setDatiAccountFornitore] = useState(fornitorePartenza?.dati_account || "");
+  const [indirizzoFornitore, setIndirizzoFornitore] = useState(fornitorePartenza?.indirizzo || "");
+  const [cittaFornitore, setCittaFornitore] = useState(fornitorePartenza?.citta || "");
+  const [capFornitore, setCapFornitore] = useState(fornitorePartenza?.cap || "");
+  function selezionaFornitore(id) {
+    setFornitoreId(id);
+    const f = (fornitori || []).find((x) => x.id === id);
+    setIbanFornitore(f?.iban || ""); setSitoWebFornitore(f?.sito_web || ""); setDatiAccountFornitore(f?.dati_account || "");
+    setIndirizzoFornitore(f?.indirizzo || ""); setCittaFornitore(f?.citta || ""); setCapFornitore(f?.cap || "");
+  }
+
+  const [descrizione, setDescrizione] = useState(abbonamentoEsistente?.descrizione || "");
+  const [categoriaId, setCategoriaId] = useState(abbonamentoEsistente?.categoria_id || "");
+  const [sottocategoriaId, setSottocategoriaId] = useState(abbonamentoEsistente?.sottocategoria_id || "");
+  const [periodicita, setPeriodicita] = useState(abbonamentoEsistente?.periodicita || "mensile");
+  const [dataInizio, setDataInizio] = useState(abbonamentoEsistente?.data_inizio || dataOggiStr());
+  const [nessunaScadenza, setNessunaScadenza] = useState(abbonamentoEsistente ? !abbonamentoEsistente.data_fine : true);
+  const [dataFine, setDataFine] = useState(abbonamentoEsistente?.data_fine || "");
+
+  const [imponibile, setImponibile] = useState(trancheAttiva?.imponibile != null ? String(trancheAttiva.imponibile) : "");
+  const [totale, setTotale] = useState(trancheAttiva?.totale != null ? String(trancheAttiva.totale) : "");
+  const [iva, setIva] = useState(trancheAttiva?.iva_percentuale ?? 22);
+  const [nuovoImportoDa, setNuovoImportoDa] = useState(dataOggiStr());
+
+  const [metodoPagamento, setMetodoPagamento] = useState(abbonamentoEsistente?.metodo_pagamento || "");
+  const [allegatoFile, setAllegatoFile] = useState(null);
+  const [allegatoPathEsistente, setAllegatoPathEsistente] = useState(abbonamentoEsistente?.allegato_path || "");
+  const [note, setNote] = useState(abbonamentoEsistente?.note || "");
+
+  const [tipoAmbito, setTipoAmbito] = useState(abbonamentoEsistente?.tipo_ambito || "generale");
+  const [sedeId, setSedeId] = useState(abbonamentoEsistente?.sede_id || "");
+  const [corsoId, setCorsoId] = useState(abbonamentoEsistente?.corso_id || "");
+  const [classeId, setClasseId] = useState(abbonamentoEsistente?.classe_id || "");
+  const [eventoId, setEventoId] = useState(abbonamentoEsistente?.evento_id || "");
+  const [ripartisci, setRipartisci] = useState(attribuzioniEsistenti.length > 0);
+  const [righeRipartizione, setRigheRipartizione] = useState(
+    attribuzioniEsistenti.length > 0
+      ? attribuzioniEsistenti.map((a) => ({ tipoAmbito: a.tipo_ambito, sedeId: a.sede_id || "", corsoId: a.corso_id || "", classeId: a.classe_id || "", eventoId: a.evento_id || "", percentuale: String(a.percentuale) }))
+      : [{ tipoAmbito: "sede", sedeId: "", corsoId: "", classeId: "", eventoId: "", percentuale: "100" }]
+  );
+
+  const [classificazione, setClassificazione] = useState(classificazioneDaRecord(abbonamentoEsistente));
+  function aggiornaClassificazione(campo, valore) { setClassificazione((prev) => ({ ...prev, [campo]: valore })); }
+
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  function totaleDaImponibile(v, ivaPct) { return v === "" ? "" : String(round2(parseNum(v) * (1 + ivaPct / 100))); }
+  function imponibileDaTotale(v, ivaPct) { return v === "" ? "" : String(round2(parseNum(v) / (1 + ivaPct / 100))); }
+  function onImponibileChange(v) { setImponibile(v); setTotale(totaleDaImponibile(v, iva)); }
+  function onTotaleChange(v) { setTotale(v); setImponibile(imponibileDaTotale(v, iva)); }
+  function onIvaChange(v) { setIva(v); setTotale(totaleDaImponibile(imponibile, v)); }
+
+  const importoCambiato = !!trancheAttiva && (
+    round2(parseNum(imponibile) || 0) !== round2(trancheAttiva.imponibile || 0)
+    || Number(iva) !== Number(trancheAttiva.iva_percentuale)
+    || round2(parseNum(totale) || 0) !== round2(trancheAttiva.totale || 0)
+  );
+
+  const sottocategorieDisponibili = sottocategorieDiCategoria(costiSottocategorie, categoriaId);
+  const opzioniSede = location.map((l) => ({ id: l.id, nome: l.nome.toUpperCase() }));
+  const opzioniCorso = corsi.map((c) => ({ id: c.id, nome: c.nome.toUpperCase() }));
+  const opzioniClasse = corsiDate.map((cd) => ({ id: cd.id, nome: `${fmtData(cd.data_inizio)} — ${corsi.find((c) => c.id === cd.corso_id)?.nome || ""}`.toUpperCase() }));
+  const opzioniEvento = eventi.map((e) => ({ id: e.id, nome: e.nome.toUpperCase() }));
+
+  function selettoreAmbito(tipo, sedeVal, setSedeVal, corsoVal, setCorsoVal, classeVal, setClasseVal, eventoVal, setEventoVal) {
+    if (tipo === "sede") return <select style={inputStyle} value={sedeVal} onChange={(e) => setSedeVal(e.target.value)}><option value="">— scegli sede —</option>{opzioniSede.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    if (tipo === "corso") return <select style={inputStyle} value={corsoVal} onChange={(e) => setCorsoVal(e.target.value)}><option value="">— scegli corso —</option>{opzioniCorso.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    if (tipo === "classe") return <select style={inputStyle} value={classeVal} onChange={(e) => setClasseVal(e.target.value)}><option value="">— scegli classe —</option>{opzioniClasse.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    if (tipo === "evento") return <select style={inputStyle} value={eventoVal} onChange={(e) => setEventoVal(e.target.value)}><option value="">— scegli evento —</option>{opzioniEvento.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}</select>;
+    return null;
+  }
+  function aggiungiRigaRipartizione() { setRigheRipartizione((p) => [...p, { tipoAmbito: "sede", sedeId: "", corsoId: "", classeId: "", eventoId: "", percentuale: "" }]); }
+  function modificaRigaRipartizione(idx, campo, valore) { setRigheRipartizione((p) => p.map((r, i) => (i === idx ? { ...r, [campo]: valore } : r))); }
+  function rimuoviRigaRipartizione(idx) { setRigheRipartizione((p) => p.filter((_, i) => i !== idx)); }
+  const sommaPercentuali = round2(righeRipartizione.reduce((s, r) => s + (parseNum(r.percentuale) || 0), 0));
+
+  async function salva() {
+    if (!categoriaId || !sottocategoriaId) { setMsg("Scegli categoria e sotto-categoria."); return; }
+    const imp = parseNum(imponibile);
+    if (!imp) { setMsg("Inserisci un imponibile."); return; }
+    if (!dataInizio) { setMsg("Inserisci la data di inizio."); return; }
+    if (!nessunaScadenza && !dataFine) { setMsg('Inserisci la scadenza, oppure spunta "Nessuna scadenza".'); return; }
+    if (ripartisci && sommaPercentuali !== 100) { setMsg(`Le percentuali di ripartizione devono sommare 100% (ora ${sommaPercentuali}%).`); return; }
+    if (importoCambiato && !nuovoImportoDa) { setMsg("Indica da quale data si applica il nuovo importo."); return; }
+
+    setSalvando(true);
+    let fornitoreIdFinale = fornitoreId;
+    const datiFornitore = {
+      iban: ibanFornitore.trim() || null, sito_web: sitoWebFornitore.trim() || null, dati_account: datiAccountFornitore.trim() || null,
+      indirizzo: indirizzoFornitore.trim() || null, citta: cittaFornitore.trim() || null, cap: capFornitore.trim() || null,
+    };
+    if (!fornitoreIdFinale && nuovoFornitore.trim()) {
+      const { data, error } = await supabase.from("fornitori").insert({ nome: nuovoFornitore.trim(), ...datiFornitore }).select().single();
+      if (error) { setMsg("Errore fornitore: " + error.message); setSalvando(false); return; }
+      fornitoreIdFinale = data.id;
+    } else if (fornitoreIdFinale) {
+      await supabase.from("fornitori").update(datiFornitore).eq("id", fornitoreIdFinale);
+    }
+
+    let allegatoPath = allegatoPathEsistente;
+    if (allegatoFile) {
+      const nomeFile = `${Date.now()}-${sanitizzaNomeFile(allegatoFile.name)}`;
+      const { error: erroreUpload } = await supabase.storage.from("spese-allegati").upload(nomeFile, allegatoFile);
+      if (erroreUpload) { setMsg("Errore allegato: " + erroreUpload.message); setSalvando(false); return; }
+      const { data: pubData } = supabase.storage.from("spese-allegati").getPublicUrl(nomeFile);
+      allegatoPath = pubData.publicUrl;
+    }
+
+    const payload = {
+      fornitore_id: fornitoreIdFinale || null,
+      descrizione: descrizione.trim() || null,
+      categoria_id: categoriaId, sottocategoria_id: sottocategoriaId,
+      periodicita, data_inizio: dataInizio, data_fine: nessunaScadenza ? null : dataFine,
+      metodo_pagamento: metodoPagamento || null,
+      allegato_path: allegatoPath || null, note: note.trim() || null,
+      tipo_ambito: ripartisci ? "generale" : tipoAmbito,
+      sede_id: ripartisci ? null : (tipoAmbito === "sede" ? sedeId || null : null),
+      corso_id: ripartisci ? null : (tipoAmbito === "corso" ? corsoId || null : null),
+      classe_id: ripartisci ? null : (tipoAmbito === "classe" ? classeId || null : null),
+      evento_id: ripartisci ? null : (tipoAmbito === "evento" ? eventoId || null : null),
+      ...classificazionePerPayload(classificazione),
+    };
+
+    let idAbbonamento = abbonamentoId;
+    if (abbonamentoId) {
+      const { error } = await supabase.from("abbonamenti_contratti").update(payload).eq("id", abbonamentoId);
+      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+    } else {
+      const { data, error } = await supabase.from("abbonamenti_contratti").insert(payload).select().single();
+      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+      idAbbonamento = data.id;
+    }
+
+    const totaleNum = totale === "" ? imp : round2(parseNum(totale));
+    if (!trancheAttiva) {
+      await supabase.from("abbonamenti_importi").insert({ abbonamento_id: idAbbonamento, imponibile: imp, iva_percentuale: Number(iva), totale: totaleNum, valido_da: dataInizio, valido_fino: null, nota: null });
+    } else if (importoCambiato) {
+      const dataChiusura = addGiorni(nuovoImportoDa, -1);
+      await supabase.from("abbonamenti_importi").update({ valido_fino: dataChiusura }).eq("id", trancheAttiva.id);
+      await supabase.from("abbonamenti_importi").insert({
+        abbonamento_id: idAbbonamento, imponibile: imp, iva_percentuale: Number(iva), totale: totaleNum,
+        valido_da: nuovoImportoDa, valido_fino: null,
+        nota: `Importo precedente valido fino al ${fmtData(dataChiusura)}: ${fmtEuroErp2(trancheAttiva.totale)}`,
+      });
+    }
+
+    await supabase.from("abbonamenti_attribuzioni").delete().eq("abbonamento_id", idAbbonamento);
+    if (ripartisci) {
+      const righe = righeRipartizione.filter((r) => parseNum(r.percentuale) > 0).map((r) => ({
+        abbonamento_id: idAbbonamento, tipo_ambito: r.tipoAmbito,
+        sede_id: r.tipoAmbito === "sede" ? r.sedeId || null : null,
+        corso_id: r.tipoAmbito === "corso" ? r.corsoId || null : null,
+        classe_id: r.tipoAmbito === "classe" ? r.classeId || null : null,
+        evento_id: r.tipoAmbito === "evento" ? r.eventoId || null : null,
+        percentuale: parseNum(r.percentuale),
+      }));
+      if (righe.length) await supabase.from("abbonamenti_attribuzioni").insert(righe);
+    }
+
+    setSalvando(false);
+    ricarica(["fornitori", "abbonamenti_contratti", "abbonamenti_importi", "abbonamenti_attribuzioni"]);
+    onBack();
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>{abbonamentoId ? "Modifica abbonamento" : "Nuovo abbonamento o contratto"}</div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Fornitore</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Fornitore">
+                <select style={inputStyle} value={fornitoreId} onChange={(e) => selezionaFornitore(e.target.value)}>
+                  <option value="">— nessuno —</option>
+                  {fornitori.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Nuovo fornitore (opzionale)"><input style={inputStyle} placeholder="Nome fornitore" value={nuovoFornitore} onChange={(e) => setNuovoFornitore(e.target.value)} disabled={!!fornitoreId} /></Field>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 220px" }}><Field label="Sito web"><input style={inputStyle} placeholder="https://…" value={sitoWebFornitore} onChange={(e) => setSitoWebFornitore(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 220px" }}><Field label="Dati account (utente/email di accesso)"><input style={inputStyle} value={datiAccountFornitore} onChange={(e) => setDatiAccountFornitore(e.target.value)} /></Field></div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "2 1 220px" }}><Field label="Indirizzo"><input style={inputStyle} value={indirizzoFornitore} onChange={(e) => setIndirizzoFornitore(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px" }}><Field label="Città"><input style={inputStyle} value={cittaFornitore} onChange={(e) => setCittaFornitore(e.target.value)} /></Field></div>
+            <div style={{ flex: "0 1 110px" }}><Field label="CAP"><input style={inputStyle} value={capFornitore} onChange={(e) => setCapFornitore(e.target.value)} /></Field></div>
+          </div>
+          <Field label="IBAN fornitore (opzionale, resta associato al fornitore)"><input style={inputStyle} placeholder="es. IT00X0000000000000000000000" value={ibanFornitore} onChange={(e) => setIbanFornitore(e.target.value)} /></Field>
+        </div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Contratto</div>
+          <Field label="Descrizione"><input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} /></Field>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Categoria">
+                <select style={inputStyle} value={categoriaId} onChange={(e) => { setCategoriaId(e.target.value); setSottocategoriaId(""); }}>
+                  <option value="">— scegli —</option>
+                  {[...costiCategorie].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label="Sotto-categoria">
+                <select style={inputStyle} value={sottocategoriaId} onChange={(e) => setSottocategoriaId(e.target.value)} disabled={!categoriaId}>
+                  <option value="">— scegli —</option>
+                  {sottocategorieDisponibili.map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 160px" }}>
+              <Field label="Ricorribilità">
+                <select style={inputStyle} value={periodicita} onChange={(e) => setPeriodicita(e.target.value)}>
+                  {PERIODICITA_ABBONAMENTO_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 160px" }}><Field label="A partire da"><input type="date" style={inputStyle} value={dataInizio} onChange={(e) => setDataInizio(e.target.value)} /></Field></div>
+            <div style={{ flex: "1 1 160px" }}>
+              <Field label="Scadenza fino a">
+                <input type="date" style={{ ...inputStyle, background: nessunaScadenza ? "#EFEFEF" : "#fff" }} disabled={nessunaScadenza} value={dataFine} onChange={(e) => setDataFine(e.target.value)} />
+              </Field>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginTop: -4 }}>
+                <input type="checkbox" checked={nessunaScadenza} onChange={(e) => setNessunaScadenza(e.target.checked)} /> Nessuna scadenza (infinito)
+              </label>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+            <div style={{ flex: 1 }}><Field label="Importo imponibile"><input style={inputStyle} inputMode="decimal" value={imponibile} onChange={(e) => onImponibileChange(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}>
+              <Field label="IVA">
+                <select style={inputStyle} value={iva} onChange={(e) => onIvaChange(Number(e.target.value))}>
+                  {ALIQUOTE_IVA_COSTI.map((a) => <option key={a} value={a}>{a}%</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}><Field label="Importo totale addebitato"><input style={inputStyle} inputMode="decimal" value={totale} onChange={(e) => onTotaleChange(e.target.value)} /></Field></div>
+          </div>
+          {importoCambiato && (
+            <div style={{ ...cardStyle, background: BG_CHIARO, marginTop: 10, marginBottom: 0 }}>
+              <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
+                L'importo è cambiato rispetto a quello in vigore ({fmtEuroErp2(trancheAttiva.totale)}). Gli addebiti passati non vengono toccati — indica da quando vale il nuovo importo:
+              </div>
+              <Field label="Nuovo importo a partire da"><input type="date" style={inputStyle} value={nuovoImportoDa} onChange={(e) => setNuovoImportoDa(e.target.value)} /></Field>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Verrà aggiunta in automatico una nota: "Importo precedente valido fino al {fmtData(addGiorni(nuovoImportoDa, -1))}: {fmtEuroErp2(trancheAttiva.totale)}".</div>
+            </div>
+          )}
+
+          {trancheStoriche.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8 }}>Storico importi</div>
+              {trancheStoriche.map((t) => (
+                <div key={t.id} style={{ padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  {fmtEuroErp2(t.totale)} — dal {fmtData(t.valido_da)} al {fmtData(t.valido_fino)}
+                  {t.nota && <div style={{ fontSize: 11.5, color: MUTED, marginTop: 2 }}>{t.nota}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <Field label="Metodo di pagamento">
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", ...fontBody, fontSize: 13, color: NAVY, marginTop: 4 }}>
+              {METODI_PAGAMENTO_ABBONAMENTO.map((opz) => (
+                <label key={opz} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+                  <input type="radio" name="metodo-abbonamento" checked={metodoPagamento === opz} onChange={() => setMetodoPagamento(opz)} /> {opz}
+                </label>
+              ))}
+            </div>
+          </Field>
+          <Field label="Allegato (contratto)">
+            <input type="file" onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
+            {allegatoPathEsistente && !allegatoFile && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Allegato già presente — scegli un file per sostituirlo.</div>}
+          </Field>
+          <Field label="Note"><textarea style={{ ...inputStyle, minHeight: 60 }} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        </div>
+
+        <div style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Ambito di attribuzione</div>
+          {!ripartisci && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Ambito">
+                  <select style={inputStyle} value={tipoAmbito} onChange={(e) => setTipoAmbito(e.target.value)}>
+                    {AMBITI_SPESA.map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
+                  </select>
+                </Field>
+              </div>
+              {["sede", "corso", "classe", "evento"].includes(tipoAmbito) && (
+                <div style={{ flex: 1 }}>
+                  <Field label={AMBITI_SPESA.find((a) => a.chiave === tipoAmbito)?.etichetta}>
+                    {selettoreAmbito(tipoAmbito, sedeId, setSedeId, corsoId, setCorsoId, classeId, setClasseId, eventoId, setEventoId)}
+                  </Field>
+                </div>
+              )}
+            </div>
+          )}
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "8px 0" }}>
+            <input type="checkbox" checked={ripartisci} onChange={(e) => setRipartisci(e.target.checked)} /> Ripartisci questa spesa su più ambiti
+          </label>
+          {ripartisci && (
+            <div>
+              {righeRipartizione.map((r, idx) => (
+                <div key={idx} style={{ display: "flex", gap: 8, alignItems: "flex-end", marginBottom: 10, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 140px" }}>
+                    <Field label="Ambito">
+                      <select style={inputStyle} value={r.tipoAmbito} onChange={(e) => modificaRigaRipartizione(idx, "tipoAmbito", e.target.value)}>
+                        {AMBITI_SPESA.filter((a) => ["sede", "corso", "classe", "evento"].includes(a.chiave)).map((a) => <option key={a.chiave} value={a.chiave}>{a.etichetta}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div style={{ flex: "1 1 160px" }}>
+                    <Field label="Selezione">
+                      {selettoreAmbito(r.tipoAmbito,
+                        r.sedeId, (v) => modificaRigaRipartizione(idx, "sedeId", v),
+                        r.corsoId, (v) => modificaRigaRipartizione(idx, "corsoId", v),
+                        r.classeId, (v) => modificaRigaRipartizione(idx, "classeId", v),
+                        r.eventoId, (v) => modificaRigaRipartizione(idx, "eventoId", v))}
+                    </Field>
+                  </div>
+                  <div style={{ flex: "0 1 90px" }}>
+                    <Field label="%"><input style={inputStyle} inputMode="decimal" value={r.percentuale} onChange={(e) => modificaRigaRipartizione(idx, "percentuale", e.target.value)} /></Field>
+                  </div>
+                  <button onClick={() => rimuoviRigaRipartizione(idx)} title="Rimuovi" style={{ width: 38, height: 38, marginBottom: 14, borderRadius: 8, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: "#C0392B", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button onClick={aggiungiRigaRipartizione} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: "none", cursor: "pointer" }}>+ Aggiungi riga</button>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: sommaPercentuali === 100 ? "#2E7D32" : "#C0392B" }}>Totale: {sommaPercentuali}%</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <PannelloClassificazioneGestionale valori={classificazione} onChange={aggiornaClassificazione} />
+
+        {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+        <Button onClick={salva} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Salvo…" : abbonamentoId ? "Salva modifiche" : "Salva abbonamento"}</Button>
+      </div>
+    </div>
+  );
+}
+
 // gestione budget: importo previsto per categoria/mese-o-anno/sede/corso
 function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricarica, onBack }) {
   const [anno, setAnno] = useState(new Date().getFullYear());
@@ -28559,6 +28996,15 @@ export default function App() {
   const [fornitori, setFornitori] = useState([]);
   const [spese, setSpese] = useState([]);
   const [speseAttribuzioni, setSpeseAttribuzioni] = useState([]);
+  // "Abbonamenti e contratti" (tab di Contabilità): spese ricorrenti e
+  // identiche nei mesi successivi (SaaS, canoni, servizi a canone). Il
+  // contratto (abbonamenti_contratti) è l'anagrafica fissa; l'importo vive
+  // a parte in abbonamenti_importi, una tranche per periodo — così quando
+  // l'importo cambia le tranche passate restano intatte e la nuova si
+  // apre solo da una data in avanti
+  const [abbonamentiContratti, setAbbonamentiContratti] = useState([]);
+  const [abbonamentiImporti, setAbbonamentiImporti] = useState([]);
+  const [abbonamentiAttribuzioni, setAbbonamentiAttribuzioni] = useState([]);
   const [costiBudget, setCostiBudget] = useState([]);
   const [costiSoglieAllerta, setCostiSoglieAllerta] = useState([]);
   // incassi occasionali non legati a un'iscrizione (es. vendita di un
@@ -28639,6 +29085,7 @@ export default function App() {
   // costi e ricavi); lo Scadenziario lo sposta su se stesso quando apre
   // "Modifica spesa" da una riga già evasa
   const [spesaRitornoView, setSpesaRitornoView] = useState("inserimentocostiricavi");
+  const [abbonamentoInModifica, setAbbonamentoInModifica] = useState(null);
   // quale scheda di Amministrazione mostrare al prossimo ingresso — la
   // riga di tasti Prima nota/Quadro impegni/Registro documenti/Scadenziari
   // compare anche dentro Prima nota cassa (pagina separata), da lì un clic
@@ -28698,6 +29145,9 @@ export default function App() {
     fornitori: async () => setFornitori((await supabase.from("fornitori").select("*").order("nome")).data || []),
     spese: async () => setSpese((await supabase.from("spese").select("*").order("data_documento", { ascending: false })).data || []),
     spese_attribuzioni: async () => setSpeseAttribuzioni((await supabase.from("spese_attribuzioni").select("*")).data || []),
+    abbonamenti_contratti: async () => setAbbonamentiContratti((await supabase.from("abbonamenti_contratti").select("*").order("data_inizio", { ascending: false })).data || []),
+    abbonamenti_importi: async () => setAbbonamentiImporti((await supabase.from("abbonamenti_importi").select("*").order("valido_da")).data || []),
+    abbonamenti_attribuzioni: async () => setAbbonamentiAttribuzioni((await supabase.from("abbonamenti_attribuzioni").select("*")).data || []),
     costi_budget: async () => setCostiBudget((await supabase.from("costi_budget").select("*")).data || []),
     costi_soglie_allerta: async () => setCostiSoglieAllerta((await supabase.from("costi_soglie_allerta").select("*")).data || []),
     entrate_manuali: async () => setEntrateManuali((await supabase.from("entrate_manuali").select("*").order("data", { ascending: false })).data || []),
@@ -28822,12 +29272,12 @@ export default function App() {
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
-    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi"],
+    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     venditeshop: ["vendite_shop"],
     venditealbanco: ["vendite_shop"],
@@ -28839,6 +29289,7 @@ export default function App() {
     catalogocategoriecosti: ["costi_categorie", "costi_sottocategorie", "spese", "costi_soglie_allerta"],
     budgetcosti: ["costi_categorie", "location", "corsi", "costi_budget"],
     spesaform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "spese", "spese_attribuzioni"],
+    abbonamentoform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "abbonamenti_attribuzioni"],
     fontdiplomi: ["font_diplomi", "diploma_eccezioni", "segnaposti_config"],
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
@@ -29252,6 +29703,8 @@ export default function App() {
     setAmministrazioneTabIniziale(tab);
     apriViewProtetta("amministrazione");
   }
+  function apriNuovoAbbonamento() { setAbbonamentoInModifica(null); apriViewProtetta("abbonamentoform"); }
+  function apriModificaAbbonamento(id) { setAbbonamentoInModifica(id); apriViewProtetta("abbonamentoform"); }
   function apriNuovaSpesa() { setSpesaInModifica(null); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
   function apriModificaSpesa(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("inserimentocostiricavi"); apriViewProtetta("spesaform"); }
   // "Modifica spesa" aperta da una riga già in Amministrazione: al
@@ -29601,13 +30054,16 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
-          spese={spese} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
+          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
+          abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
           ricarica={fetchDati}
           onBack={() => setView("erp")}
           onApriModificaSpesa={apriModificaSpesaDaAmministrazione}
           onApriPrimaNotaCassa={apriInserimentoCostiRicavi}
           onApriIscritto={apriIscritto}
           onApriNuovaSpesaDaPagare={apriNuovaSpesaDaPagare}
+          onApriNuovoAbbonamento={apriNuovoAbbonamento}
+          onApriModificaAbbonamento={apriModificaAbbonamento}
           tabIniziale={amministrazioneTabIniziale}
         />
       )}
@@ -29661,6 +30117,7 @@ export default function App() {
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           categorieGruppi={categorieGruppi}
+          abbonamentiContratti={abbonamentiContratti}
           ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
           onApriAmministrazioneTab={apriAmministrazioneTab}
@@ -29743,6 +30200,17 @@ export default function App() {
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
           onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView(spesaRitornoView); } }}
+        />
+      )}
+
+      {view === "abbonamentoform" && (
+        <PaginaAbbonamentoForm
+          abbonamentoId={abbonamentoInModifica}
+          corsi={corsi} location={location} corsiDate={corsiDate} eventi={eventi} fornitori={fornitori}
+          costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
+          abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti} abbonamentiAttribuzioni={abbonamentiAttribuzioni}
+          ricarica={fetchDati}
+          onBack={() => { setAmministrazioneTabIniziale("abbonamenti"); setView("amministrazione"); }}
         />
       )}
 
