@@ -22606,8 +22606,8 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       ...classificazionePerPayload(classNuova),
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    if (applicaCategoriaATutteLoc && categoriaSpesaLoc) {
-      await supabase.from("location").update({ categoria_spesa_id: categoriaSpesaLoc }).not("id", "is", null);
+    if (applicaCategoriaATutteLoc) {
+      await supabase.from("location").update({ categoria_spesa_id: categoriaSpesaLoc, ...classificazionePerPayload(classNuova) }).not("id", "is", null);
     }
     setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setApplicaCategoriaATutteLoc(false); setClassNuova(classificazioneVuota()); setMostraFormSede(false); setMsg("Sede aggiunta.");
     ricarica(["location"]);
@@ -22639,8 +22639,8 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       ...classificazionePerPayload(classMod),
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
-    if (modApplicaCategoriaATutteLoc && modCategoriaSpesaLoc) {
-      await supabase.from("location").update({ categoria_spesa_id: modCategoriaSpesaLoc }).neq("id", id);
+    if (modApplicaCategoriaATutteLoc) {
+      await supabase.from("location").update({ categoria_spesa_id: modCategoriaSpesaLoc, ...classificazionePerPayload(classMod) }).neq("id", id);
     }
     setLocInModifica(null); setModApplicaCategoriaATutteLoc(false); setMsg("Sede aggiornata.");
     ricarica(["location"]);
@@ -22768,10 +22768,11 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                   <Button onClick={aggiungiLocation}>Aggiungi sede</Button>
                   <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                     <input type="checkbox" checked={applicaCategoriaATutteLoc} onChange={(e) => setApplicaCategoriaATutteLoc(e.target.checked)} style={{ width: 16, height: 16 }} />
-                    <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica categoria di spesa a tutte le sedi</span>
+                    <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica categoria di spesa e classificazione a tutte le sedi</span>
                   </label>
                   <Button variant="ghost" onClick={() => setMostraFormSede(false)}>Annulla</Button>
                 </div>
+                {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Errore") ? "#B3261E" : NAVY, marginTop: 10 }}>{msg}</div>}
               </div>
             )}
 
@@ -22833,10 +22834,11 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                             <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
                             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                               <input type="checkbox" checked={modApplicaCategoriaATutteLoc} onChange={(e) => setModApplicaCategoriaATutteLoc(e.target.checked)} style={{ width: 16, height: 16 }} />
-                              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica categoria di spesa a tutte le sedi</span>
+                              <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica categoria di spesa e classificazione a tutte le sedi</span>
                             </label>
                             <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
                           </div>
+                          {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Errore") ? "#B3261E" : NAVY, marginTop: 10 }}>{msg}</div>}
                         </div>
                       )}
                     </div>
