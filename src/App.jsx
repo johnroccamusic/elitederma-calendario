@@ -23128,8 +23128,6 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   // rispettivi compensi di default)
   const [vistaGestione, setVistaGestione] = useState("master");
   const [corsoCompensiEspansoId, setCorsoCompensiEspansoId] = useState(null);
-  const [menuAzioni, setMenuAzioni] = useState(false);
-  const [modificaContatti, setModificaContatti] = useState(false);
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
   const [ibanMod, setIbanMod] = useState("");
@@ -23142,7 +23140,6 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
   const [pecMod, setPecMod] = useState("");
   const [classMod, setClassMod] = useState(classificazioneVuota());
-  function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -23200,8 +23197,6 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     setClassMod(classificazioneDaRecord(selezionato));
     setTab("corsi");
     setCorsoEspansoId(null);
-    setModificaContatti(false);
-    setMenuAzioni(false);
     setMsg("");
   }, [selezionatoId]);
 
@@ -23220,20 +23215,34 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
     const { error } = await supabase.from("master").delete().eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setSelezionatoId(null); setMenuAzioni(false); ricarica(["master"]);
+    setSelezionatoId(null); ricarica(["master"]);
   }
   function toggleFirmato(checked) { return salvaCampoMaster("diploma_gia_firmato", checked); }
-  async function salvaContatti() {
+  // salvataggio diretto dei contatti/dati fiscali: nessun tasto "Salva",
+  // ogni campo si registra da solo quando si esce da lì (onBlur) o al
+  // cambio (select/checkbox della classificazione gestionale). classOverride
+  // serve solo per la classificazione: setClassMod è asincrono, quindi
+  // aggiornaClassMod passa qui il valore già aggiornato invece di
+  // affidarsi alla chiusura su classMod, che al momento della chiamata
+  // sarebbe ancora quello vecchio
+  async function salvaContatti(classOverride) {
     const campi = {
       email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null,
       indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
       partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
-      ...classificazionePerPayload(classMod),
+      ...classificazionePerPayload(classOverride || classMod),
     };
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setModificaContatti(false); ricarica(["master"]);
+    ricarica(["master"]);
+  }
+  function aggiornaClassMod(campo, valore) {
+    setClassMod((prev) => {
+      const nuovo = { ...prev, [campo]: valore };
+      salvaContatti(nuovo);
+      return nuovo;
+    });
   }
   function salvaRegimeFiscale(valore) { return salvaCampoMaster("regime_fiscale", valore || null); }
   async function caricaFoto(file) {
@@ -23427,67 +23436,33 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                       <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>MASTER</span>
                     </div>
-                    {!modificaContatti ? (
-                      <>
-                        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
-                          {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
-                          {" · "}
-                          {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
-                          {" · "}
-                          {selezionato.iban || <span style={{ fontStyle: "italic" }}>IBAN non impostato</span>}
-                        </div>
-                        {(selezionato.indirizzo || selezionato.citta || selezionato.partita_iva || selezionato.codice_destinatario || selezionato.pec) && (
-                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-                            {[
-                              [selezionato.indirizzo, selezionato.civico].filter(Boolean).join(" "),
-                              selezionato.citta,
-                              selezionato.partita_iva && `P.IVA ${selezionato.partita_iva}`,
-                              selezionato.codice_destinatario && `SDI ${selezionato.codice_destinatario}`,
-                              selezionato.pec,
-                            ].filter(Boolean).join(" · ")}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                          <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />
-                        </div>
-                        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                          <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                        </div>
-                        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                          <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                        </div>
-                        <div style={{ marginTop: 10, maxWidth: 640 }}>
-                          <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
-                        </div>
-                        <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
-                      </>
-                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                      <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                      <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                      <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                    </div>
+                    <div style={{ marginTop: 10, maxWidth: 640 }}>
+                      <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
+                    </div>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
                       <input type="checkbox" checked={!!selezionato.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 15, height: 15 }} />
                       <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
                     </label>
                   </div>
 
-                  <div style={{ position: "relative", flexShrink: 0 }}>
-                    <button onClick={() => setMenuAzioni((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: "9px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-                      Azioni <IconaChevronGiuErp size={11} />
-                    </button>
-                    {menuAzioni && (
-                      <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 10, minWidth: 180, overflow: "hidden" }}>
-                        <div onClick={() => { setModificaContatti(true); setMenuAzioni(false); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>Modifica contatti</div>
-                        <div onClick={eliminaMaster} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B" }}>Elimina master</div>
-                      </div>
-                    )}
-                  </div>
+                  <button onClick={eliminaMaster} title="Elimina master" style={{ flexShrink: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: 9, cursor: "pointer", color: "#C0392B", display: "flex" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                  </button>
                 </div>
 
                 <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 18, overflowX: "auto" }}>
