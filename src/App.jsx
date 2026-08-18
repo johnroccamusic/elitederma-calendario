@@ -18441,6 +18441,77 @@ function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false 
   return righe.sort((a, b) => (a.scadenza || "").localeCompare(b.scadenza || ""));
 }
 
+// riepilogo per mese di un elenco già calcolato da
+// calcolaScadenziarioAttivo: quante scadenze e quanto totale cadono in
+// ciascun mese (chiave "yyyy-mm") — la barra dei mesi di Scadenziario
+// Attivo lo usa per i conteggi, l'intestazione del mese selezionato
+// per il totale
+function riepilogoMensileScadenze(righe) {
+  const mappa = {};
+  (righe || []).forEach((r) => {
+    if (!r.scadenza) return;
+    const chiave = r.scadenza.slice(0, 7);
+    mappa[chiave] = mappa[chiave] || { count: 0, totale: 0 };
+    mappa[chiave].count++;
+    mappa[chiave].totale += r.importo || 0;
+  });
+  return mappa;
+}
+// intestazione ricca di un mese in Scadenziario Attivo: nome mese e
+// numero di scadenze a sinistra, totale del mese a destra — compare
+// una volta sola guardando un mese solo, ripetuta ad ogni cambio mese
+// in "Tutto l'anno"
+function IntestazioneMeseScadenzeAttivo({ mese, anno, count, totale }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "22px 0 10px", flexWrap: "wrap", gap: 8 }}>
+      <div>
+        <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{mese} {anno}</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{count} {count === 1 ? "scadenza" : "scadenze"}</div>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8 }}>Totale mese</div>
+        <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{fmtEuroErp(totale)}</div>
+      </div>
+    </div>
+  );
+}
+// intestazione di giorno, più granulare della IntestazioneMeseLista
+// usata nelle altre liste di Amministrazione: un mese di Scadenziario
+// Attivo può avere decine di scadenze, serve vedere subito quali
+// cadono lo stesso giorno
+function IntestazioneGiornoScadenzeAttivo({ data }) {
+  return (
+    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, padding: "12px 0 6px" }}>
+      {fmtData(data)}
+    </div>
+  );
+}
+// combina le due intestazioni sopra su un elenco di scadenze già
+// ordinato per data — stesso principio di elencoConIntestazioniMese,
+// qui su due livelli invece di uno
+function elencoScadenzeConIntestazioni(righe, riepilogoMensile, renderRiga) {
+  let meseAttuale = null;
+  let giornoAttuale = null;
+  const elementi = [];
+  righe.forEach((riga, idx) => {
+    const data = riga.scadenza;
+    const chiaveMese = data ? data.slice(0, 7) : null;
+    if (chiaveMese && chiaveMese !== meseAttuale) {
+      const [anno, mese] = chiaveMese.split("-").map(Number);
+      const info = riepilogoMensile[chiaveMese] || { count: 0, totale: 0 };
+      elementi.push(<IntestazioneMeseScadenzeAttivo key={`mese-${chiaveMese}`} mese={MESI[mese - 1]} anno={anno} count={info.count} totale={info.totale} />);
+      meseAttuale = chiaveMese;
+      giornoAttuale = null;
+    }
+    if (data && data !== giornoAttuale) {
+      elementi.push(<IntestazioneGiornoScadenzeAttivo key={`giorno-${data}-${idx}`} data={data} />);
+      giornoAttuale = data;
+    }
+    elementi.push(renderRiga(riga, idx));
+  });
+  return elementi;
+}
+
 async function caricaRicevutaSpesa(file) {
   const nomeFile = `${Date.now()}-${sanitizzaNomeFile(file.name)}`;
   const { error } = await supabase.storage.from("spese-allegati").upload(nomeFile, file);
@@ -18695,6 +18766,12 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const [msg, setMsg] = useState("");
 
   const oggiStr = dataOggiStr();
+  // Scadenziario Attivo: navigazione anno/mese (default oggi) + ricerca
+  // cliente/servizio, tutte e tre applicate solo all'elenco mostrato lì
+  const [annoScadAttivo, setAnnoScadAttivo] = useState(Number(oggiStr.slice(0, 4)));
+  const [meseScadAttivo, setMeseScadAttivo] = useState(Number(oggiStr.slice(5, 7))); // null = "Tutto l'anno"
+  const [ricercaScadAttivo, setRicercaScadAttivo] = useState("");
+  const [infoScadAttivoAperto, setInfoScadAttivoAperto] = useState(false);
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
@@ -18782,6 +18859,28 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
 
   const scadenziarioAttivo = calcolaScadenziarioAttivo({ iscritti, corsiDate });
   const scadenziarioAttivoStorico = calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate: true });
+
+  // Scadenziario Attivo: anno/mese/ricerca filtrano solo l'elenco
+  // mostrato, non i conteggi delle due pillole Da incassare/Storico
+  // (quelli restano sul totale, come oggi)
+  const elencoAttivoBaseScad = subTabAttivo === "attive" ? scadenziarioAttivo : scadenziarioAttivoStorico;
+  const riepilogoMeseScadAttivo = riepilogoMensileScadenze(elencoAttivoBaseScad);
+  const meseCorrenteStrScad = oggiStr.slice(0, 7);
+  // "scadute": mesi interamente passati (non quello in corso, ancora in
+  // svolgimento) con almeno una rata/saldo non incassato — calcolato
+  // sempre su "Da incassare", indipendentemente dall'anno/mese guardati
+  const riepilogoMeseAttiveScad = riepilogoMensileScadenze(scadenziarioAttivo);
+  const mesiScadutiScad = Object.entries(riepilogoMeseAttiveScad).filter(([chiave]) => chiave < meseCorrenteStrScad);
+  const scaduteContoScad = mesiScadutiScad.reduce((s, [, v]) => s + v.count, 0);
+  const scaduteTotaleScad = mesiScadutiScad.reduce((s, [, v]) => s + v.totale, 0);
+  const elencoAnnoScadAttivo = elencoAttivoBaseScad.filter((r) => r.scadenza && r.scadenza.slice(0, 4) === String(annoScadAttivo));
+  const elencoMeseScadAttivo = meseScadAttivo ? elencoAnnoScadAttivo.filter((r) => Number(r.scadenza.slice(5, 7)) === meseScadAttivo) : elencoAnnoScadAttivo;
+  const elencoFiltratoScadAttivo = ricercaScadAttivo.trim()
+    ? elencoMeseScadAttivo.filter((r) => {
+        const q = ricercaScadAttivo.trim().toLowerCase();
+        return `${r.iscritto.nome} ${r.iscritto.cognome}`.toLowerCase().includes(q) || etichettaCorso(r.corsoData).toLowerCase().includes(q);
+      })
+    : elencoMeseScadAttivo;
 
   // registra una fattura per uno o più impegni insieme ("Cumula altri
   // impegni" in RigaQuadroImpegni): stesso fornitore/tipo, stesso numero
@@ -19065,10 +19164,46 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
               <TabPillola attivo={subTabAttivo === "attive"} onClick={() => setSubTabAttivo("attive")}>Da incassare ({scadenziarioAttivo.length})</TabPillola>
               <TabPillola attivo={subTabAttivo === "storico"} onClick={() => setSubTabAttivo("storico")}>Storico ({scadenziarioAttivoStorico.length})</TabPillola>
             </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setAnnoScadAttivo((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoScadAttivo}</div>
+                <button onClick={() => setAnnoScadAttivo((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
+              </div>
+              {subTabAttivo === "attive" && scaduteContoScad > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 16, padding: "6px 12px" }}>
+                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C0392B", display: "inline-block", flexShrink: 0 }} />
+                  {scaduteContoScad} {scaduteContoScad === 1 ? "scaduta" : "scadute"} · {fmtEuroErp(scaduteTotaleScad)}
+                </div>
+              )}
+              <button onClick={() => setMeseScadAttivo(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: meseScadAttivo === null ? "#fff" : NAVY, background: meseScadAttivo === null ? NAVY : "#fff", border: `1px solid ${meseScadAttivo === null ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Tutto l'anno</button>
+              <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+                <CampoRicerca value={ricercaScadAttivo} onChange={(e) => setRicercaScadAttivo(e.target.value)} placeholder="Cerca cliente, servizio…" />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+              {MESI_ABBR.map((abbr, idx) => {
+                const m = idx + 1;
+                const chiave = `${annoScadAttivo}-${String(m).padStart(2, "0")}`;
+                const info = riepilogoMeseScadAttivo[chiave];
+                const scaduto = chiave < meseCorrenteStrScad && !!info;
+                const attivoMese = meseScadAttivo === m;
+                return (
+                  <button key={m} onClick={() => setMeseScadAttivo(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoMese ? "#fff" : NAVY, background: attivoMese ? NAVY : "#fff", border: `1px solid ${attivoMese ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
+                    {scaduto && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivoMese ? "#fff" : "#C0392B" }} />}
+                    <div>{abbr}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoMese ? "#fff" : MUTED, marginTop: 2 }}>{info ? info.count : "—"}</div>
+                  </button>
+                );
+              })}
+            </div>
+
             {subTabAttivo === "attive" && (
               <div style={{ ...cardStyle }}>
-                {scadenziarioAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo in sospeso.</div>}
-                {elencoConIntestazioniMese(scadenziarioAttivo, (item) => item.scadenza || null, (item) => (
+                {elencoFiltratoScadAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
+                {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseScadAttivo, (item) => (
                   <RigaAmministrazione
                     key={item.key}
                     data={item.scadenza}
@@ -19079,12 +19214,22 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                     <button onClick={() => onApriIscritto?.(item.iscritto)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vai alla scheda</button>
                   </RigaAmministrazione>
                 ))}
+                <div style={{ marginTop: 14 }}>
+                  <button onClick={() => setInfoScadAttivoAperto((v) => !v)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                    {infoScadAttivoAperto ? "Nascondi" : "Perché è impostato così"}
+                  </button>
+                  {infoScadAttivoAperto && (
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 6, maxWidth: 560 }}>
+                      Non esiste una scadenza vera e propria in anagrafica: l'Acconto è dovuto da subito, dalla data di iscrizione. Il Pre corso e il Saldo sono dovuti dalla data di inizio del corso, anche se il corso è ancora lontano — per questo possono comparire scadenze già "in ritardo" per corsi che devono ancora iniziare.
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             {subTabAttivo === "storico" && (
               <div style={{ ...cardStyle }}>
-                {scadenziarioAttivoStorico.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna rata o saldo incassato ancora.</div>}
-                {elencoConIntestazioniMese(scadenziarioAttivoStorico, (item) => item.scadenza || null, (item) => (
+                {elencoFiltratoScadAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
+                {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseScadAttivo, (item) => (
                   <RigaAmministrazione
                     key={item.key}
                     data={item.scadenza}
