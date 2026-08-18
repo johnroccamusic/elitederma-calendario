@@ -19014,7 +19014,438 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
 // fornitore e in Scadenziario Passivo → Da pagare, già classificata per
 // sede e categoria in base a "Associa il gruppo a una categoria di spesa"
 // (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, tabIniziale }) {
+// Riconciliazione fatture — schermata (spec-riconciliazione.md §7) e
+// transazione di conferma (§8). Non è una sezione autonoma di per sé
+// (§7.1): si apre sempre sul dettaglio di un documento, raggiunta dal
+// Registro documenti fornitore. Implementati i primi due dei quattro
+// punti d'ingresso della spec (click sulla riga, coda con avanti/
+// indietro) — "Notifica" non esiste ancora come infrastruttura in
+// quest'app, "dal singolo impegno" resta da fare.
+//
+// Le scritture di §8 sono una sequenza di chiamate awaited, non una
+// transazione Postgres vera: questa app non ha mai usato funzioni RPC
+// per le operazioni multi-tabella (vedi registraFattura in Quadro
+// Impegni, stesso principio), quindi resta coerente con lo stile
+// esistente invece di introdurne uno nuovo — un fallimento a metà
+// lascia scritture parziali, non viene fatto un rollback automatico.
+function PaginaRiconciliazione({
+  documentoFornitoreIdIniziale,
+  documentoFornitoreTabella, impegnoTabella, riconciliazioneTabella, scadenzaPassivaTabella, preferenzeMatchTabella,
+  fornitori, costiSottocategorie, abbonamentiContratti, abbonamentiImporti,
+  ricarica, onBack,
+}) {
+  const isMobile = useIsMobile();
+  const [subTab, setSubTab] = useState("da_riconciliare");
+  const [apertoId, setApertoId] = useState(documentoFornitoreIdIniziale || null);
+  const [selezione, setSelezione] = useState({}); // impegnoId -> importo allocato
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [caricandoAllegato, setCaricandoAllegato] = useState(false);
+  const [nuovoImpegnoAperto, setNuovoImpegnoAperto] = useState(false);
+  const [nuovoImpDescrizione, setNuovoImpDescrizione] = useState("");
+  const [nuovoImpImporto, setNuovoImpImporto] = useState("");
+  const [nuovoImpCategoria, setNuovoImpCategoria] = useState("");
+
+  const documenti = documentoFornitoreTabella || [];
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
+  const codaDaRiconciliare = documenti.filter((d) => d.stato === "da_riconciliare").sort((a, b) => (a.data_documento || "").localeCompare(b.data_documento || ""));
+  const elencoRiconciliate = documenti.filter((d) => d.stato === "riconciliato").sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+  const elencoSenzaImpegno = documenti.filter((d) => d.stato === "senza_impegno").sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+  const elencoScartate = documenti.filter((d) => d.stato === "scartato").sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+
+  // il documento aperto per il dettaglio: se non è (più) in coda —
+  // appena riconciliato/scartato, o passato da un link diretto — cade
+  // sul primo della coda, così il tasto non resta mai vuoto
+  const indiceCoda = codaDaRiconciliare.findIndex((d) => d.id === apertoId);
+  const documento = indiceCoda >= 0 ? codaDaRiconciliare[indiceCoda] : (codaDaRiconciliare[0] || null);
+
+  function vaiA(offset) {
+    const i = codaDaRiconciliare.findIndex((d) => d.id === documento?.id);
+    const successivo = codaDaRiconciliare[i + offset];
+    setApertoId(successivo ? successivo.id : null);
+    setSelezione({});
+    setMsg("");
+  }
+
+  const impegniAperti = (impegnoTabella || []).filter((i) => i.stato === "aperto" || i.stato === "parzialmente_coperto");
+  const candidati = documento ? calcolaCandidatiMatch(documento, impegniAperti, { fornitori, preferenze: preferenzeMatchTabella }) : [];
+  const autoAbbinamento = documento ? valutaAutoAbbinamentoContratto(documento, { abbonamentiContratti, abbonamentiImporti }) : { abbinabile: false };
+
+  const allocato = round2(Object.values(selezione).reduce((s, v) => s + (Number(v) || 0), 0));
+  const totaleDocumento = documento?.totale || 0;
+  const residuo = round2(totaleDocumento - allocato);
+
+  function residuoImpegno(imp) {
+    return round2((imp.importo_previsto || 0) - (imp.importo_coperto || 0));
+  }
+  function toggleCandidato(imp) {
+    setSelezione((s) => {
+      const copia = { ...s };
+      if (copia[imp.id] != null) { delete copia[imp.id]; return copia; }
+      const giaAllocato = Object.values(copia).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const residuoDoc = round2(totaleDocumento - giaAllocato);
+      copia[imp.id] = round2(Math.max(0, Math.min(residuoImpegno(imp), residuoDoc)));
+      return copia;
+    });
+  }
+
+  async function vediDocumentoOriginale() {
+    if (!documento?.fic_id) return;
+    setCaricandoAllegato(true);
+    const { data, error } = await supabase.functions.invoke("fic-documento-allegato", { body: { ficId: documento.fic_id } });
+    setCaricandoAllegato(false);
+    if (error || data?.errore) { window.alert("Errore: " + (data?.errore || error.message)); return; }
+    if (data.tipo === "xml") {
+      const html = renderaFatturaElettronicaHtml(data.xml);
+      window.open(URL.createObjectURL(new Blob([html], { type: "text/html" })), "_blank");
+      return;
+    }
+    window.open(data.url, "_blank");
+  }
+
+  // genera le scadenze passive dal documento (§3 "si genera dal
+  // documento, mai dall'impegno"): una per rata se il documento ne ha
+  // più di una (documento.rate, i payments_list originali di Fatture
+  // in Cloud), altrimenti una sola alla data_scadenza_prevista
+  async function generaScadenzePassive(doc) {
+    const rate = Array.isArray(doc.rate) ? doc.rate : null;
+    if (rate && rate.length > 0) {
+      const righe = rate.map((r) => ({ documento_id: doc.id, data_scadenza: r.due_date || doc.data_scadenza_prevista || null, importo: r.amount ?? null, stato: "da_pagare" }));
+      await supabase.from("scadenza_passiva").insert(righe);
+    } else if (doc.data_scadenza_prevista) {
+      await supabase.from("scadenza_passiva").insert({ documento_id: doc.id, data_scadenza: doc.data_scadenza_prevista, importo: doc.totale, stato: "da_pagare" });
+    }
+  }
+
+  // §8: transazione di conferma — crea le righe riconciliazione,
+  // ricalcola gli impegni toccati, marca il documento riconciliato,
+  // genera le scadenze, alimenta l'apprendimento (§6.5)
+  async function confermaRiconciliazione() {
+    if (!documento || allocato <= 0 || allocato > totaleDocumento + 0.01) return;
+    setSalvando(true);
+    setMsg("");
+    const voci = Object.entries(selezione).filter(([, v]) => Number(v) > 0);
+
+    for (const [impegnoId, importo] of voci) {
+      const { error } = await supabase.from("riconciliazione").insert({ documento_id: documento.id, impegno_id: impegnoId, importo_allocato: Number(importo), creata_da: "staff" });
+      if (error) { setMsg("Errore: " + error.message); setSalvando(false); return; }
+    }
+    for (const [impegnoId, importo] of voci) {
+      const imp = impegnoTabella.find((i) => i.id === impegnoId);
+      if (!imp) continue;
+      const nuovoCoperto = round2((imp.importo_coperto || 0) + Number(importo));
+      const nuovoEffettivo = round2((imp.importo_effettivo || 0) + Number(importo));
+      // mai automatico a "coperto": lo decide l'utente altrove con
+      // "chiudi impegno" (§5) — qui solo aperto/parzialmente_coperto
+      const nuovoStato = nuovoCoperto > 0 ? "parzialmente_coperto" : "aperto";
+      await supabase.from("impegno").update({ importo_coperto: nuovoCoperto, importo_effettivo: nuovoEffettivo, stato: nuovoStato }).eq("id", impegnoId);
+    }
+    await generaScadenzePassive(documento);
+    const nuovoAllocatoDoc = round2((documento.importo_allocato || 0) + allocato);
+    await supabase.from("documento_fornitore").update({ stato: "riconciliato", importo_allocato: nuovoAllocatoDoc }).eq("id", documento.id);
+
+    const primoImpegno = impegnoTabella.find((i) => i.id === voci[0]?.[0]);
+    if (primoImpegno) await registraPreferenzaMatch(documento.fornitore_id, primoImpegno.categoria_id, primoImpegno.origine_tipo);
+
+    setSalvando(false);
+    setSelezione({});
+    await ricarica(["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore"]);
+    vaiA(0); // dopo il ricarico il documento appena chiuso è uscito dalla coda: si riallinea sul successivo
+  }
+
+  async function accettaSenzaImpegno() {
+    if (!documento) return;
+    if (!window.confirm("Accettare questo documento come spesa non prevista, senza collegarlo a nessun impegno?")) return;
+    setSalvando(true);
+    await generaScadenzePassive(documento);
+    await supabase.from("documento_fornitore").update({ stato: "senza_impegno" }).eq("id", documento.id);
+    setSalvando(false);
+    await ricarica(["documento_fornitore", "scadenza_passiva"]);
+    vaiA(0);
+  }
+
+  async function scartaDocumento() {
+    if (!documento) return;
+    const motivo = window.prompt("Motivo dello scarto (obbligatorio):");
+    if (motivo === null) return;
+    if (!motivo.trim()) { window.alert("Il motivo è obbligatorio."); return; }
+    await supabase.from("documento_fornitore").update({ stato: "scartato", note: motivo.trim() }).eq("id", documento.id);
+    await ricarica(["documento_fornitore"]);
+    vaiA(0);
+  }
+
+  async function creaImpegnoFuoriPrevisione() {
+    if (!documento) return;
+    const importo = Number(nuovoImpImporto);
+    if (!nuovoImpDescrizione.trim() || !(importo > 0)) { window.alert("Descrizione e importo sono obbligatori."); return; }
+    const { data, error } = await supabase.from("impegno").insert({
+      fornitore_id: documento.fornitore_id, descrizione: nuovoImpDescrizione.trim(), origine_tipo: "manuale",
+      categoria_id: nuovoImpCategoria || null, importo_previsto: importo, data_prevista: documento.data_documento, stato: "aperto",
+    }).select("id").single();
+    if (error || !data) { window.alert("Errore: " + (error?.message || "")); return; }
+    const residuoDoc = round2(totaleDocumento - allocato);
+    setSelezione((s) => ({ ...s, [data.id]: round2(Math.max(0, Math.min(importo, residuoDoc))) }));
+    setNuovoImpDescrizione(""); setNuovoImpImporto(""); setNuovoImpCategoria(""); setNuovoImpegnoAperto(false);
+    await ricarica(["impegno"]);
+  }
+
+  // sgancia le scadenze non pagate di un documento — usata sia per
+  // annullare una riconciliazione sia per far tornare in coda un
+  // documento "senza impegno": in entrambi i casi si rifiuta se una
+  // scadenza collegata è già stata pagata (il passato contabile non si
+  // riscrive mai, §8 "Annullamento della riconciliazione")
+  async function sganciaScadenzeNonPagate(doc) {
+    const collegate = (scadenzaPassivaTabella || []).filter((s) => s.documento_id === doc.id);
+    if (collegate.some((s) => s.stato === "pagata")) {
+      window.alert("Questo documento ha già una scadenza pagata: l'operazione non è permessa, il passato contabile non si riscrive.");
+      return false;
+    }
+    const idsDaEliminare = collegate.filter((s) => s.stato !== "pagata").map((s) => s.id);
+    if (idsDaEliminare.length > 0) await supabase.from("scadenza_passiva").delete().in("id", idsDaEliminare);
+    return true;
+  }
+
+  async function annullaRiconciliazione(doc) {
+    if (!window.confirm("Annullare questa riconciliazione? Gli impegni collegati tornano aperti e le scadenze non pagate vengono eliminate.")) return;
+    const ok = await sganciaScadenzeNonPagate(doc);
+    if (!ok) return;
+    const righe = (riconciliazioneTabella || []).filter((r) => r.documento_id === doc.id);
+    for (const r of righe) {
+      const imp = impegnoTabella.find((i) => i.id === r.impegno_id);
+      if (!imp) continue;
+      const nuovoCoperto = round2(Math.max(0, (imp.importo_coperto || 0) - r.importo_allocato));
+      const nuovoEffettivo = round2(Math.max(0, (imp.importo_effettivo || 0) - r.importo_allocato));
+      await supabase.from("impegno").update({ importo_coperto: nuovoCoperto, importo_effettivo: nuovoEffettivo, stato: nuovoCoperto > 0 ? "parzialmente_coperto" : "aperto" }).eq("id", imp.id);
+    }
+    await supabase.from("riconciliazione").delete().eq("documento_id", doc.id);
+    await supabase.from("documento_fornitore").update({ stato: "da_riconciliare", importo_allocato: 0 }).eq("id", doc.id);
+    await ricarica(["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva"]);
+  }
+
+  async function riportaInCoda(doc) {
+    if (doc.stato === "senza_impegno") {
+      const ok = await sganciaScadenzeNonPagate(doc);
+      if (!ok) return;
+    }
+    await supabase.from("documento_fornitore").update({ stato: "da_riconciliare", note: null }).eq("id", doc.id);
+    await ricarica(["documento_fornitore", "scadenza_passiva"]);
+  }
+
+  const messaggioBarra = allocato <= 0
+    ? "Seleziona gli impegni da coprire"
+    : allocato > totaleDocumento + 0.01
+      ? "Hai allocato più del totale fattura: correggi gli importi"
+      : residuo > 0.01
+        ? `Copertura parziale: ${fmtEuroErp(residuo)} resteranno senza impegno e verranno segnalati come spesa non prevista`
+        : "Fattura coperta al centesimo";
+  const bottoneAbilitato = allocato > 0 && allocato <= totaleDocumento + 0.01 && !salvando;
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+            <IconaFrecciaSinistra size={20} />
+          </button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione · Contabilità</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Riconciliazione</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Le fatture arrivate da Fatture in Cloud, abbinate agli impegni già presi.</div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+          <TabPillola attivo={subTab === "da_riconciliare"} onClick={() => setSubTab("da_riconciliare")}>Da riconciliare ({codaDaRiconciliare.length})</TabPillola>
+          <TabPillola attivo={subTab === "riconciliate"} onClick={() => setSubTab("riconciliate")}>Riconciliate ({elencoRiconciliate.length})</TabPillola>
+          <TabPillola attivo={subTab === "senza_impegno"} onClick={() => setSubTab("senza_impegno")}>Senza impegno ({elencoSenzaImpegno.length})</TabPillola>
+          <TabPillola attivo={subTab === "scartate"} onClick={() => setSubTab("scartate")}>Scartate ({elencoScartate.length})</TabPillola>
+        </div>
+
+        {subTab === "da_riconciliare" && (
+          documento ? (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{indiceCoda >= 0 ? indiceCoda + 1 : 1} di {codaDaRiconciliare.length}</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => vaiA(-1)} disabled={indiceCoda <= 0} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: indiceCoda <= 0 ? "default" : "pointer", color: NAVY, opacity: indiceCoda <= 0 ? 0.4 : 1 }}><IconaFrecciaSinistra size={14} /></button>
+                  <button onClick={() => vaiA(1)} disabled={indiceCoda < 0 || indiceCoda >= codaDaRiconciliare.length - 1} style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)", opacity: (indiceCoda < 0 || indiceCoda >= codaDaRiconciliare.length - 1) ? 0.4 : 1 }}><IconaFrecciaSinistra size={14} /></button>
+                </div>
+              </div>
+
+              {autoAbbinamento.abbinabile && (
+                <div style={{ ...fontBody, fontSize: 13, color: NAVY, background: "#EAF1FB", border: "1px solid #C9DAF0", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                  Questo fornitore ha un contratto ricorrente attivo (Abbonamenti e contratti) e l'importo rientra nella tolleranza — probabilmente non serve riconciliarla a mano: valuta di scartarla qui e lasciarla gestire dal contratto.
+                </div>
+              )}
+              {autoAbbinamento.avviso && (
+                <div style={{ ...fontBody, fontSize: 13, color: "#8A6D1D", background: "#FBF1DD", border: "1px solid #EBD9A6", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
+                  {autoAbbinamento.avviso} (contratto ricorrente collegato a questo fornitore).
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, marginBottom: 20 }}>
+                <div style={{ ...cardStyle }}>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Documento ricevuto</div>
+                  <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{fornitoriById[documento.fornitore_id]?.nome || "Fornitore sconosciuto"}</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>
+                    {[documento.numero ? `Fattura n. ${documento.numero}` : null, fornitoriById[documento.fornitore_id]?.partita_iva ? `P.IVA ${fornitoriById[documento.fornitore_id].partita_iva}` : null].filter(Boolean).join(" · ")}
+                  </div>
+                  {[
+                    ["Data documento", fmtData(documento.data_documento)],
+                    ["Imponibile", fmtEuroErp(documento.imponibile)],
+                    ["IVA", fmtEuroErp(documento.iva)],
+                    ["Totale documento", fmtEuroErp(documento.totale)],
+                    ["Scadenza prevista", documento.data_scadenza_prevista ? fmtData(documento.data_scadenza_prevista) : "—"],
+                  ].map(([et, val]) => (
+                    <div key={et} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13 }}>
+                      <span style={{ color: MUTED }}>{et}</span><span style={{ fontWeight: 700, color: NAVY }}>{val}</span>
+                    </div>
+                  ))}
+                  {(documento.righe || []).length > 0 && (
+                    <div style={{ marginTop: 14 }}>
+                      {documento.righe.map((r, idx) => (
+                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", ...fontBody, fontSize: 12.5, color: MUTED }}>
+                          <span>{r.descrizione}</span><span>{r.importo != null ? fmtEuroErp(r.importo) : ""}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 16 }}>
+                    <button onClick={vediDocumentoOriginale} disabled={caricandoAllegato || !documento.fic_id} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", opacity: caricandoAllegato ? 0.6 : 1 }}>
+                      {caricandoAllegato ? "Carico…" : "Vedi documento originale"}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ ...cardStyle }}>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Impegni compatibili</div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Seleziona uno o più impegni da coprire con questa fattura.</div>
+                  {candidati.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno compatibile trovato.</div>}
+                  {candidati.map((c) => {
+                    const selezionato = selezione[c.impegno.id] != null;
+                    return (
+                      <div key={c.impegno.id} style={{ border: `1px solid ${selezionato ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10, cursor: "pointer" }} onClick={() => toggleCandidato(c.impegno)}>
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+                          <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: c.preselezionato ? "#2E7D32" : "#8A6D1D", background: c.preselezionato ? "#E3F3E5" : "#FBF1DD", borderRadius: 10, padding: "3px 8px" }}>MATCH {c.punteggio}%</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <input type="checkbox" checked={selezionato} readOnly style={{ marginTop: 3 }} />
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                              <span style={{ ...fontBody, fontWeight: 700, color: NAVY, fontSize: 14 }}>{c.impegno.descrizione}</span>
+                              <span style={{ ...fontBody, fontWeight: 700, color: NAVY, fontSize: 14, whiteSpace: "nowrap" }}>{fmtEuroErp(c.impegno.importo_previsto)}</span>
+                            </div>
+                            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{c.impegno.data_prevista ? `Previsto ${fmtData(c.impegno.data_prevista)}` : null}</div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                              {c.motivazioni.map((m, idx) => (
+                                <span key={idx} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: m.positiva ? "#2E7D32" : "#C0392B", background: m.positiva ? "#E3F3E5" : "#FBE4E1", borderRadius: 10, padding: "3px 8px" }}>{m.testo}</span>
+                              ))}
+                            </div>
+                            {selezionato && (
+                              <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                                <label style={{ ...fontBody, fontSize: 11, color: MUTED }}>Importo allocato</label>
+                                <input
+                                  type="number" step="0.01" value={selezione[c.impegno.id]}
+                                  onChange={(e) => setSelezione((s) => ({ ...s, [c.impegno.id]: e.target.value === "" ? "" : round2(Number(e.target.value)) }))}
+                                  style={{ ...inputStyle, marginTop: 4 }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {!nuovoImpegnoAperto ? (
+                    <button onClick={() => setNuovoImpegnoAperto(true)} style={{ width: "100%", ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: "12px", cursor: "pointer" }}>
+                      + Nessun impegno corrisponde — crea impegno "fuori previsione"
+                    </button>
+                  ) : (
+                    <div style={{ border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: 14 }}>
+                      <Field label="Descrizione"><input style={inputStyle} value={nuovoImpDescrizione} onChange={(e) => setNuovoImpDescrizione(e.target.value)} /></Field>
+                      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                        <div style={{ flex: 1 }}><Field label="Importo"><input type="number" step="0.01" style={inputStyle} value={nuovoImpImporto} onChange={(e) => setNuovoImpImporto(e.target.value)} /></Field></div>
+                        <div style={{ flex: 1 }}>
+                          <Field label="Categoria">
+                            <select style={inputStyle} value={nuovoImpCategoria} onChange={(e) => setNuovoImpCategoria(e.target.value)}>
+                              <option value="">—</option>
+                              {(costiSottocategorie || []).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                            </select>
+                          </Field>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <Button onClick={creaImpegnoFuoriPrevisione}>Crea e seleziona</Button>
+                        <button onClick={() => setNuovoImpegnoAperto(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ ...cardStyle, position: "sticky", bottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Allocato {fmtEuroErp(allocato)} di {fmtEuroErp(totaleDocumento)} — Residuo {fmtEuroErp(residuo)}</div>
+                  <div style={{ ...fontBody, fontSize: 12, color: allocato > totaleDocumento + 0.01 ? "#C0392B" : MUTED, marginTop: 2 }}>{messaggioBarra}</div>
+                  <div style={{ height: 4, background: CREAM_BORDER, borderRadius: 2, marginTop: 8, width: 220, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.min(100, totaleDocumento > 0 ? (allocato / totaleDocumento) * 100 : 0)}%`, background: allocato > totaleDocumento + 0.01 ? "#C0392B" : NAVY, borderRadius: 2 }} />
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={scartaDocumento} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Scarta</button>
+                  <button onClick={accettaSenzaImpegno} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Accetta senza impegno</button>
+                  <button onClick={() => vaiA(1)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Rimanda</button>
+                  <button onClick={confermaRiconciliazione} disabled={!bottoneAbilitato} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "10px 18px", cursor: bottoneAbilitato ? "pointer" : "default", opacity: bottoneAbilitato ? 1 : 0.5 }}>
+                    {salvando ? "Salvo…" : "Riconcilia e crea scadenza"}
+                  </button>
+                </div>
+              </div>
+              {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Errore") ? "#C0392B" : NAVY, marginTop: 12 }}>{msg}</div>}
+            </div>
+          ) : (
+            <div style={{ ...cardStyle }}>
+              <div style={{ ...fontBody, fontSize: 14, color: MUTED, textAlign: "center", padding: "30px 0" }}>Nessuna fattura da riconciliare — tutto smistato.</div>
+            </div>
+          )
+        )}
+
+        {subTab === "riconciliate" && (
+          <div style={{ ...cardStyle }}>
+            {elencoRiconciliate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura riconciliata ancora.</div>}
+            {elencoConIntestazioniMese(elencoRiconciliate, (d) => d.data_documento || null, (d) => (
+              <RigaAmministrazione key={d.id} data={d.data_documento} titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"} sottotitolo={d.numero ? `Fattura n. ${d.numero}` : null} importo={fmtEuroErp(d.totale)}>
+                <button onClick={() => annullaRiconciliazione(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Annulla riconciliazione</button>
+              </RigaAmministrazione>
+            ))}
+          </div>
+        )}
+
+        {subTab === "senza_impegno" && (
+          <div style={{ ...cardStyle }}>
+            {elencoSenzaImpegno.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun documento senza impegno.</div>}
+            {elencoConIntestazioniMese(elencoSenzaImpegno, (d) => d.data_documento || null, (d) => (
+              <RigaAmministrazione key={d.id} data={d.data_documento} titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"} sottotitolo={d.numero ? `Fattura n. ${d.numero}` : null} importo={fmtEuroErp(d.totale)}>
+                <button onClick={() => riportaInCoda(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riporta in coda</button>
+              </RigaAmministrazione>
+            ))}
+          </div>
+        )}
+
+        {subTab === "scartate" && (
+          <div style={{ ...cardStyle }}>
+            {elencoScartate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun documento scartato.</div>}
+            {elencoConIntestazioniMese(elencoScartate, (d) => d.data_documento || null, (d) => (
+              <RigaAmministrazione key={d.id} data={d.data_documento} titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"} sottotitolo={d.note || null} importo={fmtEuroErp(d.totale)}>
+                <button onClick={() => riportaInCoda(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riporta in coda</button>
+              </RigaAmministrazione>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
@@ -19103,6 +19534,12 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
+  // Registro documenti fornitore: ciascuna riga di fatture_ricevute_fic
+  // ha una gemella in documento_fornitore (stesso fic_id, popolate
+  // insieme da fic-sync-documenti) — da qui il pulsante giusto per
+  // stato ("Riconcilia" solo se non già importata a mano prima che la
+  // riconciliazione esistesse)
+  const documentoFornitorePerFicId = Object.fromEntries((documentoFornitoreTabella || []).map((d) => [d.fic_id, d]));
   function etichettaCorso(cd) {
     const c = corsiById[cd.corso_id];
     const l = locationById[cd.location_id];
@@ -19501,14 +19938,32 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                   chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
                   importo={fmtEuroErp(f.totale)}
                 >
-                  {f.spesa_id ? (
-                    <>
-                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
-                      <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
-                    </>
-                  ) : (
-                    <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>
-                  )}
+                  {(() => {
+                    if (f.spesa_id) {
+                      return (
+                        <>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
+                          <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
+                        </>
+                      );
+                    }
+                    const df = documentoFornitorePerFicId[f.fic_id];
+                    if (df && df.stato === "riconciliato") {
+                      return (
+                        <>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Riconciliata</span>
+                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi riconciliazione</button>
+                        </>
+                      );
+                    }
+                    if (df && df.stato === "scartato") {
+                      return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Scartata</span>;
+                    }
+                    if (df) {
+                      return <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>;
+                    }
+                    return <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>;
+                  })()}
                 </RigaAmministrazione>
               ), dataDiFic)}
             </div>
@@ -29989,6 +30444,15 @@ export default function App() {
   // (Registro documenti fornitore → "Da Fatture in Cloud"); i token
   // OAuth veri vivono solo lato server, mai qui
   const [fattureRicevuteFic, setFattureRicevuteFic] = useState([]);
+  // riconciliazione fatture (spec-riconciliazione.md §4): le 4 tabelle
+  // del modello dati, lette qui per la prima volta — finora create ma
+  // mai caricate in nessuna schermata
+  const [documentoFornitoreTabella, setDocumentoFornitoreTabella] = useState([]);
+  const [impegnoTabella, setImpegnoTabella] = useState([]);
+  const [riconciliazioneTabella, setRiconciliazioneTabella] = useState([]);
+  const [scadenzaPassivaTabella, setScadenzaPassivaTabella] = useState([]);
+  const [preferenzeMatchTabella, setPreferenzeMatchTabella] = useState([]);
+  const [documentoFornitoreApertoId, setDocumentoFornitoreApertoId] = useState(null);
   const [costiBudget, setCostiBudget] = useState([]);
   const [costiSoglieAllerta, setCostiSoglieAllerta] = useState([]);
   // incassi occasionali non legati a un'iscrizione (es. vendita di un
@@ -30133,6 +30597,11 @@ export default function App() {
     abbonamenti_importi: async () => setAbbonamentiImporti((await supabase.from("abbonamenti_importi").select("*").order("valido_da")).data || []),
     abbonamenti_attribuzioni: async () => setAbbonamentiAttribuzioni((await supabase.from("abbonamenti_attribuzioni").select("*")).data || []),
     fatture_ricevute_fic: async () => setFattureRicevuteFic((await supabase.from("fatture_ricevute_fic").select("*").order("data_documento", { ascending: false })).data || []),
+    documento_fornitore: async () => setDocumentoFornitoreTabella((await supabase.from("documento_fornitore").select("*").order("data_documento", { ascending: false })).data || []),
+    impegno: async () => setImpegnoTabella((await supabase.from("impegno").select("*")).data || []),
+    riconciliazione: async () => setRiconciliazioneTabella((await supabase.from("riconciliazione").select("*")).data || []),
+    scadenza_passiva: async () => setScadenzaPassivaTabella((await supabase.from("scadenza_passiva").select("*")).data || []),
+    preferenze_match_fornitore: async () => setPreferenzeMatchTabella((await supabase.from("preferenze_match_fornitore").select("*")).data || []),
     costi_budget: async () => setCostiBudget((await supabase.from("costi_budget").select("*")).data || []),
     costi_soglie_allerta: async () => setCostiSoglieAllerta((await supabase.from("costi_soglie_allerta").select("*")).data || []),
     entrate_manuali: async () => setEntrateManuali((await supabase.from("entrate_manuali").select("*").order("data", { ascending: false })).data || []),
@@ -30257,7 +30726,8 @@ export default function App() {
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore"],
+    riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
@@ -30726,6 +31196,10 @@ export default function App() {
     setSpesaRitornoView("amministrazione");
     apriViewProtetta("spesaform");
   }
+  function apriRiconciliazione(documentoFornitoreId) {
+    setDocumentoFornitoreApertoId(documentoFornitoreId);
+    apriViewProtetta("riconciliazione");
+  }
   function apriNuovaSpesaPerClasse(classeId, categoriaId, sottocategoriaId) {
     setSpesaInModifica(null);
     setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
@@ -31073,6 +31547,7 @@ export default function App() {
           spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
           abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
           fattureRicevuteFic={fattureRicevuteFic}
+          documentoFornitoreTabella={documentoFornitoreTabella}
           ricarica={fetchDati}
           onBack={() => setView("erp")}
           onApriModificaSpesa={apriModificaSpesaDaAmministrazione}
@@ -31082,7 +31557,25 @@ export default function App() {
           onApriNuovoAbbonamento={apriNuovoAbbonamento}
           onApriModificaAbbonamento={apriModificaAbbonamento}
           onApriNuovaSpesaDaFatturaFic={apriNuovaSpesaDaFatturaFic}
+          onApriRiconciliazione={apriRiconciliazione}
           tabIniziale={amministrazioneTabIniziale}
+        />
+      )}
+
+      {view === "riconciliazione" && (
+        <PaginaRiconciliazione
+          documentoFornitoreIdIniziale={documentoFornitoreApertoId}
+          documentoFornitoreTabella={documentoFornitoreTabella}
+          impegnoTabella={impegnoTabella}
+          riconciliazioneTabella={riconciliazioneTabella}
+          scadenzaPassivaTabella={scadenzaPassivaTabella}
+          preferenzeMatchTabella={preferenzeMatchTabella}
+          fornitori={fornitori}
+          costiSottocategorie={costiSottocategorie}
+          abbonamentiContratti={abbonamentiContratti}
+          abbonamentiImporti={abbonamentiImporti}
+          ricarica={fetchDati}
+          onBack={() => setView("amministrazione")}
         />
       )}
 
