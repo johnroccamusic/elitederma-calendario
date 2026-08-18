@@ -18480,9 +18480,10 @@ function IntestazioneMeseScadenzeAttivo({ mese, anno, count, totale }) {
 // Attivo può avere decine di scadenze, serve vedere subito quali
 // cadono lo stesso giorno
 function IntestazioneGiornoScadenzeAttivo({ data }) {
+  const [anno, mese, giorno] = data.split("-");
   return (
     <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, padding: "12px 0 6px" }}>
-      {fmtData(data)}
+      {giorno} {MESI_ABBR[Number(mese) - 1]} {anno}
     </div>
   );
 }
@@ -18881,6 +18882,12 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         return `${r.iscritto.nome} ${r.iscritto.cognome}`.toLowerCase().includes(q) || etichettaCorso(r.corsoData).toLowerCase().includes(q);
       })
     : elencoMeseScadAttivo;
+  // riepilogo usato dentro l'elenco (intestazione "N scadenze / TOTALE
+  // MESE"): deve riflettere ciò che si vede sotto, quindi calcolato
+  // sull'elenco già filtrato dalla ricerca — riepilogoMeseScadAttivo
+  // resta invece sull'intero mese/anno, per non far "saltare" i
+  // conteggi della barra dei mesi mentre si digita
+  const riepilogoMeseFiltratoScadAttivo = riepilogoMensileScadenze(elencoFiltratoScadAttivo);
 
   // registra una fattura per uno o più impegni insieme ("Cumula altri
   // impegni" in RigaQuadroImpegni): stesso fornitore/tipo, stesso numero
@@ -19188,7 +19195,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                 const m = idx + 1;
                 const chiave = `${annoScadAttivo}-${String(m).padStart(2, "0")}`;
                 const info = riepilogoMeseScadAttivo[chiave];
-                const scaduto = chiave < meseCorrenteStrScad && !!info;
+                const scaduto = subTabAttivo === "attive" && chiave < meseCorrenteStrScad && !!info;
                 const attivoMese = meseScadAttivo === m;
                 return (
                   <button key={m} onClick={() => setMeseScadAttivo(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoMese ? "#fff" : NAVY, background: attivoMese ? NAVY : "#fff", border: `1px solid ${attivoMese ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
@@ -19203,7 +19210,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {subTabAttivo === "attive" && (
               <div style={{ ...cardStyle }}>
                 {elencoFiltratoScadAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
-                {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseScadAttivo, (item) => (
+                {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseFiltratoScadAttivo, (item) => (
                   <RigaAmministrazione
                     key={item.key}
                     data={item.scadenza}
@@ -19229,7 +19236,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             {subTabAttivo === "storico" && (
               <div style={{ ...cardStyle }}>
                 {elencoFiltratoScadAttivo.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna scadenza per il periodo selezionato.</div>}
-                {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseScadAttivo, (item) => (
+                {elencoScadenzeConIntestazioni(elencoFiltratoScadAttivo, riepilogoMeseFiltratoScadAttivo, (item) => (
                   <RigaAmministrazione
                     key={item.key}
                     data={item.scadenza}
