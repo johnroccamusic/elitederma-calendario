@@ -17315,6 +17315,63 @@ function ultimaCategoriaSpesaDiFornitore(fornitoreId, spese, costiSottocategorie
   return ultime.length > 0 ? categoriaNomePer(ultime[0].sottocategoria_id, costiSottocategorie) : null;
 }
 
+// "Carica documento (bonifico)" in Anagrafiche: legge un PDF con testo
+// selezionabile (niente OCR, niente nuove dipendenze — stesso limite
+// già accettato da estraiDatiModuloPdf) e prova a riconoscere IBAN e
+// fornitore, senza mai salvare il file da nessuna parte: letto in
+// memoria (file.arrayBuffer()), buttato via appena finita la lettura.
+
+// lunghezza esatta dell'IBAN per paese: un pattern generico da solo
+// prende anche testo adiacente nei documenti dove l'IBAN non è isolato
+// da spazi — la lunghezza esatta è il modo più affidabile di tagliare
+// al punto giusto
+const LUNGHEZZA_IBAN_PER_PAESE = { AT: 20, BE: 16, BG: 22, CH: 21, CY: 28, CZ: 24, DE: 22, DK: 18, EE: 20, ES: 24, FI: 18, FR: 27, GB: 22, GR: 27, HR: 21, HU: 28, IE: 22, IS: 26, IT: 27, LI: 21, LT: 20, LU: 20, LV: 21, MC: 27, MT: 31, NL: 18, NO: 15, PL: 28, PT: 25, RO: 24, SE: 24, SI: 19, SK: 24, SM: 27 };
+function estraiIbanDaTesto(testo) {
+  // cerca nel testo originale, NON in una versione con tutti gli spazi
+  // tolti: comprimere tutto prima di cercare distrugge i confini fra
+  // parole ("Data operazione: 18/08/2026" diventa "...ONE18082026...",
+  // dove "\b" non blocca più nulla) e il pattern si aggancia a testo
+  // circostante invece che al vero IBAN. \b sul testo intatto funziona
+  // perché la punteggiatura/gli spazi reali restano al loro posto.
+  const t = (testo || "").toUpperCase();
+  const pattern = [
+    /\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b/g,           // IBAN scritto tutto attaccato
+    /\b[A-Z]{2}\d{2}(?:[ \t][A-Z0-9]{2,4}){3,9}\b/g, // IBAN a blocchi separati da spazio (formato più comune sugli estratti conto)
+  ];
+  let migliore = null;
+  for (const re of pattern) {
+    let m;
+    while ((m = re.exec(t))) {
+      const compatto = m[0].replace(/[ \t]/g, "");
+      const lunghezzaAttesa = LUNGHEZZA_IBAN_PER_PAESE[compatto.slice(0, 2)];
+      if (lunghezzaAttesa && compatto.length === lunghezzaAttesa) return compatto;
+      if (!migliore && compatto.length >= 15 && compatto.length <= 34) migliore = compatto;
+    }
+  }
+  return migliore;
+}
+// toglie forma giuridica e punteggiatura per confrontare "Wind Tre
+// S.p.A." con "WIND TRE" dentro un testo scritto in modo diverso —
+// stessa idea (non lo stesso codice) di distanzaLevenshteinNormalizzata
+// usata nel motore di match, qui una sottostringa basta perché il nome
+// completo nei documenti bancari è quasi sempre riportato per intero
+function normalizzaNomeAzienda(nome) {
+  return (nome || "")
+    .toUpperCase()
+    .replace(/\b(S\.?P\.?A\.?|S\.?R\.?L\.?S?\.?|S\.?N\.?C\.?|S\.?A\.?S\.?|SOCIET[AÀ]\s+A\s+RESPONSABILIT[AÀ]\s+LIMITATA)\b/g, " ")
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function trovaSoggettiNelTesto(testo, soggetti) {
+  const testoNorm = (testo || "").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ");
+  if (!testoNorm) return [];
+  return (soggetti || []).filter((s) => {
+    const n = normalizzaNomeAzienda(s.nome);
+    return n.length >= 4 && testoNorm.includes(n);
+  });
+}
+
 // unifica master/assistente/hotel/location/venditori/fornitori in
 // un'unica lista di "soggetti", raggruppando per nome (case
 // insensitive) su TUTTE le fonti insieme — non solo i fornitori dentro
@@ -17430,6 +17487,75 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     await ricarica([s.tabella]);
   }
 
+  // "Carica documento (bonifico)": legge un PDF in memoria (mai
+  // caricato da nessuna parte, buttato via appena letto), prova a
+  // riconoscere IBAN e fornitore, propone di completare la scheda —
+  // resta un aiuto, non un automatismo: chiede sempre conferma
+  const [caricaDocAperto, setCaricaDocAperto] = useState(false);
+  const [elaborandoDoc, setElaborandoDoc] = useState(false);
+  const [erroreDoc, setErroreDoc] = useState("");
+  const [risultatoDoc, setRisultatoDoc] = useState(null); // { iban, candidati }
+  const [soggettoSelezionatoId, setSoggettoSelezionatoId] = useState("");
+  const [ricercaSoggettoDoc, setRicercaSoggettoDoc] = useState("");
+  const [applicandoDoc, setApplicandoDoc] = useState(false);
+
+  async function gestisciFileBonifico(file) {
+    if (!file) return;
+    setElaborandoDoc(true);
+    setErroreDoc("");
+    setRisultatoDoc(null);
+    setSoggettoSelezionatoId("");
+    try {
+      const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
+        setErroreDoc("Per ora leggo solo file PDF con testo selezionabile (non foto o scansioni).");
+        return;
+      }
+      const pdfjsLib = await getPdfjsLib();
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      let testo = "";
+      for (let n = 1; n <= pdf.numPages; n++) {
+        const pagina = await pdf.getPage(n);
+        const content = await pagina.getTextContent();
+        testo += " " + content.items.map((it) => it.str).join(" ");
+      }
+      if (!testo.trim()) {
+        setErroreDoc("Non trovo testo leggibile in questo PDF: probabilmente è una scansione o una foto, non un documento digitale.");
+        return;
+      }
+      const iban = estraiIbanDaTesto(testo);
+      const candidati = trovaSoggettiNelTesto(testo, soggetti);
+      if (!iban && candidati.length === 0) {
+        setErroreDoc("Non ho trovato né un IBAN né un fornitore riconoscibile in questo documento.");
+        return;
+      }
+      setRisultatoDoc({ iban });
+      if (candidati.length >= 1) setSoggettoSelezionatoId(candidati[0].id);
+    } catch (e) {
+      setErroreDoc("Errore nella lettura del PDF: " + e.message);
+    } finally {
+      setElaborandoDoc(false);
+    }
+  }
+
+  async function applicaIbanDaDocumento() {
+    const soggetto = soggetti.find((s) => s.id === soggettoSelezionatoId);
+    if (!soggetto || !risultatoDoc?.iban) return;
+    if (soggetto.tabella === "location") { window.alert("Le location non hanno un campo IBAN modificabile da qui."); return; }
+    setApplicandoDoc(true);
+    const { error } = await supabase.from(soggetto.tabella).update({ iban: risultatoDoc.iban }).eq("id", soggetto.recordId);
+    setApplicandoDoc(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setCaricaDocAperto(false);
+    setRisultatoDoc(null);
+    await ricarica([soggetto.tabella]);
+  }
+
+  const soggettiRicercaDoc = ricercaSoggettoDoc.trim().length >= 2
+    ? soggetti.filter((s) => s.nome.toLowerCase().includes(ricercaSoggettoDoc.trim().toLowerCase())).slice(0, 8)
+    : [];
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -17452,6 +17578,9 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{elencoFiltrato.length} soggetti</div>
+          <button onClick={() => { setCaricaDocAperto(true); setErroreDoc(""); setRisultatoDoc(null); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "9px 16px", cursor: "pointer" }}>
+            Carica documento (bonifico)
+          </button>
           <div style={{ flex: "1 1 220px", maxWidth: 320, marginLeft: "auto" }}>
             <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca nome, P.IVA, città…" />
           </div>
@@ -17514,6 +17643,52 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
               <button onClick={() => setModificaAperta(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Annulla</button>
               <Button onClick={salvaModifica} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {caricaDocAperto && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }} onClick={() => setCaricaDocAperto(false)}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 26, width: "100%", maxWidth: 460, maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Carica documento</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>Un bonifico o una fattura in PDF: provo a leggere IBAN e fornitore. Il file resta solo nel browser, non viene mai salvato.</div>
+
+            <input type="file" accept="application/pdf" style={{ ...inputStyle, width: "100%" }} onChange={(e) => gestisciFileBonifico(e.target.files?.[0] || null)} />
+
+            {elaborandoDoc && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 14 }}>Leggo il documento…</div>}
+            {erroreDoc && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginTop: 14 }}>{erroreDoc}</div>}
+
+            {risultatoDoc && (
+              <div style={{ marginTop: 16 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>IBAN trovato</div>
+                <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 16 }}>{risultatoDoc.iban || "— non trovato, controllalo a mano —"}</div>
+
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Fornitore</div>
+                {soggettoSelezionatoId && (
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 8 }}>
+                    {soggetti.find((s) => s.id === soggettoSelezionatoId)?.nome}
+                  </div>
+                )}
+                <input
+                  style={inputStyle} placeholder="Cerca per cambiare fornitore…"
+                  value={ricercaSoggettoDoc} onChange={(e) => setRicercaSoggettoDoc(e.target.value)}
+                />
+                {soggettiRicercaDoc.length > 0 && (
+                  <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginTop: 6, overflow: "hidden" }}>
+                    {soggettiRicercaDoc.map((s) => (
+                      <button key={s.id} onClick={() => { setSoggettoSelezionatoId(s.id); setRicercaSoggettoDoc(""); }} style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "9px 12px", cursor: "pointer" }}>
+                        {s.nome}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+                  <button onClick={() => setCaricaDocAperto(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Annulla</button>
+                  <Button onClick={applicaIbanDaDocumento} disabled={applicandoDoc || !risultatoDoc.iban || !soggettoSelezionatoId}>{applicandoDoc ? "Applico…" : "Applica IBAN"}</Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
