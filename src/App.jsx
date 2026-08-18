@@ -1055,6 +1055,19 @@ function addGiorni(dataStr, n) {
   dt.setUTCDate(dt.getUTCDate() + n);
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
+// aggiunge n mesi a una data "yyyy-mm-dd" (n negativo per sottrarre,
+// n=12 per un anno): se il giorno di partenza non esiste nel mese di
+// destinazione (es. 31 gennaio + 1 mese) si ferma all'ultimo giorno
+// valido di quel mese, non "trabocca" nel mese successivo
+function addMesi(dataStr, n) {
+  const [y, m, d] = dataStr.split("-").map(Number);
+  const mesiTotali = (m - 1) + n;
+  const annoDest = y + Math.floor(mesiTotali / 12);
+  const meseDest = ((mesiTotali % 12) + 12) % 12;
+  const ultimoGiornoMese = new Date(Date.UTC(annoDest, meseDest + 1, 0)).getUTCDate();
+  const giornoDest = Math.min(d, ultimoGiornoMese);
+  return `${annoDest}-${String(meseDest + 1).padStart(2, "0")}-${String(giornoDest).padStart(2, "0")}`;
+}
 // numero di giorni tra due date "yyyy-mm-dd" (dataB - dataA)
 function differenzaGiorni(dataA, dataB) {
   const [ya, ma, da] = dataA.split("-").map(Number);
@@ -18341,6 +18354,53 @@ function calcolaVociScadenziario({ corsiDate, iscritti, corsiDateDocenti, master
   return { impegni, daPagareVirtuali: daPagare };
 }
 
+function prossimaScadenzaAbbonamento(dataStr, periodicita) {
+  if (periodicita === "giornaliera") return addGiorni(dataStr, 1);
+  if (periodicita === "settimanale") return addGiorni(dataStr, 7);
+  if (periodicita === "annuale") return addMesi(dataStr, 12);
+  return addMesi(dataStr, 1); // mensile, anche come default se non impostata
+}
+// righe virtuali "da pagare" di Scadenziario Passivo generate dagli
+// Abbonamenti e contratti: una per ogni scadenza di periodicità
+// trascorsa dalla data di inizio del contratto a oggi (o alla sua
+// scadenza, se già passata) — stesso meccanismo di dedup delle altre
+// righe virtuali (origine_scadenziario_chiave su spese), qui una
+// chiave per occorrenza invece che una per edizione. L'importo di
+// ciascuna occorrenza è quello della tranche in vigore in quella data
+// (vedi abbonamenti_importi): un cambio di importo non riscrive le
+// occorrenze già generate, cambia solo quelle successive alla data da
+// cui vale la nuova tranche
+function calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }) {
+  const oggiStr = dataOggiStr();
+  const spesePerChiave = new Set((spese || []).filter((s) => s.origine_scadenziario_chiave).map((s) => s.origine_scadenziario_chiave));
+  const occorrenze = [];
+  (abbonamentiContratti || []).forEach((ab) => {
+    if (!ab.data_inizio) return;
+    const tranche = (abbonamentiImporti || []).filter((t) => t.abbonamento_id === ab.id).sort((a, b) => (a.valido_da || "").localeCompare(b.valido_da || ""));
+    if (tranche.length === 0) return;
+    const limite = ab.data_fine && ab.data_fine < oggiStr ? ab.data_fine : oggiStr;
+    let cursore = ab.data_inizio;
+    let n = 0;
+    while (cursore <= limite && n < 1000) {
+      n++;
+      const chiave = `abbonamento_${ab.id}_${cursore}`;
+      if (!spesePerChiave.has(chiave)) {
+        const trancheDiCompetenza = [...tranche].reverse().find((t) => t.valido_da <= cursore);
+        if (trancheDiCompetenza) {
+          occorrenze.push({
+            key: chiave, chiave, tipo: "abbonamento", abbonamento: ab,
+            nome: ab.descrizione || null, fornitoreId: ab.fornitore_id,
+            scadenza: cursore, dataDebito: cursore, sottocategoriaId: ab.sottocategoria_id,
+            imponibile: trancheDiCompetenza.imponibile, ivaPercentuale: trancheDiCompetenza.iva_percentuale, totale: trancheDiCompetenza.totale,
+          });
+        }
+      }
+      cursore = prossimaScadenzaAbbonamento(cursore, ab.periodicita);
+    }
+  });
+  return occorrenze;
+}
+
 // "Scadenziario Attivo": rate/saldi non ancora incassati dagli allievi, su
 // tutti i corsi — l'incasso si registra come sempre sulla scheda
 // dell'iscritto (checkbox Incassato, "pagato" sulle rate), qui è solo la
@@ -18686,7 +18746,22 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
       scadenza: x.spesa.scadenza_pagamento || null,
     }));
 
-  const daPagare = [...daPagareVirtuali, ...righeReali].sort((a, b) => {
+  // occorrenze "da pagare" degli Abbonamenti e contratti: stessa logica
+  // delle altre righe virtuali, una per scadenza di periodicità già
+  // trascorsa e non ancora coperta da una spesa reale — vedi
+  // calcolaOccorrenzeAbbonamenti
+  const occorrenzeAbbonamenti = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).map((o) => {
+    const fornitoreNome = fornitoriById[o.fornitoreId]?.nome || null;
+    return {
+      ...o,
+      nome: o.nome || fornitoreNome || "Abbonamento",
+      fornitore: fornitoreNome,
+      iban: fornitoriById[o.fornitoreId]?.iban || null,
+      oggetto: [fornitoreNome, etichettaOpzione(PERIODICITA_ABBONAMENTO_OPZIONI, o.abbonamento.periodicita)].filter(Boolean).join(" · "),
+    };
+  });
+
+  const daPagare = [...daPagareVirtuali, ...righeReali, ...occorrenzeAbbonamenti].sort((a, b) => {
     const da = a.corsoData?.data_fine || a.dataDebito || "";
     const db = b.corsoData?.data_fine || b.dataDebito || "";
     return da.localeCompare(db);
@@ -18775,8 +18850,45 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["spese"]);
   }
+  // conferma il pagamento di una occorrenza di Abbonamenti e contratti:
+  // nasce una spesa vera già "pagata", con la stessa classificazione
+  // gestionale/ambito del contratto (così un abbonamento classificato
+  // una volta sola si riflette su ogni addebito generato, invece di
+  // restare solo informativo come sulle altre anagrafiche) e la chiave
+  // di questa specifica occorrenza — la prossima scadenza dello stesso
+  // abbonamento resta una riga a sé, non tocca questa
+  async function segnaPagataAbbonamento(item, { file, dataPagamento }) {
+    setMsg("");
+    let allegatoPath = null;
+    if (file) {
+      const { errore, url } = await caricaRicevutaSpesa(file);
+      if (errore) { setMsg("Errore allegato: " + errore); return; }
+      allegatoPath = url;
+    }
+    const ab = item.abbonamento;
+    const { error } = await supabase.from("spese").insert({
+      descrizione: ab.descrizione || null,
+      categoria_id: ab.categoria_id || null, sottocategoria_id: ab.sottocategoria_id || null,
+      fornitore_id: ab.fornitore_id || null,
+      tipo_ambito: ab.tipo_ambito || "generale",
+      sede_id: ab.sede_id || null, corso_id: ab.corso_id || null, classe_id: ab.classe_id || null, evento_id: ab.evento_id || null,
+      imponibile: item.imponibile, iva_percentuale: item.ivaPercentuale, totale: item.totale,
+      data_documento: item.dataDebito,
+      stato: "pagata", data_pagamento: dataPagamento || null, metodo_pagamento: ab.metodo_pagamento || null,
+      allegato_path: allegatoPath, origine: "automatico",
+      origine_scadenziario_chiave: item.chiave,
+      diretto_indiretto: ab.diretto_indiretto, fisso_variabile: ab.fisso_variabile, ricorrente_occasionale: ab.ricorrente_occasionale,
+      natura: ab.natura, controllabilita: ab.controllabilita, riducibilita: ab.riducibilita, essenzialita: ab.essenzialita,
+      ricorrenza: ab.ricorrenza, bene_durevole: ab.bene_durevole, includi_analisi_costi: ab.includi_analisi_costi,
+      budget_previsto: ab.budget_previsto, soglia_allerta_personalizzata: ab.soglia_allerta_personalizzata, responsabile_costo: ab.responsabile_costo,
+    });
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["spese"]);
+  }
   function confermaPagato(item, dati) {
-    return item.tipo === "reale" ? segnaPagataReale(item, dati) : segnaPagataVirtuale(item, dati);
+    if (item.tipo === "reale") return segnaPagataReale(item, dati);
+    if (item.tipo === "abbonamento") return segnaPagataAbbonamento(item, dati);
+    return segnaPagataVirtuale(item, dati);
   }
 
   return (
@@ -18901,7 +19013,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                   <RigaScadenziarioDaPagare
                     key={item.key}
                     nome={item.nome}
-                    corsoLabel={etichettaCorso(item.corsoData)}
+                    corsoLabel={item.corsoData ? etichettaCorso(item.corsoData) : null}
                     fornitore={item.fornitore}
                     oggetto={item.oggetto || (item.corsoData ? etichettaCorso(item.corsoData) : null)}
                     dataDebito={item.dataDebito || item.corsoData?.data_fine || null}
@@ -19049,7 +19161,7 @@ const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  abbonamentiContratti,
+  abbonamentiContratti, abbonamentiImporti,
   ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
@@ -19107,6 +19219,7 @@ function PaginaInserimentoCostiRicavi({
     }).length;
   const documentiFornitorePerConteggio = (spese || []).filter((s) => s.numero_documento).length;
   const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
+  const occorrenzeAbbonamentiPerConteggio = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).length;
 
   async function eliminaSpesa(id) {
     if (!window.confirm("Eliminare questa spesa?")) return;
@@ -19145,7 +19258,7 @@ function PaginaInserimentoCostiRicavi({
           onApriScheda={onApriAmministrazioneTab}
           impegniCount={impegniPerConteggio.length}
           documentiCount={documentiFornitorePerConteggio}
-          passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio}
+          passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio}
           attivoCount={scadenziarioAttivoPerConteggio}
           abbonamentiCount={(abbonamentiContratti || []).length}
         />
@@ -30117,7 +30230,7 @@ export default function App() {
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           categorieGruppi={categorieGruppi}
-          abbonamentiContratti={abbonamentiContratti}
+          abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
           ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
           onApriAmministrazioneTab={apriAmministrazioneTab}
