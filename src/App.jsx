@@ -711,6 +711,16 @@ function IconaTileCatalogo({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="4" width="19" height="16" rx="1.5" />
+      <circle cx="9" cy="10.3" r="2.3" />
+      <path d="M5.3 16.5c.6-2 2-3 3.7-3s3.1 1 3.7 3" />
+      <path d="M15 9h4M15 12.3h4" stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileGestioneMagazzino({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -17246,7 +17256,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster }) {
+function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -17272,8 +17282,241 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCa
           <TileHome title="Contabilità" descrizione="Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo." Icona={IconaTileCostiRicavi} onClick={onApriAmministrazione} />
           <TileHome title="Categorie di spesa" descrizione="Organizza e gestisci le categorie usate in Prima nota cassa." Icona={IconaTileCatalogo} onClick={onApriCatalogoCategorieCosti} />
           <TileHome title="Operativo corsi" descrizione="Assegna master, assistenti, leve, hotel e sedi a ogni edizione." Icona={IconaTileMaster} onClick={onApriAssegnazioneMaster} />
+          <TileHome title="Anagrafiche" descrizione="Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno." Icona={IconaTileAnagrafiche} onClick={onApriAnagrafiche} />
         </div>
       </div>
+    </div>
+  );
+}
+
+const RUOLO_ANAGRAFICA = {
+  master: { testo: "MASTER", colore: "#2E5AAC", sfondo: "#E7EEFB" },
+  assistente: { testo: "ASSISTENTE", colore: "#7A4FB5", sfondo: "#F1E9FA" },
+  location: { testo: "LOCATION", colore: "#2E7D5C", sfondo: "#E3F3EA" },
+  venditore: { testo: "VENDITORE", colore: "#B5622C", sfondo: "#FBEADD" },
+  fornitore: { testo: "FORNITORE", colore: "#8A6D1D", sfondo: "#FBF1DD" },
+};
+
+// nome del gruppo di categoria di costo già associato a un tipo (master/
+// assistente/alloggio/venditore, vedi categoriaGruppoPer) — condiviso da
+// tutte le persone dello stesso ruolo, non individuale
+function categoriaNomePer(sottocategoriaId, costiSottocategorie) {
+  if (!sottocategoriaId) return null;
+  return (costiSottocategorie || []).find((c) => c.id === sottocategoriaId)?.nome || null;
+}
+// per i fornitori "puri" (senza un ruolo master/assistente/hotel/
+// venditore) non esiste un gruppo: si prende la categoria dell'ultima
+// spesa registrata per quel fornitore, la cosa più vicina a "come lo
+// stiamo trattando adesso" senza dover aggiungere un campo dedicato
+function ultimaCategoriaSpesaDiFornitore(fornitoreId, spese, costiSottocategorie) {
+  const ultime = (spese || [])
+    .filter((s) => s.fornitore_id === fornitoreId && s.sottocategoria_id)
+    .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+  return ultime.length > 0 ? categoriaNomePer(ultime[0].sottocategoria_id, costiSottocategorie) : null;
+}
+
+// unifica master/assistente/hotel/location/venditori/fornitori in
+// un'unica lista di "soggetti", raggruppando per nome (case
+// insensitive) su TUTTE le fonti insieme — non solo i fornitori dentro
+// gli altri ruoli, ma anche due ruoli diversi sulla stessa persona
+// (es. un master che è anche assistente): senza questo raggruppamento
+// comparirebbe due volte, una per tabella. master/assistente/hotel
+// hanno già i propri contatti/dati fiscali (appendice), quindi non
+// serve nessuna tabella-ponte nuova: si leggono direttamente da lì.
+// "Modifica" scrive sempre su una sola riga di origine per soggetto
+// (la prima trovata, fornitori/master/assistente/hotel/venditori prima
+// di location, che non ha campi di contatto) — se la stessa persona ha
+// più righe (es. master e assistente), le altre restano modificabili
+// solo dalle rispettive pagine di gestione, non da qui.
+function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiSottocategorie, categorieGruppi }) {
+  const gruppi = new Map(); // nome normalizzato -> { nome, voci: [...] }
+  function aggiungi(tabella, recordId, nome, ruolo, contatti, categoria) {
+    const chiave = (nome || "").trim().toLowerCase();
+    if (!chiave) return;
+    if (!gruppi.has(chiave)) gruppi.set(chiave, { nome, voci: [] });
+    gruppi.get(chiave).voci.push({ tabella, recordId, ruolo, contatti, categoria });
+  }
+
+  (master || []).forEach((m) => aggiungi("master", m.id, m.nome, "master",
+    { citta: m.citta, indirizzo: m.indirizzo, partitaIva: m.partita_iva, iban: m.iban, telefono: m.telefono, email: m.email },
+    categoriaNomePer(categoriaGruppoPer("master", categorieGruppi), costiSottocategorie)));
+  (assistente || []).forEach((a) => aggiungi("assistente", a.id, a.nome, "assistente",
+    { citta: a.citta, indirizzo: a.indirizzo, partitaIva: a.partita_iva, iban: a.iban, telefono: a.telefono, email: a.email },
+    categoriaNomePer(categoriaGruppoPer("assistente", categorieGruppi), costiSottocategorie)));
+  (hotel || []).forEach((h) => aggiungi("hotel", h.id, h.nome, "location",
+    { citta: h.citta, indirizzo: h.indirizzo, partitaIva: h.partita_iva, iban: h.iban, telefono: h.telefono, email: h.email },
+    categoriaNomePer(categoriaGruppoPer("alloggio", categorieGruppi), costiSottocategorie)));
+  (location || []).forEach((l) => aggiungi("location", l.id, l.nome, "location",
+    { citta: null, indirizzo: null, partitaIva: null, iban: l.iban, telefono: null, email: null },
+    categoriaNomePer(l.categoria_spesa_id, costiSottocategorie)));
+  (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
+    { citta: null, indirizzo: null, partitaIva: null, iban: null, telefono: v.telefono, email: v.email },
+    categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie)));
+  (fornitori || []).forEach((f) => aggiungi("fornitori", f.id, f.nome, "fornitore",
+    { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email },
+    ultimaCategoriaSpesaDiFornitore(f.id, spese, costiSottocategorie)));
+
+  const ordinePriorita = ["fornitori", "master", "assistente", "hotel", "venditori", "location"];
+  return Array.from(gruppi.values()).map((g) => {
+    const vociOrdinate = [...g.voci].sort((a, b) => ordinePriorita.indexOf(a.tabella) - ordinePriorita.indexOf(b.tabella));
+    const ruoli = [];
+    vociOrdinate.forEach((v) => { if (!ruoli.includes(v.ruolo)) ruoli.push(v.ruolo); });
+    if (!ruoli.includes("fornitore") && vociOrdinate.some((v) => v.contatti.partitaIva)) ruoli.push("fornitore");
+    const primo = (campo) => vociOrdinate.map((v) => v.contatti[campo]).find(Boolean) || null;
+    const categoria = vociOrdinate.map((v) => v.categoria).find(Boolean) || null;
+    const rigaModifica = vociOrdinate.find((v) => v.tabella !== "location") || vociOrdinate[0];
+    return {
+      id: g.voci.map((v) => `${v.tabella}_${v.recordId}`).join("+"),
+      nome: g.nome, ruoli, categoria,
+      citta: primo("citta"), indirizzo: primo("indirizzo"), partitaIva: primo("partitaIva"),
+      codiceFiscale: primo("codiceFiscale"), iban: primo("iban"), telefono: primo("telefono"), email: primo("email"),
+      tabella: rigaModifica.tabella, recordId: rigaModifica.recordId,
+    };
+  }).sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
+}
+
+// "Anagrafiche": tutti i soggetti con cui l'accademia ha rapporti in
+// un'unica lista, invece che sparsi fra Gestione Master/Assistenti/
+// Hotel/Location e i fornitori inseriti al volo da spese/abbonamenti.
+// Sola unificazione in lettura (nessuna tabella nuova): cliccando il
+// nome si modificano telefono/email/indirizzo/P.IVA/IBAN direttamente
+// sulla tabella di origine — la stessa "appendice dati fiscali" già
+// presente nelle rispettive pagine di gestione, qui raggiungibile in
+// un solo posto. Le location (semplici spazi, non soggetti fiscali)
+// rimandano invece alla loro pagina di gestione esistente.
+function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation }) {
+  const isMobile = useIsMobile();
+  const [filtro, setFiltro] = useState("tutti");
+  const [ricerca, setRicerca] = useState("");
+  const [modificaAperta, setModificaAperta] = useState(null);
+  const [formModifica, setFormModifica] = useState({});
+  const [salvando, setSalvando] = useState(false);
+
+  const soggetti = costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiSottocategorie, categorieGruppi });
+  const conta = (ruolo) => soggetti.filter((s) => s.ruoli.includes(ruolo)).length;
+
+  const elencoFiltrato = soggetti
+    .filter((s) => filtro === "tutti" || s.ruoli.includes(filtro))
+    .filter((s) => {
+      if (!ricerca.trim()) return true;
+      const q = ricerca.trim().toLowerCase();
+      return [s.nome, s.partitaIva, s.codiceFiscale, s.citta].filter(Boolean).some((v) => v.toLowerCase().includes(q));
+    });
+
+  function apriModifica(soggetto) {
+    if (soggetto.tabella === "location") { onApriGestioneLocation(); return; }
+    setModificaAperta(soggetto);
+    setFormModifica({
+      telefono: soggetto.telefono || "", email: soggetto.email || "",
+      indirizzo: soggetto.indirizzo || "", citta: soggetto.citta || "",
+      partitaIva: soggetto.partitaIva || "", codiceFiscale: soggetto.codiceFiscale || "",
+      iban: soggetto.iban || "",
+    });
+  }
+
+  async function salvaModifica() {
+    const s = modificaAperta;
+    if (!s) return;
+    setSalvando(true);
+    let campi = { telefono: formModifica.telefono.trim() || null, email: formModifica.email.trim() || null };
+    if (s.tabella !== "venditori") {
+      campi = { ...campi, indirizzo: formModifica.indirizzo.trim() || null, citta: formModifica.citta.trim() || null, partita_iva: formModifica.partitaIva.trim() || null, iban: formModifica.iban.trim() || null };
+    }
+    if (s.tabella === "fornitori") campi.codice_fiscale = formModifica.codiceFiscale.trim() || null;
+    const { error } = await supabase.from(s.tabella).update(campi).eq("id", s.recordId);
+    setSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setModificaAperta(null);
+    await ricarica([s.tabella]);
+  }
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
+            <IconaFrecciaSinistra size={20} />
+          </button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Anagrafiche</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.</div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <TabPillola attivo={filtro === "tutti"} onClick={() => setFiltro("tutti")}>Tutti ({soggetti.length})</TabPillola>
+          <TabPillola attivo={filtro === "fornitore"} onClick={() => setFiltro("fornitore")}>Fornitori ({conta("fornitore")})</TabPillola>
+          <TabPillola attivo={filtro === "master"} onClick={() => setFiltro("master")}>Master ({conta("master")})</TabPillola>
+          <TabPillola attivo={filtro === "assistente"} onClick={() => setFiltro("assistente")}>Assistenti ({conta("assistente")})</TabPillola>
+          <TabPillola attivo={filtro === "location"} onClick={() => setFiltro("location")}>Strutture ({conta("location")})</TabPillola>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{elencoFiltrato.length} soggetti</div>
+          <div style={{ flex: "1 1 220px", maxWidth: 320, marginLeft: "auto" }}>
+            <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca nome, P.IVA, città…" />
+          </div>
+        </div>
+
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ display: isMobile ? "none" : "grid", gridTemplateColumns: "2fr 1.6fr 1.6fr 1.2fr 1.6fr", gap: 12, padding: "12px 20px", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            {["Soggetto", "Ruoli", "Categoria di costo", "Telefono", "Email"].map((et) => (
+              <div key={et} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6 }}>{et}</div>
+            ))}
+          </div>
+          {elencoFiltrato.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "24px 20px" }}>Nessun soggetto trovato.</div>}
+          {elencoFiltrato.map((s) => (
+            <div key={s.id} style={{ display: isMobile ? "flex" : "grid", flexDirection: "column", gridTemplateColumns: "2fr 1.6fr 1.6fr 1.2fr 1.6fr", gap: 12, padding: "14px 20px", borderBottom: `1px solid ${CREAM_BORDER}`, alignItems: "center" }}>
+              <div>
+                <button onClick={() => apriModifica(s)} style={{ ...fontBody, fontSize: 14.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}>{s.nome}</button>
+                <div style={{ ...fontBody, fontStyle: "italic", fontSize: 12, color: MUTED, marginTop: 2 }}>
+                  {[s.citta, s.partitaIva ? `P.IVA ${s.partitaIva}` : (s.codiceFiscale ? `CF ${s.codiceFiscale}` : null)].filter(Boolean).join(" · ") || "—"}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {s.ruoli.map((r) => (
+                  <span key={r} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: RUOLO_ANAGRAFICA[r].colore, background: RUOLO_ANAGRAFICA[r].sfondo, borderRadius: 10, padding: "3px 9px", whiteSpace: "nowrap" }}>{RUOLO_ANAGRAFICA[r].testo}</span>
+                ))}
+              </div>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{s.categoria || "—"}</div>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{s.telefono || "—"}</div>
+              <div style={{ ...fontBody, fontSize: 13, color: "#2E5AAC", wordBreak: "break-word" }}>{s.email || "—"}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {modificaAperta && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }} onClick={() => setModificaAperta(null)}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 26, width: "100%", maxWidth: 440, maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{modificaAperta.nome}</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>Dati di contatto e fiscali</div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><Field label="Telefono"><input style={inputStyle} value={formModifica.telefono} onChange={(e) => setFormModifica((f) => ({ ...f, telefono: e.target.value }))} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="Email"><input style={inputStyle} value={formModifica.email} onChange={(e) => setFormModifica((f) => ({ ...f, email: e.target.value }))} /></Field></div>
+            </div>
+
+            {modificaAperta.tabella !== "venditori" && (
+              <>
+                <Field label="Indirizzo"><input style={inputStyle} value={formModifica.indirizzo} onChange={(e) => setFormModifica((f) => ({ ...f, indirizzo: e.target.value }))} /></Field>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={formModifica.citta} onChange={(e) => setFormModifica((f) => ({ ...f, citta: e.target.value }))} /></Field></div>
+                  <div style={{ flex: 1 }}><Field label="P.IVA"><input style={inputStyle} value={formModifica.partitaIva} onChange={(e) => setFormModifica((f) => ({ ...f, partitaIva: e.target.value }))} /></Field></div>
+                </div>
+                {modificaAperta.tabella === "fornitori" && (
+                  <Field label="Codice fiscale"><input style={inputStyle} value={formModifica.codiceFiscale} onChange={(e) => setFormModifica((f) => ({ ...f, codiceFiscale: e.target.value }))} /></Field>
+                )}
+                <Field label="IBAN"><input style={inputStyle} value={formModifica.iban} onChange={(e) => setFormModifica((f) => ({ ...f, iban: e.target.value }))} /></Field>
+              </>
+            )}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+              <button onClick={() => setModificaAperta(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Annulla</button>
+              <Button onClick={salvaModifica} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -30728,6 +30971,7 @@ export default function App() {
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
+    anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
@@ -31536,6 +31780,7 @@ export default function App() {
           onApriAmministrazione={apriAmministrazione}
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
+          onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
         />
       )}
 
@@ -31576,6 +31821,16 @@ export default function App() {
           abbonamentiImporti={abbonamentiImporti}
           ricarica={fetchDati}
           onBack={() => setView("amministrazione")}
+        />
+      )}
+
+      {view === "anagrafiche" && (
+        <PaginaAnagrafiche
+          master={master} assistente={assistente} hotel={hotel} location={location} venditori={venditori} fornitori={fornitori}
+          spese={spese} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
+          ricarica={fetchDati}
+          onBack={() => setView("erp")}
+          onApriGestioneLocation={apriGestioneLocation}
         />
       )}
 
