@@ -18836,7 +18836,12 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
   const [sincronizzandoFic, setSincronizzandoFic] = useState(false);
   const [msgFic, setMsgFic] = useState("");
-  const [mostraTutteFic, setMostraTutteFic] = useState(false);
+  // Registro documenti fornitore: stessa navigazione anno/mese/ricerca
+  // di Scadenziario Attivo/Passivo, sulla data documento delle fatture
+  // ricevute da Fatture in Cloud
+  const [annoDocFic, setAnnoDocFic] = useState(Number(oggiStr.slice(0, 4)));
+  const [meseDocFic, setMeseDocFic] = useState(Number(oggiStr.slice(5, 7)));
+  const [ricercaDocFic, setRicercaDocFic] = useState("");
   async function sincronizzaFatturaInCloud() {
     setSincronizzandoFic(true);
     setMsgFic("");
@@ -18997,6 +19002,23 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   // resta invece sull'intero mese/anno, per non far "saltare" i
   // conteggi della barra dei mesi mentre si digita
   const riepilogoMeseFiltratoScadAttivo = riepilogoMensileScadenze(elencoFiltratoScadAttivo);
+
+  // Registro documenti fornitore: stessa logica anno/mese/ricerca di
+  // Scadenziario Attivo/Passivo, qui sulla data_documento e sul totale
+  // delle fatture ricevute da Fatture in Cloud
+  const dataDiFic = (f) => f.data_documento || null;
+  const importoDiFic = (f) => f.totale || 0;
+  const fattureFicOrdinate = [...(fattureRicevuteFic || [])].sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+  const riepilogoMeseFic = riepilogoMensileScadenze(fattureFicOrdinate, dataDiFic, importoDiFic);
+  const elencoAnnoFic = fattureFicOrdinate.filter((f) => f.data_documento && f.data_documento.slice(0, 4) === String(annoDocFic));
+  const elencoMeseFic = meseDocFic ? elencoAnnoFic.filter((f) => Number(f.data_documento.slice(5, 7)) === meseDocFic) : elencoAnnoFic;
+  const elencoFiltratoFic = ricercaDocFic.trim()
+    ? elencoMeseFic.filter((f) => {
+        const q = ricercaDocFic.trim().toLowerCase();
+        return (f.fornitore_nome || "").toLowerCase().includes(q) || (f.descrizione || "").toLowerCase().includes(q) || (f.categoria || "").toLowerCase().includes(q) || (f.numero_documento || "").toLowerCase().includes(q);
+      })
+    : elencoMeseFic;
+  const riepilogoMeseFiltratoFic = riepilogoMensileScadenze(elencoFiltratoFic, dataDiFic, importoDiFic);
 
   // registra una fattura per uno o più impegni insieme ("Cumula altri
   // impegni" in RigaQuadroImpegni): stesso fornitore/tipo, stesso numero
@@ -19184,57 +19206,66 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           </div>
         )}
 
-        {tab === "documenti" && (() => {
-          // il registro è le fatture di Fatture in Cloud, punto: prima
-          // c'era anche una scheda "Con fattura registrata" (spese con
-          // numero_documento inserito a mano) separata da questa, ma
-          // erano due elenchi che raccontavano la stessa cosa in due
-          // posti diversi — ora è questo l'unico elenco, e il conteggio
-          // del tasto "Registro documenti fornitore" in alto viene da qui
-          const elencoFicOrdinato = [...(fattureRicevuteFic || [])].sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-          const elencoFicVisibile = mostraTutteFic ? elencoFicOrdinato : elencoFicOrdinato.slice(0, SPESE_PAGINA_INIZIALE);
-          return (
-            <div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-                <button onClick={sincronizzaFatturaInCloud} disabled={sincronizzandoFic} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto", opacity: sincronizzandoFic ? 0.6 : 1 }}>
-                  {sincronizzandoFic ? "Sincronizzo…" : "Sincronizza da Fatture in Cloud"}
-                </button>
-              </div>
-              {msgFic && <div style={{ ...fontBody, fontSize: 13, color: msgFic.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgFic}</div>}
+        {tab === "documenti" && (
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={sincronizzaFatturaInCloud} disabled={sincronizzandoFic} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto", opacity: sincronizzandoFic ? 0.6 : 1 }}>
+                {sincronizzandoFic ? "Sincronizzo…" : "Sincronizza da Fatture in Cloud"}
+              </button>
+            </div>
+            {msgFic && <div style={{ ...fontBody, fontSize: 13, color: msgFic.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgFic}</div>}
 
-              <div style={{ ...cardStyle }}>
-                {elencoFicOrdinato.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura ricevuta da Fatture in Cloud — prova a sincronizzare.</div>}
-                {elencoConIntestazioniMese(elencoFicVisibile, (f) => f.data_documento || null, (f) => (
-                  <RigaAmministrazione
-                    key={f.id}
-                    data={f.data_documento}
-                    titolo={f.fornitore_nome || f.descrizione || "Documento"}
-                    sottotitolo={[f.categoria, f.numero_documento ? `Doc. ${f.numero_documento}` : null].filter(Boolean).join(" · ") || null}
-                    chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
-                    importo={fmtEuroErp(f.totale)}
-                  >
-                    {f.spesa_id ? (
-                      <>
-                        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
-                        <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
-                      </>
-                    ) : (
-                      <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>
-                    )}
-                  </RigaAmministrazione>
-                ))}
-                {!mostraTutteFic && elencoFicOrdinato.length > SPESE_PAGINA_INIZIALE && (
-                  <div style={{ textAlign: "center", marginTop: 14 }}>
-                    <button onClick={() => setMostraTutteFic(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                      Mostra altri documenti
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                    </button>
-                  </div>
-                )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setAnnoDocFic((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoDocFic}</div>
+                <button onClick={() => setAnnoDocFic((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
+              </div>
+              <button onClick={() => setMeseDocFic(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: meseDocFic === null ? "#fff" : NAVY, background: meseDocFic === null ? NAVY : "#fff", border: `1px solid ${meseDocFic === null ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Tutto l'anno</button>
+              <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+                <CampoRicerca value={ricercaDocFic} onChange={(e) => setRicercaDocFic(e.target.value)} placeholder="Cerca fornitore, categoria…" />
               </div>
             </div>
-          );
-        })()}
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+              {MESI_ABBR.map((abbr, idx) => {
+                const m = idx + 1;
+                const chiave = `${annoDocFic}-${String(m).padStart(2, "0")}`;
+                const info = riepilogoMeseFic[chiave];
+                const attivoMese = meseDocFic === m;
+                return (
+                  <button key={m} onClick={() => setMeseDocFic(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoMese ? "#fff" : NAVY, background: attivoMese ? NAVY : "#fff", border: `1px solid ${attivoMese ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
+                    <div>{abbr}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoMese ? "#fff" : MUTED, marginTop: 2 }}>{info ? info.count : "—"}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ ...cardStyle }}>
+              {elencoFiltratoFic.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun documento per il periodo selezionato.</div>}
+              {elencoScadenzeConIntestazioni(elencoFiltratoFic, riepilogoMeseFiltratoFic, (f) => (
+                <RigaAmministrazione
+                  key={f.id}
+                  data={f.data_documento}
+                  titolo={f.fornitore_nome || f.descrizione || "Documento"}
+                  sottotitolo={[f.categoria, f.numero_documento ? `Doc. ${f.numero_documento}` : null].filter(Boolean).join(" · ") || null}
+                  chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
+                  importo={fmtEuroErp(f.totale)}
+                >
+                  {f.spesa_id ? (
+                    <>
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
+                      <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
+                    </>
+                  ) : (
+                    <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>
+                  )}
+                </RigaAmministrazione>
+              ), dataDiFic)}
+            </div>
+          </div>
+        )}
 
         {tab === "passivo" && (
           <div>
