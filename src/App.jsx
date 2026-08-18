@@ -13486,8 +13486,15 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     ? (corsoData.costo_giorno_sede_cash ?? locSedeClasse?.costo_giornaliero_cash ?? locSedeClasse?.costo_giornaliero_bonifico ?? null)
     : (corsoData.costo_giorno_sede_bonifico ?? locSedeClasse?.costo_giornaliero_bonifico ?? locSedeClasse?.costo_giornaliero_cash ?? null));
   const costoLocationClasse = costoGiornalieroLocation != null ? round2(costoGiornalieroLocation * durataGiorniCorso) : 0;
+  // il titolo guida col vero fornitore (il nome della sede, per far
+  // match con la fattura reale) e riporta la città solo come contesto —
+  // prima mostrava solo la città, che non basta a riconoscere QUALE
+  // sede tra tutte quelle della stessa città
+  const nomeLocationPerTitolo = locSedeClasse?.nome_sede
+    ? `${locSedeClasse.nome_sede}, ${toTitleCase(locSedeClasse?.nome || "")}`
+    : toTitleCase(locSedeClasse?.nome || "—");
   const rigaLocationClasse = costoGiornalieroLocation != null ? {
-    rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${locSedeClasse?.nome || "—"}`, totale: costoLocationClasse,
+    rigaId: corsoData.id, tabella: "corsi_date", tipo: "location", nome: `Costo Location — ${nomeLocationPerTitolo}`, totale: costoLocationClasse,
     bonifico: pagamentoSedeClasse === "cash" ? 0 : costoLocationClasse,
     cash: pagamentoSedeClasse === "cash" ? costoLocationClasse : 0,
     scadenza: corsoData.scadenza_pagamento_location || null,
@@ -13541,7 +13548,10 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       // una volta per questa riga (tipoPagamento valorizzato) — finché
       // resta solo la tariffa di default dell'hotel, senza conferma, non
       // deve comparire nel Quadro impegni
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", iban: hotelRiga?.iban || null };
+      // il titolo guida col vero fornitore (l'hotel, per far match con la
+      // fattura reale) e riporta la persona solo come contesto — prima
+      // mostrava solo la persona, che non serve a niente per riconciliare
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${hotelRiga?.nome || "—"}, per ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", iban: hotelRiga?.iban || null };
     })
     .filter(Boolean);
 
