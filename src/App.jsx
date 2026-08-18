@@ -16979,6 +16979,51 @@ function variazionePctErp(attuale, precedente) {
   if (!precedente) return attuale ? null : 0;
   return ((attuale - precedente) / Math.abs(precedente)) * 100;
 }
+
+// range di date [inizio, fine] per una granularità mese/trimestre/anno
+// di Prima nota cassa — stessa idea della barra anno/mese di
+// Scadenziario Attivo, qui su tre livelli invece di due
+function rangeGranularitaPrimaNota(anno, granularita, mese, trimestre) {
+  const ultimoGiornoMese = (a, m) => new Date(Date.UTC(a, m, 0)).getUTCDate();
+  if (granularita === "mese") {
+    const gg = ultimoGiornoMese(anno, mese);
+    return { inizio: `${anno}-${String(mese).padStart(2, "0")}-01`, fine: `${anno}-${String(mese).padStart(2, "0")}-${String(gg).padStart(2, "0")}` };
+  }
+  if (granularita === "trimestre") {
+    const meseInizio = (trimestre - 1) * 3 + 1;
+    const meseFine = meseInizio + 2;
+    const gg = ultimoGiornoMese(anno, meseFine);
+    return { inizio: `${anno}-${String(meseInizio).padStart(2, "0")}-01`, fine: `${anno}-${String(meseFine).padStart(2, "0")}-${String(gg).padStart(2, "0")}` };
+  }
+  return { inizio: `${anno}-01-01`, fine: `${anno}-12-31` };
+}
+// il periodo immediatamente precedente, stessa granularità e durata —
+// per il confronto "+18% vs luglio" sotto il totale
+function periodoPrecedentePrimaNota(anno, granularita, mese, trimestre) {
+  if (granularita === "mese") return mese === 1 ? { anno: anno - 1, mese: 12, trimestre } : { anno, mese: mese - 1, trimestre };
+  if (granularita === "trimestre") return trimestre === 1 ? { anno: anno - 1, mese, trimestre: 4 } : { anno, mese, trimestre: trimestre - 1 };
+  return { anno: anno - 1, mese, trimestre };
+}
+// etichetta leggibile di un periodo, per l'intestazione "Spese · ..." e
+// per il confronto "+N% vs ..."
+function etichettaPeriodoPrimaNota(anno, granularita, mese, trimestre) {
+  if (granularita === "mese") return `${MESI[mese - 1]} ${anno}`;
+  if (granularita === "trimestre") return `T${trimestre} ${anno}`;
+  return `${anno}`;
+}
+// totale pagato per mese (chiave "yyyy-mm") su un elenco di spese reali
+// già filtrate per stato "pagata" — barra dei mesi di Prima nota cassa:
+// qui conta l'importo, non il numero di righe (vedi commento sulla
+// pagina), diversamente dalla barra di Scadenziario Attivo
+function riepilogoMensilePrimaNota(spesePagate) {
+  const mappa = {};
+  (spesePagate || []).forEach((s) => {
+    if (!s.data_documento) return;
+    const chiave = s.data_documento.slice(0, 7);
+    mappa[chiave] = (mappa[chiave] || 0) + (s.totale || 0);
+  });
+  return mappa;
+}
 // ricavi/costi/allievi/riempimento/cash flow/crediti di un insieme di
 // edizioni filtrate per periodo + sede — riusata sia per i KPI del
 // periodo corrente/precedente sia per ogni riga di "Andamento per sede"
@@ -19317,13 +19362,23 @@ function PaginaInserimentoCostiRicavi({
   ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
-  const [periodo, setPeriodo] = useState("ultimomese");
+  // periodo navigabile — stessa filosofia della barra anno/mese di
+  // Scadenziario Attivo: qui su tre granularità (mese/trimestre/anno)
+  // invece dei vecchi 5 pulsanti fissi "ultimo mese/trimestre/anno
+  // accademico" — "personalizzato" resta un'opzione a sé, con le date
+  // libere di sempre
+  const [granularitaPN, setGranularitaPN] = useState("mese");
+  const [annoPN, setAnnoPN] = useState(Number(dataOggiStr().slice(0, 4)));
+  const [mesePN, setMesePN] = useState(Number(dataOggiStr().slice(5, 7)));
+  const [trimestrePN, setTrimestrePN] = useState(Math.ceil(Number(dataOggiStr().slice(5, 7)) / 3));
+  const [personalizzatoPN, setPersonalizzatoPN] = useState(false);
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
+  const [ricercaPN, setRicercaPN] = useState("");
   const [importCsvAperto, setImportCsvAperto] = useState(false);
   const [mostraTutte, setMostraTutte] = useState(false);
 
-  const range = rangePeriodoInserimento(periodo, { da: customDa, a: customA });
+  const range = personalizzatoPN ? { inizio: customDa, fine: customA } : rangeGranularitaPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN);
 
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
   const costiCategorieById = Object.fromEntries((costiCategorie || []).map((c) => [c.id, c]));
@@ -19348,14 +19403,63 @@ function PaginaInserimentoCostiRicavi({
   // realmente pagati (stato "pagata"). Tutto il resto — fatture
   // registrate ma non ancora pagate, impegni presi, spese inserite da
   // "+ Nuova spesa da pagare" — resta solo in Scadenziario Passivo →
-  // Da pagare, finché non viene segnato "Pagato" lì.
-  const speseRealiFiltrate = (spese || [])
-    .filter((s) => s.stato === "pagata" && s.data_documento && s.data_documento >= range.inizio && s.data_documento <= range.fine)
+  // Da pagare, finché non viene segnato "Pagato" lì. Il badge "non
+  // pagate" qui sotto è solo un promemoria incrociato: non aggiunge
+  // righe a questo libro cassa, che deve restare "solo movimenti veri".
+  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && s.data_documento);
+  const speseRealiFiltrate = spesePagate
+    .filter((s) => s.data_documento >= range.inizio && s.data_documento <= range.fine)
     .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-  const righeUnite = speseRealiFiltrate.map(normalizzaRigaReale);
-  const righeVisibili = mostraTutte ? righeUnite : righeUnite.slice(0, SPESE_PAGINA_INIZIALE);
+  // la ricerca filtra le spese vere PRIMA di normalizzarle e prima di
+  // calcolare le top categorie qui sotto, così tutto quello che si vede
+  // (elenco, conteggio, totale, top categorie) resta coerente con
+  // quello che si è cercato — non solo l'elenco delle righe
+  const speseRealiRicercate = ricercaPN.trim()
+    ? speseRealiFiltrate.filter((s) => {
+        const q = ricercaPN.trim().toLowerCase();
+        const cat = costiCategorieById[s.categoria_id]?.nome || "";
+        const sott = costiSottocategorieById[s.sottocategoria_id]?.nome || "";
+        const forn = s.fornitore_id ? fornitoriById[s.fornitore_id]?.nome || "" : "";
+        return (s.descrizione || "").toLowerCase().includes(q) || cat.toLowerCase().includes(q) || sott.toLowerCase().includes(q) || forn.toLowerCase().includes(q);
+      })
+    : speseRealiFiltrate;
+  const righeUniteRicerca = speseRealiRicercate.map(normalizzaRigaReale);
+  const righeVisibili = mostraTutte ? righeUniteRicerca : righeUniteRicerca.slice(0, SPESE_PAGINA_INIZIALE);
 
-  const totaleSpese = round2(righeUnite.reduce((s, r) => s + (r.importo || 0), 0));
+  const totaleSpese = round2(righeUniteRicerca.reduce((s, r) => s + (r.importo || 0), 0));
+
+  // confronto col periodo precedente, stessa granularità e durata
+  const periodoPrecPN = periodoPrecedentePrimaNota(annoPN, granularitaPN, mesePN, trimestrePN);
+  const rangePrecPN = rangeGranularitaPrimaNota(periodoPrecPN.anno, granularitaPN, periodoPrecPN.mese, periodoPrecPN.trimestre);
+  const totalePrecedentePN = round2(spesePagate.filter((s) => s.data_documento >= rangePrecPN.inizio && s.data_documento <= rangePrecPN.fine).reduce((s, r) => s + (r.totale || 0), 0));
+  const variazionePctPN = personalizzatoPN ? null : variazionePctErp(totaleSpese, totalePrecedentePN);
+
+  // "N non pagate": spese non ancora pagate con data nel periodo in
+  // vista — solo un avviso incrociato verso Scadenziario Passivo, mai
+  // aggiunto all'elenco qui sotto (vedi commento sopra)
+  function bonificoRealePN(s) { return round2((s.totale || 0) - (s.importo_pagato_cash || 0)); }
+  const speseNonPagateTutte = (spese || []).filter((s) => s.stato !== "pagata" && s.data_documento && bonificoRealePN(s) > 0);
+  const nonPagateNelPeriodo = speseNonPagateTutte.filter((s) => s.data_documento >= range.inizio && s.data_documento <= range.fine);
+  const nonPagateContoPN = nonPagateNelPeriodo.length;
+  const nonPagateTotalePN = round2(nonPagateNelPeriodo.reduce((s, r) => s + bonificoRealePN(r), 0));
+  const riepilogoNonPagatePerMese = riepilogoMensilePrimaNota(speseNonPagateTutte.map((s) => ({ data_documento: s.data_documento, totale: bonificoRealePN(s) })));
+
+  // barra dei mesi/trimestri: importo pagato per mese, sull'anno in
+  // vista — usata sia per i pulsanti sia per la barretta sotto ciascuno
+  const riepilogoMesePN = riepilogoMensilePrimaNota(spesePagate.filter((s) => s.data_documento.slice(0, 4) === String(annoPN)));
+  const maxMensilePN = Math.max(1, ...Object.values(riepilogoMesePN));
+
+  // top 4 sotto-categorie per spesa nel periodo in vista — dove sono
+  // finiti i soldi, senza scorrere l'intero elenco
+  const totaliSottocategoriaPN = {};
+  speseRealiRicercate.forEach((s) => {
+    const chiave = s.sottocategoria_id || "__altro";
+    totaliSottocategoriaPN[chiave] = (totaliSottocategoriaPN[chiave] || 0) + (s.totale || 0);
+  });
+  const topCategoriePN = Object.entries(totaliSottocategoriaPN)
+    .map(([id, totale]) => ({ nome: costiSottocategorieById[id]?.nome || "Altro", totale }))
+    .sort((a, b) => b.totale - a.totale)
+    .slice(0, 4);
 
   // conteggi per la riga di tasti verso le altre schede di Amministrazione
   // (vedi TabsAmministrazione) — stesse funzioni condivise usate lì, così
@@ -19415,41 +19519,107 @@ function PaginaInserimentoCostiRicavi({
           abbonamentiCount={(abbonamentiContratti || []).length}
         />
 
-        <div style={{ ...cardStyle, padding: 16, marginBottom: 18 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: periodo === "personalizzato" ? 10 : 0 }}>
-            {[
-              { v: "ultimomese", l: "Ultimo mese" },
-              { v: "sempreattivo", l: "Sempre attivo" },
-              { v: "ultimotrimestre", l: "Ultimo trimestre" },
-              { v: "ultimoannoaccademico", l: "Ultimo anno accademico" },
-              { v: "personalizzato", l: "Data personalizzata" },
-            ].map((p) => (
-              <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 12px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap" }}>
-                {p.l}
-              </button>
-            ))}
-          </div>
-          {periodo === "personalizzato" && (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-              <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
-              <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          {!personalizzatoPN && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => setAnnoPN((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoPN}</div>
+              <button onClick={() => setAnnoPN((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
             </div>
           )}
+          {!personalizzatoPN && (
+            <div style={{ display: "flex", gap: 2, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 3 }}>
+              {[{ v: "mese", l: "Mese" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }].map((g) => (
+                <button key={g.v} onClick={() => setGranularitaPN(g.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "7px 13px", borderRadius: 13, border: "none", background: granularitaPN === g.v ? NAVY : "transparent", color: granularitaPN === g.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                  {g.l}
+                </button>
+              ))}
+            </div>
+          )}
+          {nonPagateContoPN > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 16, padding: "6px 12px" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#C0392B", display: "inline-block", flexShrink: 0 }} />
+              {nonPagateContoPN} {nonPagateContoPN === 1 ? "non pagata" : "non pagate"} · {fmtEuroErp(nonPagateTotalePN)}
+            </div>
+          )}
+          <button onClick={() => setPersonalizzatoPN((v) => !v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: personalizzatoPN ? "#fff" : NAVY, background: personalizzatoPN ? NAVY : "#fff", border: `1px solid ${personalizzatoPN ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Data personalizzata</button>
+          <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+            <CampoRicerca value={ricercaPN} onChange={(e) => setRicercaPN(e.target.value)} placeholder="Cerca spesa, fornitore, categoria…" />
+          </div>
         </div>
 
+        {personalizzatoPN ? (
+          <div style={{ ...cardStyle, padding: 16, marginBottom: 18, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <Field label="Dal"><input type="date" style={inputStyle} value={customDa} onChange={(e) => setCustomDa(e.target.value)} /></Field>
+            <Field label="Al"><input type="date" style={inputStyle} value={customA} onChange={(e) => setCustomA(e.target.value)} /></Field>
+          </div>
+        ) : granularitaPN === "mese" ? (
+          <div style={{ display: "flex", gap: 6, marginBottom: 18, overflowX: "auto", paddingBottom: 4 }}>
+            {MESI_ABBR.map((abbr, idx) => {
+              const m = idx + 1;
+              const chiave = `${annoPN}-${String(m).padStart(2, "0")}`;
+              const totaleMese = riepilogoMesePN[chiave] || 0;
+              const nonPagatoMese = (riepilogoNonPagatePerMese[chiave] || 0) > 0;
+              const attivoBtn = mesePN === m;
+              return (
+                <button key={m} onClick={() => setMesePN(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 74, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoBtn ? "#fff" : NAVY, background: attivoBtn ? NAVY : "#fff", border: `1px solid ${attivoBtn ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 8px 10px", cursor: "pointer", textAlign: "center" }}>
+                  {nonPagatoMese && <span style={{ position: "absolute", top: 5, right: 6, width: 6, height: 6, borderRadius: "50%", background: attivoBtn ? "#fff" : "#C0392B" }} />}
+                  <div>{abbr}</div>
+                  <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoBtn ? "#fff" : MUTED, marginTop: 2 }}>{totaleMese ? fmtEuroErp(totaleMese) : "—"}</div>
+                  <div style={{ height: 3, borderRadius: 2, marginTop: 6, background: attivoBtn ? "rgba(255,255,255,0.35)" : BG_CHIARO, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${Math.max(4, Math.round((totaleMese / maxMensilePN) * 100))}%`, background: attivoBtn ? "#fff" : GOLD, borderRadius: 2 }} />
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : granularitaPN === "trimestre" ? (
+          <div style={{ display: "flex", gap: 6, marginBottom: 18, overflowX: "auto", paddingBottom: 4 }}>
+            {[1, 2, 3, 4].map((t) => {
+              const mesiTrim = [(t - 1) * 3 + 1, (t - 1) * 3 + 2, (t - 1) * 3 + 3];
+              const totaleTrim = mesiTrim.reduce((s, m) => s + (riepilogoMesePN[`${annoPN}-${String(m).padStart(2, "0")}`] || 0), 0);
+              const nonPagatoTrim = mesiTrim.some((m) => (riepilogoNonPagatePerMese[`${annoPN}-${String(m).padStart(2, "0")}`] || 0) > 0);
+              const attivoBtn = trimestrePN === t;
+              return (
+                <button key={t} onClick={() => setTrimestrePN(t)} style={{ position: "relative", flex: "0 0 auto", minWidth: 100, ...fontBody, fontSize: 12.5, fontWeight: 700, color: attivoBtn ? "#fff" : NAVY, background: attivoBtn ? NAVY : "#fff", border: `1px solid ${attivoBtn ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "9px 10px", cursor: "pointer", textAlign: "center" }}>
+                  {nonPagatoTrim && <span style={{ position: "absolute", top: 6, right: 8, width: 6, height: 6, borderRadius: "50%", background: attivoBtn ? "#fff" : "#C0392B" }} />}
+                  <div>T{t}</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: attivoBtn ? "#fff" : MUTED, marginTop: 2 }}>{totaleTrim ? fmtEuroErp(totaleTrim) : "—"}</div>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div style={{ ...cardStyle, marginBottom: 0, padding: isMobile ? 16 : 26 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 14 }}>
             <div>
-              <div style={{ ...fontHero, fontSize: 26, color: NAVY }}>Spese</div>
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{righeUnite.length} vo{righeUnite.length === 1 ? "ce" : "ci"}</div>
+              <div style={{ ...fontHero, fontSize: 26, color: NAVY }}>Spese · {personalizzatoPN ? `${fmtData(customDa)} – ${fmtData(customA)}` : etichettaPeriodoPrimaNota(annoPN, granularitaPN, mesePN, trimestrePN)}</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>{righeUniteRicerca.length} vo{righeUniteRicerca.length === 1 ? "ce" : "ci"}</div>
             </div>
             <div style={{ textAlign: "right" }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Totale spese</div>
-              <div style={{ ...fontHero, fontSize: 24, color: "#C0392B" }}>{fmtEuroErp(totaleSpese)}</div>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8 }}>Totale periodo</div>
+              <div style={{ ...fontHero, fontSize: 24, color: NAVY }}>{fmtEuroErp(totaleSpese)}</div>
+              {!personalizzatoPN && variazionePctPN !== null && (
+                <div style={{ ...fontBody, fontSize: 12, color: variazionePctPN >= 0 ? "#C0392B" : "#2E7D32", marginTop: 2 }}>
+                  <b>{variazionePctPN >= 0 ? "+" : ""}{Math.round(variazionePctPN)}%</b> vs {granularitaPN === "anno" ? periodoPrecPN.anno : granularitaPN === "trimestre" ? `T${periodoPrecPN.trimestre}` : MESI[periodoPrecPN.mese - 1].toLowerCase()} ({fmtEuroErp(totalePrecedentePN)})
+                </div>
+              )}
             </div>
           </div>
 
-          {righeUnite.length === 0 ? (
+          {topCategoriePN.length > 0 && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+              {topCategoriePN.map((c) => (
+                <div key={c.nome} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "8px 12px", minWidth: 120 }}>
+                  <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY }}>{c.nome}</div>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, marginTop: 1 }}>{fmtEuroErp(c.totale)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {righeUniteRicerca.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna spesa nel periodo.</div>
           ) : (
             <>
@@ -19498,7 +19668,7 @@ function PaginaInserimentoCostiRicavi({
                   </div>
                 );
               })}
-              {!mostraTutte && righeUnite.length > SPESE_PAGINA_INIZIALE && (
+              {!mostraTutte && righeUniteRicerca.length > SPESE_PAGINA_INIZIALE && (
                 <div style={{ textAlign: "center", marginTop: 14 }}>
                   <button onClick={() => setMostraTutte(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
                     Mostra altre spese
