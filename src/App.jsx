@@ -9576,6 +9576,79 @@ const CONTROLLABILITA_OPZIONI = [{ chiave: "controllabile", etichetta: "Controll
 const RIDUCIBILITA_OPZIONI = [{ chiave: "alta", etichetta: "Alta" }, { chiave: "media", etichetta: "Media" }, { chiave: "bassa", etichetta: "Bassa" }];
 const ESSENZIALITA_OPZIONI = [{ chiave: "essenziale", etichetta: "Essenziale" }, { chiave: "utile", etichetta: "Utile" }, { chiave: "discrezionale", etichetta: "Discrezionale" }];
 const ORIGINE_OPZIONI = [{ chiave: "manuale", etichetta: "Manuale" }, { chiave: "automatico", etichetta: "Automatico" }, { chiave: "importato", etichetta: "Importato" }];
+
+// stessa "Classificazione gestionale" + "Budget e controllo" del modulo
+// Nuova spesa (PaginaSpesaForm), qui su un'anagrafica (location/master/
+// assistente) invece che su una spesa: solo informativi, compilazione
+// manuale — non vengono (ancora) riportati in automatico sulle spese che
+// quell'anagrafica genera
+function classificazioneVuota() {
+  return {
+    direttoIndiretto: "", fissoVariabile: "", ricorrenteOccasionale: "",
+    natura: "operativo", controllabilita: "", riducibilita: "", essenzialita: "",
+    origine: "manuale", ricorrenza: "nessuna",
+    beneDurevole: false, includiAnalisiCosti: true,
+    budgetPrevisto: "", sogliaPersonalizzata: "", responsabileCosto: "",
+  };
+}
+function classificazioneDaRecord(r) {
+  return {
+    direttoIndiretto: r?.diretto_indiretto || "", fissoVariabile: r?.fisso_variabile || "", ricorrenteOccasionale: r?.ricorrente_occasionale || "",
+    natura: r?.natura || "operativo", controllabilita: r?.controllabilita || "", riducibilita: r?.riducibilita || "", essenzialita: r?.essenzialita || "",
+    origine: r?.origine || "manuale", ricorrenza: r?.ricorrenza || "nessuna",
+    beneDurevole: r?.bene_durevole || false, includiAnalisiCosti: r?.includi_analisi_costi !== false,
+    budgetPrevisto: r?.budget_previsto != null ? String(r.budget_previsto) : "",
+    sogliaPersonalizzata: r?.soglia_allerta_personalizzata != null ? String(r.soglia_allerta_personalizzata) : "",
+    responsabileCosto: r?.responsabile_costo || "",
+  };
+}
+function classificazionePerPayload(v) {
+  return {
+    diretto_indiretto: v.direttoIndiretto || null, fisso_variabile: v.fissoVariabile || null, ricorrente_occasionale: v.ricorrenteOccasionale || null,
+    natura: v.natura || "operativo", controllabilita: v.controllabilita || null, riducibilita: v.riducibilita || null, essenzialita: v.essenzialita || null,
+    origine: v.origine || "manuale", ricorrenza: v.ricorrenza || "nessuna",
+    bene_durevole: !!v.beneDurevole, includi_analisi_costi: v.includiAnalisiCosti !== false,
+    budget_previsto: v.budgetPrevisto === "" ? null : Number(v.budgetPrevisto),
+    soglia_allerta_personalizzata: v.sogliaPersonalizzata === "" ? null : Number(v.sogliaPersonalizzata),
+    responsabile_costo: (v.responsabileCosto || "").trim() || null,
+  };
+}
+function PannelloClassificazioneGestionale({ valori, onChange }) {
+  const v = valori || classificazioneVuota();
+  return (
+    <>
+      <div style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Classificazione gestionale</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
+          <Field label="Diretto/indiretto"><select style={inputStyle} value={v.direttoIndiretto} onChange={(e) => onChange("direttoIndiretto", e.target.value)}><option value="">—</option>{DIRETTO_INDIRETTO_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Fisso/variabile"><select style={inputStyle} value={v.fissoVariabile} onChange={(e) => onChange("fissoVariabile", e.target.value)}><option value="">—</option>{FISSO_VARIABILE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Ricorrente/occasionale"><select style={inputStyle} value={v.ricorrenteOccasionale} onChange={(e) => onChange("ricorrenteOccasionale", e.target.value)}><option value="">—</option>{RICORRENTE_OCCASIONALE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Natura"><select style={inputStyle} value={v.natura} onChange={(e) => onChange("natura", e.target.value)}>{NATURA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Controllabilità"><select style={inputStyle} value={v.controllabilita} onChange={(e) => onChange("controllabilita", e.target.value)}><option value="">—</option>{CONTROLLABILITA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Riducibilità"><select style={inputStyle} value={v.riducibilita} onChange={(e) => onChange("riducibilita", e.target.value)}><option value="">—</option>{RIDUCIBILITA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Essenzialità"><select style={inputStyle} value={v.essenzialita} onChange={(e) => onChange("essenzialita", e.target.value)}><option value="">—</option>{ESSENZIALITA_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Origine"><select style={inputStyle} value={v.origine} onChange={(e) => onChange("origine", e.target.value)}>{ORIGINE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
+          <Field label="Ricorrenza"><select style={inputStyle} value={v.ricorrenza} onChange={(e) => onChange("ricorrenza", e.target.value)}>{RICORRENZA_OPZIONI.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}</select></Field>
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, margin: "10px 0 4px" }}>
+          <input type="checkbox" checked={v.beneDurevole} onChange={(e) => onChange("beneDurevole", e.target.checked)} /> Bene durevole
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 4 }}>
+          <input type="checkbox" checked={v.includiAnalisiCosti} onChange={(e) => onChange("includiAnalisiCosti", e.target.checked)} /> Incluso nell'analisi dei costi
+        </label>
+      </div>
+      <div style={{ ...cardStyle, marginBottom: 14 }}>
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Budget e controllo</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 160px" }}><Field label="Budget previsto"><input style={inputStyle} inputMode="decimal" value={v.budgetPrevisto} onChange={(e) => onChange("budgetPrevisto", e.target.value)} /></Field></div>
+          <div style={{ flex: "1 1 160px" }}><Field label="Soglia di allerta personalizzata"><input style={inputStyle} inputMode="decimal" value={v.sogliaPersonalizzata} onChange={(e) => onChange("sogliaPersonalizzata", e.target.value)} /></Field></div>
+          <div style={{ flex: "1 1 160px" }}><Field label="Responsabile del costo"><input style={inputStyle} value={v.responsabileCosto} onChange={(e) => onChange("responsabileCosto", e.target.value)} /></Field></div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function etichettaOpzione(lista, chiave) {
   return lista.find((o) => o.chiave === chiave)?.etichetta || chiave || "—";
 }
@@ -21228,6 +21301,8 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const [partitaIvaMod, setPartitaIvaMod] = useState("");
   const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
   const [pecMod, setPecMod] = useState("");
+  const [classMod, setClassMod] = useState(classificazioneVuota());
+  function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -21282,6 +21357,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     setPartitaIvaMod(selezionato?.partita_iva || "");
     setCodiceDestinatarioMod(selezionato?.codice_destinatario || "");
     setPecMod(selezionato?.pec || "");
+    setClassMod(classificazioneDaRecord(selezionato));
     setTab("corsi");
     setCorsoEspansoId(null);
     setModificaContatti(false);
@@ -21312,6 +21388,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
       email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null,
       indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
       partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
+      ...classificazionePerPayload(classMod),
     };
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
@@ -21547,8 +21624,11 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                           <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
                           <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
                           <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                          <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
                         </div>
+                        <div style={{ marginTop: 10, maxWidth: 640 }}>
+                          <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
+                        </div>
+                        <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
                       </>
                     )}
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
@@ -21830,6 +21910,8 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   const [partitaIvaMod, setPartitaIvaMod] = useState("");
   const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
   const [pecMod, setPecMod] = useState("");
+  const [classMod, setClassMod] = useState(classificazioneVuota());
+  function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -21883,6 +21965,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setPartitaIvaMod(selezionato?.partita_iva || "");
     setCodiceDestinatarioMod(selezionato?.codice_destinatario || "");
     setPecMod(selezionato?.pec || "");
+    setClassMod(classificazioneDaRecord(selezionato));
     setTab(isAssistente ? "corsi" : "calendario");
     setModificaContatti(false);
     setMenuAzioni(false);
@@ -21921,6 +22004,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
       Object.assign(campi, {
         iban: ibanMod.trim() || null, indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
         partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
+        ...classificazionePerPayload(classMod),
       });
     }
     const { error } = await supabase.from(tabella).update(campi).eq("id", selezionatoId);
@@ -22153,8 +22237,11 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                               <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
                               <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
                               <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                              <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
                             </div>
+                            <div style={{ marginTop: 10, maxWidth: 640 }}>
+                              <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
+                            </div>
+                            <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
                           </>
                         )}
                       </>
@@ -22482,6 +22569,8 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   // categoria di spesa: propria per ciascuna sede, non più un'unica
   // categoria condivisa da tutte le location (vedi calcolaVociScadenziario)
   const [categoriaSpesaLoc, setCategoriaSpesaLoc] = useState(null);
+  const [classNuova, setClassNuova] = useState(classificazioneVuota());
+  function aggiornaClassNuova(campo, valore) { setClassNuova((prev) => ({ ...prev, [campo]: valore })); }
 
   const [locInModifica, setLocInModifica] = useState(null);
   const [modNomeSedeLoc, setModNomeSedeLoc] = useState("");
@@ -22492,6 +22581,8 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
   const [modIbanLoc, setModIbanLoc] = useState("");
   const [modCategoriaSpesaLoc, setModCategoriaSpesaLoc] = useState(null);
+  const [classMod, setClassMod] = useState(classificazioneVuota());
+  function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
 
   const gruppiLocationPerCitta = useMemo(() => {
     const mappa = {};
@@ -22510,9 +22601,10 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       sede_centrale: sedeCentraleLoc,
       iban: ibanLoc.trim() || null,
       categoria_spesa_id: categoriaSpesaLoc,
+      ...classificazionePerPayload(classNuova),
     });
     if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setMostraFormSede(false); setMsg("Sede aggiunta.");
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setClassNuova(classificazioneVuota()); setMostraFormSede(false); setMsg("Sede aggiunta.");
     ricarica(["location"]);
   }
   function apriModificaLocation(l) {
@@ -22525,6 +22617,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
     setModSedeCentraleLoc(!!l.sede_centrale);
     setModIbanLoc(l.iban || "");
     setModCategoriaSpesaLoc(l.categoria_spesa_id || null);
+    setClassMod(classificazioneDaRecord(l));
   }
   async function salvaModificaLocation(id) {
     if (!modNomeLoc.trim()) { setMsg("Il nome della città non può essere vuoto."); return; }
@@ -22537,6 +22630,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       sede_centrale: modSedeCentraleLoc,
       iban: modIbanLoc.trim() || null,
       categoria_spesa_id: modCategoriaSpesaLoc,
+      ...classificazionePerPayload(classMod),
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     setLocInModifica(null); setMsg("Sede aggiornata.");
@@ -22660,6 +22754,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                 <Field label="Categoria di spesa (opzionale)">
                   <SelectCategoriaSpesa value={categoriaSpesaLoc} onChange={setCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
                 </Field>
+                <PannelloClassificazioneGestionale valori={classNuova} onChange={aggiornaClassNuova} />
                 <div style={{ display: "flex", gap: 8 }}>
                   <Button onClick={aggiungiLocation}>Aggiungi sede</Button>
                   <Button variant="ghost" onClick={() => setMostraFormSede(false)}>Annulla</Button>
@@ -22720,6 +22815,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                           <Field label="Categoria di spesa (opzionale)">
                             <SelectCategoriaSpesa value={modCategoriaSpesaLoc} onChange={setModCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
                           </Field>
+                          <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
                           <div style={{ display: "flex", gap: 8 }}>
                             <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
                             <Button variant="ghost" onClick={() => setLocInModifica(null)}>Annulla</Button>
