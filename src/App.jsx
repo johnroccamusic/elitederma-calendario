@@ -18834,7 +18834,6 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const [annoScadPassivo, setAnnoScadPassivo] = useState(Number(oggiStr.slice(0, 4)));
   const [meseScadPassivo, setMeseScadPassivo] = useState(Number(oggiStr.slice(5, 7)));
   const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
-  const [subTabDocumenti, setSubTabDocumenti] = useState("spese");
   const [sincronizzandoFic, setSincronizzandoFic] = useState(false);
   const [msgFic, setMsgFic] = useState("");
   const [mostraTutteFic, setMostraTutteFic] = useState(false);
@@ -18967,10 +18966,6 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
       })
     : elencoMesePassivo;
   const riepilogoMeseFiltratoPassivo = riepilogoMensileScadenze(elencoFiltratoPassivo, dataDiPassivoAttuale, importoDiPassivoAttuale);
-
-  const documentiFornitore = (spese || [])
-    .filter((s) => s.numero_documento)
-    .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
 
   const scadenziarioAttivo = calcolaScadenziarioAttivo({ iscritti, corsiDate });
   const scadenziarioAttivoStorico = calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate: true });
@@ -19126,7 +19121,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           onApriPrimaNotaCassa={onApriPrimaNotaCassa}
           onApriScheda={setTab}
           impegniCount={impegni.length}
-          documentiCount={documentiFornitore.length}
+          documentiCount={(fattureRicevuteFic || []).length}
           passivoCount={daPagare.length}
           attivoCount={scadenziarioAttivo.length}
           abbonamentiCount={(abbonamentiContratti || []).length}
@@ -19189,84 +19184,57 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           </div>
         )}
 
-        {tab === "documenti" && (
-          <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <TabPillola attivo={subTabDocumenti === "spese"} onClick={() => setSubTabDocumenti("spese")}>Con fattura registrata ({documentiFornitore.length})</TabPillola>
-              <TabPillola attivo={subTabDocumenti === "fic"} onClick={() => setSubTabDocumenti("fic")}>Da Fatture in Cloud ({(fattureRicevuteFic || []).length})</TabPillola>
-              {subTabDocumenti === "fic" && (
+        {tab === "documenti" && (() => {
+          // il registro è le fatture di Fatture in Cloud, punto: prima
+          // c'era anche una scheda "Con fattura registrata" (spese con
+          // numero_documento inserito a mano) separata da questa, ma
+          // erano due elenchi che raccontavano la stessa cosa in due
+          // posti diversi — ora è questo l'unico elenco, e il conteggio
+          // del tasto "Registro documenti fornitore" in alto viene da qui
+          const elencoFicOrdinato = [...(fattureRicevuteFic || [])].sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+          const elencoFicVisibile = mostraTutteFic ? elencoFicOrdinato : elencoFicOrdinato.slice(0, SPESE_PAGINA_INIZIALE);
+          return (
+            <div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
                 <button onClick={sincronizzaFatturaInCloud} disabled={sincronizzandoFic} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto", opacity: sincronizzandoFic ? 0.6 : 1 }}>
                   {sincronizzandoFic ? "Sincronizzo…" : "Sincronizza da Fatture in Cloud"}
                 </button>
-              )}
-            </div>
-            {msgFic && subTabDocumenti === "fic" && <div style={{ ...fontBody, fontSize: 13, color: msgFic.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgFic}</div>}
-
-            {subTabDocumenti === "spese" && (
-              <div style={{ ...cardStyle }}>
-                {documentiFornitore.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura registrata ancora.</div>}
-                {elencoConIntestazioniMese(documentiFornitore, (spesa) => spesa.data_documento || null, (spesa) => {
-                  const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
-                  const chips = [
-                    spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? fornitoriById[spesa.fornitore_id].nome : null,
-                    spesa.scadenza_pagamento ? `Scade ${fmtData(spesa.scadenza_pagamento)}` : null,
-                  ].filter(Boolean);
-                  return (
-                    <RigaAmministrazione
-                      key={spesa.id}
-                      data={spesa.data_documento}
-                      titolo={spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}
-                      sottotitolo={`Fattura n. ${spesa.numero_documento}`}
-                      chips={chips}
-                      importo={fmtEuroErp(spesa.totale)}
-                    >
-                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
-                        {etichettaOpzione(STATI_SPESA, spesa.stato)}
-                      </span>
-                      <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
-                    </RigaAmministrazione>
-                  );
-                })}
               </div>
-            )}
-            {subTabDocumenti === "fic" && (() => {
-              const elencoFicOrdinato = [...(fattureRicevuteFic || [])].sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
-              const elencoFicVisibile = mostraTutteFic ? elencoFicOrdinato : elencoFicOrdinato.slice(0, SPESE_PAGINA_INIZIALE);
-              return (
-                <div style={{ ...cardStyle }}>
-                  {elencoFicOrdinato.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura ricevuta da Fatture in Cloud — prova a sincronizzare.</div>}
-                  {elencoConIntestazioniMese(elencoFicVisibile, (f) => f.data_documento || null, (f) => (
-                    <RigaAmministrazione
-                      key={f.id}
-                      data={f.data_documento}
-                      titolo={f.fornitore_nome || f.descrizione || "Documento"}
-                      sottotitolo={[f.categoria, f.numero_documento ? `Doc. ${f.numero_documento}` : null].filter(Boolean).join(" · ") || null}
-                      chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
-                      importo={fmtEuroErp(f.totale)}
-                    >
-                      {f.spesa_id ? (
-                        <>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
-                          <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
-                        </>
-                      ) : (
-                        <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>
-                      )}
-                    </RigaAmministrazione>
-                  ))}
-                  {!mostraTutteFic && elencoFicOrdinato.length > SPESE_PAGINA_INIZIALE && (
-                    <div style={{ textAlign: "center", marginTop: 14 }}>
-                      <button onClick={() => setMostraTutteFic(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        Mostra altri documenti
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        )}
+              {msgFic && <div style={{ ...fontBody, fontSize: 13, color: msgFic.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgFic}</div>}
+
+              <div style={{ ...cardStyle }}>
+                {elencoFicOrdinato.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura ricevuta da Fatture in Cloud — prova a sincronizzare.</div>}
+                {elencoConIntestazioniMese(elencoFicVisibile, (f) => f.data_documento || null, (f) => (
+                  <RigaAmministrazione
+                    key={f.id}
+                    data={f.data_documento}
+                    titolo={f.fornitore_nome || f.descrizione || "Documento"}
+                    sottotitolo={[f.categoria, f.numero_documento ? `Doc. ${f.numero_documento}` : null].filter(Boolean).join(" · ") || null}
+                    chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
+                    importo={fmtEuroErp(f.totale)}
+                  >
+                    {f.spesa_id ? (
+                      <>
+                        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
+                        <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
+                      </>
+                    ) : (
+                      <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>
+                    )}
+                  </RigaAmministrazione>
+                ))}
+                {!mostraTutteFic && elencoFicOrdinato.length > SPESE_PAGINA_INIZIALE && (
+                  <div style={{ textAlign: "center", marginTop: 14 }}>
+                    <button onClick={() => setMostraTutteFic(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      Mostra altri documenti
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {tab === "passivo" && (
           <div>
@@ -19514,7 +19482,7 @@ const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
-  abbonamentiContratti, abbonamentiImporti,
+  abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic,
   ricarica, onBack, onApriModificaSpesa, onApriNuovaSpesa, onApriBudget, onApriAmministrazioneTab,
 }) {
   const isMobile = useIsMobile();
@@ -19629,7 +19597,7 @@ function PaginaInserimentoCostiRicavi({
       const bonifico = round2((s.totale || 0) - (s.importo_pagato_cash || 0));
       return bonifico > 0 && (!corsoDataSpesa || s.origine_scadenziario_chiave || corsoDataSpesa.data_fine <= oggiStrConteggio);
     }).length;
-  const documentiFornitorePerConteggio = (spese || []).filter((s) => s.numero_documento).length;
+  const documentiFornitorePerConteggio = (fattureRicevuteFic || []).length;
   const scadenziarioAttivoPerConteggio = calcolaScadenziarioAttivo({ iscritti, corsiDate }).length;
   const occorrenzeAbbonamentiPerConteggio = calcolaOccorrenzeAbbonamenti({ abbonamentiContratti, abbonamentiImporti, spese }).length;
 
@@ -29900,7 +29868,7 @@ export default function App() {
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
-    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi"],
+    inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     venditeshop: ["vendite_shop"],
     venditealbanco: ["vendite_shop"],
@@ -30774,6 +30742,7 @@ export default function App() {
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           categorieGruppi={categorieGruppi}
           abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
+          fattureRicevuteFic={fattureRicevuteFic}
           ricarica={fetchDati} onBack={() => setView("amministrazione")}
           onApriModificaSpesa={apriModificaSpesa} onApriNuovaSpesa={apriNuovaSpesa} onApriBudget={apriBudgetCosti}
           onApriAmministrazioneTab={apriAmministrazioneTab}
