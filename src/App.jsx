@@ -18805,7 +18805,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
 // fornitore e in Scadenziario Passivo → Da pagare, già classificata per
 // sede e categoria in base a "Associa il gruppo a una categoria di spesa"
 // (Gestione Master/Assistenti/Hotel/Location, Statistiche venditori).
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, tabIniziale }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, tabIniziale }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
@@ -18824,6 +18824,23 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const [annoScadPassivo, setAnnoScadPassivo] = useState(Number(oggiStr.slice(0, 4)));
   const [meseScadPassivo, setMeseScadPassivo] = useState(Number(oggiStr.slice(5, 7)));
   const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
+  const [subTabDocumenti, setSubTabDocumenti] = useState("spese");
+  const [sincronizzandoFic, setSincronizzandoFic] = useState(false);
+  const [msgFic, setMsgFic] = useState("");
+  const [mostraTutteFic, setMostraTutteFic] = useState(false);
+  async function sincronizzaFatturaInCloud() {
+    setSincronizzandoFic(true);
+    setMsgFic("");
+    const { data: sessione } = await supabase.auth.getSession();
+    const { data, error } = await supabase.functions.invoke("fic-sync-documenti", {
+      headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
+    });
+    setSincronizzandoFic(false);
+    if (error) { setMsgFic("Errore: " + error.message); return; }
+    if (data?.errore) { setMsgFic("Errore: " + data.errore); return; }
+    setMsgFic(`Sincronizzate ${data?.importati ?? 0} fatture.`);
+    ricarica(["fatture_ricevute_fic"]);
+  }
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
@@ -19163,30 +19180,81 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         )}
 
         {tab === "documenti" && (
-          <div style={{ ...cardStyle }}>
-            {documentiFornitore.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura registrata ancora.</div>}
-            {elencoConIntestazioniMese(documentiFornitore, (spesa) => spesa.data_documento || null, (spesa) => {
-              const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
-              const chips = [
-                spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? fornitoriById[spesa.fornitore_id].nome : null,
-                spesa.scadenza_pagamento ? `Scade ${fmtData(spesa.scadenza_pagamento)}` : null,
-              ].filter(Boolean);
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <TabPillola attivo={subTabDocumenti === "spese"} onClick={() => setSubTabDocumenti("spese")}>Con fattura registrata ({documentiFornitore.length})</TabPillola>
+              <TabPillola attivo={subTabDocumenti === "fic"} onClick={() => setSubTabDocumenti("fic")}>Da Fatture in Cloud ({(fattureRicevuteFic || []).length})</TabPillola>
+              {subTabDocumenti === "fic" && (
+                <button onClick={sincronizzaFatturaInCloud} disabled={sincronizzandoFic} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto", opacity: sincronizzandoFic ? 0.6 : 1 }}>
+                  {sincronizzandoFic ? "Sincronizzo…" : "Sincronizza da Fatture in Cloud"}
+                </button>
+              )}
+            </div>
+            {msgFic && subTabDocumenti === "fic" && <div style={{ ...fontBody, fontSize: 13, color: msgFic.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgFic}</div>}
+
+            {subTabDocumenti === "spese" && (
+              <div style={{ ...cardStyle }}>
+                {documentiFornitore.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura registrata ancora.</div>}
+                {elencoConIntestazioniMese(documentiFornitore, (spesa) => spesa.data_documento || null, (spesa) => {
+                  const stato = COLORE_STATO_SPESA[spesa.stato] || COLORE_STATO_SPESA.preventivata;
+                  const chips = [
+                    spesa.fornitore_id && fornitoriById[spesa.fornitore_id] ? fornitoriById[spesa.fornitore_id].nome : null,
+                    spesa.scadenza_pagamento ? `Scade ${fmtData(spesa.scadenza_pagamento)}` : null,
+                  ].filter(Boolean);
+                  return (
+                    <RigaAmministrazione
+                      key={spesa.id}
+                      data={spesa.data_documento}
+                      titolo={spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}
+                      sottotitolo={`Fattura n. ${spesa.numero_documento}`}
+                      chips={chips}
+                      importo={fmtEuroErp(spesa.totale)}
+                    >
+                      <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
+                        {etichettaOpzione(STATI_SPESA, spesa.stato)}
+                      </span>
+                      <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
+                    </RigaAmministrazione>
+                  );
+                })}
+              </div>
+            )}
+            {subTabDocumenti === "fic" && (() => {
+              const elencoFicOrdinato = [...(fattureRicevuteFic || [])].sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+              const elencoFicVisibile = mostraTutteFic ? elencoFicOrdinato : elencoFicOrdinato.slice(0, SPESE_PAGINA_INIZIALE);
               return (
-                <RigaAmministrazione
-                  key={spesa.id}
-                  data={spesa.data_documento}
-                  titolo={spesa.descrizione || sottocategoriaCostoDi(costiSottocategorie, spesa.sottocategoria_id)?.nome || "Spesa"}
-                  sottotitolo={`Fattura n. ${spesa.numero_documento}`}
-                  chips={chips}
-                  importo={fmtEuroErp(spesa.totale)}
-                >
-                  <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: stato.colore, background: stato.sfondo, borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>
-                    {etichettaOpzione(STATI_SPESA, spesa.stato)}
-                  </span>
-                  <button onClick={() => onApriModificaSpesa(spesa.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Modifica spesa</button>
-                </RigaAmministrazione>
+                <div style={{ ...cardStyle }}>
+                  {elencoFicOrdinato.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura ricevuta da Fatture in Cloud — prova a sincronizzare.</div>}
+                  {elencoConIntestazioniMese(elencoFicVisibile, (f) => f.data_documento || null, (f) => (
+                    <RigaAmministrazione
+                      key={f.id}
+                      data={f.data_documento}
+                      titolo={f.fornitore_nome || f.descrizione || "Documento"}
+                      sottotitolo={[f.categoria, f.numero_documento ? `Doc. ${f.numero_documento}` : null].filter(Boolean).join(" · ") || null}
+                      chips={[f.fattura_elettronica ? "Fattura elettronica" : null].filter(Boolean)}
+                      importo={fmtEuroErp(f.totale)}
+                    >
+                      {f.spesa_id ? (
+                        <>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Importata</span>
+                          <button onClick={() => onApriModificaSpesa(f.spesa_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi spesa</button>
+                        </>
+                      ) : (
+                        <button onClick={() => onApriNuovaSpesaDaFatturaFic(f)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Importa come spesa</button>
+                      )}
+                    </RigaAmministrazione>
+                  ))}
+                  {!mostraTutteFic && elencoFicOrdinato.length > SPESE_PAGINA_INIZIALE && (
+                    <div style={{ textAlign: "center", marginTop: 14 }}>
+                      <button onClick={() => setMostraTutteFic(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 4 }}>
+                        Mostra altri documenti
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
-            })}
+            })()}
           </div>
         )}
 
@@ -28197,27 +28265,27 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   // essere certi che la spesa finisca esattamente in quella casella
   const ambitoBloccato = !!prefill?.classeId;
 
-  const [descrizione, setDescrizione] = useState(spesaEsistente?.descrizione || "");
+  const [descrizione, setDescrizione] = useState(spesaEsistente?.descrizione || prefill?.descrizione || "");
   const [categoriaId, setCategoriaId] = useState(prefill?.categoriaId || spesaEsistente?.categoria_id || "");
   const [sottocategoriaId, setSottocategoriaId] = useState(prefill?.sottocategoriaId || spesaEsistente?.sottocategoria_id || "");
-  const [fornitoreId, setFornitoreId] = useState(spesaEsistente?.fornitore_id || "");
-  const [nuovoFornitore, setNuovoFornitore] = useState("");
-  const [ibanFornitore, setIbanFornitore] = useState(() => (fornitori || []).find((f) => f.id === spesaEsistente?.fornitore_id)?.iban || "");
-  const [numeroDocumento, setNumeroDocumento] = useState(spesaEsistente?.numero_documento || "");
-  const [dataDocumento, setDataDocumento] = useState(spesaEsistente?.data_documento || dataOggiStr());
+  const [fornitoreId, setFornitoreId] = useState(prefill?.fornitoreId || spesaEsistente?.fornitore_id || "");
+  const [nuovoFornitore, setNuovoFornitore] = useState(prefill?.nomeFornitore || "");
+  const [ibanFornitore, setIbanFornitore] = useState(() => (fornitori || []).find((f) => f.id === (prefill?.fornitoreId || spesaEsistente?.fornitore_id))?.iban || "");
+  const [numeroDocumento, setNumeroDocumento] = useState(prefill?.numeroDocumento || spesaEsistente?.numero_documento || "");
+  const [dataDocumento, setDataDocumento] = useState(prefill?.dataDocumento || spesaEsistente?.data_documento || dataOggiStr());
   const [dataPagamento, setDataPagamento] = useState(spesaEsistente?.data_pagamento || "");
   const [scadenzaPagamento, setScadenzaPagamento] = useState(spesaEsistente?.scadenza_pagamento || "");
   const [competenzaDa, setCompetenzaDa] = useState(spesaEsistente?.competenza_da || "");
   const [competenzaA, setCompetenzaA] = useState(spesaEsistente?.competenza_a || "");
-  const [imponibile, setImponibile] = useState(spesaEsistente?.imponibile != null ? String(spesaEsistente.imponibile) : (prefill?.totale != null ? String(round2(prefill.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100))) : ""));
+  const [imponibile, setImponibile] = useState(spesaEsistente?.imponibile != null ? String(spesaEsistente.imponibile) : (prefill?.imponibile != null ? String(prefill.imponibile) : (prefill?.totale != null ? String(round2(prefill.totale / (1 + ALIQUOTA_IVA_RIEPILOGO_CLASSE / 100))) : "")));
   const [totale, setTotale] = useState(spesaEsistente?.totale != null ? String(spesaEsistente.totale) : (prefill?.totale != null ? String(prefill.totale) : ""));
-  const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? 22);
-  const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : false);
+  const [iva, setIva] = useState(spesaEsistente?.iva_percentuale ?? (prefill?.ivaPercentuale ?? 22));
+  const [esenteIva, setEsenteIva] = useState(spesaEsistente ? spesaEsistente.iva_percentuale === 0 : prefill?.ivaPercentuale === 0);
   const [stato, setStato] = useState(spesaEsistente?.stato || prefill?.statoIniziale || "pagata");
   const [metodoPagamento, setMetodoPagamento] = useState(spesaEsistente?.metodo_pagamento || "");
   const [note, setNote] = useState(spesaEsistente?.note || "");
 
-  const [tipoAmbito, setTipoAmbito] = useState(prefill ? "classe" : spesaEsistente?.tipo_ambito || "generale");
+  const [tipoAmbito, setTipoAmbito] = useState(prefill?.classeId ? "classe" : spesaEsistente?.tipo_ambito || "generale");
   const [sedeId, setSedeId] = useState(spesaEsistente?.sede_id || "");
   const [corsoId, setCorsoId] = useState(spesaEsistente?.corso_id || "");
   const [classeId, setClasseId] = useState(prefill?.classeId || spesaEsistente?.classe_id || "");
@@ -28362,8 +28430,15 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
       if (righe.length) await supabase.from("spese_attribuzioni").insert(righe);
     }
 
+    // spesa creata a partire da "Importa come spesa" su una fattura di
+    // Fatture in Cloud: la segna come già importata, così non ricompare
+    // più con il tasto "Importa come spesa" nel Registro documenti fornitore
+    if (prefill?.fatturaFicId) {
+      await supabase.from("fatture_ricevute_fic").update({ spesa_id: idSpesa }).eq("id", prefill.fatturaFicId);
+    }
+
     setSalvando(false);
-    ricarica(["fornitori", "spese", "spese_attribuzioni"]);
+    ricarica(prefill?.fatturaFicId ? ["fornitori", "spese", "spese_attribuzioni", "fatture_ricevute_fic"] : ["fornitori", "spese", "spese_attribuzioni"]);
     onBack();
   }
 
@@ -29518,6 +29593,10 @@ export default function App() {
   const [abbonamentiContratti, setAbbonamentiContratti] = useState([]);
   const [abbonamentiImporti, setAbbonamentiImporti] = useState([]);
   const [abbonamentiAttribuzioni, setAbbonamentiAttribuzioni] = useState([]);
+  // cache locale delle fatture di acquisto ricevute da Fatture in Cloud
+  // (Registro documenti fornitore → "Da Fatture in Cloud"); i token
+  // OAuth veri vivono solo lato server, mai qui
+  const [fattureRicevuteFic, setFattureRicevuteFic] = useState([]);
   const [costiBudget, setCostiBudget] = useState([]);
   const [costiSoglieAllerta, setCostiSoglieAllerta] = useState([]);
   // incassi occasionali non legati a un'iscrizione (es. vendita di un
@@ -29661,6 +29740,7 @@ export default function App() {
     abbonamenti_contratti: async () => setAbbonamentiContratti((await supabase.from("abbonamenti_contratti").select("*").order("data_inizio", { ascending: false })).data || []),
     abbonamenti_importi: async () => setAbbonamentiImporti((await supabase.from("abbonamenti_importi").select("*").order("valido_da")).data || []),
     abbonamenti_attribuzioni: async () => setAbbonamentiAttribuzioni((await supabase.from("abbonamenti_attribuzioni").select("*")).data || []),
+    fatture_ricevute_fic: async () => setFattureRicevuteFic((await supabase.from("fatture_ricevute_fic").select("*").order("data_documento", { ascending: false })).data || []),
     costi_budget: async () => setCostiBudget((await supabase.from("costi_budget").select("*")).data || []),
     costi_soglie_allerta: async () => setCostiSoglieAllerta((await supabase.from("costi_soglie_allerta").select("*")).data || []),
     entrate_manuali: async () => setEntrateManuali((await supabase.from("entrate_manuali").select("*").order("data", { ascending: false })).data || []),
@@ -29785,7 +29865,7 @@ export default function App() {
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
@@ -30223,6 +30303,32 @@ export default function App() {
   // "Modifica spesa" aperta da una riga già in Amministrazione: al
   // salvataggio "Indietro" deve tornare lì, non a Prima nota cassa
   function apriModificaSpesaDaAmministrazione(id) { setSpesaInModifica(id); setSpesaPrefill(null); setSpesaRitornoView("amministrazione"); apriViewProtetta("spesaform"); }
+  // "Importa come spesa" da una fattura ricevuta di Fatture in Cloud
+  // (Registro documenti fornitore): apre la stessa scheda "Nuova
+  // spesa" di sempre, precompilata con fornitore/importo/data/numero
+  // documento — categoria e sotto-categoria restano da scegliere,
+  // Fatture in Cloud non le conosce. Se esiste già un fornitore con lo
+  // stesso nome lo abbina, altrimenti propone di crearne uno nuovo
+  function apriNuovaSpesaDaFatturaFic(f) {
+    const fornitoreEsistente = (fornitori || []).find((ft) => ft.nome.trim().toLowerCase() === (f.fornitore_nome || "").trim().toLowerCase());
+    setSpesaInModifica(null);
+    setSpesaPrefill({
+      descrizione: f.descrizione || f.fornitore_nome || null,
+      fornitoreId: fornitoreEsistente?.id || null,
+      nomeFornitore: fornitoreEsistente ? null : (f.fornitore_nome || null),
+      numeroDocumento: f.numero_documento || null,
+      dataDocumento: f.data_documento || null,
+      imponibile: f.imponibile != null ? Number(f.imponibile) : null,
+      ivaPercentuale: (() => {
+        const pct = f.imponibile ? (Number(f.iva || 0) / Number(f.imponibile)) * 100 : 0;
+        return ALIQUOTE_IVA_COSTI.reduce((piuVicina, v) => (Math.abs(v - pct) < Math.abs(piuVicina - pct) ? v : piuVicina), ALIQUOTE_IVA_COSTI[0]);
+      })(),
+      totale: f.totale != null ? Number(f.totale) : null,
+      fatturaFicId: f.id,
+    });
+    setSpesaRitornoView("amministrazione");
+    apriViewProtetta("spesaform");
+  }
   function apriNuovaSpesaPerClasse(classeId, categoriaId, sottocategoriaId) {
     setSpesaInModifica(null);
     setSpesaPrefill({ classeId, categoriaId, sottocategoriaId });
@@ -30569,6 +30675,7 @@ export default function App() {
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
           spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
           abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
+          fattureRicevuteFic={fattureRicevuteFic}
           ricarica={fetchDati}
           onBack={() => setView("erp")}
           onApriModificaSpesa={apriModificaSpesaDaAmministrazione}
@@ -30577,6 +30684,7 @@ export default function App() {
           onApriNuovaSpesaDaPagare={apriNuovaSpesaDaPagare}
           onApriNuovoAbbonamento={apriNuovoAbbonamento}
           onApriModificaAbbonamento={apriModificaAbbonamento}
+          onApriNuovaSpesaDaFatturaFic={apriNuovaSpesaDaFatturaFic}
           tabIniziale={amministrazioneTabIniziale}
         />
       )}
@@ -30712,7 +30820,7 @@ export default function App() {
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
-          onBack={() => { if (spesaPrefill) { setSpesaPrefill(null); setView("scheda"); } else { setView(spesaRitornoView); } }}
+          onBack={() => { if (spesaPrefill?.classeId) { setSpesaPrefill(null); setView("scheda"); } else { setSpesaPrefill(null); setView(spesaRitornoView); } }}
         />
       )}
 
