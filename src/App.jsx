@@ -3019,7 +3019,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 4 }}>Team</div>
-            <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Assegnazione Master</div>
+            <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Operativo corsi</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Organizza il team, gli assistenti e le trasferte per ogni corso</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -3084,7 +3084,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         </div>
 
         <div style={{ ...cardStyle, boxShadow: "0 10px 24px -14px rgba(14,27,51,0.15)", marginBottom: 24 }}>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Carico assegnazioni</div>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Carico assegnazioni master</div>
           {caricoAssegnazioni.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna assegnazione ancora.</div>
           ) : (
