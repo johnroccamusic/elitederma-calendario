@@ -3283,3 +3283,88 @@ drop policy if exists "accesso interno scadenza_passiva" on public.scadenza_pass
 create policy "accesso interno scadenza_passiva" on public.scadenza_passiva for all to anon using (true) with check (true);
 
 notify pgrst, 'reload schema';
+
+-- 120) Motore di match: P.IVA/CF su fornitori
+-- ---------------------------------------------------------
+-- Motore di match (spec-riconciliazione.md §6): il segnale "Fornitore"
+-- vale 40/100 punti su P.IVA/CF identici, ma la tabella fornitori non
+-- ha mai avuto questi due campi — creata solo con nome/iban/indirizzo.
+-- Senza P.IVA/CF il segnale può solo scendere alla ragione sociale
+-- simile (15 punti), e nessun documento raggiungerebbe mai la soglia
+-- di preselezione automatica (90).
+--
+-- Additivo puro: due colonne nullable su una tabella esistente, nessun
+-- default, nessun vincolo NOT NULL, nessuna riga esistente toccata.
+-- Valorizzate da qui in avanti da fic-sync-documenti quando crea un
+-- nuovo fornitore da un documento Fatture in Cloud; i fornitori già
+-- esistenti restano con questi campi vuoti finché non vengono
+-- aggiornati a mano o da un futuro arricchimento.
+-- ---------------------------------------------------------
+
+alter table public.fornitori
+  add column if not exists partita_iva text,
+  add column if not exists codice_fiscale text;
+
+create index if not exists fornitori_partita_iva_idx on public.fornitori(partita_iva) where partita_iva is not null;
+
+notify pgrst, 'reload schema';
+
+
+-- 121) Motore di match: chiave stabile su impegno
+-- ---------------------------------------------------------
+-- Motore di match (spec-riconciliazione.md §6): impegno è ancora
+-- vuota — Quadro Impegni oggi è calcolato al volo da corsi/hotel/
+-- location (calcolaVociScadenziario), mai salvato come righe.
+--
+-- Per allineare quelle voci virtuali in impegno senza duplicarle ad
+-- ogni sincronizzazione serve una chiave stabile su cui fare upsert:
+-- stesso principio già in uso su spese.origine_scadenziario_chiave
+-- (stessa stringa "<tipo>_<rigaId>", vedi calcolaVociScadenziario in
+-- App.jsx), qui replicato su impegno invece che reinventato.
+--
+-- Additivo puro: una colonna nullable (gli impegni "manuale" non
+-- hanno un'origine virtuale da tracciare) con vincolo univoco,
+-- nessuna riga esistente toccata (la tabella è vuota).
+-- ---------------------------------------------------------
+
+alter table public.impegno
+  add column if not exists chiave_origine text;
+
+-- NON parziale: un indice/vincolo unique "pieno" in Postgres tollera
+-- comunque più NULL (i NULL non sono mai uguali fra loro), e solo così
+-- può essere usato come target di ON CONFLICT dall'upsert di
+-- PostgREST — un indice unique parziale (WHERE chiave_origine is not
+-- null, il primo tentativo) viene rifiutato da ON CONFLICT
+alter table public.impegno add constraint impegno_chiave_origine_key unique (chiave_origine);
+
+notify pgrst, 'reload schema';
+
+
+-- 122) Motore di match: tabella di apprendimento fornitore->categoria
+-- ---------------------------------------------------------
+-- Motore di match (spec-riconciliazione.md §6.5 "Apprendimento"): alla
+-- prima conferma manuale di una riconciliazione si memorizza la coppia
+-- fornitore → (categoria, origine_tipo). Ai match successivi dello
+-- stesso fornitore il segnale "Categoria" (§6.1, 8 punti) attinge da
+-- qui invece di restare sempre a 0 per i fornitori mai visti.
+--
+-- Una riga per fornitore (non uno storico): la preferenza è "l'ultima
+-- scelta buona", non un log — un upsert su fornitore_id la aggiorna
+-- ad ogni conferma successiva.
+-- ---------------------------------------------------------
+
+create table if not exists public.preferenze_match_fornitore (
+  id uuid primary key default gen_random_uuid(),
+  fornitore_id uuid not null unique references public.fornitori(id) on delete cascade,
+  categoria_id text references public.costi_sottocategorie(id) on delete set null,
+  origine_tipo text check (origine_tipo in ('corso', 'struttura', 'marketing', 'manuale')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.preferenze_match_fornitore enable row level security;
+drop policy if exists "accesso interno preferenze_match_fornitore" on public.preferenze_match_fornitore;
+create policy "accesso interno preferenze_match_fornitore" on public.preferenze_match_fornitore for all to anon using (true) with check (true);
+
+notify pgrst, 'reload schema';
+

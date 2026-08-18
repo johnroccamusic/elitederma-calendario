@@ -100,6 +100,76 @@ function mappaDocumento(d: any) {
   };
 }
 
+// trova (per P.IVA, poi CF, poi nome) o crea il fornitore su cui
+// agganciare il documento — documento_fornitore.fornitore_id è
+// obbligatorio, a differenza di fatture_ricevute_fic.fornitore_nome
+// che è solo testo. Cache in memoria per non ripetere le stesse query
+// per ogni fattura dello stesso fornitore nella stessa sincronizzazione
+// (es. le bollette mensili Wind Tre sono 12 documenti, un fornitore)
+const cacheFornitori = new Map<string, string>();
+async function trovaOCreaFornitore(entity: any) {
+  if (!entity) return null;
+  const piva = (entity.vat_number || "").trim();
+  const cf = (entity.tax_code || "").trim();
+  const nome = (entity.name || `${entity.first_name || ""} ${entity.last_name || ""}`).trim();
+  const chiaveCache = piva || cf || nome.toLowerCase();
+  if (!chiaveCache) return null;
+  if (cacheFornitori.has(chiaveCache)) return cacheFornitori.get(chiaveCache)!;
+
+  if (piva) {
+    const { data } = await supabase.from("fornitori").select("id").eq("partita_iva", piva).limit(1);
+    if (data?.[0]) { cacheFornitori.set(chiaveCache, data[0].id); return data[0].id; }
+  }
+  if (cf) {
+    const { data } = await supabase.from("fornitori").select("id").eq("codice_fiscale", cf).limit(1);
+    if (data?.[0]) { cacheFornitori.set(chiaveCache, data[0].id); return data[0].id; }
+  }
+  if (nome) {
+    const { data } = await supabase.from("fornitori").select("id").ilike("nome", nome).limit(1);
+    if (data?.[0]) { cacheFornitori.set(chiaveCache, data[0].id); return data[0].id; }
+  }
+
+  const { data, error } = await supabase.from("fornitori").insert({
+    nome: nome || "Fornitore sconosciuto",
+    partita_iva: piva || null,
+    codice_fiscale: cf || null,
+    indirizzo: entity.address_street || null,
+    citta: entity.address_city || null,
+    cap: entity.address_postal_code || null,
+  }).select("id").single();
+  if (error || !data) return null;
+  cacheFornitori.set(chiaveCache, data.id);
+  return data.id;
+}
+
+// da ReceivedDocument alla riga di documento_fornitore (spec
+// §4.1) — righe e data_scadenza_prevista sono i campi che userà il
+// motore di match (§6.1 "Origine") e la generazione delle scadenze
+// (§8 punto 5); "rate" solo se il documento ha più di un pagamento
+function mappaDocumentoFornitore(d: any, fornitoreId: string) {
+  const righe = Array.isArray(d.items_list)
+    ? d.items_list.map((r: any) => ({ descrizione: r.name || "", importo: r.net_price ?? null }))
+    : null;
+  const pagamenti = Array.isArray(d.payments_list) ? d.payments_list : [];
+  return {
+    fornitore_id: fornitoreId,
+    fic_id: d.id,
+    tipo: "fattura", // la sincronizzazione legge solo type=expense: nota di credito/autofattura non arrivano da qui
+    numero: d.invoice_number || null,
+    data_documento: d.date || null,
+    imponibile: d.amount_net ?? null,
+    iva: d.amount_vat ?? null,
+    totale: d.amount_gross ?? null,
+    data_scadenza_prevista: d.next_due_date || null,
+    rate: pagamenti.length > 1 ? pagamenti : null,
+    righe,
+    // stato NON incluso di proposito: sulla insert prende il default di
+    // schema ('importato'), sull'update (stesso fic_id) resta quello
+    // che ha già in tabella — non deve tornare indietro un documento
+    // già riconciliato/scartato solo perché arriva di nuovo dalla sync
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -124,7 +194,7 @@ Deno.serve(async (req) => {
   let completato = false;
 
   while (pagina <= MASSIMO_PAGINE) {
-    const url = `https://api-v2.fattureincloud.it/c/${config.company_id}/received_documents?type=expense&page=${pagina}&per_page=${PER_PAGE}`;
+    const url = `https://api-v2.fattureincloud.it/c/${config.company_id}/received_documents?type=expense&page=${pagina}&per_page=${PER_PAGE}&fieldset=detailed`;
     const risposta = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!risposta.ok) {
       const testo = await risposta.text();
@@ -144,9 +214,32 @@ Deno.serve(async (req) => {
     }
     importati += righe.length;
 
+    // stesso lotto anche in documento_fornitore (spec riconciliazione
+    // §4.1): un giro di trova-o-crea fornitore per documento, poi
+    // upsert — se un fornitore non si risolve (entity mancante) il
+    // documento resta fuori da questo giro, ripescato al prossimo sync
+    const righeDocumentoFornitore = [];
+    for (const d of documenti) {
+      const fornitoreId = await trovaOCreaFornitore(d.entity);
+      if (!fornitoreId) continue;
+      righeDocumentoFornitore.push(mappaDocumentoFornitore(d, fornitoreId));
+    }
+    if (righeDocumentoFornitore.length > 0) {
+      const { error: erroreDf } = await supabase.from("documento_fornitore").upsert(righeDocumentoFornitore, { onConflict: "fic_id" });
+      if (erroreDf) {
+        return new Response(JSON.stringify({ errore: "Errore salvataggio documento_fornitore: " + erroreDf.message, importati, pagina }), { status: 500, headers: jsonHeaders });
+      }
+    }
+
     if (!corpo.last_page || pagina >= corpo.last_page) { completato = true; break; }
     pagina += 1;
   }
+
+  // promuove a "da_riconciliare" i documenti appena inseriti (stato di
+  // default "importato", vedi mappaDocumentoFornitore) — nessun passo
+  // intermedio reale oggi fra i due stati, l'auto-abbinamento contratti
+  // ricorrenti (§6.4) arriverà come parte del motore di match
+  await supabase.from("documento_fornitore").update({ stato: "da_riconciliare" }).eq("stato", "importato");
 
   await supabase.from("fatture_in_cloud_config").update({ ultima_sincronizzazione: new Date().toISOString() }).eq("id", config.id);
 

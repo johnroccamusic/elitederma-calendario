@@ -18496,6 +18496,205 @@ function calcolaScadenziarioAttivo({ iscritti, corsiDate, soloIncassate = false 
   return righe.sort((a, b) => (a.scadenza || "").localeCompare(b.scadenza || ""));
 }
 
+// ---------- Riconciliazione fatture: motore di match (spec-riconciliazione.md §6) ----------
+// Dato un documento_fornitore in stato "da_riconciliare" e l'elenco
+// degli impegni aperti/parzialmente coperti, assegna a ciascun impegno
+// un punteggio 0-100 sui 5 segnali della spec, con le motivazioni che
+// lo giustificano (§6.3 "Spiegabilità obbligatoria" — senza il perché
+// l'utente conferma alla cieca, che è esattamente il fallimento che
+// questa funzione deve evitare). Funzioni pure, senza I/O: chi chiama
+// passa dati già caricati (fornitori, impegni, preferenze) e riceve
+// indietro solo numeri e testo — la UI (§7) e la transazione di
+// conferma (§8) restano passi successivi, non ancora costruiti.
+
+// distanza di Levenshtein normalizzata (0 = identiche, 1 = niente in
+// comune) — usata solo per la ragione sociale simile (§6.1); P.IVA/CF
+// devono sempre combaciare esattamente o valere zero, mai "quasi"
+function distanzaLevenshteinNormalizzata(a, b) {
+  const s1 = (a || "").trim().toLowerCase();
+  const s2 = (b || "").trim().toLowerCase();
+  if (!s1 || !s2) return 1;
+  if (s1 === s2) return 0;
+  const m = s1.length, n = s2.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = s1[i - 1] === s2[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j - 1], dp[i - 1][j], dp[i][j - 1]);
+    }
+  }
+  return dp[m][n] / Math.max(m, n);
+}
+
+// segnale "Fornitore" — 40 punti max (§6.1)
+function segnaleFornitore(fornitoreDocumento, fornitoreImpegno) {
+  if (!fornitoreDocumento || !fornitoreImpegno) return { punti: 0, motivazioni: [{ testo: "Fornitore non identificato sull'impegno", positiva: false }] };
+  if (fornitoreDocumento.id === fornitoreImpegno.id) {
+    const pivaCombacia = fornitoreDocumento.partita_iva && fornitoreDocumento.partita_iva === fornitoreImpegno.partita_iva;
+    const cfCombacia = fornitoreDocumento.codice_fiscale && fornitoreDocumento.codice_fiscale === fornitoreImpegno.codice_fiscale;
+    if (pivaCombacia || cfCombacia) return { punti: 40, motivazioni: [{ testo: "P.IVA identica", positiva: true }] };
+    return { punti: 40, motivazioni: [{ testo: "Stesso fornitore in anagrafica", positiva: true }] };
+  }
+  const distanza = distanzaLevenshteinNormalizzata(fornitoreDocumento.nome, fornitoreImpegno.nome);
+  if (distanza < 0.15) return { punti: 15, motivazioni: [{ testo: "Ragione sociale simile", positiva: true }] };
+  return { punti: 0, motivazioni: [{ testo: "Fornitore diverso", positiva: false }] };
+}
+
+// segnale "Importo" — 25 punti max; il caso "combinazione di impegni"
+// (20 punti) è gestito a parte da trovaCombinazioniImporto perché
+// coinvolge più impegni insieme, non un singolo confronto
+function segnaleImporto(totaleDocumento, importoImpegno) {
+  if (!(totaleDocumento > 0) || !(importoImpegno > 0)) return { punti: 0, motivazioni: [] };
+  const scarto = round2(totaleDocumento - importoImpegno);
+  const scartoPct = Math.abs(scarto) / totaleDocumento;
+  if (Math.abs(scarto) < 0.01) return { punti: 25, motivazioni: [{ testo: "Importo esatto", positiva: true }] };
+  const etichetta = `Importo ${scarto > 0 ? "+" : ""}${fmtEuroErp(scarto)}`;
+  if (scartoPct <= 0.05) return { punti: 18, motivazioni: [{ testo: etichetta, positiva: true }] };
+  return { punti: 0, motivazioni: [{ testo: etichetta, positiva: false }] };
+}
+
+// combinazioni di 2-4 impegni dello stesso fornitore la cui somma cade
+// entro tolleranza dal totale del documento (§6.1 "importo" 20 punti,
+// es. acconto+saldo, o docenza+trasferta) — bruteforce, accettabile
+// perché per fornitore i candidati aperti sono sempre poche unità, mai
+// centinaia (tetto di sicurezza combinatorio a 24 impegni)
+function trovaCombinazioniImporto(totaleDocumento, impegniStessoFornitore, tolleranzaPct = 0.02) {
+  const partecipanti = new Set();
+  const elenco = (impegniStessoFornitore || []).filter((i) => (i.importo_previsto || 0) > 0);
+  const n = elenco.length;
+  if (!(totaleDocumento > 0) || n < 2 || n > 24) return partecipanti;
+  const soglia = totaleDocumento * tolleranzaPct;
+  function combina(inizio, sottoinsieme, somma) {
+    if (sottoinsieme.length >= 2 && Math.abs(somma - totaleDocumento) <= soglia) {
+      sottoinsieme.forEach((imp) => partecipanti.add(imp.id));
+    }
+    if (sottoinsieme.length === 4) return;
+    for (let i = inizio; i < n; i++) {
+      combina(i + 1, [...sottoinsieme, elenco[i]], somma + elenco[i].importo_previsto);
+    }
+  }
+  combina(0, [], 0);
+  return partecipanti;
+}
+
+// segnale "Periodo" — 15 punti max (§6.1)
+function segnalePeriodo(dataDocumento, dataPrevista) {
+  if (!dataDocumento || !dataPrevista) return { punti: 0, motivazioni: [] };
+  const giorni = Math.abs(differenzaGiorni(dataDocumento, dataPrevista));
+  if (giorni <= 30) return { punti: 15, motivazioni: [{ testo: "Periodo coerente", positiva: true }] };
+  if (giorni <= 60) return { punti: 8, motivazioni: [{ testo: "Periodo vicino", positiva: true }] };
+  return { punti: 0, motivazioni: [{ testo: "Periodo lontano", positiva: false }] };
+}
+
+// estrae dalla descrizione di un impegno ("Costo Location — Centro Via
+// Valtorta, 48, Milano", "Costo Alloggio — H21 (MI), per ELIA CITO")
+// il nome del corso/sede da cercare nelle righe del documento — stessa
+// convenzione "— nome" già usata da calcolaRigheSpeseCorso per questi
+// titoli, qui letta al contrario invece di reinventare un altro campo
+function terminiOrigineDiImpegno(imp) {
+  const desc = imp?.descrizione || "";
+  const idx = desc.indexOf("—");
+  if (idx === -1) return [desc].filter(Boolean);
+  return [desc.slice(idx + 1).split(",")[0].trim()].filter(Boolean);
+}
+
+// segnale "Origine" — 12 punti max (§6.1): il nome del corso/sede
+// dell'impegno compare fra le righe (o la descrizione) del documento
+function segnaleOrigine(documento, terminiOrigine) {
+  const termini = (terminiOrigine || []).map((t) => (t || "").trim().toLowerCase()).filter((t) => t.length >= 3);
+  if (termini.length === 0) return { punti: 0, motivazioni: [] };
+  const testoDocumento = [documento.descrizione, ...(documento.righe || []).map((r) => r.descrizione)].filter(Boolean).join(" \n ").toLowerCase();
+  if (!testoDocumento) return { punti: 0, motivazioni: [] };
+  const trovato = termini.some((t) => testoDocumento.includes(t));
+  if (trovato) return { punti: 12, motivazioni: [{ testo: "Corso/sede citati in fattura", positiva: true }] };
+  return { punti: 0, motivazioni: [] };
+}
+
+// segnale "Categoria" — 8 punti max (§6.1), attinge alla tabella di
+// apprendimento (§6.5): categoria storicamente associata al fornitore,
+// valorizzata alla prima conferma manuale — vedi registraPreferenzaMatch
+function segnaleCategoria(fornitoreId, categoriaImpegnoId, preferenze) {
+  if (!fornitoreId || !categoriaImpegnoId) return { punti: 0, motivazioni: [] };
+  const pref = (preferenze || []).find((p) => p.fornitore_id === fornitoreId);
+  if (!pref || pref.categoria_id !== categoriaImpegnoId) return { punti: 0, motivazioni: [] };
+  return { punti: 8, motivazioni: [{ testo: "Categoria coerente con lo storico del fornitore", positiva: true }] };
+}
+
+// punto d'ingresso del motore: per un documento, i candidati fra gli
+// impegni aperti con punteggio ≥60 (§6.2 — sotto soglia non si
+// mostrano nemmeno, restano raggiungibili solo con ricerca manuale),
+// ordinati per punteggio, con preselezionato=true da ≥90
+function calcolaCandidatiMatch(documento, impegniAperti, { fornitori, preferenze } = {}) {
+  const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
+  const fornitoreDocumento = fornitoriById[documento.fornitore_id] || null;
+  const stessoFornitore = (impegniAperti || []).filter((i) => i.fornitore_id === documento.fornitore_id);
+  const partecipantiCombinazione = trovaCombinazioniImporto(documento.totale, stessoFornitore);
+
+  return (impegniAperti || [])
+    .map((imp) => {
+      const fornitoreImpegno = fornitoriById[imp.fornitore_id] || null;
+      const sFornitore = segnaleFornitore(fornitoreDocumento, fornitoreImpegno);
+      let sImporto = segnaleImporto(documento.totale, imp.importo_previsto);
+      if (partecipantiCombinazione.has(imp.id) && sImporto.punti < 20) {
+        sImporto = { punti: 20, motivazioni: [{ testo: "Fa parte di una combinazione che copre il totale documento", positiva: true }] };
+      }
+      const sPeriodo = segnalePeriodo(documento.data_documento, imp.data_prevista);
+      const sOrigine = segnaleOrigine(documento, terminiOrigineDiImpegno(imp));
+      const sCategoria = segnaleCategoria(imp.fornitore_id, imp.categoria_id, preferenze);
+      const punteggio = sFornitore.punti + sImporto.punti + sPeriodo.punti + sOrigine.punti + sCategoria.punti;
+      const motivazioni = [...sFornitore.motivazioni, ...sImporto.motivazioni, ...sPeriodo.motivazioni, ...sOrigine.motivazioni, ...sCategoria.motivazioni];
+      return { impegno: imp, punteggio, motivazioni, preselezionato: punteggio >= 90 };
+    })
+    .filter((c) => c.punteggio >= 60)
+    .sort((a, b) => b.punteggio - a.punteggio);
+}
+
+// §6.4 "Auto-abbinamento dei contratti ricorrenti": se il fornitore del
+// documento ha un contratto ricorrente attivo alla data del documento e
+// il totale rientra nella tolleranza (default ±5%), il documento si
+// abbina in automatico, senza passare dalla coda — stessa idea di
+// "tranche in vigore" di calcolaOccorrenzeAbbonamenti, qui applicata
+// alla data del documento invece che a ciascuna occorrenza periodica.
+// Fuori tolleranza: resta in coda con l'avviso esplicito di variazione
+function valutaAutoAbbinamentoContratto(documento, { abbonamentiContratti, abbonamentiImporti }, tolleranzaPct = 0.05) {
+  const contratto = (abbonamentiContratti || []).find((ab) =>
+    ab.fornitore_id === documento.fornitore_id &&
+    ab.data_inizio && ab.data_inizio <= documento.data_documento &&
+    (!ab.data_fine || ab.data_fine >= documento.data_documento)
+  );
+  if (!contratto) return { abbinabile: false, contratto: null, avviso: null };
+
+  const tranche = (abbonamentiImporti || [])
+    .filter((t) => t.abbonamento_id === contratto.id && t.valido_da <= documento.data_documento)
+    .sort((a, b) => (b.valido_da || "").localeCompare(a.valido_da || ""))[0];
+  if (!tranche || !(tranche.totale > 0)) return { abbinabile: false, contratto, avviso: null };
+
+  const scartoPct = Math.abs((documento.totale || 0) - tranche.totale) / tranche.totale;
+  if (scartoPct <= tolleranzaPct) return { abbinabile: true, contratto, avviso: null };
+
+  const variazionePct = Math.round(((documento.totale - tranche.totale) / tranche.totale) * 100);
+  return {
+    abbinabile: false,
+    contratto,
+    avviso: `Il canone è ${variazionePct >= 0 ? "aumentato" : "diminuito"} del ${Math.abs(variazionePct)}% rispetto al contratto`,
+  };
+}
+
+// §6.5 "Apprendimento": alla prima conferma manuale di una
+// riconciliazione, memorizza fornitore → (categoria, origine_tipo) —
+// una riga per fornitore (l'ultima scelta buona, non uno storico), così
+// segnaleCategoria ha di che attingere ai match successivi dello
+// stesso fornitore. Da richiamare dalla transazione di conferma (§8),
+// non ancora costruita: nessun punto della UI la chiama oggi
+async function registraPreferenzaMatch(fornitoreId, categoriaId, origineTipo) {
+  if (!fornitoreId || !categoriaId) return;
+  await supabase.from("preferenze_match_fornitore").upsert(
+    { fornitore_id: fornitoreId, categoria_id: categoriaId, origine_tipo: origineTipo || null, updated_at: new Date().toISOString() },
+    { onConflict: "fornitore_id" }
+  );
+}
+
 // riepilogo per mese di un elenco di scadenze: quante scadenze e
 // quanto totale cadono in ciascun mese (chiave "yyyy-mm") — la barra
 // dei mesi lo usa per i conteggi, l'intestazione del mese selezionato
@@ -18836,6 +19035,51 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   const [ricercaScadPassivo, setRicercaScadPassivo] = useState("");
   const [sincronizzandoFic, setSincronizzandoFic] = useState(false);
   const [msgFic, setMsgFic] = useState("");
+  const [sincronizzandoImpegni, setSincronizzandoImpegni] = useState(false);
+  const [msgImpegni, setMsgImpegni] = useState("");
+  // allinea le voci virtuali di Quadro Impegni (calcolate al volo da
+  // corsi/hotel/location, mai salvate finora) nella tabella impegno
+  // del motore di match (spec-riconciliazione.md §6) — upsert su
+  // chiave_origine, la stessa chiave "<tipo>_<rigaId>" già usata da
+  // spese.origine_scadenziario_chiave, così rieseguirla non duplica.
+  // hotel/location non sono fornitori: risolve/crea la riga fornitori
+  // per nome (stesso principio di trovaOCreaFornitore in
+  // fic-sync-documenti, qui lato client perché Quadro Impegni è già
+  // calcolato lato client)
+  async function sincronizzaImpegni() {
+    setSincronizzandoImpegni(true);
+    setMsgImpegni("");
+    const fornitoriPerNome = new Map((fornitori || []).map((f) => [f.nome.trim().toLowerCase(), f.id]));
+    const righeImpegno = [];
+    for (const v of impegni) {
+      const nomeFornitore = (v.fornitore || "").trim();
+      let fornitoreId = nomeFornitore ? fornitoriPerNome.get(nomeFornitore.toLowerCase()) : null;
+      if (nomeFornitore && !fornitoreId) {
+        const { data, error } = await supabase.from("fornitori").insert({ nome: nomeFornitore, iban: v.iban || null }).select("id").single();
+        if (!error && data) {
+          fornitoreId = data.id;
+          fornitoriPerNome.set(nomeFornitore.toLowerCase(), fornitoreId);
+        }
+      }
+      righeImpegno.push({
+        chiave_origine: v.chiave,
+        fornitore_id: fornitoreId || null,
+        descrizione: v.nome,
+        origine_tipo: "corso",
+        origine_id: v.rigaId,
+        categoria_id: v.sottocategoriaId || null,
+        importo_previsto: v.totale,
+        data_prevista: v.corsoData?.data_fine || v.scadenzaSuggerita || null,
+      });
+    }
+    if (righeImpegno.length > 0) {
+      const { error } = await supabase.from("impegno").upsert(righeImpegno, { onConflict: "chiave_origine" });
+      if (error) { setMsgImpegni("Errore: " + error.message); setSincronizzandoImpegni(false); return; }
+    }
+    setMsgImpegni(`Allineati ${righeImpegno.length} impegni.`);
+    setSincronizzandoImpegni(false);
+    ricarica(["fornitori"]);
+  }
   // Registro documenti fornitore: stessa navigazione anno/mese/ricerca
   // di Scadenziario Attivo/Passivo, sulla data documento delle fatture
   // ricevute da Fatture in Cloud
@@ -19156,7 +19400,11 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
             <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
               <TabPillola attivo={subTabImpegni === "attivi"} onClick={() => setSubTabImpegni("attivi")}>Impegni ({impegni.length})</TabPillola>
               <TabPillola attivo={subTabImpegni === "storico"} onClick={() => setSubTabImpegni("storico")}>Storico ({storicoImpegni.length})</TabPillola>
+              <button onClick={sincronizzaImpegni} disabled={sincronizzandoImpegni} title="Allinea questi impegni alla tabella usata dalla riconciliazione fatture" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", marginLeft: "auto", opacity: sincronizzandoImpegni ? 0.6 : 1 }}>
+                {sincronizzandoImpegni ? "Sincronizzo…" : "Sincronizza impegni"}
+              </button>
             </div>
+            {msgImpegni && <div style={{ ...fontBody, fontSize: 13, color: msgImpegni.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgImpegni}</div>}
             {subTabImpegni === "attivi" && (
               <div style={{ ...cardStyle }}>
                 {impegni.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessun impegno in attesa di fattura.</div>}
