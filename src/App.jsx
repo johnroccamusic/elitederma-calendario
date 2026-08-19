@@ -9664,7 +9664,6 @@ function PannelloClassificazioneGestionale({ valori, onChange }) {
       {aperto && (
       <>
       <div style={{ marginTop: 14 }}>
-        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Classificazione gestionale</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0 14px" }}>
           <Field label="Diretto/indiretto"><select style={inputStyle} value={v.direttoIndiretto} onChange={(e) => onChange("direttoIndiretto", e.target.value)}><option value="">—</option>{DIRETTO_INDIRETTO_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
           <Field label="Fisso/variabile"><select style={inputStyle} value={v.fissoVariabile} onChange={(e) => onChange("fissoVariabile", e.target.value)}><option value="">—</option>{FISSO_VARIABILE_OPZIONI.map((o) => <option key={o.chiave} value={o.chiave}>{o.etichetta}</option>)}</select></Field>
@@ -17403,8 +17402,15 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   (hotel || []).forEach((h) => aggiungi("hotel", h.id, h.nome, "location",
     { citta: h.citta, indirizzo: h.indirizzo, partitaIva: h.partita_iva, iban: h.iban, telefono: h.telefono, email: h.email },
     categoriaNomePer(categoriaGruppoPer("alloggio", categorieGruppi), costiSottocategorie)));
-  (location || []).forEach((l) => aggiungi("location", l.id, l.nome, "location",
-    { citta: null, indirizzo: null, partitaIva: null, iban: l.iban, telefono: null, email: null },
+  // location.nome è la città (es. "BARI"), location.nome_sede è il vero
+  // nome della sede (es. "Aule bari") — stessa convenzione già usata nei
+  // titoli di Quadro Impegni ("Costo Location — Centro Via Valtorta, 48,
+  // Milano"). Usare nome al posto di nome_sede qui mostrerebbe solo il
+  // nome della città come se fosse un soggetto a sé, che non è: le
+  // "città esistenti" (tabella citta, tutt'altra cosa) non sono
+  // soggetti con cui l'accademia ha rapporti, non vanno in Anagrafiche
+  (location || []).forEach((l) => aggiungi("location", l.id, l.nome_sede ? `${l.nome_sede}, ${toTitleCase(l.nome || "")}` : toTitleCase(l.nome || "—"), "location",
+    { citta: l.nome || null, indirizzo: null, partitaIva: null, iban: l.iban, telefono: null, email: null },
     categoriaNomePer(l.categoria_spesa_id, costiSottocategorie)));
   (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
     { citta: null, indirizzo: null, partitaIva: null, iban: null, telefono: v.telefono, email: v.email },
@@ -23140,6 +23146,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
   const [pecMod, setPecMod] = useState("");
   const [classMod, setClassMod] = useState(classificazioneVuota());
+  const [applicaClassATutteMaster, setApplicaClassATutteMaster] = useState(false);
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -23195,6 +23202,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     setCodiceDestinatarioMod(selezionato?.codice_destinatario || "");
     setPecMod(selezionato?.pec || "");
     setClassMod(classificazioneDaRecord(selezionato));
+    setApplicaClassATutteMaster(false);
     setTab("corsi");
     setCorsoEspansoId(null);
     setMsg("");
@@ -23226,15 +23234,21 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   // affidarsi alla chiusura su classMod, che al momento della chiamata
   // sarebbe ancora quello vecchio
   async function salvaContatti(classOverride) {
+    const classPayload = classificazionePerPayload(classOverride || classMod);
     const campi = {
       email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null,
       indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
       partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
-      ...classificazionePerPayload(classOverride || classMod),
+      ...classPayload,
     };
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
     const { error } = await supabase.from("master").update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
+    // solo la classificazione/budget va agli altri master, mai email/
+    // telefono/IBAN/indirizzo — quelli restano personali per ciascuno
+    if (applicaClassATutteMaster) {
+      await supabase.from("master").update(classPayload).neq("id", selezionatoId);
+    }
     ricarica(["master"]);
   }
   function aggiornaClassMod(campo, valore) {
@@ -23454,6 +23468,10 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                     <div style={{ marginTop: 10, maxWidth: 640 }}>
                       <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
                     </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
+                      <input type="checkbox" checked={applicaClassATutteMaster} onChange={(e) => { setApplicaClassATutteMaster(e.target.checked); if (e.target.checked) salvaContatti(); }} style={{ width: 15, height: 15 }} />
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica classificazione e budget a tutte le master</span>
+                    </label>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
                       <input type="checkbox" checked={!!selezionato.diploma_gia_firmato} onChange={(e) => toggleFirmato(e.target.checked)} style={{ width: 15, height: 15 }} />
                       <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Diploma già firmato (non applicare la firma automatica)</span>
