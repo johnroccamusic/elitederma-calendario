@@ -13513,6 +13513,10 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     // nessuno l'ha confermata qui, non deve comparire nel Quadro impegni
     gestita: corsoData.pagamento_sede != null,
     fornitore: locSedeClasse?.nome_sede || (locSedeClasse?.nome ? toTitleCase(locSedeClasse.nome) : "—"),
+    // se la sede è già "Associata" a un fornitore vero (Anagrafiche),
+    // usa quel collegamento invece di risolvere/creare per nome — non
+    // ne va creato uno fantasma col vecchio nome segnaposto
+    fornitoreId: locSedeClasse?.fornitore_id || null,
     iban: locSedeClasse?.iban || null,
     // categoria di spesa della SEDE specifica (non più un'unica categoria
     // condivisa da tutte le location, vedi PaginaGestioneLocation)
@@ -13560,7 +13564,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       // il titolo guida col vero fornitore (l'hotel, per far match con la
       // fattura reale) e riporta la persona solo come contesto — prima
       // mostrava solo la persona, che non serve a niente per riconciliare
-      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${hotelRiga?.nome || "—"}, per ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", iban: hotelRiga?.iban || null };
+      return { rigaId: r.rigaId, tabella: r.tabella, tipo: "alloggio", nome: `Costo Alloggio — ${hotelRiga?.nome || "—"}, per ${persona?.nome || "—"}`, totale, bonifico, cash, pagato: !!r.pagato, scadenza: r.scadenza || null, gestita: !!r.tipoPagamento, fornitore: hotelRiga?.nome || "—", fornitoreId: hotelRiga?.fornitore_id || null, iban: hotelRiga?.iban || null };
     })
     .filter(Boolean);
 
@@ -20157,10 +20161,14 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   // del motore di match (spec-riconciliazione.md §6) — upsert su
   // chiave_origine, la stessa chiave "<tipo>_<rigaId>" già usata da
   // spese.origine_scadenziario_chiave, così rieseguirla non duplica.
-  // hotel/location non sono fornitori: risolve/crea la riga fornitori
-  // per nome (stesso principio di trovaOCreaFornitore in
+  // hotel/location non sono fornitori: se la sede/hotel è già
+  // "Associata" (Anagrafiche) a un fornitore vero, usa quel
+  // collegamento (v.fornitoreId) — altrimenti risolve/crea la riga
+  // fornitori per nome (stesso principio di trovaOCreaFornitore in
   // fic-sync-documenti, qui lato client perché Quadro Impegni è già
-  // calcolato lato client)
+  // calcolato lato client). Senza questa precedenza, una sede associata
+  // DOPO aver già generato un impegno finiva con un fornitore fantasma
+  // creato sul vecchio nome segnaposto, doppione del fornitore vero.
   async function sincronizzaImpegni() {
     setSincronizzandoImpegni(true);
     setMsgImpegni("");
@@ -20168,8 +20176,8 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     const righeImpegno = [];
     for (const v of impegni) {
       const nomeFornitore = (v.fornitore || "").trim();
-      let fornitoreId = nomeFornitore ? fornitoriPerNome.get(nomeFornitore.toLowerCase()) : null;
-      if (nomeFornitore && !fornitoreId) {
+      let fornitoreId = v.fornitoreId || (nomeFornitore ? fornitoriPerNome.get(nomeFornitore.toLowerCase()) : null);
+      if (!v.fornitoreId && nomeFornitore && !fornitoreId) {
         const { data, error } = await supabase.from("fornitori").insert({ nome: nomeFornitore, iban: v.iban || null }).select("id").single();
         if (!error && data) {
           fornitoreId = data.id;
