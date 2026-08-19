@@ -27619,47 +27619,48 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
 // va sempre rispettato, un passo alla volta (vedi PillaFaseLogistica)
 function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
-  const etichettaFase = faseCorrente === FASE_LOGISTICA_COMPLETATA
+  const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
+  const etichettaFase = completata
     ? FASI_LOGISTICA[FASI_LOGISTICA.length - 1].etichettaFatto
     : (FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichettaPending || "");
   // "Gestione rientro" si sblocca solo a spedizione completata: prima
   // non ha senso gestire il rientro di un pacco non ancora consegnato
-  const speditoCompletamente = faseCorrente === FASE_LOGISTICA_COMPLETATA;
-  const numeroPartecipanti = iscrittiEdizione.length;
+  const speditoCompletamente = completata;
+  // solo il totale qui (il dettaglio per tipo di kit resta nel
+  // pannello "Preparazione kit" a destra, vedi RiepilogoKitPacchetti)
+  const kitTotali = iscrittiEdizione.filter((i) => i.pacchetto_kit).length;
   return (
     <div
       onClick={onSeleziona}
-      style={{ padding: "16px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", background: selezionato ? "#FBF3E4" : "transparent", borderRadius: 10 }}
+      style={{ border: `2px solid ${GOLD}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff" }}
     >
-      <div style={{ display: "flex", gap: 12, alignItems: "flex-start", marginBottom: 12 }}>
-        <div style={{ background: BG, borderRadius: 10, padding: "6px 11px", textAlign: "center", flexShrink: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{gg}</div>
-          <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
+      <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ background: GOLD, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#fff" }}>{gg}</div>
+          <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
         </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>Ora: {etichettaFase}</div>
-              <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
-            </div>
-          </div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{toTitleCase(loc?.nome || "—")} · {numeroPartecipanti} partecipant{numeroPartecipanti === 1 ? "e" : "i"}</div>
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
+          <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
         </div>
-      </div>
-      <div style={{ display: "flex", gap: 6 }}>
-        {FASI_LOGISTICA.map((f) => (
-          <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
-        ))}
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{kitTotali} KIT</div>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: completata ? "#2E7D32" : "#C0392B" }}>{etichettaFase}</div>
+        </div>
+        <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280 }}>
+          {FASI_LOGISTICA.map((f) => (
+            <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
+          ))}
+        </div>
       </div>
       {speditoCompletamente && (
         <>
-          <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={!!gestioneRientroAttiva} onChange={(e) => onToggleGestioneRientro(e.target.checked)} style={{ width: 15, height: 15 }} />
             <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Gestione rientro</span>
           </label>
           {gestioneRientroAttiva && (
-            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
               {FASI_RIENTRO.map((f) => (
                 <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseRientroCorrente} fasi={FASI_RIENTRO} onClick={(e) => { e.stopPropagation(); onCambiaFaseRientro(prossimaFaseLogistica(FASI_RIENTRO, faseRientroCorrente)); }} />
               ))}
