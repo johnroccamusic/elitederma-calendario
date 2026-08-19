@@ -3536,3 +3536,30 @@ alter table public.logistica_kit_edizioni
   add column if not exists scarico_per_kit jsonb not null default '{}'::jsonb;
 
 notify pgrst, 'reload schema';
+
+
+-- 131) Logistica prodotti: kit di riserva, scarico legato alla fase, prodotti extra
+-- ---------------------------------------------------------
+-- Tre correzioni sullo stesso pannello "Preparazione kit":
+--
+-- 1. Cursore "Di riserva" per ciascun tipo di kit (nuova colonna
+--    riserva_per_kit, mappa kit_id -> quantità extra) — si somma al
+--    conteggio automatico dagli iscritti, resta finché non lo si toglie
+--    a mano anche se cambiano gli iscritti.
+-- 2. Tolto il tasto "Modifica quantità di magazzino": lo scarico ora
+--    scatta da solo avanzando alla fase "Pacco ritirato dal corriere"
+--    (con conferma), ed è quello il momento in cui il pacco parte
+--    davvero. Tornare indietro da quella fase chiede conferma e
+--    ritoglie gli stessi prodotti dal magazzino.
+-- 3. "Prodotti extra kit": prodotti pescati a mano dall'intero
+--    magazzino per la singola edizione, non legati a un kit — stessa
+--    mappa accessori_quantita/accessori_scaricati già in uso, chiave
+--    "extra::prodottoId".
+--
+-- Additiva pura, nessuna riga toccata.
+-- ---------------------------------------------------------
+
+alter table public.logistica_kit_edizioni
+  add column if not exists riserva_per_kit jsonb not null default '{}'::jsonb;
+
+notify pgrst, 'reload schema';

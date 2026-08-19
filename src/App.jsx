@@ -27612,6 +27612,17 @@ function kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corsoId) {
   });
   return conteggio;
 }
+// quanti kit servono DAVVERO da preparare: il conteggio dagli iscritti
+// sopra, più eventuali kit di riserva aggiunti a mano per ciascun tipo
+// (riserva_per_kit, mai sovrascritti dal ricalcolo automatico — restano
+// finché non li si toglie a mano, anche se cambiano gli iscritti)
+function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riservaPerKit) {
+  const totale = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corsoId);
+  Object.entries(riservaPerKit || {}).forEach(([kitId, q]) => {
+    if (q) totale[kitId] = (totale[kitId] || 0) + q;
+  });
+  return totale;
+}
 // riepilogo "2 KIT PRO / 1 KIT BASE / 3 KIT TOTALI": quanti iscritti di
 // questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
 // riusato sia nella riga del corso sia in cima a "Preparazione kit"
@@ -27637,7 +27648,7 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
 // attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
 // la pillola della fase corrente è cliccabile, mai una a caso: l'ordine
 // va sempre rispettato, un passo alla volta (vedi PillaFaseLogistica)
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
   const etichettaFase = completata
@@ -27676,7 +27687,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           ))}
           {indiceFaseLogistica(FASI_LOGISTICA, faseCorrente) > 0 && (
             <button
-              onClick={(e) => { e.stopPropagation(); onCambiaFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
+              onClick={(e) => { e.stopPropagation(); onTornaIndietroFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
               title="Torna alla fase precedente"
               style={{ background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px", flexShrink: 0 }}
             >
@@ -27715,7 +27726,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino, onProdottiRientrati }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onProdottiRientrati }) {
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -27732,33 +27743,46 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
   // kit richiesti: dedotti dalle scelte reali degli iscritti (mai
   // scelti a mano qui) — un corso con 3 pacchetti diversi scelti mostra
-  // 3 righe, ciascuna col proprio contenuto da spedire
+  // 3 righe, ciascuna col proprio contenuto da spedire. Il cursore "Di
+  // riserva" aggiunge unità extra allo stesso tipo di kit, per chi vuole
+  // prepararne qualcuna in più oltre agli iscritti — resta finché non
+  // lo si toglie a mano, anche se cambia chi si iscrive
   const nomeKit = (id) => kitDefinizioni.find((k) => k.id === id)?.nome || "—";
   const kitRichiesti = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null);
+  const riservaPerKit = statoEdizione.riserva_per_kit || {};
   const righeKitRichiesti = Object.entries(kitRichiesti).sort(
     (a, b) => (kitDefinizioni.find((k) => k.id === a[0])?.ordine || 0) - (kitDefinizioni.find((k) => k.id === b[0])?.ordine || 0)
   );
-
-  // pulsante "Modifica quantità di magazzino"/"Magazzino aggiornato":
-  // reattivo alla differenza fra quanto richiesto ORA (sopra) e quanto
-  // già scaricato l'ultima volta per CIASCUN kit — mai al valore
-  // assoluto, così un doppio click non scarica due volte lo stesso kit,
-  // e un kit che non serve più (iscritto che ha cambiato scelta) rientra
-  const scaricoPerKit = statoEdizione.scarico_per_kit || {};
-  const kitFuoriSincronia = [...new Set([...Object.keys(kitRichiesti), ...Object.keys(scaricoPerKit)])]
-    .some((kitId) => (kitRichiesti[kitId] || 0) !== (scaricoPerKit[kitId] || 0));
+  function cambiaRiservaKit(kitId, valore) {
+    onSalvaCampi({ riserva_per_kit: { ...riservaPerKit, [kitId]: valore === "" ? 0 : Math.max(0, Number(valore)) } });
+  }
   // accessori didattica: non appartengono a un kit specifico ma a tutto
   // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
   // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
   const tuttiAccessori = corsiKitProdotti
     .filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null))
     .map((r) => ({ ...r, chiave: `accessorio::${r.prodotto_id}` }));
-  const accessoriDaSincronizzare = tuttiAccessori.some((r) => {
-    const target = statoEdizione.accessori_quantita?.[r.chiave] || 0;
-    const scaricato = statoEdizione.accessori_scaricati?.[r.chiave] || 0;
-    return target !== scaricato;
-  });
-  const daSincronizzare = kitFuoriSincronia || accessoriDaSincronizzare;
+
+  // "Prodotti extra kit": pescati a mano dall'intero magazzino per
+  // questa singola edizione (non un accessorio del corso, non il
+  // contenuto di un kit) — stessa mappa accessori_quantita/
+  // accessori_scaricati degli accessori sopra, chiave "extra::prodottoId"
+  const accessoriQuantita = statoEdizione.accessori_quantita || {};
+  const prodottiExtraIds = Object.keys(accessoriQuantita).filter((k) => k.startsWith("extra::")).map((k) => k.slice(7));
+  const [pickerExtraAperto, setPickerExtraAperto] = useState(false);
+  const [ricercaExtra, setRicercaExtra] = useState("");
+  const risultatiExtra = ricercaExtra.trim()
+    ? prodottiShop.filter((p) => p.nome.toLowerCase().includes(ricercaExtra.trim().toLowerCase()) && !prodottiExtraIds.includes(p.id)).slice(0, 8)
+    : [];
+  function aggiungiProdottoExtra(prodottoId) {
+    onSalvaCampi({ accessori_quantita: { ...accessoriQuantita, [`extra::${prodottoId}`]: 0 } });
+    setRicercaExtra(""); setPickerExtraAperto(false);
+  }
+  function rimuoviProdottoExtra(prodottoId) {
+    const nuovo = { ...accessoriQuantita };
+    delete nuovo[`extra::${prodottoId}`];
+    onSalvaCampi({ accessori_quantita: nuovo });
+  }
 
   // "Materiali da rientrare": quello che la master ha dichiarato di
   // rispedire (Inventario di sede > "Materiali che vengono rispediti") —
@@ -27802,12 +27826,26 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
       <div style={{ marginBottom: 20 }}>
         {righeKitRichiesti.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ha ancora scelto un kit.</div>
-        ) : righeKitRichiesti.map(([kitId, quantita]) => (
-          <div key={kitId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{nomeKit(kitId)}</span>
-            <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{quantita}</span>
-          </div>
-        ))}
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 40, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, paddingRight: 2 }}>
+              <span>Iscritti</span><span>Di riserva</span>
+            </div>
+            {righeKitRichiesti.map(([kitId, quantitaIscritti]) => (
+              <div key={kitId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{nomeKit(kitId)}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, width: 24, textAlign: "center" }}>{quantitaIscritti}</span>
+                  <input
+                    type="number" min="0" style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
+                    value={riservaPerKit[kitId] ?? ""} placeholder="0"
+                    onChange={(e) => cambiaRiservaKit(kitId, e.target.value)}
+                  />
+                </div>
+              </div>
+            ))}
+          </>
+        )}
       </div>
 
       {CHECKLIST_KIT_ITEMS.map((c) => (
@@ -27819,6 +27857,43 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <span style={{ ...fontBody, fontSize: 14, color: NAVY }}>{c.etichetta}</span>
         </label>
       ))}
+
+      <div style={{ marginTop: 12 }}>
+        {prodottiExtraIds.map((prodottoId) => (
+          <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{nomeProdotto(prodottoId)}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="number" min="0" style={{ ...inputStyle, width: 70, padding: "6px 8px" }}
+                value={accessoriQuantita[`extra::${prodottoId}`] ?? ""} placeholder="0"
+                onChange={(e) => onSalvaCampi({ accessori_quantita: { ...accessoriQuantita, [`extra::${prodottoId}`]: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) } })}
+              />
+              <button onClick={() => rimuoviProdottoExtra(prodottoId)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>
+            </div>
+          </div>
+        ))}
+        {pickerExtraAperto ? (
+          <div style={{ marginTop: 8 }}>
+            <input autoFocus style={inputStyle} placeholder="Cerca prodotto…" value={ricercaExtra} onChange={(e) => setRicercaExtra(e.target.value)} />
+            {ricercaExtra.trim() && (
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, marginTop: 4, maxHeight: 180, overflowY: "auto" }}>
+                {risultatiExtra.length === 0 ? (
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 8 }}>Nessun prodotto trovato.</div>
+                ) : risultatiExtra.map((p) => (
+                  <button key={p.id} onClick={() => aggiungiProdottoExtra(p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                    {p.nome}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => { setPickerExtraAperto(false); setRicercaExtra(""); }} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", cursor: "pointer", marginTop: 6, padding: 0 }}>Annulla</button>
+          </div>
+        ) : (
+          <button onClick={() => setPickerExtraAperto(true)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", marginTop: prodottiExtraIds.length ? 8 : 0, width: "100%" }}>
+            + Aggiungi prodotti extra kit
+          </button>
+        )}
+      </div>
 
       {righeKitRichiesti.map(([kitId]) => {
         const contenuto = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
@@ -27885,16 +27960,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </button>
         </div>
       )}
-
-      <div style={{ marginTop: 24 }}>
-        <button
-          onClick={onSincronizzaMagazzino}
-          disabled={!daSincronizzare}
-          style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: daSincronizzare ? "#fff" : MUTED, background: daSincronizzare ? NAVY : "#EDEAE0", border: "none", borderRadius: 10, padding: "13px 16px", cursor: daSincronizzare ? "pointer" : "default", width: "100%" }}
-        >
-          {daSincronizzare ? "Modifica quantità di magazzino" : "Magazzino aggiornato"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -27944,7 +28009,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // una risincronizzazione muovono solo la differenza, mai il totale
   async function sincronizzaMagazzino(corsoData) {
     const stato = statoDi(corsoData.id);
-    const richiesti = kitRichiestiEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni, corsoData.corso_id);
+    const richiesti = totaleKitPerEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni, corsoData.corso_id, stato.riserva_per_kit);
     const scaricoAttuale = stato.scarico_per_kit || {};
 
     const deltaPerProdotto = {}; // prodotto_id -> variazione da applicare a giacenza (positivo = restituire, negativo = togliere)
@@ -27961,18 +28026,24 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       if (target > 0) nuovoScarico[kitId] = target;
     });
 
+    // accessori: tre origini nella stessa mappa "chiave -> quantità"
+    // (accessori_quantita/accessori_scaricati) — "kitId::prodottoId" per
+    // gli accessori di un kit specifico, "accessorio::prodottoId" per
+    // gli accessori didattica del corso (sempre inviati), "extra::
+    // prodottoId" per i prodotti extra aggiunti a mano su questa
+    // edizione — in tutti e tre i casi il prodotto è l'ultima parte
+    // della chiave, la quantità scaricata si confronta allo stesso modo
     const accessoriScaricatiAggiornati = { ...(stato.accessori_scaricati || {}) };
-    Object.keys(richiesti).forEach((kitId) => {
-      corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
-        const chiave = `${kitId}::${r.prodotto_id}`;
-        const target = stato.accessori_quantita?.[chiave] || 0;
-        const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
-        const deltaAcc = target - giaScaricato;
-        if (deltaAcc !== 0) {
-          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - deltaAcc;
-          accessoriScaricatiAggiornati[chiave] = target;
-        }
-      });
+    new Set([...Object.keys(stato.accessori_quantita || {}), ...Object.keys(stato.accessori_scaricati || {})]).forEach((chiave) => {
+      const prodottoId = chiave.split("::")[1];
+      if (!prodottoId) return;
+      const target = stato.accessori_quantita?.[chiave] || 0;
+      const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
+      const deltaAcc = target - giaScaricato;
+      if (deltaAcc !== 0) {
+        deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) - deltaAcc;
+        accessoriScaricatiAggiornati[chiave] = target;
+      }
     });
 
     if (Object.keys(deltaPerProdotto).length === 0) return;
@@ -27987,14 +28058,16 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     }));
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati });
   }
-  // "Gestione rientro" > "Prodotti ripristinati": ricarica in
-  // giacenza_magazzino esattamente quanto è registrato come scaricato
-  // per questa edizione, kit per kit (ognuno con la propria lista di
-  // prodotti) più gli accessori — l'esatto contrario di
+  // ricarica in giacenza_magazzino esattamente quanto è registrato come
+  // scaricato per questa edizione, kit per kit (ognuno con la propria
+  // lista di prodotti) più gli accessori — l'esatto contrario di
   // sincronizzaMagazzino sopra — poi azzera i contatori di scarico,
-  // così un'eventuale nuova preparazione dello stesso corso riparte da
-  // zero senza restare "indietro"
-  async function ripristinaKitRientro(corsoData) {
+  // così una nuova preparazione riparte da zero senza restare
+  // "indietro". Condivisa da due punti: "Prodotti ripristinati" in
+  // Gestione rientro (fine corso) e "torna indietro" dalla fase "Pacco
+  // ritirato dal corriere" (annulla lo scarico appena fatto) — nessuno
+  // dei due tocca qui la fase, ci pensa chi chiama
+  async function ripristinaMagazzinoDaScarico(corsoData) {
     const stato = statoDi(corsoData.id);
     const scaricoAttuale = stato.scarico_per_kit || {};
     const deltaPerProdotto = {};
@@ -28004,12 +28077,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * quantita;
       });
     });
-    Object.keys(scaricoAttuale).forEach((kitId) => {
-      corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
-        const chiave = `${kitId}::${r.prodotto_id}`;
-        const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
-        if (giaScaricato) deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + giaScaricato;
-      });
+    // stessa mappa unica di sincronizzaMagazzino: accessori di kit,
+    // accessori didattica del corso ("accessorio::") ed extra
+    // aggiunti a mano ("extra::") — il prodotto è sempre l'ultima
+    // parte della chiave
+    Object.entries(stato.accessori_scaricati || {}).forEach(([chiave, giaScaricato]) => {
+      const prodottoId = chiave.split("::")[1];
+      if (prodottoId && giaScaricato) deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + giaScaricato;
     });
     if (Object.keys(deltaPerProdotto).length > 0) {
       await Promise.all(Object.entries(deltaPerProdotto).map(([prodottoId, delta]) => {
@@ -28018,13 +28092,35 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         return supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId);
       }));
     }
-    await salvaCampiEdizione(corsoData.id, {
-      scarico_per_kit: {}, accessori_scaricati: {},
-      // "completato", non "prodotti_ripristinati": è l'ultima fascia
-      // della lista, senza il sentinella resterebbe "corrente" (rossa)
-      // per sempre invece di passare a "fatto" (verde)
-      fase_rientro: FASE_LOGISTICA_COMPLETATA,
-    });
+    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {} });
+  }
+  async function ripristinaKitRientro(corsoData) {
+    await ripristinaMagazzinoDaScarico(corsoData);
+    // "completato", non "prodotti_ripristinati": è l'ultima fascia
+    // della lista, senza il sentinella resterebbe "corrente" (rossa)
+    // per sempre invece di passare a "fatto" (verde)
+    await salvaCampiEdizione(corsoData.id, { fase_rientro: FASE_LOGISTICA_COMPLETATA });
+  }
+  // fase "Pacco ritirato dal corriere": è il momento in cui il pacco
+  // parte davvero, quindi è qui che si chiede se scaricare i prodotti
+  // dal magazzino — non più un tasto separato ("Modifica quantità di
+  // magazzino"), lo scarico è legato all'avanzamento della fase stessa
+  async function cambiaFaseLogistica(corsoData, fase) {
+    if (fase === "ritirato_corriere") {
+      if (!window.confirm("Vuoi scaricare i prodotti in partenza dal magazzino?")) return;
+      await sincronizzaMagazzino(corsoData);
+    }
+    await salvaCampiEdizione(corsoData.id, { fase });
+  }
+  async function tornaIndietroFaseLogistica(corsoData, faseTarget) {
+    // si esce da "ritirato_corriere" tornando indietro solo quando la
+    // fase ATTUALE è proprio quella: è lì che è scattato lo scarico,
+    // quindi è lì che va annullato
+    if (statoDi(corsoData.id).fase === "ritirato_corriere") {
+      if (!window.confirm("Tornando indietro, questi prodotti verranno tolti di nuovo dal magazzino. Confermi?")) return;
+      await ripristinaMagazzinoDaScarico(corsoData);
+    }
+    await salvaCampiEdizione(corsoData.id, { fase: faseTarget });
   }
   function cambiaFaseRientro(corsoData, fase) {
     // il ripristino scatta solo cliccando l'ULTIMA pillola ("Pacco in
@@ -28141,7 +28237,8 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 faseCorrente={statoDi(cd.id).fase}
                 selezionato={edizioneSel?.id === cd.id}
                 onSeleziona={() => setEdizioneSelId(cd.id)}
-                onCambiaFase={(fase) => { setEdizioneSelId(cd.id); salvaCampiEdizione(cd.id, { fase }); }}
+                onCambiaFase={(fase) => { setEdizioneSelId(cd.id); cambiaFaseLogistica(cd, fase); }}
+                onTornaIndietroFase={(fase) => { setEdizioneSelId(cd.id); tornaIndietroFaseLogistica(cd, fase); }}
                 gestioneRientroAttiva={statoDi(cd.id).gestione_rientro_attiva}
                 faseRientroCorrente={statoDi(cd.id).fase_rientro}
                 onToggleGestioneRientro={(attivo) => salvaCampiEdizione(cd.id, {
@@ -28173,7 +28270,6 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 prodottiApertiMagazzino={prodottiApertiMagazzino}
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
-                onSincronizzaMagazzino={() => sincronizzaMagazzino(edizioneSel)}
                 onProdottiRientrati={() => processaRientro(edizioneSel)}
               />
             )}
