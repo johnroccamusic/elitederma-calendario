@@ -23440,7 +23440,11 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
   // aggiornaClassMod passa qui il valore già aggiornato invece di
   // affidarsi alla chiusura su classMod, che al momento della chiamata
   // sarebbe ancora quello vecchio
-  async function salvaContatti(classOverride) {
+  // applicaOverride: come classOverride, serve a chi spunta la casella
+  // "applica a tutte" e chiama salvaContatti nello stesso istante —
+  // setApplicaClassATutteMaster è asincrono, quindi applicaClassATutteMaster
+  // letto dalla chiusura sarebbe ancora il valore vecchio (false)
+  async function salvaContatti(classOverride, applicaOverride) {
     const classPayload = classificazionePerPayload(classOverride || classMod);
     const campi = {
       email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null,
@@ -23453,7 +23457,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     if (error) { window.alert("Errore: " + error.message); return; }
     // solo la classificazione/budget va agli altri master, mai email/
     // telefono/IBAN/indirizzo — quelli restano personali per ciascuno
-    if (applicaClassATutteMaster) {
+    if (applicaOverride !== undefined ? applicaOverride : applicaClassATutteMaster) {
       await supabase.from("master").update(classPayload).neq("id", selezionatoId);
     }
     ricarica(["master"]);
@@ -23676,7 +23680,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                       <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
                     </div>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
-                      <input type="checkbox" checked={applicaClassATutteMaster} onChange={(e) => { setApplicaClassATutteMaster(e.target.checked); if (e.target.checked) salvaContatti(); }} style={{ width: 15, height: 15 }} />
+                      <input type="checkbox" checked={applicaClassATutteMaster} onChange={(e) => { const checked = e.target.checked; setApplicaClassATutteMaster(checked); if (checked) salvaContatti(undefined, checked); }} style={{ width: 15, height: 15 }} />
                       <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica classificazione e budget a tutte le master</span>
                     </label>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
