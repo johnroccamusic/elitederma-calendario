@@ -27629,13 +27629,16 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
   // solo il totale qui (il dettaglio per tipo di kit resta nel
   // pannello "Preparazione kit" a destra, vedi RiepilogoKitPacchetti)
   const kitTotali = iscrittiEdizione.filter((i) => i.pacchetto_kit).length;
+  // riquadro data e contorno della card nel colore assegnato al corso
+  // (Gestione corsi), non un colore fisso uguale per tutti
+  const coloreCorso = corso?.colore || NAVY;
   return (
     <div
       onClick={onSeleziona}
-      style={{ border: `2px solid ${GOLD}`, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff" }}
+      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, cursor: "pointer", background: selezionato ? "#FBF3E4" : "#fff" }}
     >
       <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ background: GOLD, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+        <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
           <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#fff" }}>{gg}</div>
           <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
         </div>
