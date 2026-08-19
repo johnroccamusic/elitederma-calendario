@@ -13086,24 +13086,42 @@ const TASTI_HOME = [
   { chiave: "crmallievi", etichetta: "CRM Allievi" },
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
-// Logistica prodotti: le 5 fasi di spedizione di un'edizione (in ordine)
-// e i 3 elementi della checklist di preparazione kit
+// Logistica prodotti: le 4 fasi di spedizione di un'edizione (in
+// ordine) e i 3 elementi della checklist di preparazione kit. Ogni
+// fase ha un'etichetta diversa a seconda che sia ancora da raggiungere
+// (etichettaPending, pillola rossa "!") o già superata (etichettaFatto,
+// pillola verde) — stesso principio di FASI_RIENTRO sotto
 const FASI_LOGISTICA = [
-  { chiave: "da_preparare", etichetta: "Da preparare" },
-  { chiave: "kit_pronto", etichetta: "Kit pronto" },
-  { chiave: "bolla_stampata", etichetta: "Bolla stampata" },
-  { chiave: "ritirato_corriere", etichetta: "Ritirato dal corriere" },
-  { chiave: "consegna_verificata", etichetta: "Consegna verificata" },
+  { chiave: "da_preparare", etichettaPending: "Pacco da preparare", etichettaFatto: "Pacco preparato" },
+  { chiave: "bolla_stampata", etichettaPending: "Bolla da preparare", etichettaFatto: "Bolla applicata" },
+  { chiave: "ritirato_corriere", etichettaPending: "Pacco da ritirare", etichettaFatto: "Pacco ritirato dal corriere" },
+  { chiave: "consegna_verificata", etichettaPending: "Pacco da consegnare", etichettaFatto: "Verifica pacco a destinazione" },
 ];
-// "Gestione rientro": stesso principio delle 5 fasi sopra ma per il
+// "Gestione rientro": stesso principio delle 4 fasi sopra ma per il
 // viaggio di ritorno del pacco — appaiono solo se il flag
-// gestione_rientro_attiva è spuntato (RigaCorsoLogistica)
+// gestione_rientro_attiva è spuntato (RigaCorsoLogistica), sbloccato
+// solo quando le 4 fasi sopra sono tutte superate (vedi RigaCorsoLogistica)
 const FASI_RIENTRO = [
-  { chiave: "bolla_rientro_emessa", etichetta: "Bolla rientro emessa" },
-  { chiave: "pacco_ritirato", etichetta: "Pacco ritirato" },
-  { chiave: "pacco_rientrato", etichetta: "Pacco rientrato" },
-  { chiave: "prodotti_ripristinati", etichetta: "Prodotti ripristinati" },
+  { chiave: "bolla_rientro_emessa", etichettaPending: "Bolla rientro da preparare", etichettaFatto: "Bolla di rientro inviata" },
+  { chiave: "pacco_ritirato", etichettaPending: "In attesa di ritiro", etichettaFatto: "Pacco ritirato" },
+  { chiave: "pacco_rientrato", etichettaPending: "Pacco in viaggio", etichettaFatto: "Pacco rientrato" },
+  { chiave: "prodotti_ripristinati", etichettaPending: "Pacco in attesa di controllo", etichettaFatto: "Prodotti ripristinati" },
 ];
+// valore di "fase"/"fase_rientro" per "tutte le fasi superate" — non è
+// una fase reale della lista, serve solo a far diventare verde anche
+// l'ultima pillola dopo che viene cliccata (altrimenti, essendo anche
+// l'ultima della lista, resterebbe "corrente" per sempre)
+const FASE_LOGISTICA_COMPLETATA = "completato";
+// una pillola è cliccabile solo se è quella corrente (PillaFaseLogistica):
+// cliccarla fa sempre avanzare alla fase successiva, mai a una scelta
+// libera — questa calcola qual è la prossima, sia per FASI_LOGISTICA
+// sia per FASI_RIENTRO
+function prossimaFaseLogistica(fasi, faseCorrente) {
+  const idx = fasi.findIndex((f) => f.chiave === faseCorrente);
+  if (idx === -1) return fasi[0]?.chiave || null;
+  if (idx === fasi.length - 1) return FASE_LOGISTICA_COMPLETATA;
+  return fasi[idx + 1].chiave;
+}
 const CHECKLIST_KIT_ITEMS = [
   { chiave: "tovagliette", etichetta: "Tovagliette inserite" },
   { chiave: "materiali_consumo", etichetta: "Materiali di consumo" },
@@ -27547,23 +27565,30 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 // ---------- Logistica prodotti (kit corsi) ----------
 // una "pillola" di fase nella riga di un'edizione: verde spuntata se già
 // superata, rossa con "!" se è quella attuale, vuota se ancora da
-// raggiungere — cliccarla imposta quella fase come fase attuale
+// raggiungere. Solo la pillola rossa (quella attuale) è cliccabile —
+// l'ordine va sempre rispettato, non si salta avanti né si torna
+// indietro: cliccarla fa avanzare alla fase successiva
 function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA }) {
   const idx = fasi.findIndex((f) => f.chiave === fase.chiave);
-  const idxCorrente = fasi.findIndex((f) => f.chiave === faseCorrente);
+  // "completato" (tutte le fasi superate) equivale a un indice oltre
+  // l'ultimo: fa risultare "fatto" anche l'ultima pillola della lista
+  const idxCorrente = faseCorrente === FASE_LOGISTICA_COMPLETATA ? fasi.length : fasi.findIndex((f) => f.chiave === faseCorrente);
   const stato = idx < idxCorrente ? "fatto" : idx === idxCorrente ? "corrente" : "futuro";
+  const cliccabile = stato === "corrente";
   const stile = {
     fatto: { background: "#E8F3EA", border: "1px solid #2E7D32", color: "#2E7D32" },
     corrente: { background: "#FBEAE4", border: "1px solid #C0392B", color: "#C0392B" },
     futuro: { background: "#fff", border: `1px solid ${CREAM_BORDER}`, color: MUTED },
   }[stato];
+  const etichetta = stato === "fatto" ? fase.etichettaFatto : fase.etichettaPending;
   return (
     <button
-      onClick={onClick}
-      style={{ ...fontBody, fontSize: 11, fontWeight: 700, borderRadius: 10, padding: "9px 6px", cursor: "pointer", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.25, ...stile }}
+      onClick={cliccabile ? onClick : undefined}
+      title={cliccabile ? undefined : "Rispetta l'ordine delle fasi"}
+      style={{ ...fontBody, fontSize: 11, fontWeight: 700, borderRadius: 10, padding: "9px 6px", cursor: cliccabile ? "pointer" : "default", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.25, ...stile }}
     >
       <div style={{ fontSize: 13, marginBottom: 3 }}>{stato === "fatto" ? "✓" : stato === "corrente" ? "!" : "○"}</div>
-      {fase.etichetta}
+      {etichetta}
     </button>
   );
 }
@@ -27589,10 +27614,17 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
   );
 }
 // una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
-// attuale in etichetta e le 5 pillole cliccabili per cambiarla
+// attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
+// la pillola della fase corrente è cliccabile, mai una a caso: l'ordine
+// va sempre rispettato, un passo alla volta (vedi PillaFaseLogistica)
 function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
-  const etichettaFase = FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichetta || "";
+  const etichettaFase = faseCorrente === FASE_LOGISTICA_COMPLETATA
+    ? FASI_LOGISTICA[FASI_LOGISTICA.length - 1].etichettaFatto
+    : (FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichettaPending || "");
+  // "Gestione rientro" si sblocca solo a spedizione completata: prima
+  // non ha senso gestire il rientro di un pacco non ancora consegnato
+  const speditoCompletamente = faseCorrente === FASE_LOGISTICA_COMPLETATA;
   const numeroPartecipanti = iscrittiEdizione.length;
   return (
     <div
@@ -27617,19 +27649,23 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
       </div>
       <div style={{ display: "flex", gap: 6 }}>
         {FASI_LOGISTICA.map((f) => (
-          <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(f.chiave); }} />
+          <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
         ))}
       </div>
-      <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" checked={!!gestioneRientroAttiva} onChange={(e) => onToggleGestioneRientro(e.target.checked)} style={{ width: 15, height: 15 }} />
-        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Gestione rientro</span>
-      </label>
-      {gestioneRientroAttiva && (
-        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-          {FASI_RIENTRO.map((f) => (
-            <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseRientroCorrente} fasi={FASI_RIENTRO} onClick={(e) => { e.stopPropagation(); onCambiaFaseRientro(f.chiave); }} />
-          ))}
-        </div>
+      {speditoCompletamente && (
+        <>
+          <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" checked={!!gestioneRientroAttiva} onChange={(e) => onToggleGestioneRientro(e.target.checked)} style={{ width: 15, height: 15 }} />
+            <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Gestione rientro</span>
+          </label>
+          {gestioneRientroAttiva && (
+            <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+              {FASI_RIENTRO.map((f) => (
+                <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseRientroCorrente} fasi={FASI_RIENTRO} onClick={(e) => { e.stopPropagation(); onCambiaFaseRientro(prossimaFaseLogistica(FASI_RIENTRO, faseRientroCorrente)); }} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -27990,7 +28026,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     }
     await salvaCampiEdizione(corsoData.id, {
       quantita_scaricata_magazzino: 0, kit_speciale_scaricato: 0, accessori_scaricati: {},
-      fase_rientro: "prodotti_ripristinati",
+      // "completato", non "prodotti_ripristinati": è l'ultima fascia
+      // della lista, senza il sentinella resterebbe "corrente" (rossa)
+      // per sempre invece di passare a "fatto" (verde)
+      fase_rientro: FASE_LOGISTICA_COMPLETATA,
     });
   }
   function cambiaFaseRientro(corsoData, fase) {
@@ -28092,7 +28131,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 onCambiaFase={(fase) => { setEdizioneSelId(cd.id); salvaCampiEdizione(cd.id, { fase }); }}
                 gestioneRientroAttiva={statoDi(cd.id).gestione_rientro_attiva}
                 faseRientroCorrente={statoDi(cd.id).fase_rientro}
-                onToggleGestioneRientro={(attivo) => salvaCampiEdizione(cd.id, { gestione_rientro_attiva: attivo })}
+                onToggleGestioneRientro={(attivo) => salvaCampiEdizione(cd.id, {
+                  gestione_rientro_attiva: attivo,
+                  // appena attivata parte dalla prima fase (pillola
+                  // rossa "!"), altrimenti senza fase_rientro impostata
+                  // nessuna pillola risulterebbe quella corrente
+                  ...(attivo && !statoDi(cd.id).fase_rientro ? { fase_rientro: FASI_RIENTRO[0].chiave } : {}),
+                })}
                 onCambiaFaseRientro={(fase) => { setEdizioneSelId(cd.id); cambiaFaseRientro(cd, fase); }}
               />
             ))}

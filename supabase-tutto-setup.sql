@@ -3496,3 +3496,21 @@ alter table public.logistica_kit_edizioni
   add column if not exists fase_rientro text;
 
 notify pgrst, 'reload schema';
+
+
+-- 129) Logistica prodotti: fasi 5→4 con etichette dinamiche, sentinella "completato"
+-- ---------------------------------------------------------
+-- Le fasi di spedizione passano da 5 a 4 (unite "Da preparare" e "Kit
+-- pronto" in una sola, "Pacco da preparare" → "Pacco preparato"),
+-- ciascuna con etichetta diversa a seconda che sia ancora da
+-- raggiungere o già superata. Introdotto anche un valore sentinella
+-- "completato" (non una fase reale, solo per far risultare verde
+-- anche l'ultima pillola dopo che viene cliccata).
+--
+-- Migrazione dati: i corsi già a "consegna_verificata" sotto il
+-- vecchio schema erano già del tutto spediti — passano a "completato"
+-- per risultare correttamente tutti verdi e sbloccare "Gestione
+-- rientro", coerentemente col loro stato reale.
+-- ---------------------------------------------------------
+
+update public.logistica_kit_edizioni set fase = 'completato' where fase = 'consegna_verificata';
