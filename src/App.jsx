@@ -23713,7 +23713,6 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   const [mostraForm, setMostraForm] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [menuAzioni, setMenuAzioni] = useState(false);
-  const [modificaContatti, setModificaContatti] = useState(false);
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
   // dati fiscali (stessa appendice della scheda hotel/master): solo per
@@ -23726,7 +23725,6 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
   const [pecMod, setPecMod] = useState("");
   const [classMod, setClassMod] = useState(classificazioneVuota());
-  function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState("");
   const [caricandoFoto, setCaricandoFoto] = useState(false);
@@ -23782,7 +23780,6 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     setPecMod(selezionato?.pec || "");
     setClassMod(classificazioneDaRecord(selezionato));
     setTab(isAssistente ? "corsi" : "calendario");
-    setModificaContatti(false);
     setMenuAzioni(false);
     setMsg("");
   }, [selezionatoId]);
@@ -23813,18 +23810,31 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     if (erroreDel) { window.alert("Errore: " + erroreDel.message); return; }
     setSelezionatoId(null); setMenuAzioni(false); ricarica([tabella, promuoviConfig.tabellaDestinazione]);
   }
-  async function salvaContatti() {
+  // salvataggio diretto, nessun tasto "Salva": ogni campo di contatto
+  // si registra da solo quando si esce da lì (onBlur); classOverride
+  // serve solo alla classificazione gestionale (solo assistenti, non
+  // leve) — setClassMod è asincrono, quindi aggiornaClassMod passa qui
+  // il valore già aggiornato invece di affidarsi alla chiusura su
+  // classMod, che al momento della chiamata sarebbe ancora quello vecchio
+  async function salvaContatti(classOverride) {
     const campi = { email: emailMod.trim() || null, telefono: telefonoMod.trim() || null };
     if (isAssistente) {
       Object.assign(campi, {
         iban: ibanMod.trim() || null, indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
         partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
-        ...classificazionePerPayload(classMod),
+        ...classificazionePerPayload(classOverride || classMod),
       });
     }
     const { error } = await supabase.from(tabella).update(campi).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    setModificaContatti(false); ricarica([tabella]);
+    ricarica([tabella]);
+  }
+  function aggiornaClassMod(campo, valore) {
+    setClassMod((prev) => {
+      const nuovo = { ...prev, [campo]: valore };
+      salvaContatti(nuovo);
+      return nuovo;
+    });
   }
   async function salvaCampo(campo, valore) {
     const { error } = await supabase.from(tabella).update({ [campo]: valore }).eq("id", selezionatoId);
@@ -24008,57 +24018,26 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                       <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>{badgeLabel}</span>
                     </div>
-                    {!modificaContatti ? (
+                    <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                      <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                      {isAssistente && <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />}
+                    </div>
+                    {isAssistente && (
                       <>
-                        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4 }}>
-                          {selezionato.email || <span style={{ fontStyle: "italic" }}>email non impostata</span>}
-                          {" · "}
-                          {selezionato.telefono || <span style={{ fontStyle: "italic" }}>telefono non impostato</span>}
-                          {isAssistente && (
-                            <>
-                              {" · "}
-                              {selezionato.iban || <span style={{ fontStyle: "italic" }}>IBAN non impostato</span>}
-                            </>
-                          )}
+                        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                          <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
                         </div>
-                        {isAssistente && (selezionato.indirizzo || selezionato.citta || selezionato.partita_iva || selezionato.codice_destinatario || selezionato.pec) && (
-                          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>
-                            {[
-                              [selezionato.indirizzo, selezionato.civico].filter(Boolean).join(" "),
-                              selezionato.citta,
-                              selezionato.partita_iva && `P.IVA ${selezionato.partita_iva}`,
-                              selezionato.codice_destinatario && `SDI ${selezionato.codice_destinatario}`,
-                              selezionato.pec,
-                            ].filter(Boolean).join(" · ")}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-                          <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                          <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                          {isAssistente && <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />}
-                          {!isAssistente && <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>}
+                        <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                          <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
+                          <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
                         </div>
-                        {isAssistente && (
-                          <>
-                            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                              <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                              <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
-                              <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                            </div>
-                            <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                              <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
-                              <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
-                              <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
-                            </div>
-                            <div style={{ marginTop: 10, maxWidth: 640 }}>
-                              <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
-                            </div>
-                            <button onClick={salvaContatti} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "6px 12px", cursor: "pointer" }}>Salva</button>
-                          </>
-                        )}
+                        <div style={{ marginTop: 10, maxWidth: 640 }}>
+                          <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
+                        </div>
                       </>
                     )}
                   </div>
@@ -24078,7 +24057,6 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                     </button>
                     {menuAzioni && (
                       <div style={{ position: "absolute", top: "100%", right: 0, marginTop: 4, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 10, minWidth: 200, overflow: "hidden" }}>
-                        <div onClick={() => { setModificaContatti(true); setMenuAzioni(false); }} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>Modifica contatti</div>
                         <div onClick={promuovi} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{promuoviConfig.etichetta}</div>
                         <div onClick={eliminaElemento} style={{ padding: "10px 14px", cursor: "pointer", ...fontBody, fontSize: 13, color: "#C0392B" }}>Elimina {nomeSingolare.toLowerCase()}</div>
                       </div>
