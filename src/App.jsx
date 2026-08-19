@@ -13122,6 +13122,20 @@ function prossimaFaseLogistica(fasi, faseCorrente) {
   if (idx === fasi.length - 1) return FASE_LOGISTICA_COMPLETATA;
   return fasi[idx + 1].chiave;
 }
+// indice "corrente" nella lista, trattando la sentinella "completato"
+// come un indice oltre l'ultimo — usato sia per l'avanzamento sia per
+// tornare indietro di una fase alla volta
+function indiceFaseLogistica(fasi, faseCorrente) {
+  return faseCorrente === FASE_LOGISTICA_COMPLETATA ? fasi.length : fasi.findIndex((f) => f.chiave === faseCorrente);
+}
+// fase precedente a quella corrente, o null se si è già alla prima —
+// si torna indietro una fase alla volta, mai con un salto libero,
+// stesso principio dell'avanzamento
+function faseIndietroLogistica(fasi, faseCorrente) {
+  const idx = indiceFaseLogistica(fasi, faseCorrente);
+  if (idx <= 0) return null;
+  return fasi[idx - 1].chiave;
+}
 const CHECKLIST_KIT_ITEMS = [
   { chiave: "tovagliette", etichetta: "Tovagliette inserite" },
   { chiave: "materiali_consumo", etichetta: "Materiali di consumo" },
@@ -27570,9 +27584,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 // indietro: cliccarla fa avanzare alla fase successiva
 function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA }) {
   const idx = fasi.findIndex((f) => f.chiave === fase.chiave);
-  // "completato" (tutte le fasi superate) equivale a un indice oltre
-  // l'ultimo: fa risultare "fatto" anche l'ultima pillola della lista
-  const idxCorrente = faseCorrente === FASE_LOGISTICA_COMPLETATA ? fasi.length : fasi.findIndex((f) => f.chiave === faseCorrente);
+  const idxCorrente = indiceFaseLogistica(fasi, faseCorrente);
   const stato = idx < idxCorrente ? "fatto" : idx === idxCorrente ? "corrente" : "futuro";
   const cliccabile = stato === "corrente";
   const stile = {
@@ -27617,7 +27629,7 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
 // attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
 // la pillola della fase corrente è cliccabile, mai una a caso: l'ordine
 // va sempre rispettato, un passo alla volta (vedi PillaFaseLogistica)
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
   const etichettaFase = completata
@@ -27650,10 +27662,19 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{kitTotali} KIT</div>
           <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: completata ? "#2E7D32" : "#C0392B" }}>{etichettaFase}</div>
         </div>
-        <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280 }}>
+        <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280, alignItems: "stretch" }}>
           {FASI_LOGISTICA.map((f) => (
             <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
           ))}
+          {indiceFaseLogistica(FASI_LOGISTICA, faseCorrente) > 0 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCambiaFase(faseIndietroLogistica(FASI_LOGISTICA, faseCorrente)); }}
+              title="Torna alla fase precedente"
+              style={{ background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px", flexShrink: 0 }}
+            >
+              <IconaFrecciaSinistra size={15} />
+            </button>
+          )}
         </div>
       </div>
       {speditoCompletamente && (
@@ -27663,10 +27684,19 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
             <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Gestione rientro</span>
           </label>
           {gestioneRientroAttiva && (
-            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "stretch" }}>
               {FASI_RIENTRO.map((f) => (
                 <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseRientroCorrente} fasi={FASI_RIENTRO} onClick={(e) => { e.stopPropagation(); onCambiaFaseRientro(prossimaFaseLogistica(FASI_RIENTRO, faseRientroCorrente)); }} />
               ))}
+              {indiceFaseLogistica(FASI_RIENTRO, faseRientroCorrente) > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onTornaIndietroFaseRientro(faseIndietroLogistica(FASI_RIENTRO, faseRientroCorrente)); }}
+                  title="Torna alla fase precedente"
+                  style={{ background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "0 10px", flexShrink: 0 }}
+                >
+                  <IconaFrecciaSinistra size={15} />
+                </button>
+              )}
             </div>
           )}
         </>
@@ -28037,12 +28067,31 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     });
   }
   function cambiaFaseRientro(corsoData, fase) {
-    if (fase === "prodotti_ripristinati") {
+    // il ripristino scatta solo cliccando l'ULTIMA pillola ("Pacco in
+    // attesa di controllo" → sentinella "completato"), non arrivando
+    // a "prodotti_ripristinati" come tappa intermedia ancora da fare —
+    // quello è solo l'arrivo alla penultima fase, un salvataggio normale
+    if (fase === FASE_LOGISTICA_COMPLETATA) {
       if (!window.confirm("I prodotti del kit stanno per essere ricaricati in magazzino. Confermi?")) return;
       ripristinaKitRientro(corsoData);
       return;
     }
     salvaCampiEdizione(corsoData.id, { fase_rientro: fase });
+  }
+  // tornare indietro di una fase alla volta è sempre un semplice
+  // salvataggio, tranne quando si esce da "completato" (cioè si
+  // annulla "Prodotti ripristinati"): lì il ripristino aveva davvero
+  // rimesso quei prodotti in giacenza, quindi tornare indietro deve
+  // toglierli di nuovo — sincronizzaMagazzino lo fa da sola: con
+  // quantita_scaricata_magazzino già azzerata dal ripristino, ricalcola
+  // la differenza rispetto a kit_per_iscritti+kit_di_riserva (ancora
+  // intatti) e la sottrae dal magazzino, esattamente come uno scarico
+  async function tornaIndietroFaseRientro(corsoData, faseTarget) {
+    if (statoDi(corsoData.id).fase_rientro === FASE_LOGISTICA_COMPLETATA) {
+      if (!window.confirm("Tornando indietro, questi prodotti verranno tolti di nuovo dal magazzino. Confermi?")) return;
+      await sincronizzaMagazzino(corsoData);
+    }
+    salvaCampiEdizione(corsoData.id, { fase_rientro: faseTarget });
   }
   // "Prodotti rientrati": i prodotti interi dichiarati dalla master
   // (Inventario di sede) ripristinano la giacenza per la sola
@@ -28143,6 +28192,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                   ...(attivo && !statoDi(cd.id).fase_rientro ? { fase_rientro: FASI_RIENTRO[0].chiave } : {}),
                 })}
                 onCambiaFaseRientro={(fase) => { setEdizioneSelId(cd.id); cambiaFaseRientro(cd, fase); }}
+                onTornaIndietroFaseRientro={(fase) => { setEdizioneSelId(cd.id); tornaIndietroFaseRientro(cd, fase); }}
               />
             ))}
           </div>
