@@ -9274,7 +9274,17 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Data inizio">
-                  <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => setModDataInizio(e.target.value)} />
+                  <input type="date" style={inputStyle} value={modDataInizio} onChange={(e) => {
+                    const nuovaInizio = e.target.value;
+                    // sposta "data fine" della stessa durata che il corso
+                    // aveva prima di questo cambio — resta comunque
+                    // modificabile a mano subito dopo
+                    if (nuovaInizio && modDataInizio && modDataFine) {
+                      const durata = differenzaGiorni(modDataInizio, modDataFine);
+                      setModDataFine(addGiorni(nuovaInizio, durata));
+                    }
+                    setModDataInizio(nuovaInizio);
+                  }} />
                 </Field>
               </div>
               <div style={{ flex: 1 }}>
@@ -15196,7 +15206,18 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div style={{ display: "flex", gap: 14 }}>
             <div style={{ flex: 1 }}>
               <Field label="Data inizio">
-                <input type="date" style={inputStyle} value={modDataInizioScheda} onChange={(e) => setModDataInizioScheda(e.target.value)} />
+                <input type="date" style={inputStyle} value={modDataInizioScheda} onChange={(e) => {
+                  const nuovaInizio = e.target.value;
+                  // sposta "data fine" della stessa durata (in giorni) che
+                  // il corso aveva prima di questo cambio, invece di
+                  // lasciarla ferma al vecchio mese — resta comunque
+                  // modificabile a mano subito dopo
+                  if (nuovaInizio && modDataInizioScheda && modDataFineScheda) {
+                    const durata = differenzaGiorni(modDataInizioScheda, modDataFineScheda);
+                    setModDataFineScheda(addGiorni(nuovaInizio, durata));
+                  }
+                  setModDataInizioScheda(nuovaInizio);
+                }} />
               </Field>
             </div>
             <div style={{ flex: 1 }}>
