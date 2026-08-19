@@ -18473,7 +18473,7 @@ const ETICHETTA_TIPO_SCONTO = { percent: "Percentuale", fixed_cart: "Importo fis
 const ETICHETTA_STATO_COUPON = {
   bozza: { testo: "Bozza", colore: MUTED },
   programmato: { testo: "Programmato", colore: "#B8860B" },
-  attivo: { testo: "Attivo", colore: "#2E7D32" },
+  attivo: { testo: "Coupon online", colore: "#2E7D32" },
   scaduto: { testo: "Scaduto", colore: "#8B8FA3" },
   annullato: { testo: "Annullato", colore: "#C0392B" },
 };
@@ -18483,6 +18483,13 @@ const ETICHETTA_STATO_COUPON = {
 function idsWooDaLocali(idsLocali, elenco, campoWoo) {
   const mappa = Object.fromEntries((elenco || []).map((el) => [el.id, el[campoWoo]]));
   return Array.from(idsLocali).map((id) => mappa[id]).filter((v) => v != null);
+}
+// direzione inversa: da id WooCommerce (salvati sul coupon) a id locali
+// (quelli con cui il form popola le checkbox) — serve per precompilare
+// il form quando si clicca un coupon per modificarlo
+function idsLocaliDaWoo(idsWoo, elenco, campoWoo) {
+  const mappa = new Map((elenco || []).map((el) => [el[campoWoo], el.id]));
+  return new Set((idsWoo || []).map((id) => mappa.get(id)).filter((v) => v != null));
 }
 
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica, onBack }) {
@@ -18508,18 +18515,50 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
   const [attivandoId, setAttivandoId] = useState(null);
   const [msg, setMsg] = useState("");
   const [msgTipo, setMsgTipo] = useState("errore");
+  // id del coupon in modifica, o null se si sta creandone uno nuovo —
+  // il form "Nuovo coupon" è lo stesso, cambia solo cosa succede al
+  // salvataggio (insert vs update)
+  const [couponInModifica, setCouponInModifica] = useState(null);
+  const formRef = useRef(null);
 
   function toggleSet(setter, id) {
     setter((prev) => { const nuovo = new Set(prev); nuovo.has(id) ? nuovo.delete(id) : nuovo.add(id); return nuovo; });
   }
 
   function svuotaForm() {
+    setCouponInModifica(null);
     setCodice(""); setDescrizione(""); setTipoSconto("percent"); setValore("");
     setValidoDa(""); setValidoFinoA(""); setAmbito("tutto");
     setCategorieSelId(new Set()); setProdottiSelId(new Set());
     setEscludiCategorieSelId(new Set()); setEscludiProdottiSelId(new Set());
     setUtilizziMax(""); setUtilizziMaxPerUtente(""); setSpesaMinima("");
     setNonCumulabile(false); setLimitaAEmail("");
+  }
+
+  // clic sul codice di un coupon (solo bozza/programmato, mai un coupon
+  // già creato su WooCommerce: non esiste un aggiornamento lato Woo, la
+  // modifica qui lo disallineerebbe in silenzio da quanto già online) —
+  // precompila lo stesso form usato per crearne uno nuovo
+  function apriModificaCoupon(c) {
+    setCouponInModifica(c.id);
+    setCodice(c.codice.toUpperCase());
+    setDescrizione(c.descrizione || "");
+    setTipoSconto(c.tipo_sconto);
+    setValore(String(c.valore));
+    setValidoDa(c.valido_da || "");
+    setValidoFinoA(c.valido_fino_a || "");
+    setAmbito(c.ambito);
+    setCategorieSelId(c.ambito === "categorie" ? idsLocaliDaWoo(c.categorie_ids, categorieProdotti, "woo_category_id") : new Set());
+    setProdottiSelId(c.ambito === "prodotti" ? idsLocaliDaWoo(c.prodotti_ids, prodottiShop, "woo_product_id") : new Set());
+    setEscludiCategorieSelId(idsLocaliDaWoo(c.escludi_categorie_ids, categorieProdotti, "woo_category_id"));
+    setEscludiProdottiSelId(idsLocaliDaWoo(c.escludi_prodotti_ids, prodottiShop, "woo_product_id"));
+    setUtilizziMax(c.utilizzi_max != null ? String(c.utilizzi_max) : "");
+    setUtilizziMaxPerUtente(c.utilizzi_max_per_utente != null ? String(c.utilizzi_max_per_utente) : "");
+    setSpesaMinima(c.spesa_minima != null ? String(c.spesa_minima) : "");
+    setNonCumulabile(!!c.non_cumulabile);
+    setLimitaAEmail((c.limita_a_email || []).join(", "));
+    setMsg("");
+    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function salvaCoupon() {
@@ -18548,10 +18587,13 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
       limita_a_email: limitaAEmail.trim() ? limitaAEmail.split(",").map((s) => s.trim()).filter(Boolean) : null,
       stato,
     };
-    const { error } = await supabase.from("coupon").insert(payload);
+    const { error } = couponInModifica
+      ? await supabase.from("coupon").update(payload).eq("id", couponInModifica)
+      : await supabase.from("coupon").insert(payload);
     setSalvando(false);
     if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
-    setMsgTipo("successo"); setMsg(stato === "programmato" ? "Coupon salvato come programmato." : "Coupon salvato come bozza — premi \"Crea su WooCommerce\" per attivarlo.");
+    setMsgTipo("successo");
+    setMsg(couponInModifica ? `Coupon "${payload.codice}" aggiornato.` : (stato === "programmato" ? "Coupon salvato come programmato." : "Coupon salvato come bozza — premi \"Crea su WooCommerce\" per attivarlo."));
     svuotaForm();
     ricarica(["coupon"]);
   }
@@ -18603,8 +18645,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
           <div style={{ ...fontBody, fontSize: 12.5, color: msgTipo === "errore" ? "#C0392B" : "#2E7D32", marginBottom: 14, padding: "8px 10px", background: msgTipo === "errore" ? "#FBEAEA" : "#EAF5EC", borderRadius: 8 }}>{msg}</div>
         )}
 
-        <div style={{ ...cardStyle }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Nuovo coupon</div>
+        <div ref={formRef} style={{ ...cardStyle }}>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>{couponInModifica ? "Modifica coupon" : "Nuovo coupon"}</div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 200px" }}><Field label="Codice"><input style={{ ...inputStyle, textTransform: "uppercase" }} value={codice} onChange={(e) => setCodice(e.target.value)} placeholder="ES. BENVENUTO10" /></Field></div>
             <div style={{ flex: "2 1 260px" }}><Field label="Descrizione"><input style={inputStyle} value={descrizione} onChange={(e) => setDescrizione(e.target.value)} /></Field></div>
@@ -18652,7 +18694,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
             <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Non cumulabile con altri coupon</span>
           </label>
 
-          <Button onClick={salvaCoupon} disabled={salvando}>{salvando ? "Salvo…" : "Salva coupon"}</Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={salvaCoupon} disabled={salvando}>{salvando ? "Salvo…" : (couponInModifica ? "Salva modifiche" : "Salva coupon")}</Button>
+            {couponInModifica && <Button variant="ghost" onClick={svuotaForm} disabled={salvando}>Annulla modifica</Button>}
+          </div>
         </div>
 
         <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>Coupon ({couponOrdinati.length})</div>
@@ -18660,11 +18705,16 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun coupon ancora.</div>
         ) : couponOrdinati.map((c) => {
           const statoInfo = ETICHETTA_STATO_COUPON[c.stato] || ETICHETTA_STATO_COUPON.bozza;
+          const modificabile = c.stato === "bozza" || c.stato === "programmato";
           return (
             <div key={c.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
+                  {modificabile ? (
+                    <button onClick={() => apriModificaCoupon(c)} title="Modifica coupon" style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}>{c.codice}</button>
+                  ) : (
+                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
+                  )}
                   <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
                 </div>
                 <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>
