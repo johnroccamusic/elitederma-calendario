@@ -17534,16 +17534,21 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     : [];
 
   // aggiorna un master/assistente/hotel/location esistente con i
-  // contatti del fornitore — location, uno spazio fisico, non ha
-  // "città" propria da sovrascrivere (è già la città scelta per
-  // arrivarci qui), ma ha tutti gli altri campi di contatto/fiscali
+  // contatti del fornitore. Location e hotel sono "spazi fisici": il
+  // loro nome (nome_sede per location, nome per hotel) era spesso un
+  // segnaposto generico ("Aule Pescara") messo lì prima di conoscere
+  // il vero fornitore, quindi qui viene sostituito col nome reale.
+  // Master/assistente sono invece persone già anagrafate col loro
+  // vero nome: il loro campo nome non va mai toccato da qui.
   async function aggiornaEsistenteAssocia(target) {
     const f = associaAperto;
     if (!f) return;
     setAssociaSalvando(true);
     const campi = target.tabella === "location"
-      ? { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null }
-      : { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null };
+      ? { nome_sede: f.nome, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null }
+      : target.tabella === "hotel"
+        ? { nome: f.nome, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null }
+        : { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null };
     const { error } = await supabase.from(target.tabella).update(campi).eq("id", target.id);
     setAssociaSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -17912,7 +17917,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
                         <button
                           key={`${el.tabella}_${el.id}`}
                           disabled={associaSalvando}
-                          onClick={() => { if (window.confirm(`Vuoi aggiornare "${el.nome}" con i dati di questo fornitore?`)) aggiornaEsistenteAssocia(el); }}
+                          onClick={() => { if (window.confirm(`Vuoi aggiornare "${el.nome}" con i dati di questo fornitore? Il nome verrà sostituito con "${associaAperto.nome}".`)) aggiornaEsistenteAssocia(el); }}
                           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", textAlign: "left", ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "9px 12px", cursor: "pointer" }}
                         >
                           <span>{el.nome}</span>
