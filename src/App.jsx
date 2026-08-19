@@ -13516,7 +13516,7 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     iban: locSedeClasse?.iban || null,
     // categoria di spesa della SEDE specifica (non più un'unica categoria
     // condivisa da tutte le location, vedi PaginaGestioneLocation)
-    categoriaSpesaId: locSedeClasse?.categoria_spesa_id || null,
+    categoriaSpesaId: locSedeClasse?.sottocategoria_id || null,
   } : null;
 
   // righe "Costo Alloggio": una per ogni persona (master, assistente o
@@ -17410,8 +17410,8 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   // "città esistenti" (tabella citta, tutt'altra cosa) non sono
   // soggetti con cui l'accademia ha rapporti, non vanno in Anagrafiche
   (location || []).forEach((l) => aggiungi("location", l.id, l.nome_sede ? `${l.nome_sede}, ${toTitleCase(l.nome || "")}` : toTitleCase(l.nome || "—"), "location",
-    { citta: l.nome || null, indirizzo: null, partitaIva: null, iban: l.iban, telefono: null, email: null },
-    categoriaNomePer(l.categoria_spesa_id, costiSottocategorie)));
+    { citta: l.nome || null, indirizzo: l.indirizzo, partitaIva: l.partita_iva, codiceFiscale: l.codice_fiscale, iban: l.iban, telefono: l.telefono, email: l.email },
+    categoriaNomePer(l.sottocategoria_id, costiSottocategorie)));
   (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
     { citta: null, indirizzo: null, partitaIva: null, iban: null, telefono: v.telefono, email: v.email },
     categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie)));
@@ -17534,14 +17534,15 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     : [];
 
   // aggiorna un master/assistente/hotel/location esistente con i
-  // contatti del fornitore — solo i campi che quella tabella ha
-  // davvero (location, uno spazio fisico, ha solo l'IBAN)
+  // contatti del fornitore — location, uno spazio fisico, non ha
+  // "città" propria da sovrascrivere (è già la città scelta per
+  // arrivarci qui), ma ha tutti gli altri campi di contatto/fiscali
   async function aggiornaEsistenteAssocia(target) {
     const f = associaAperto;
     if (!f) return;
     setAssociaSalvando(true);
     const campi = target.tabella === "location"
-      ? { iban: f.iban || null }
+      ? { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null }
       : { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null };
     const { error } = await supabase.from(target.tabella).update(campi).eq("id", target.id);
     setAssociaSalvando(false);
@@ -17556,7 +17557,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     setAssociaSalvando(true);
     const { error } = associaTipo === "hotel"
       ? await supabase.from("hotel").insert({ nome: f.nome, citta: associaCittaScelta, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, iban: f.iban || null })
-      : await supabase.from("location").insert({ nome: associaCittaScelta, nome_sede: f.nome, iban: f.iban || null });
+      : await supabase.from("location").insert({ nome: associaCittaScelta, nome_sede: f.nome, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null });
     setAssociaSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
     chiudiAssocia();
@@ -24581,10 +24582,18 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   const [costoCashLoc, setCostoCashLoc] = useState("");
   const [costoBonificoLoc, setCostoBonificoLoc] = useState("");
   const [sedeCentraleLoc, setSedeCentraleLoc] = useState(false);
+  const [telefonoLoc, setTelefonoLoc] = useState("");
+  const [emailLoc, setEmailLoc] = useState("");
+  const [indirizzoLoc, setIndirizzoLoc] = useState("");
+  const [partitaIvaLoc, setPartitaIvaLoc] = useState("");
+  const [codiceFiscaleLoc, setCodiceFiscaleLoc] = useState("");
   const [ibanLoc, setIbanLoc] = useState("");
-  // categoria di spesa: propria per ciascuna sede, non più un'unica
-  // categoria condivisa da tutte le location (vedi calcolaVociScadenziario)
-  const [categoriaSpesaLoc, setCategoriaSpesaLoc] = useState(null);
+  // categoria/sottocategoria di spesa: proprie per ciascuna sede, non
+  // più un'unica categoria condivisa da tutte le location (vedi
+  // calcolaVociScadenziario) — stessa coppia categoria_id/
+  // sottocategoria_id già usata sui fornitori
+  const [categoriaIdLoc, setCategoriaIdLoc] = useState(null);
+  const [sottocategoriaLoc, setSottocategoriaLoc] = useState(null);
   const [applicaCategoriaATutteLoc, setApplicaCategoriaATutteLoc] = useState(false);
   const [classNuova, setClassNuova] = useState(classificazioneVuota());
   function aggiornaClassNuova(campo, valore) { setClassNuova((prev) => ({ ...prev, [campo]: valore })); }
@@ -24596,8 +24605,14 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   const [modCostoCashLoc, setModCostoCashLoc] = useState("");
   const [modCostoBonificoLoc, setModCostoBonificoLoc] = useState("");
   const [modSedeCentraleLoc, setModSedeCentraleLoc] = useState(false);
+  const [modTelefonoLoc, setModTelefonoLoc] = useState("");
+  const [modEmailLoc, setModEmailLoc] = useState("");
+  const [modIndirizzoLoc, setModIndirizzoLoc] = useState("");
+  const [modPartitaIvaLoc, setModPartitaIvaLoc] = useState("");
+  const [modCodiceFiscaleLoc, setModCodiceFiscaleLoc] = useState("");
   const [modIbanLoc, setModIbanLoc] = useState("");
-  const [modCategoriaSpesaLoc, setModCategoriaSpesaLoc] = useState(null);
+  const [modCategoriaIdLoc, setModCategoriaIdLoc] = useState(null);
+  const [modSottocategoriaLoc, setModSottocategoriaLoc] = useState(null);
   const [modApplicaCategoriaATutteLoc, setModApplicaCategoriaATutteLoc] = useState(false);
   const [classMod, setClassMod] = useState(classificazioneVuota());
   function aggiornaClassMod(campo, valore) { setClassMod((prev) => ({ ...prev, [campo]: valore })); }
@@ -24617,15 +24632,21 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       costo_giornaliero_cash: sedeCentraleLoc ? null : (costoCashLoc === "" ? null : Number(costoCashLoc)),
       costo_giornaliero_bonifico: sedeCentraleLoc ? null : (costoBonificoLoc === "" ? null : Number(costoBonificoLoc)),
       sede_centrale: sedeCentraleLoc,
+      telefono: telefonoLoc.trim() || null,
+      email: emailLoc.trim() || null,
+      indirizzo: indirizzoLoc.trim() || null,
+      partita_iva: partitaIvaLoc.trim() || null,
+      codice_fiscale: codiceFiscaleLoc.trim() || null,
       iban: ibanLoc.trim() || null,
-      categoria_spesa_id: categoriaSpesaLoc,
+      categoria_id: categoriaIdLoc,
+      sottocategoria_id: sottocategoriaLoc,
       ...classificazionePerPayload(classNuova),
     });
     if (error) { setMsg("Errore: " + error.message); return; }
     if (applicaCategoriaATutteLoc) {
-      await supabase.from("location").update({ categoria_spesa_id: categoriaSpesaLoc, ...classificazionePerPayload(classNuova) }).not("id", "is", null);
+      await supabase.from("location").update({ categoria_id: categoriaIdLoc, sottocategoria_id: sottocategoriaLoc, ...classificazionePerPayload(classNuova) }).not("id", "is", null);
     }
-    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setIbanLoc(""); setCategoriaSpesaLoc(null); setApplicaCategoriaATutteLoc(false); setClassNuova(classificazioneVuota()); setMostraFormSede(false); setMsg("Sede aggiunta.");
+    setNomeSedeLoc(""); setNomeLoc(""); setPostiMaxLoc(""); setCostoCashLoc(""); setCostoBonificoLoc(""); setSedeCentraleLoc(false); setTelefonoLoc(""); setEmailLoc(""); setIndirizzoLoc(""); setPartitaIvaLoc(""); setCodiceFiscaleLoc(""); setIbanLoc(""); setCategoriaIdLoc(null); setSottocategoriaLoc(null); setApplicaCategoriaATutteLoc(false); setClassNuova(classificazioneVuota()); setMostraFormSede(false); setMsg("Sede aggiunta.");
     ricarica(["location"]);
   }
   function apriModificaLocation(l) {
@@ -24636,8 +24657,14 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
     setModCostoCashLoc(l.costo_giornaliero_cash != null ? String(l.costo_giornaliero_cash) : "");
     setModCostoBonificoLoc(l.costo_giornaliero_bonifico != null ? String(l.costo_giornaliero_bonifico) : "");
     setModSedeCentraleLoc(!!l.sede_centrale);
+    setModTelefonoLoc(l.telefono || "");
+    setModEmailLoc(l.email || "");
+    setModIndirizzoLoc(l.indirizzo || "");
+    setModPartitaIvaLoc(l.partita_iva || "");
+    setModCodiceFiscaleLoc(l.codice_fiscale || "");
     setModIbanLoc(l.iban || "");
-    setModCategoriaSpesaLoc(l.categoria_spesa_id || null);
+    setModCategoriaIdLoc(l.categoria_id || null);
+    setModSottocategoriaLoc(l.sottocategoria_id || null);
     setModApplicaCategoriaATutteLoc(false);
     setClassMod(classificazioneDaRecord(l));
   }
@@ -24650,13 +24677,19 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
       costo_giornaliero_cash: modSedeCentraleLoc ? null : (modCostoCashLoc === "" ? null : Number(modCostoCashLoc)),
       costo_giornaliero_bonifico: modSedeCentraleLoc ? null : (modCostoBonificoLoc === "" ? null : Number(modCostoBonificoLoc)),
       sede_centrale: modSedeCentraleLoc,
+      telefono: modTelefonoLoc.trim() || null,
+      email: modEmailLoc.trim() || null,
+      indirizzo: modIndirizzoLoc.trim() || null,
+      partita_iva: modPartitaIvaLoc.trim() || null,
+      codice_fiscale: modCodiceFiscaleLoc.trim() || null,
       iban: modIbanLoc.trim() || null,
-      categoria_spesa_id: modCategoriaSpesaLoc,
+      categoria_id: modCategoriaIdLoc,
+      sottocategoria_id: modSottocategoriaLoc,
       ...classificazionePerPayload(classMod),
     }).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     if (modApplicaCategoriaATutteLoc) {
-      await supabase.from("location").update({ categoria_spesa_id: modCategoriaSpesaLoc, ...classificazionePerPayload(classMod) }).neq("id", id);
+      await supabase.from("location").update({ categoria_id: modCategoriaIdLoc, sottocategoria_id: modSottocategoriaLoc, ...classificazionePerPayload(classMod) }).neq("id", id);
     }
     setLocInModifica(null); setModApplicaCategoriaATutteLoc(false); setMsg("Sede aggiornata.");
     ricarica(["location"]);
@@ -24773,12 +24806,38 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                     </Field>
                   </>
                 )}
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}><Field label="Telefono (opzionale)"><input style={inputStyle} value={telefonoLoc} onChange={(e) => setTelefonoLoc(e.target.value)} /></Field></div>
+                  <div style={{ flex: 1 }}><Field label="Email (opzionale)"><input style={inputStyle} value={emailLoc} onChange={(e) => setEmailLoc(e.target.value)} /></Field></div>
+                </div>
+                <Field label="Indirizzo (opzionale)">
+                  <input style={inputStyle} value={indirizzoLoc} onChange={(e) => setIndirizzoLoc(e.target.value)} />
+                </Field>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}><Field label="P.IVA (opzionale)"><input style={inputStyle} value={partitaIvaLoc} onChange={(e) => setPartitaIvaLoc(e.target.value)} /></Field></div>
+                  <div style={{ flex: 1 }}><Field label="Codice fiscale (opzionale)"><input style={inputStyle} value={codiceFiscaleLoc} onChange={(e) => setCodiceFiscaleLoc(e.target.value)} /></Field></div>
+                </div>
                 <Field label="IBAN (opzionale)">
                   <input style={inputStyle} value={ibanLoc} onChange={(e) => setIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
                 </Field>
-                <Field label="Categoria di spesa (opzionale)">
-                  <SelectCategoriaSpesa value={categoriaSpesaLoc} onChange={setCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
-                </Field>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Categoria di spesa (opzionale)">
+                      <select style={inputStyle} value={categoriaIdLoc || ""} onChange={(e) => { setCategoriaIdLoc(e.target.value || null); setSottocategoriaLoc(null); }}>
+                        <option value="">— nessuna —</option>
+                        {[...(costiCategorie || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Sotto-categoria">
+                      <select style={inputStyle} value={sottocategoriaLoc || ""} onChange={(e) => setSottocategoriaLoc(e.target.value || null)} disabled={!categoriaIdLoc}>
+                        <option value="">— scegli —</option>
+                        {sottocategorieDiCategoria(costiSottocategorie, categoriaIdLoc).map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                </div>
                 <PannelloClassificazioneGestionale valori={classNuova} onChange={aggiornaClassNuova} />
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                   <Button onClick={aggiungiLocation}>Aggiungi sede</Button>
@@ -24806,7 +24865,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                         dettaglio={[
                           l.posti_max != null ? `Capienza sede: ${l.posti_max}` : "Nessun tetto sui posti",
                           l.sede_centrale ? "sede centrale — corsi gratuiti" : null,
-                          l.categoria_spesa_id ? `categoria: ${sottocategoriaCostoDi(costiSottocategorie, l.categoria_spesa_id)?.nome || "—"}` : "categoria di spesa non impostata",
+                          l.sottocategoria_id ? `categoria: ${sottocategoriaCostoDi(costiSottocategorie, l.sottocategoria_id)?.nome || "—"}` : "categoria di spesa non impostata",
                         ].filter(Boolean).join(" · ")}
                         onModifica={() => (locInModifica === l.id ? setLocInModifica(null) : apriModificaLocation(l))}
                         onDelete={() => eliminaLocation(l.id)}
@@ -24839,12 +24898,38 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
                               </Field>
                             </>
                           )}
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <div style={{ flex: 1 }}><Field label="Telefono (opzionale)"><input style={inputStyle} value={modTelefonoLoc} onChange={(e) => setModTelefonoLoc(e.target.value)} /></Field></div>
+                            <div style={{ flex: 1 }}><Field label="Email (opzionale)"><input style={inputStyle} value={modEmailLoc} onChange={(e) => setModEmailLoc(e.target.value)} /></Field></div>
+                          </div>
+                          <Field label="Indirizzo (opzionale)">
+                            <input style={inputStyle} value={modIndirizzoLoc} onChange={(e) => setModIndirizzoLoc(e.target.value)} />
+                          </Field>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <div style={{ flex: 1 }}><Field label="P.IVA (opzionale)"><input style={inputStyle} value={modPartitaIvaLoc} onChange={(e) => setModPartitaIvaLoc(e.target.value)} /></Field></div>
+                            <div style={{ flex: 1 }}><Field label="Codice fiscale (opzionale)"><input style={inputStyle} value={modCodiceFiscaleLoc} onChange={(e) => setModCodiceFiscaleLoc(e.target.value)} /></Field></div>
+                          </div>
                           <Field label="IBAN (opzionale)">
                             <input style={inputStyle} value={modIbanLoc} onChange={(e) => setModIbanLoc(e.target.value)} placeholder="es. IT00X0000000000000000000000" />
                           </Field>
-                          <Field label="Categoria di spesa (opzionale)">
-                            <SelectCategoriaSpesa value={modCategoriaSpesaLoc} onChange={setModCategoriaSpesaLoc} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} />
-                          </Field>
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <div style={{ flex: 1 }}>
+                              <Field label="Categoria di spesa (opzionale)">
+                                <select style={inputStyle} value={modCategoriaIdLoc || ""} onChange={(e) => { setModCategoriaIdLoc(e.target.value || null); setModSottocategoriaLoc(null); }}>
+                                  <option value="">— nessuna —</option>
+                                  {[...(costiCategorie || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                                </select>
+                              </Field>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <Field label="Sotto-categoria">
+                                <select style={inputStyle} value={modSottocategoriaLoc || ""} onChange={(e) => setModSottocategoriaLoc(e.target.value || null)} disabled={!modCategoriaIdLoc}>
+                                  <option value="">— scegli —</option>
+                                  {sottocategorieDiCategoria(costiSottocategorie, modCategoriaIdLoc).map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                                </select>
+                              </Field>
+                            </div>
+                          </div>
                           <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
                           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                             <Button onClick={() => salvaModificaLocation(l.id)}>Salva</Button>
