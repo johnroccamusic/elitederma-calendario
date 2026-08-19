@@ -5429,23 +5429,43 @@ function PaginaDashboardVenditori({
 }
 
 // ---------- Dashboard master ----------
-// una data assegnata alla master, con link ai biglietti di viaggio già
-// caricati da "Assegnazione Master" (stesso file, stesso bucket
-// "allegati-iscritti" — qui è solo in lettura, il caricamento resta un
-// compito di chi gestisce l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, apribile, onApriInventario }) {
+// riquadro data compatto per CardDataMaster: un solo giorno "19", un
+// intervallo nello stesso mese "17-19", un intervallo a cavallo di due
+// mesi "28 ago-2 set" — mai solo il primo giorno, la master deve
+// vedere a colpo d'occhio quanto dura il corso
+function etichettaIntervalloGiorni(dataInizio, dataFine) {
+  const [, meseI, ggI] = dataInizio.split("-").map(Number);
+  const [, meseF, ggF] = dataFine.split("-").map(Number);
+  if (dataInizio === dataFine) return { numero: String(ggI), sotto: MESI_ABBR[meseI - 1] };
+  if (meseI === meseF) return { numero: `${ggI}-${ggF}`, sotto: MESI_ABBR[meseI - 1] };
+  return { numero: `${ggI} ${MESI_ABBR[meseI - 1]}-${ggF} ${MESI_ABBR[meseF - 1]}`, sotto: "" };
+}
+// una data assegnata alla master: stesso stile a card delle schede di
+// Logistica prodotti (bordo e riquadro data nel colore del corso), con
+// allievi/kit previsti, sede del corso e dati di viaggio (biglietti +
+// alloggio, con link ai biglietti già caricati da "Assegnazione
+// Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
+// in lettura, il caricamento resta un compito di chi gestisce
+// l'assegnazione)
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario }) {
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
+  const coloreCorso = corso?.colore || NAVY;
+  const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   return (
     <div
       onClick={apribile ? () => onApriInventario(corsoData.id) : undefined}
-      style={{ ...cardStyle, marginBottom: 10, cursor: apribile ? "pointer" : "default", border: apribile ? `1px solid ${GOLD}` : cardStyle.border }}
+      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: apribile ? "pointer" : "default" }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{corso?.nome || "—"}</div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>
-            {corsoData.data_inizio === corsoData.data_fine ? fmtData(corsoData.data_inizio) : `${fmtData(corsoData.data_inizio)} → ${fmtData(corsoData.data_fine)}`} · {toTitleCase(loc?.nome || "—")}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
+            {sotto && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
+          </div>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: statoViaggio.colore }}>
@@ -5453,38 +5473,75 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, apribile, onApr
           {statoViaggio.etichetta}
         </div>
       </div>
-      {biglietti.length > 0 && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti di viaggio</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {biglietti.map((percorso, i) => (
-              <AllegatoLink key={i} percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
-            ))}
-          </div>
+
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9, marginBottom: 6 }}>
+          <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{iscrittiEdizione.length}</span>
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>Allievi totali</span>
         </div>
-      )}
-      {hotelAssociato && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-          <div>
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Alloggio</div>
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{toTitleCase(hotelAssociato.nome)}</div>
-            {(hotelAssociato.indirizzo || hotelAssociato.citta) && (
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>
-                {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}
-                {hotelAssociato.indirizzo && hotelAssociato.citta ? " · " : ""}
-                {hotelAssociato.citta ? toTitleCase(hotelAssociato.citta) : ""}
-              </div>
-            )}
-          </div>
-          {hotelAssociato.telefono && (
-            <a href={`https://wa.me/${numeroWhatsapp(hotelAssociato.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Contatta su WhatsApp" style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, flexShrink: 0 }}>
-              {hotelAssociato.telefono} <IconaWhatsapp size={18} />
-            </a>
+        <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
+      </div>
+
+      {loc && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Sede del corso</div>
+          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{loc.nome_sede ? toTitleCase(loc.nome_sede) : toTitleCase(loc.nome || "—")}</div>
+          {(loc.indirizzo || loc.nome) && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>
+              {[loc.indirizzo, loc.nome_sede ? toTitleCase(loc.nome || "") : null].filter(Boolean).join(" · ")}
+            </div>
+          )}
+          {loc.telefono && (
+            <a href={`tel:${loc.telefono}`} onClick={(e) => e.stopPropagation()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginTop: 2, display: "inline-block" }}>{loc.telefono}</a>
           )}
         </div>
       )}
+
+      {(biglietti.length > 0 || hotelAssociato) && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Dati di viaggio</div>
+
+          {biglietti.length > 0 && (
+            <div style={{ marginBottom: hotelAssociato ? 12 : 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti scaricabili</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {biglietti.map((percorso, i) => (
+                  <AllegatoLink key={i} percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {hotelAssociato && (
+            <div>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Alloggio</div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{toTitleCase(hotelAssociato.nome)}</div>
+                  {(hotelAssociato.indirizzo || hotelAssociato.citta) && (
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>
+                      {[hotelAssociato.indirizzo, hotelAssociato.civico].filter(Boolean).join(" ")}
+                      {hotelAssociato.indirizzo && hotelAssociato.citta ? " · " : ""}
+                      {hotelAssociato.citta ? toTitleCase(hotelAssociato.citta) : ""}
+                    </div>
+                  )}
+                </div>
+                {hotelAssociato.telefono && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                    <a href={`tel:${hotelAssociato.telefono}`} onClick={(e) => e.stopPropagation()} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{hotelAssociato.telefono}</a>
+                    <a href={`https://wa.me/${numeroWhatsapp(hotelAssociato.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Contatta su WhatsApp" style={{ display: "flex" }}>
+                      <IconaWhatsapp size={18} />
+                    </a>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {apribile && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
           Tocca per dichiarare l'inventario di {toTitleCase(loc?.nome || "questa sede")} →
         </div>
       )}
@@ -5607,7 +5664,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -5758,6 +5815,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, mast
               <CardDataMaster
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
+                iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
               />
             ))}
@@ -31847,7 +31905,7 @@ export default function App() {
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
@@ -32868,7 +32926,7 @@ export default function App() {
 
       {view === "dashboardmaster" && (
         <PaginaDashboardMaster
-          master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel}
+          master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
           onApriInventarioSede={apriInventarioSede}
