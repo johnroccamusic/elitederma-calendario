@@ -9650,7 +9650,11 @@ function classificazionePerPayload(v) {
 }
 function PannelloClassificazioneGestionale({ valori, onChange }) {
   const v = valori || classificazioneVuota();
-  const [aperto, setAperto] = useState(false);
+  // aperto di default: è più comodo leggere tutta la classificazione
+  // subito, appena si apre la scheda, invece di doverla espandere ogni
+  // volta — vale per tutti i punti in cui compare questo pannello
+  // (master, assistenti, hotel, location, spese/abbonamenti)
+  const [aperto, setAperto] = useState(true);
   return (
     <div style={{ ...cardStyle, marginBottom: 14 }}>
       <button
@@ -23299,7 +23303,14 @@ const REGIMI_FISCALI_MASTER = [
 // le altre hanno sempre un "da" e un "a". Righe tenute in locale mentre
 // si scrive, salvate sul blur di ogni campo o subito quando si
 // aggiunge/rimuove una fascia.
-function EditorFasceCompenso({ fasce, onCambia }) {
+// etichetta orizzontale di una fascia, es. "1-2: 300€" o "6+: 400€" —
+// usata sia nel riepilogo sia nella tendina "Importa compensi"
+function etichettaFasciaCompenso(f) {
+  const range = f.a != null ? `${f.da}-${f.a}` : `${f.da}+`;
+  return `${range}: ${f.compenso ?? "—"}€`;
+}
+
+function EditorFasceCompenso({ fasce, onCambia, opzioniImporta }) {
   const [righe, setRighe] = useState(fasce || []);
   useEffect(() => { setRighe(fasce || []); }, [fasce]);
 
@@ -23308,6 +23319,14 @@ function EditorFasceCompenso({ fasce, onCambia }) {
   }
   function salva(righeDaSalvare) {
     onCambia(righeDaSalvare.map((r) => ({ da: r.da === "" ? null : Number(r.da), a: r.a === "" || r.a == null ? null : Number(r.a), compenso: r.compenso === "" ? null : Number(r.compenso) })));
+  }
+  // "Importa compensi": copia le fasce di un altro corso (già impostate
+  // altrove) su questo, invece di ricomporle a mano da zero — sostituisce
+  // le fasce correnti, non le somma
+  function importaDa(fasceDaImportare) {
+    const nuove = (fasceDaImportare || []).map((f) => ({ da: f.da, a: f.a, compenso: f.compenso }));
+    setRighe(nuove);
+    salva(nuove);
   }
   function aggiungiRiga() {
     const ultima = righe[righe.length - 1];
@@ -23362,6 +23381,21 @@ function EditorFasceCompenso({ fasce, onCambia }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+      {opzioniImporta && opzioniImporta.length > 0 && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Importa compensi</div>
+          <select
+            style={{ ...inputStyle, fontSize: 12.5 }}
+            value=""
+            onChange={(e) => { const scelto = opzioniImporta.find((o) => o.id === e.target.value); if (scelto) importaDa(scelto.fasce); }}
+          >
+            <option value="">— scegli un corso da cui copiare le fasce —</option>
+            {opzioniImporta.map((o) => (
+              <option key={o.id} value={o.id}>{o.nome} · {o.fasce.map(etichettaFasciaCompenso).join(" · ")}</option>
+            ))}
+          </select>
         </div>
       )}
       <button onClick={aggiungiRiga} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer" }}>+ Aggiungi fascia</button>
@@ -23915,6 +23949,13 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
             ) : [...(corsi || [])].sort((a, b) => a.nome.localeCompare(b.nome)).map((c) => {
               const espanso = corsoCompensiEspansoId === c.id;
               const fasce = fasceCorsoOverride[c.id] ?? (c.fasce_compenso_default || []);
+              // altri corsi con almeno una fascia già impostata, da cui
+              // copiare invece di ricomporre le fasce a mano
+              const opzioniImportaCorso = [...(corsi || [])]
+                .filter((altro) => altro.id !== c.id)
+                .map((altro) => ({ id: altro.id, nome: altro.nome, fasce: fasceCorsoOverride[altro.id] ?? (altro.fasce_compenso_default || []) }))
+                .filter((altro) => altro.fasce.length > 0)
+                .sort((a, b) => a.nome.localeCompare(b.nome));
               return (
                 <div key={c.id} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -23931,7 +23972,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                   </div>
                   {espanso && (
                     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                      <EditorFasceCompenso fasce={fasce} onCambia={(nuoveFasce) => salvaFasceCorso(c.id, nuoveFasce)} />
+                      <EditorFasceCompenso fasce={fasce} onCambia={(nuoveFasce) => salvaFasceCorso(c.id, nuoveFasce)} opzioniImporta={opzioniImportaCorso} />
                     </div>
                   )}
                 </div>
