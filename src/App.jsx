@@ -13087,7 +13087,7 @@ const TASTI_HOME = [
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
 // Logistica prodotti: le 5 fasi di spedizione di un'edizione (in ordine)
-// e i 7 elementi della checklist di preparazione kit
+// e i 3 elementi della checklist di preparazione kit
 const FASI_LOGISTICA = [
   { chiave: "da_preparare", etichetta: "Da preparare" },
   { chiave: "kit_pronto", etichetta: "Kit pronto" },
@@ -13095,14 +13095,19 @@ const FASI_LOGISTICA = [
   { chiave: "ritirato_corriere", etichetta: "Ritirato dal corriere" },
   { chiave: "consegna_verificata", etichetta: "Consegna verificata" },
 ];
+// "Gestione rientro": stesso principio delle 5 fasi sopra ma per il
+// viaggio di ritorno del pacco — appaiono solo se il flag
+// gestione_rientro_attiva è spuntato (RigaCorsoLogistica)
+const FASI_RIENTRO = [
+  { chiave: "bolla_rientro_emessa", etichetta: "Bolla rientro emessa" },
+  { chiave: "pacco_ritirato", etichetta: "Pacco ritirato" },
+  { chiave: "pacco_rientrato", etichetta: "Pacco rientrato" },
+  { chiave: "prodotti_ripristinati", etichetta: "Prodotti ripristinati" },
+];
 const CHECKLIST_KIT_ITEMS = [
   { chiave: "tovagliette", etichetta: "Tovagliette inserite" },
   { chiave: "materiali_consumo", etichetta: "Materiali di consumo" },
   { chiave: "materiale_didattico", etichetta: "Materiale didattico" },
-  { chiave: "indirizzo_verificato", etichetta: "Indirizzo verificato" },
-  { chiave: "pacchi_etichettati", etichetta: "Pacchi etichettati" },
-  { chiave: "spedizione_prenotata", etichetta: "Spedizione prenotata" },
-  { chiave: "tracking_inserito", etichetta: "Tracking inserito" },
 ];
 // unica password "di sistema" rimasta fuori dalla tabella "Gestione
 // utenti" (Utente generico/Amministratore/Programmatore sono righe di
@@ -27543,9 +27548,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 // una "pillola" di fase nella riga di un'edizione: verde spuntata se già
 // superata, rossa con "!" se è quella attuale, vuota se ancora da
 // raggiungere — cliccarla imposta quella fase come fase attuale
-function PillaFaseLogistica({ fase, faseCorrente, onClick }) {
-  const idx = FASI_LOGISTICA.findIndex((f) => f.chiave === fase.chiave);
-  const idxCorrente = FASI_LOGISTICA.findIndex((f) => f.chiave === faseCorrente);
+function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA }) {
+  const idx = fasi.findIndex((f) => f.chiave === fase.chiave);
+  const idxCorrente = fasi.findIndex((f) => f.chiave === faseCorrente);
   const stato = idx < idxCorrente ? "fatto" : idx === idxCorrente ? "corrente" : "futuro";
   const stile = {
     fatto: { background: "#E8F3EA", border: "1px solid #2E7D32", color: "#2E7D32" },
@@ -27585,7 +27590,7 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
 }
 // una riga di "Corsi in arrivo": data, corso, città/partecipanti, fase
 // attuale in etichetta e le 5 pillole cliccabili per cambiarla
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase }) {
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const etichettaFase = FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichetta || "";
   const numeroPartecipanti = iscrittiEdizione.length;
@@ -27615,6 +27620,17 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
           <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(f.chiave); }} />
         ))}
       </div>
+      <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={!!gestioneRientroAttiva} onChange={(e) => onToggleGestioneRientro(e.target.checked)} style={{ width: 15, height: 15 }} />
+        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Gestione rientro</span>
+      </label>
+      {gestioneRientroAttiva && (
+        <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+          {FASI_RIENTRO.map((f) => (
+            <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseRientroCorrente} fasi={FASI_RIENTRO} onClick={(e) => { e.stopPropagation(); onCambiaFaseRientro(f.chiave); }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -27858,6 +27874,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       kit_id: null, kit_per_iscritti: null, kit_di_riserva: null, quantita_scaricata_magazzino: 0,
       kit_speciale_id: null, kit_speciale_per_iscritti: null, kit_speciale_di_riserva: null, kit_speciale_scaricato: 0,
       checklist: {}, accessori_quantita: {}, accessori_scaricati: {},
+      gestione_rientro_attiva: false, fase_rientro: null,
     };
   }
   async function salvaCampiEdizione(corsoDataId, campi) {
@@ -27932,6 +27949,57 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     if (kitPrincipaleId) campiAggiornati.quantita_scaricata_magazzino = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
     if (kitSpecialeId) campiAggiornati.kit_speciale_scaricato = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
     await salvaCampiEdizione(corsoData.id, campiAggiornati);
+  }
+  // "Gestione rientro" > "Prodotti ripristinati": ricarica in
+  // giacenza_magazzino esattamente quanto è registrato come scaricato
+  // per questa edizione (kit, kit speciale, accessori) — l'esatto
+  // contrario di sincronizzaMagazzino sopra — poi azzera i contatori di
+  // scarico, così un'eventuale nuova preparazione dello stesso corso
+  // riparte da zero senza restare "indietro"
+  async function ripristinaKitRientro(corsoData) {
+    const stato = statoDi(corsoData.id);
+    const kitDefault = kitDefinizioni.find((k) => k.corso_id === corsoData.corso_id) || null;
+    const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
+    const kitSpecialeId = stato.kit_speciale_id || null;
+    const deltaPerProdotto = {};
+    const quantitaKit = stato.quantita_scaricata_magazzino || 0;
+    if (kitPrincipaleId && quantitaKit > 0) {
+      corsiKitProdotti.filter((r) => r.kit_id === kitPrincipaleId && r.tipo === "kit").forEach((r) => {
+        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * quantitaKit;
+      });
+    }
+    const quantitaSpeciale = stato.kit_speciale_scaricato || 0;
+    if (kitSpecialeId && quantitaSpeciale > 0) {
+      corsiKitProdotti.filter((r) => r.kit_id === kitSpecialeId && r.tipo === "kit").forEach((r) => {
+        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * quantitaSpeciale;
+      });
+    }
+    [kitPrincipaleId, kitSpecialeId].filter(Boolean).forEach((kitId) => {
+      corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
+        const chiave = `${kitId}::${r.prodotto_id}`;
+        const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
+        if (giaScaricato) deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + giaScaricato;
+      });
+    });
+    if (Object.keys(deltaPerProdotto).length > 0) {
+      await Promise.all(Object.entries(deltaPerProdotto).map(([prodottoId, delta]) => {
+        const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+        if (!prodotto) return null;
+        return supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId);
+      }));
+    }
+    await salvaCampiEdizione(corsoData.id, {
+      quantita_scaricata_magazzino: 0, kit_speciale_scaricato: 0, accessori_scaricati: {},
+      fase_rientro: "prodotti_ripristinati",
+    });
+  }
+  function cambiaFaseRientro(corsoData, fase) {
+    if (fase === "prodotti_ripristinati") {
+      if (!window.confirm("I prodotti del kit stanno per essere ricaricati in magazzino. Confermi?")) return;
+      ripristinaKitRientro(corsoData);
+      return;
+    }
+    salvaCampiEdizione(corsoData.id, { fase_rientro: fase });
   }
   // "Prodotti rientrati": i prodotti interi dichiarati dalla master
   // (Inventario di sede) ripristinano la giacenza per la sola
@@ -28022,6 +28090,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 selezionato={edizioneSel?.id === cd.id}
                 onSeleziona={() => setEdizioneSelId(cd.id)}
                 onCambiaFase={(fase) => { setEdizioneSelId(cd.id); salvaCampiEdizione(cd.id, { fase }); }}
+                gestioneRientroAttiva={statoDi(cd.id).gestione_rientro_attiva}
+                faseRientroCorrente={statoDi(cd.id).fase_rientro}
+                onToggleGestioneRientro={(attivo) => salvaCampiEdizione(cd.id, { gestione_rientro_attiva: attivo })}
+                onCambiaFaseRientro={(fase) => { setEdizioneSelId(cd.id); cambiaFaseRientro(cd, fase); }}
               />
             ))}
           </div>
