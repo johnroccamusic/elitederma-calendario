@@ -17415,9 +17415,13 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
     { citta: null, indirizzo: null, partitaIva: null, iban: null, telefono: v.telefono, email: v.email },
     categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie)));
+  // categoria di default del fornitore (§ scheda fornitore): se
+  // impostata è quella mostrata in colonna, altrimenti si ripiega
+  // sull'ultima spesa registrata (comportamento di prima, per i
+  // fornitori che non hanno ancora una categoria propria impostata)
   (fornitori || []).forEach((f) => aggiungi("fornitori", f.id, f.nome, "fornitore",
-    { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email },
-    ultimaCategoriaSpesaDiFornitore(f.id, spese, costiSottocategorie)));
+    { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email, categoriaId: f.categoria_id, sottocategoriaId: f.sottocategoria_id },
+    categoriaNomePer(f.sottocategoria_id, costiSottocategorie) || ultimaCategoriaSpesaDiFornitore(f.id, spese, costiSottocategorie)));
 
   const ordinePriorita = ["fornitori", "master", "assistente", "hotel", "venditori", "location"];
   return Array.from(gruppi.values()).map((g) => {
@@ -17433,6 +17437,7 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
       nome: g.nome, ruoli, categoria,
       citta: primo("citta"), indirizzo: primo("indirizzo"), partitaIva: primo("partitaIva"),
       codiceFiscale: primo("codiceFiscale"), iban: primo("iban"), telefono: primo("telefono"), email: primo("email"),
+      categoriaId: primo("categoriaId"), sottocategoriaId: primo("sottocategoriaId"),
       tabella: rigaModifica.tabella, recordId: rigaModifica.recordId,
     };
   }).sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"));
@@ -17447,7 +17452,7 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
 // presente nelle rispettive pagine di gestione, qui raggiungibile in
 // un solo posto. Le location (semplici spazi, non soggetti fiscali)
 // rimandano invece alla loro pagina di gestione esistente.
-function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation }) {
+function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation }) {
   const isMobile = useIsMobile();
   const [filtro, setFiltro] = useState("tutti");
   const [ricerca, setRicerca] = useState("");
@@ -17473,7 +17478,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       telefono: soggetto.telefono || "", email: soggetto.email || "",
       indirizzo: soggetto.indirizzo || "", citta: soggetto.citta || "",
       partitaIva: soggetto.partitaIva || "", codiceFiscale: soggetto.codiceFiscale || "",
-      iban: soggetto.iban || "",
+      iban: soggetto.iban || "", categoriaId: soggetto.categoriaId || "", sottocategoriaId: soggetto.sottocategoriaId || "",
     });
   }
 
@@ -17485,7 +17490,14 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     if (s.tabella !== "venditori") {
       campi = { ...campi, indirizzo: formModifica.indirizzo.trim() || null, citta: formModifica.citta.trim() || null, partita_iva: formModifica.partitaIva.trim() || null, iban: formModifica.iban.trim() || null };
     }
-    if (s.tabella === "fornitori") campi.codice_fiscale = formModifica.codiceFiscale.trim() || null;
+    if (s.tabella === "fornitori") {
+      campi.codice_fiscale = formModifica.codiceFiscale.trim() || null;
+      // categoria/sottocategoria di default: si propongono da sole
+      // nelle spese future collegate a questo fornitore (§ "Fornitore"
+      // nel form spesa), restano comunque modificabili spesa per spesa
+      campi.categoria_id = formModifica.categoriaId || null;
+      campi.sottocategoria_id = formModifica.sottocategoriaId || null;
+    }
     const { error } = await supabase.from(s.tabella).update(campi).eq("id", s.recordId);
     setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -17676,6 +17688,26 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
                   <Field label="Codice fiscale"><input style={inputStyle} value={formModifica.codiceFiscale} onChange={(e) => setFormModifica((f) => ({ ...f, codiceFiscale: e.target.value }))} /></Field>
                 )}
                 <Field label="IBAN"><input style={inputStyle} value={formModifica.iban} onChange={(e) => setFormModifica((f) => ({ ...f, iban: e.target.value }))} /></Field>
+                {modificaAperta.tabella === "fornitori" && (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Categoria di spesa (default)">
+                        <select style={inputStyle} value={formModifica.categoriaId} onChange={(e) => setFormModifica((f) => ({ ...f, categoriaId: e.target.value, sottocategoriaId: "" }))}>
+                          <option value="">— nessuna —</option>
+                          {[...(costiCategorie || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Sotto-categoria">
+                        <select style={inputStyle} value={formModifica.sottocategoriaId} onChange={(e) => setFormModifica((f) => ({ ...f, sottocategoriaId: e.target.value }))} disabled={!formModifica.categoriaId}>
+                          <option value="">— scegli —</option>
+                          {sottocategorieDiCategoria(costiSottocategorie, formModifica.categoriaId).map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                        </select>
+                      </Field>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -29772,7 +29804,19 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <Field label="Fornitore">
-                <select style={inputStyle} value={fornitoreId} onChange={(e) => { setFornitoreId(e.target.value); setIbanFornitore((fornitori || []).find((f) => f.id === e.target.value)?.iban || ""); }}>
+                <select style={inputStyle} value={fornitoreId} onChange={(e) => {
+                  const id = e.target.value;
+                  setFornitoreId(id);
+                  const f = (fornitori || []).find((x) => x.id === id);
+                  setIbanFornitore(f?.iban || "");
+                  // categoria/sottocategoria di default del fornitore (Anagrafiche):
+                  // si propone da sola scegliendo il fornitore, resta comunque
+                  // modificabile qui sotto se questa spesa è di un'altra categoria
+                  if (!ambitoBloccato && f?.sottocategoria_id) {
+                    setCategoriaId(f.categoria_id || "");
+                    setSottocategoriaId(f.sottocategoria_id);
+                  }
+                }}>
                   <option value="">— nessuno —</option>
                   {fornitori.map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
                 </select>
@@ -31178,7 +31222,7 @@ export default function App() {
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
-    anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
@@ -32034,7 +32078,7 @@ export default function App() {
       {view === "anagrafiche" && (
         <PaginaAnagrafiche
           master={master} assistente={assistente} hotel={hotel} location={location} venditori={venditori} fornitori={fornitori}
-          spese={spese} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
+          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
           ricarica={fetchDati}
           onBack={() => setView("erp")}
           onApriGestioneLocation={apriGestioneLocation}
