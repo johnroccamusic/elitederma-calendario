@@ -5815,15 +5815,12 @@ function RigaAttrezzaturaInventario({ riga, voce, onSalva, onRimuovi }) {
 // stessa identica logica di PannelloPreparazioneKit, riusata sia per
 // limitare le tendine di "Materiali rispediti" (Inventario di sede) sia
 // per la sezione "Materiali da rientrare" in Logistica prodotti
-function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni) {
+function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti) {
   if (!corsoData) return [];
-  const stato = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData.id) || {};
-  const kitDefault = (kitDefinizioni || []).find((k) => k.corso_id === corso?.id) || null;
-  const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
-  const kitSpecialeId = stato.kit_speciale_id || null;
+  const richiesti = kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni || [], corso?.id || null);
   const ids = new Set();
   (corsiKitProdotti || []).forEach((r) => {
-    const appartieneAlKit = r.kit_id && (r.kit_id === kitPrincipaleId || r.kit_id === kitSpecialeId) && r.tipo === "kit";
+    const appartieneAlKit = r.kit_id && richiesti[r.kit_id] > 0 && r.tipo === "kit";
     const accessorioDidattica = r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null);
     if (appartieneAlKit || accessorioDidattica) ids.add(r.prodotto_id);
   });
@@ -5831,19 +5828,16 @@ function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, 
 }
 // quantità EFFETTIVAMENTE inviata di ciascun prodotto a questa edizione:
 // stessa identica logica di quantità di PannelloPreparazioneKit/
-// Logistica prodotti (kit_per_iscritti+kit_di_riserva, kit speciale,
-// accessori con override manuale) — è il termine "Inviati" della
-// verifica di congruità dell'Inventario Post Corso
-function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni) {
+// Logistica prodotti — un kit per ciascun pacchetto scelto dagli
+// iscritti, ognuno con la propria lista di prodotti, più gli accessori
+// con override manuale — è il termine "Inviati" della verifica di
+// congruità dell'Inventario Post Corso
+function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti) {
   const mappa = {};
   if (!corsoData) return mappa;
   const stato = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData.id) || {};
-  const kitDefault = (kitDefinizioni || []).find((k) => k.corso_id === corso?.id) || null;
-  const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
-  const kitSpecialeId = stato.kit_speciale_id || null;
-  const quantitaPrincipale = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
-  const quantitaSpeciale = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
-  [{ kitId: kitPrincipaleId, qta: quantitaPrincipale }, { kitId: kitSpecialeId, qta: quantitaSpeciale }].forEach(({ kitId, qta }) => {
+  const richiesti = kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni || [], corso?.id || null);
+  Object.entries(richiesti).forEach(([kitId, qta]) => {
     if (!kitId || qta <= 0) return;
     (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && r.tipo === "kit").forEach((r) => {
       mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + r.quantita * qta;
@@ -5878,7 +5872,7 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
     </div>
   );
 }
-function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, ricarica, onBack }) {
+function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricercaIntero, setRicercaIntero] = useState("");
   const [ricercaAperto, setRicercaAperto] = useState("");
@@ -5954,8 +5948,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   // "Prodotti interi"/"Prodotti aperti" e per la verifica di congruità
   const statoEdizione = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData?.id) || null;
   const idsSpediti = useMemo(
-    () => prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni),
-    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni]
+    () => prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti),
+    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti]
   );
   const prodottiSpediti = idsSpediti.map((id) => prodottiShop.find((p) => p.id === id)).filter(Boolean);
   const rientroInteri = statoEdizione?.rientro_prodotti_interi || {};
@@ -6035,8 +6029,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   // giustificare, per ogni prodotto del corso — calcolata solo qui,
   // niente conferma finché non è tutto giustificato
   const inviatiPerProdottoId = useMemo(
-    () => quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni),
-    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni]
+    () => quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti),
+    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti]
   );
   const vendutiPerProdottoId = useMemo(() => {
     const mappa = {};
@@ -21698,7 +21692,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
 // corsi come contenuto dei kit (mai venduto, mai un omaggio del POS —
 // semplicemente materiale didattico/consumo distribuito) — somma
 // quantitaInviataPerProdotto su tutte le edizioni del periodo scelto
-function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, onBack }) {
+function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, onBack }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("annoscolastico");
   const oggi = new Date();
@@ -21714,7 +21708,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
   const perProdottoId = {};
   edizioniPeriodo.forEach((cd) => {
     const corso = (corsi || []).find((c) => c.id === cd.corso_id);
-    const quantitaPerProdotto = quantitaInviataPerProdotto(cd, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni);
+    const quantitaPerProdotto = quantitaInviataPerProdotto(cd, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti);
     Object.entries(quantitaPerProdotto).forEach(([prodottoId, qta]) => {
       if (!qta) return;
       perProdottoId[prodottoId] = (perProdottoId[prodottoId] || 0) + qta;
@@ -27604,6 +27598,20 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA
     </button>
   );
 }
+// quanti kit di ciascun tipo servono per un'edizione, dedotti dalle
+// scelte reali degli iscritti (iscritti.pacchetto_kit corrisponde
+// sempre esattamente al nome di un kit_definizioni di quel corso) —
+// mai inserito a mano: se cambiano gli iscritti o cosa scelgono, la
+// lista si aggiorna da sola, senza dover andare a correggerla
+function kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corsoId) {
+  const conteggio = {};
+  (iscrittiEdizione || []).forEach((i) => {
+    if (!i.pacchetto_kit) return;
+    const kit = kitDefinizioni.find((k) => k.corso_id === corsoId && k.nome === i.pacchetto_kit);
+    if (kit) conteggio[kit.id] = (conteggio[kit.id] || 0) + 1;
+  });
+  return conteggio;
+}
 // riepilogo "2 KIT PRO / 1 KIT BASE / 3 KIT TOTALI": quanti iscritti di
 // questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
 // riusato sia nella riga del corso sia in cima a "Preparazione kit"
@@ -27707,7 +27715,11 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino, onProdottiRientrati }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onSincronizzaMagazzino, onProdottiRientrati }) {
+  // stessa intestazione (data/corso/città nel colore del corso) della
+  // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
+  const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
+  const coloreCorso = corso?.colore || NAVY;
   const checklist = statoEdizione.checklist || {};
   const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
   const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
@@ -27718,31 +27730,23 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
   const giaInSede = (prodottoId) => (inventarioSede || []).find((r) => r.location_id === corsoData.location_id && r.tipo === "prodotto" && r.riferimento === prodottoId) || null;
   const labelStyle = { ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 };
 
-  // kit principale: quello scelto esplicitamente per questa edizione, o
-  // in mancanza il kit il cui "corso di default" è questo corso — sempre
-  // sostituibile dalla tendina con uno qualunque tra quelli creati
-  const kitDefault = kitDefinizioni.find((k) => k.corso_id === corso?.id) || null;
-  const kitPrincipaleId = statoEdizione.kit_id || kitDefault?.id || "";
-  const kitSpecialeId = statoEdizione.kit_speciale_id || "";
-  const contenutoPrincipale = kitPrincipaleId ? corsiKitProdotti.filter((r) => r.kit_id === kitPrincipaleId) : [];
-  const contenutoSpeciale = kitSpecialeId ? corsiKitProdotti.filter((r) => r.kit_id === kitSpecialeId) : [];
+  // kit richiesti: dedotti dalle scelte reali degli iscritti (mai
+  // scelti a mano qui) — un corso con 3 pacchetti diversi scelti mostra
+  // 3 righe, ciascuna col proprio contenuto da spedire
   const nomeKit = (id) => kitDefinizioni.find((k) => k.id === id)?.nome || "—";
-
-  // cambiare il kit selezionato azzera il suo contatore di scarico: il
-  // vecchio valore si riferiva ai prodotti del kit precedente, non ha
-  // più senso come base di confronto per un kit diverso
-  function cambiaKitPrincipale(nuovoId) { onSalvaCampi({ kit_id: nuovoId || null, quantita_scaricata_magazzino: 0 }); }
-  function cambiaKitSpeciale(nuovoId) { onSalvaCampi({ kit_speciale_id: nuovoId || null, kit_speciale_scaricato: 0 }); }
+  const kitRichiesti = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni, corso?.id || null);
+  const righeKitRichiesti = Object.entries(kitRichiesti).sort(
+    (a, b) => (kitDefinizioni.find((k) => k.id === a[0])?.ordine || 0) - (kitDefinizioni.find((k) => k.id === b[0])?.ordine || 0)
+  );
 
   // pulsante "Modifica quantità di magazzino"/"Magazzino aggiornato":
-  // reattivo alla differenza tra la quantità attuale (kit principale, kit
-  // speciale e, prodotto per prodotto, accessori di entrambi) e quella
-  // già applicata al magazzino l'ultima volta — mai al valore assoluto,
-  // così un doppio click non scarica due volte lo stesso kit
-  const quantitaKitAttuale = (statoEdizione.kit_per_iscritti || 0) + (statoEdizione.kit_di_riserva || 0);
-  const kitDaSincronizzare = quantitaKitAttuale !== (statoEdizione.quantita_scaricata_magazzino || 0);
-  const quantitaSpecialeAttuale = (statoEdizione.kit_speciale_per_iscritti || 0) + (statoEdizione.kit_speciale_di_riserva || 0);
-  const specialeDaSincronizzare = quantitaSpecialeAttuale !== (statoEdizione.kit_speciale_scaricato || 0);
+  // reattivo alla differenza fra quanto richiesto ORA (sopra) e quanto
+  // già scaricato l'ultima volta per CIASCUN kit — mai al valore
+  // assoluto, così un doppio click non scarica due volte lo stesso kit,
+  // e un kit che non serve più (iscritto che ha cambiato scelta) rientra
+  const scaricoPerKit = statoEdizione.scarico_per_kit || {};
+  const kitFuoriSincronia = [...new Set([...Object.keys(kitRichiesti), ...Object.keys(scaricoPerKit)])]
+    .some((kitId) => (kitRichiesti[kitId] || 0) !== (scaricoPerKit[kitId] || 0));
   // accessori didattica: non appartengono a un kit specifico ma a tutto
   // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
   // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
@@ -27754,7 +27758,7 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
     const scaricato = statoEdizione.accessori_scaricati?.[r.chiave] || 0;
     return target !== scaricato;
   });
-  const daSincronizzare = kitDaSincronizzare || specialeDaSincronizzare || accessoriDaSincronizzare;
+  const daSincronizzare = kitFuoriSincronia || accessoriDaSincronizzare;
 
   // "Materiali da rientrare": quello che la master ha dichiarato di
   // rispedire (Inventario di sede > "Materiali che vengono rispediti") —
@@ -27774,10 +27778,16 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-        <div>
-          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Preparazione kit</div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{corso?.nome || "—"} · {fmtData(corsoData.data_inizio)}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#fff" }}>{gg}</div>
+            <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
+          </div>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
+          </div>
         </div>
         <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
       </div>
@@ -27788,42 +27798,16 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
         </div>
       )}
 
-      <div style={labelStyle}>Kit</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <select value={kitPrincipaleId} onChange={(e) => cambiaKitPrincipale(e.target.value)} style={{ ...inputStyle, flex: 2 }}>
-          <option value="">— nessun kit —</option>
-          {kitDefinizioni.map((k) => <option key={k.id} value={k.id}>{k.nome}</option>)}
-        </select>
-        <input
-          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Per iscritti"
-          value={statoEdizione.kit_per_iscritti ?? ""} placeholder="Per iscritti"
-          onChange={(e) => onSalvaCampi({ kit_per_iscritti: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
-        />
-        <input
-          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Di riserva"
-          value={statoEdizione.kit_di_riserva ?? ""} placeholder="Di riserva"
-          onChange={(e) => onSalvaCampi({ kit_di_riserva: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
-        />
-      </div>
-
-      <div style={labelStyle}>Kit speciale (facoltativo)</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-        <select value={kitSpecialeId} onChange={(e) => cambiaKitSpeciale(e.target.value)} style={{ ...inputStyle, flex: 2 }}>
-          <option value="">— nessuno —</option>
-          {kitDefinizioni.map((k) => <option key={k.id} value={k.id}>{k.nome}</option>)}
-        </select>
-        <input
-          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Per iscritti"
-          value={statoEdizione.kit_speciale_per_iscritti ?? ""} placeholder="Per iscritti"
-          disabled={!kitSpecialeId}
-          onChange={(e) => onSalvaCampi({ kit_speciale_per_iscritti: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
-        />
-        <input
-          type="number" min="0" style={{ ...inputStyle, flex: 1 }} title="Di riserva"
-          value={statoEdizione.kit_speciale_di_riserva ?? ""} placeholder="Di riserva"
-          disabled={!kitSpecialeId}
-          onChange={(e) => onSalvaCampi({ kit_speciale_di_riserva: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
-        />
+      <div style={labelStyle}>Kit previsti (dagli iscritti)</div>
+      <div style={{ marginBottom: 20 }}>
+        {righeKitRichiesti.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ha ancora scelto un kit.</div>
+        ) : righeKitRichiesti.map(([kitId, quantita]) => (
+          <div key={kitId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{nomeKit(kitId)}</span>
+            <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{quantita}</span>
+          </div>
+        ))}
       </div>
 
       {CHECKLIST_KIT_ITEMS.map((c) => (
@@ -27836,27 +27820,20 @@ function PannelloPreparazioneKit({ corsoData, corso, statoEdizione, kitDefinizio
         </label>
       ))}
 
-      {contenutoPrincipale.filter((r) => r.tipo === "kit").length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={labelStyle}>Contenuto {nomeKit(kitPrincipaleId)}</div>
-          {contenutoPrincipale.filter((r) => r.tipo === "kit").map((r) => (
-            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-              <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {kitSpecialeId && contenutoSpeciale.filter((r) => r.tipo === "kit").length > 0 && (
-        <div style={{ marginTop: 20 }}>
-          <div style={labelStyle}>Contenuto {nomeKit(kitSpecialeId)} (speciale)</div>
-          {contenutoSpeciale.filter((r) => r.tipo === "kit").map((r) => (
-            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-              <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {righeKitRichiesti.map(([kitId]) => {
+        const contenuto = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
+        if (contenuto.length === 0) return null;
+        return (
+          <div key={kitId} style={{ marginTop: 20 }}>
+            <div style={labelStyle}>Contenuto {nomeKit(kitId)}</div>
+            {contenuto.map((r) => (
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
+                <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
 
       {tuttiAccessori.length > 0 && (
         <div style={{ marginTop: 20 }}>
@@ -27943,7 +27920,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       corso_data_id: corsoDataId, fase: "da_preparare",
       kit_id: null, kit_per_iscritti: null, kit_di_riserva: null, quantita_scaricata_magazzino: 0,
       kit_speciale_id: null, kit_speciale_per_iscritti: null, kit_speciale_di_riserva: null, kit_speciale_scaricato: 0,
-      checklist: {}, accessori_quantita: {}, accessori_scaricati: {},
+      checklist: {}, accessori_quantita: {}, accessori_scaricati: {}, scarico_per_kit: {},
       gestione_rientro_attiva: false, fase_rientro: null,
     };
   }
@@ -27960,39 +27937,32 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     ricarica(["logistica_kit_edizioni"]);
   }
   // scarico "reattivo": non riscarica mai il valore assoluto, applica al
-  // magazzino solo la DIFFERENZA fra la quantità attuale — kit
-  // principale, kit speciale e, per ciascun accessorio di entrambi,
-  // quantità inviata — e quella già applicata l'ultima volta, così
-  // cambiare kit_per_iscritti da 9 a 8 e risincronizzare rimette a
-  // magazzino esattamente 1 kit, mai di più
+  // magazzino solo la DIFFERENZA fra quanto richiesto ORA — un kit per
+  // ciascun pacchetto scelto dagli iscritti, ognuno con la propria lista
+  // di prodotti, tutti scaricati insieme — e quanto già applicato
+  // l'ultima volta per QUEL kit, così un iscritto che cambia pacchetto e
+  // una risincronizzazione muovono solo la differenza, mai il totale
   async function sincronizzaMagazzino(corsoData) {
     const stato = statoDi(corsoData.id);
-    const kitDefault = kitDefinizioni.find((k) => k.corso_id === corsoData.corso_id) || null;
-    const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
-    const kitSpecialeId = stato.kit_speciale_id || null;
+    const richiesti = kitRichiestiEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni, corsoData.corso_id);
+    const scaricoAttuale = stato.scarico_per_kit || {};
 
     const deltaPerProdotto = {}; // prodotto_id -> variazione da applicare a giacenza (positivo = restituire, negativo = togliere)
+    const nuovoScarico = {};
+    new Set([...Object.keys(richiesti), ...Object.keys(scaricoAttuale)]).forEach((kitId) => {
+      const target = richiesti[kitId] || 0;
+      const giaScaricato = scaricoAttuale[kitId] || 0;
+      const delta = target - giaScaricato;
+      if (delta !== 0) {
+        corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit").forEach((r) => {
+          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * delta;
+        });
+      }
+      if (target > 0) nuovoScarico[kitId] = target;
+    });
 
-    if (kitPrincipaleId) {
-      const quantitaKitAttuale = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
-      const deltaKit = quantitaKitAttuale - (stato.quantita_scaricata_magazzino || 0);
-      if (deltaKit !== 0) {
-        corsiKitProdotti.filter((r) => r.kit_id === kitPrincipaleId && r.tipo === "kit").forEach((r) => {
-          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * deltaKit;
-        });
-      }
-    }
-    if (kitSpecialeId) {
-      const quantitaSpecialeAttuale = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
-      const deltaSpeciale = quantitaSpecialeAttuale - (stato.kit_speciale_scaricato || 0);
-      if (deltaSpeciale !== 0) {
-        corsiKitProdotti.filter((r) => r.kit_id === kitSpecialeId && r.tipo === "kit").forEach((r) => {
-          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - r.quantita * deltaSpeciale;
-        });
-      }
-    }
     const accessoriScaricatiAggiornati = { ...(stato.accessori_scaricati || {}) };
-    [kitPrincipaleId, kitSpecialeId].filter(Boolean).forEach((kitId) => {
+    Object.keys(richiesti).forEach((kitId) => {
       corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
         const chiave = `${kitId}::${r.prodotto_id}`;
         const target = stato.accessori_quantita?.[chiave] || 0;
@@ -28015,36 +27985,26 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       if (!prodotto) return null;
       return supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId);
     }));
-    const campiAggiornati = { accessori_scaricati: accessoriScaricatiAggiornati };
-    if (kitPrincipaleId) campiAggiornati.quantita_scaricata_magazzino = (stato.kit_per_iscritti || 0) + (stato.kit_di_riserva || 0);
-    if (kitSpecialeId) campiAggiornati.kit_speciale_scaricato = (stato.kit_speciale_per_iscritti || 0) + (stato.kit_speciale_di_riserva || 0);
-    await salvaCampiEdizione(corsoData.id, campiAggiornati);
+    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati });
   }
   // "Gestione rientro" > "Prodotti ripristinati": ricarica in
   // giacenza_magazzino esattamente quanto è registrato come scaricato
-  // per questa edizione (kit, kit speciale, accessori) — l'esatto
-  // contrario di sincronizzaMagazzino sopra — poi azzera i contatori di
-  // scarico, così un'eventuale nuova preparazione dello stesso corso
-  // riparte da zero senza restare "indietro"
+  // per questa edizione, kit per kit (ognuno con la propria lista di
+  // prodotti) più gli accessori — l'esatto contrario di
+  // sincronizzaMagazzino sopra — poi azzera i contatori di scarico,
+  // così un'eventuale nuova preparazione dello stesso corso riparte da
+  // zero senza restare "indietro"
   async function ripristinaKitRientro(corsoData) {
     const stato = statoDi(corsoData.id);
-    const kitDefault = kitDefinizioni.find((k) => k.corso_id === corsoData.corso_id) || null;
-    const kitPrincipaleId = stato.kit_id || kitDefault?.id || null;
-    const kitSpecialeId = stato.kit_speciale_id || null;
+    const scaricoAttuale = stato.scarico_per_kit || {};
     const deltaPerProdotto = {};
-    const quantitaKit = stato.quantita_scaricata_magazzino || 0;
-    if (kitPrincipaleId && quantitaKit > 0) {
-      corsiKitProdotti.filter((r) => r.kit_id === kitPrincipaleId && r.tipo === "kit").forEach((r) => {
-        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * quantitaKit;
+    Object.entries(scaricoAttuale).forEach(([kitId, quantita]) => {
+      if (!quantita) return;
+      corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit").forEach((r) => {
+        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * quantita;
       });
-    }
-    const quantitaSpeciale = stato.kit_speciale_scaricato || 0;
-    if (kitSpecialeId && quantitaSpeciale > 0) {
-      corsiKitProdotti.filter((r) => r.kit_id === kitSpecialeId && r.tipo === "kit").forEach((r) => {
-        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * quantitaSpeciale;
-      });
-    }
-    [kitPrincipaleId, kitSpecialeId].filter(Boolean).forEach((kitId) => {
+    });
+    Object.keys(scaricoAttuale).forEach((kitId) => {
       corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "accessorio").forEach((r) => {
         const chiave = `${kitId}::${r.prodotto_id}`;
         const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
@@ -28059,7 +28019,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       }));
     }
     await salvaCampiEdizione(corsoData.id, {
-      quantita_scaricata_magazzino: 0, kit_speciale_scaricato: 0, accessori_scaricati: {},
+      scarico_per_kit: {}, accessori_scaricati: {},
       // "completato", non "prodotti_ripristinati": è l'ultima fascia
       // della lista, senza il sentinella resterebbe "corrente" (rossa)
       // per sempre invece di passare a "fatto" (verde)
@@ -28204,6 +28164,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               <PannelloPreparazioneKit
                 corsoData={edizioneSel}
                 corso={corsoById[edizioneSel.corso_id]}
+                loc={locById[edizioneSel.location_id]}
                 statoEdizione={statoDi(edizioneSel.id)}
                 kitDefinizioni={kitDefinizioni}
                 corsiKitProdotti={corsiKitProdotti}
@@ -31778,7 +31739,7 @@ export default function App() {
     venditeshop: ["vendite_shop"],
     venditealbanco: ["vendite_shop"],
     omaggi: ["vendite_shop"],
-    prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "prodotti_shop"],
+    prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -31791,7 +31752,7 @@ export default function App() {
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
     dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi"],
+    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
@@ -32713,7 +32674,7 @@ export default function App() {
       {view === "prodottiusatikit" && (
         <PaginaProdottiUsatiKit
           corsi={corsi} corsiDate={corsiDate} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
-          logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop}
+          logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiShop={prodottiShop}
           onBack={() => setView("magazzinoshop")}
         />
       )}
@@ -32825,6 +32786,7 @@ export default function App() {
           corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
           location={location} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          iscritti={iscritti}
           inventarioSede={inventarioSede} masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiApertiMagazzino={prodottiApertiMagazzino}
           magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioAmmanchi={inventarioAmmanchi}

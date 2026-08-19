@@ -3514,3 +3514,25 @@ notify pgrst, 'reload schema';
 -- ---------------------------------------------------------
 
 update public.logistica_kit_edizioni set fase = 'completato' where fase = 'consegna_verificata';
+
+
+-- 130) Logistica prodotti: kit multipli per edizione (scarico_per_kit)
+-- ---------------------------------------------------------
+-- "Preparazione kit" sceglieva un solo kit (+ un eventuale "speciale")
+-- per l'intera edizione, con quantità inserite a mano. Ora elenca
+-- automaticamente i kit già determinati dalle scelte reali degli
+-- iscritti (iscritti.pacchetto_kit, che corrisponde sempre al nome di
+-- un kit_definizioni) — un corso con 3 pacchetti diversi scelti scarica
+-- 3 liste di prodotti diverse, contemporaneamente.
+--
+-- Serve tracciare "quanto è già stato scaricato" per CIASCUN kit (non
+-- più un unico numero): nuova colonna scarico_per_kit, mappa
+-- kit_id -> quantità. Additiva pura, le vecchie colonne (kit_id,
+-- kit_speciale_id, kit_per_iscritti, ecc.) restano intatte per lo
+-- storico ma non vengono più scritte da qui in avanti.
+-- ---------------------------------------------------------
+
+alter table public.logistica_kit_edizioni
+  add column if not exists scarico_per_kit jsonb not null default '{}'::jsonb;
+
+notify pgrst, 'reload schema';
