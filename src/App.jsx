@@ -17452,7 +17452,7 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
 // presente nelle rispettive pagine di gestione, qui raggiungibile in
 // un solo posto. Le location (semplici spazi, non soggetti fiscali)
 // rimandano invece alla loro pagina di gestione esistente.
-function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation }) {
+function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, citta, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation }) {
   const isMobile = useIsMobile();
   const [filtro, setFiltro] = useState("tutti");
   const [ricerca, setRicerca] = useState("");
@@ -17503,6 +17503,64 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     if (error) { window.alert("Errore: " + error.message); return; }
     setModificaAperta(null);
     await ricarica([s.tabella]);
+  }
+
+  // "Associa": collega un fornitore "puro" (senza già un ruolo master/
+  // assistente/hotel/location) a un record esistente di uno di questi 4
+  // tipi, copiandoci sopra i contatti/dati fiscali del fornitore — o,
+  // solo per hotel/location, ne crea uno nuovo nella città scelta.
+  // Serve perché la fusione automatica (costruisciSoggettiAnagrafiche)
+  // funziona solo su nome identico: un fornitore "Ambassador Srl
+  // Ambassador Palace Hotel" non si aggancia da solo all'hotel
+  // anagrafato come "Ambassador Palace" — qui lo si fa a mano
+  const [associaAperto, setAssociaAperto] = useState(null); // il soggetto fornitore, o null
+  const [associaTipo, setAssociaTipo] = useState("");
+  const [associaCittaScelta, setAssociaCittaScelta] = useState("");
+  const [associaSalvando, setAssociaSalvando] = useState(false);
+
+  function apriAssocia(soggetto) {
+    setAssociaAperto(soggetto);
+    setAssociaTipo("");
+    setAssociaCittaScelta("");
+  }
+  function chiudiAssocia() { setAssociaAperto(null); }
+
+  const cittaDisponibili = [...(citta || [])].map((c) => c.nome).filter(Boolean).sort((a, b) => a.localeCompare(b, "it"));
+  const strutturePerCittaAssocia = associaCittaScelta
+    ? [
+        ...(hotel || []).filter((h) => (h.citta || "").trim().toUpperCase() === associaCittaScelta.toUpperCase()).map((h) => ({ tabella: "hotel", id: h.id, nome: h.nome })),
+        ...(location || []).filter((l) => (l.nome || "").trim().toUpperCase() === associaCittaScelta.toUpperCase()).map((l) => ({ tabella: "location", id: l.id, nome: l.nome_sede || l.nome })),
+      ]
+    : [];
+
+  // aggiorna un master/assistente/hotel/location esistente con i
+  // contatti del fornitore — solo i campi che quella tabella ha
+  // davvero (location, uno spazio fisico, ha solo l'IBAN)
+  async function aggiornaEsistenteAssocia(target) {
+    const f = associaAperto;
+    if (!f) return;
+    setAssociaSalvando(true);
+    const campi = target.tabella === "location"
+      ? { iban: f.iban || null }
+      : { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null };
+    const { error } = await supabase.from(target.tabella).update(campi).eq("id", target.id);
+    setAssociaSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    chiudiAssocia();
+    await ricarica([target.tabella]);
+  }
+
+  async function creaNuovoAssocia() {
+    const f = associaAperto;
+    if (!f || !associaCittaScelta || (associaTipo !== "hotel" && associaTipo !== "location")) return;
+    setAssociaSalvando(true);
+    const { error } = associaTipo === "hotel"
+      ? await supabase.from("hotel").insert({ nome: f.nome, citta: associaCittaScelta, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, iban: f.iban || null })
+      : await supabase.from("location").insert({ nome: associaCittaScelta, nome_sede: f.nome, iban: f.iban || null });
+    setAssociaSalvando(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    chiudiAssocia();
+    await ricarica([associaTipo]);
   }
 
   // "Carica documento (bonifico)": legge dei PDF in memoria (mai
@@ -17652,6 +17710,9 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
                 <div style={{ ...fontBody, fontStyle: "italic", fontSize: 12, color: MUTED, marginTop: 2 }}>
                   {[s.citta, s.partitaIva ? `P.IVA ${s.partitaIva}` : (s.codiceFiscale ? `CF ${s.codiceFiscale}` : null)].filter(Boolean).join(" · ") || "—"}
                 </div>
+                {s.tabella === "fornitori" && (
+                  <button onClick={() => apriAssocia(s)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E5AAC", background: "none", border: "none", padding: 0, marginTop: 3, cursor: "pointer", textDecoration: "underline" }}>Associa</button>
+                )}
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {s.ruoli.map((r) => (
@@ -17788,6 +17849,87 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {associaAperto && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }} onClick={chiudiAssocia}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 26, width: "100%", maxWidth: 460, maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Associa "{associaAperto.nome}"</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>Collega questo fornitore a un master, assistente, hotel o location già in anagrafica — oppure crea una nuova sede/hotel con questi dati.</div>
+
+            <Field label="Tipo">
+              <select style={inputStyle} value={associaTipo} onChange={(e) => { setAssociaTipo(e.target.value); setAssociaCittaScelta(""); }}>
+                <option value="">— scegli —</option>
+                <option value="assistente">Assistenti</option>
+                <option value="master">Master</option>
+                <option value="location">Location</option>
+                <option value="hotel">Hotel</option>
+              </select>
+            </Field>
+
+            {(associaTipo === "master" || associaTipo === "assistente") && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
+                  {associaTipo === "master" ? "Master esistenti" : "Assistenti esistenti"}
+                </div>
+                <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, maxHeight: 260, overflowY: "auto" }}>
+                  {(associaTipo === "master" ? master : assistente || []).length === 0 && (
+                    <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: 12 }}>Nessuno trovato.</div>
+                  )}
+                  {(associaTipo === "master" ? master : assistente).map((el) => (
+                    <button
+                      key={el.id}
+                      disabled={associaSalvando}
+                      onClick={() => { if (window.confirm(`Vuoi aggiornare "${toTitleCase(el.nome)}" con i dati di questo fornitore?`)) aggiornaEsistenteAssocia({ tabella: associaTipo, id: el.id, nome: el.nome }); }}
+                      style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "9px 12px", cursor: "pointer" }}
+                    >
+                      {toTitleCase(el.nome)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(associaTipo === "location" || associaTipo === "hotel") && (
+              <div style={{ marginTop: 10 }}>
+                <Field label="Città">
+                  <select style={inputStyle} value={associaCittaScelta} onChange={(e) => setAssociaCittaScelta(e.target.value)}>
+                    <option value="">— scegli —</option>
+                    {cittaDisponibili.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </Field>
+                {associaCittaScelta && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>Hotel e location a {toTitleCase(associaCittaScelta)}</div>
+                    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, maxHeight: 220, overflowY: "auto", marginBottom: 12 }}>
+                      {strutturePerCittaAssocia.length === 0 && (
+                        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: 12 }}>Nessun hotel o location esistente in questa città.</div>
+                      )}
+                      {strutturePerCittaAssocia.map((el) => (
+                        <button
+                          key={`${el.tabella}_${el.id}`}
+                          disabled={associaSalvando}
+                          onClick={() => { if (window.confirm(`Vuoi aggiornare "${el.nome}" con i dati di questo fornitore?`)) aggiornaEsistenteAssocia(el); }}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, width: "100%", textAlign: "left", ...fontBody, fontSize: 13, color: NAVY, background: "#fff", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "9px 12px", cursor: "pointer" }}
+                        >
+                          <span>{el.nome}</span>
+                          <span style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>{el.tabella === "hotel" ? "Hotel" : "Location"}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <Button onClick={creaNuovoAssocia} disabled={associaSalvando} style={{ width: "100%" }}>
+                      {associaSalvando ? "Creo…" : `+ Crea nuov${associaTipo === "hotel" ? "o hotel" : "a location"} a ${toTitleCase(associaCittaScelta)}`}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+              <button onClick={chiudiAssocia} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Chiudi</button>
+            </div>
           </div>
         </div>
       )}
@@ -31222,7 +31364,7 @@ export default function App() {
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
-    anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
@@ -32078,7 +32220,7 @@ export default function App() {
       {view === "anagrafiche" && (
         <PaginaAnagrafiche
           master={master} assistente={assistente} hotel={hotel} location={location} venditori={venditori} fornitori={fornitori}
-          spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
+          spese={spese} citta={citta} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
           ricarica={fetchDati}
           onBack={() => setView("erp")}
           onApriGestioneLocation={apriGestioneLocation}
