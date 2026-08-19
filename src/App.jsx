@@ -17385,12 +17385,20 @@ function trovaSoggettiNelTesto(testo, soggetti) {
 // più righe (es. master e assistente), le altre restano modificabili
 // solo dalle rispettive pagine di gestione, non da qui.
 function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiSottocategorie, categorieGruppi }) {
-  const gruppi = new Map(); // nome normalizzato -> { nome, voci: [...] }
-  function aggiungi(tabella, recordId, nome, ruolo, contatti, categoria) {
-    const chiave = (nome || "").trim().toLowerCase();
-    if (!chiave) return;
+  const gruppi = new Map(); // nome normalizzato (o chiave esplicita) -> { nome, voci: [...] }
+  // "Associa" (Anagrafiche) collega esplicitamente una location/hotel
+  // al fornitore da cui derivano i dati (location.fornitore_id/
+  // hotel.fornitore_id) — quando presente, chiaveOverride forza la
+  // riga in quel gruppo invece di uno nuovo per nome, altrimenti il
+  // nome della sede ("Aura Formazione Srl, Pescara", con la città in
+  // coda) non coincide mai col nome puro del fornitore e resterebbe
+  // un doppione anche dopo l'associazione
+  function aggiungi(tabella, recordId, nome, ruolo, contatti, categoria, chiaveOverride) {
+    const chiave = chiaveOverride || (nome || "").trim().toLowerCase();
+    if (!chiave) return null;
     if (!gruppi.has(chiave)) gruppi.set(chiave, { nome, voci: [] });
     gruppi.get(chiave).voci.push({ tabella, recordId, ruolo, contatti, categoria });
+    return chiave;
   }
 
   (master || []).forEach((m) => aggiungi("master", m.id, m.nome, "master",
@@ -17399,9 +17407,26 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   (assistente || []).forEach((a) => aggiungi("assistente", a.id, a.nome, "assistente",
     { citta: a.citta, indirizzo: a.indirizzo, partitaIva: a.partita_iva, iban: a.iban, telefono: a.telefono, email: a.email },
     categoriaNomePer(categoriaGruppoPer("assistente", categorieGruppi), costiSottocategorie)));
+
+  // i fornitori vanno registrati PRIMA di hotel/location: serve il
+  // loro gruppo già pronto per poterci agganciare, via fornitore_id,
+  // le sedi/hotel associate (subito sotto)
+  const chiavePerFornitoreId = new Map();
+  // categoria di default del fornitore (§ scheda fornitore): se
+  // impostata è quella mostrata in colonna, altrimenti si ripiega
+  // sull'ultima spesa registrata (comportamento di prima, per i
+  // fornitori che non hanno ancora una categoria propria impostata)
+  (fornitori || []).forEach((f) => {
+    const chiave = aggiungi("fornitori", f.id, f.nome, "fornitore",
+      { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email, categoriaId: f.categoria_id, sottocategoriaId: f.sottocategoria_id },
+      categoriaNomePer(f.sottocategoria_id, costiSottocategorie) || ultimaCategoriaSpesaDiFornitore(f.id, spese, costiSottocategorie));
+    if (chiave) chiavePerFornitoreId.set(f.id, chiave);
+  });
+
   (hotel || []).forEach((h) => aggiungi("hotel", h.id, h.nome, "location",
     { citta: h.citta, indirizzo: h.indirizzo, partitaIva: h.partita_iva, iban: h.iban, telefono: h.telefono, email: h.email },
-    categoriaNomePer(categoriaGruppoPer("alloggio", categorieGruppi), costiSottocategorie)));
+    categoriaNomePer(categoriaGruppoPer("alloggio", categorieGruppi), costiSottocategorie),
+    h.fornitore_id ? chiavePerFornitoreId.get(h.fornitore_id) : undefined));
   // location.nome è la città (es. "BARI"), location.nome_sede è il vero
   // nome della sede (es. "Aule bari") — stessa convenzione già usata nei
   // titoli di Quadro Impegni ("Costo Location — Centro Via Valtorta, 48,
@@ -17411,17 +17436,11 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
   // soggetti con cui l'accademia ha rapporti, non vanno in Anagrafiche
   (location || []).forEach((l) => aggiungi("location", l.id, l.nome_sede ? `${l.nome_sede}, ${toTitleCase(l.nome || "")}` : toTitleCase(l.nome || "—"), "location",
     { citta: l.nome || null, indirizzo: l.indirizzo, partitaIva: l.partita_iva, codiceFiscale: l.codice_fiscale, iban: l.iban, telefono: l.telefono, email: l.email },
-    categoriaNomePer(l.sottocategoria_id, costiSottocategorie)));
+    categoriaNomePer(l.sottocategoria_id, costiSottocategorie),
+    l.fornitore_id ? chiavePerFornitoreId.get(l.fornitore_id) : undefined));
   (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
     { citta: null, indirizzo: null, partitaIva: null, iban: null, telefono: v.telefono, email: v.email },
     categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie)));
-  // categoria di default del fornitore (§ scheda fornitore): se
-  // impostata è quella mostrata in colonna, altrimenti si ripiega
-  // sull'ultima spesa registrata (comportamento di prima, per i
-  // fornitori che non hanno ancora una categoria propria impostata)
-  (fornitori || []).forEach((f) => aggiungi("fornitori", f.id, f.nome, "fornitore",
-    { citta: f.citta, indirizzo: f.indirizzo, partitaIva: f.partita_iva, codiceFiscale: f.codice_fiscale, iban: f.iban, telefono: f.telefono, email: f.email, categoriaId: f.categoria_id, sottocategoriaId: f.sottocategoria_id },
-    categoriaNomePer(f.sottocategoria_id, costiSottocategorie) || ultimaCategoriaSpesaDiFornitore(f.id, spese, costiSottocategorie)));
 
   const ordinePriorita = ["fornitori", "master", "assistente", "hotel", "venditori", "location"];
   return Array.from(gruppi.values()).map((g) => {
@@ -17545,9 +17564,9 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     if (!f) return;
     setAssociaSalvando(true);
     const campi = target.tabella === "location"
-      ? { nome_sede: f.nome, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null }
+      ? { nome_sede: f.nome, fornitore_id: f.recordId, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null }
       : target.tabella === "hotel"
-        ? { nome: f.nome, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null }
+        ? { nome: f.nome, fornitore_id: f.recordId, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null }
         : { telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, citta: f.citta || null, partita_iva: f.partitaIva || null, iban: f.iban || null };
     const { error } = await supabase.from(target.tabella).update(campi).eq("id", target.id);
     setAssociaSalvando(false);
@@ -17561,8 +17580,8 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     if (!f || !associaCittaScelta || (associaTipo !== "hotel" && associaTipo !== "location")) return;
     setAssociaSalvando(true);
     const { error } = associaTipo === "hotel"
-      ? await supabase.from("hotel").insert({ nome: f.nome, citta: associaCittaScelta, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, iban: f.iban || null })
-      : await supabase.from("location").insert({ nome: associaCittaScelta, nome_sede: f.nome, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null });
+      ? await supabase.from("hotel").insert({ nome: f.nome, citta: associaCittaScelta, fornitore_id: f.recordId, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, iban: f.iban || null })
+      : await supabase.from("location").insert({ nome: associaCittaScelta, nome_sede: f.nome, fornitore_id: f.recordId, telefono: f.telefono || null, email: f.email || null, indirizzo: f.indirizzo || null, partita_iva: f.partitaIva || null, codice_fiscale: f.codiceFiscale || null, iban: f.iban || null });
     setAssociaSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
     chiudiAssocia();
