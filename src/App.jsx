@@ -5545,8 +5545,8 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       </div>
 
       {apribile && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
-          Tocca per dichiarare l'inventario di {toTitleCase(loc?.nome || "questa sede")} →
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4 }}>
+          Inventario fine corso →
         </div>
       )}
     </div>
