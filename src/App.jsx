@@ -21887,37 +21887,6 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // sincronizzazione fallisce quel prodotto resta pendente, niente stock
 // "fantasma"
 
-// "Riassortimento": l'unico modo per far crescere lo STOCK TOTALE di un
-// prodotto (arrivo merce fisica) — il quantitativo aggiunto va sempre in
-// magazzino (fisico), da lì lo si sposta poi verso lo shop con i tastini
-// "+" della tabella. Nessuna chiamata a WooCommerce: è un dato solo
-// interno, non cambia nulla sullo shop finché non lo si sposta
-function ModaleRiassortimento({ prodotto, onClose, onFatto }) {
-  const [aggiungi, setAggiungi] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-  async function conferma() {
-    const quantita = parseInt(parseNum(aggiungi), 10);
-    if (!quantita || quantita <= 0) { setMsg("Scrivi un numero maggiore di zero."); return; }
-    setSalvando(true);
-    const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + quantita }).eq("id", prodotto.id);
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    onFatto();
-  }
-  return (
-    <Modal title={`Riassortimento — ${prodotto.nome}`} onClose={onClose}>
-      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>
-        Stock totale attuale: {(prodotto.giacenza || 0) + (prodotto.giacenza_magazzino || 0)} pezzi. La quantità aggiunta entra in magazzino.
-      </div>
-      <Field label="Aggiungi">
-        <input style={inputStyle} inputMode="numeric" value={aggiungi} onChange={(e) => { setAggiungi(e.target.value); setMsg(""); }} onKeyDown={(e) => e.key === "Enter" && conferma()} autoFocus />
-      </Field>
-      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={conferma} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Confermo…" : "Conferma"}</Button>
-    </Modal>
-  );
-}
 
 // "Nuovo prodotto": due percorsi. Con un prezzo, il prodotto va venduto
 // online — si crea davvero su WooCommerce (Edge Function
@@ -22314,10 +22283,11 @@ function GraficoTrendBarre({ voci }) {
 // locale (istantaneo, nessuna chiamata) — il numero mostrato include già
 // gli spostamenti non ancora sincronizzati, evidenziati in oro finché non
 // si preme "Sincronizza magazzini"
-function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica, onSpostaLocale, sincronizzandoMagazzini }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, sincronizzandoMagazzini }) {
   const [prezzo, setPrezzo] = useState(p.prezzo_vendita != null ? String(p.prezzo_vendita) : "");
   const [costo, setCosto] = useState(p.costo_acquisto != null ? String(p.costo_acquisto) : "");
   const [scortaMin, setScortaMin] = useState(p.scorta_minima != null ? String(p.scorta_minima) : "");
+  const [stockTotaleInput, setStockTotaleInput] = useState(String(p.stockTotale));
 
   async function salvaPrezzo() {
     const nuovo = prezzo.trim() === "" ? null : parseNum(prezzo);
@@ -22352,6 +22322,24 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica, on
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["prodotti_shop"]);
   }
+  // scrivere qui sopra imposta lo STOCK TOTALE desiderato: la differenza
+  // rispetto ad oggi va sempre e solo nel magazzino fisico, mai sullo
+  // shop online — che quindi resta esattamente quello che è
+  async function salvaStockTotale() {
+    const testo = stockTotaleInput.trim();
+    const nuovoTotale = testo === "" ? 0 : parseInt(parseNum(testo), 10);
+    if (!Number.isFinite(nuovoTotale) || nuovoTotale < 0) { window.alert("Scrivi un numero valido."); setStockTotaleInput(String(p.stockTotale)); return; }
+    if (nuovoTotale === p.stockTotale) return;
+    const nuovoMagazzino = nuovoTotale - (p.giacenza || 0);
+    if (nuovoMagazzino < 0) { window.alert(`Lo stock totale non può scendere sotto i ${p.giacenza || 0} pezzi già disponibili sullo shop online.`); setStockTotaleInput(String(p.stockTotale)); return; }
+    if (!window.confirm(`Impostare lo stock totale di "${p.nome}" a ${nuovoTotale} pezzi?\nIl magazzino passerà da ${p.giacenza_magazzino || 0} a ${nuovoMagazzino}. Lo shop online non cambia.`)) {
+      setStockTotaleInput(String(p.stockTotale));
+      return;
+    }
+    const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); setStockTotaleInput(String(p.stockTotale)); return; }
+    ricarica(["prodotti_shop"]);
+  }
 
   const tdStyle = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` };
   const cellInputStyle = { ...inputStyle, width: 68, padding: "5px 7px", fontSize: 12.5 };
@@ -22366,9 +22354,17 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica, on
 
   return (
     <tr>
-      <td onClick={() => onApriRiassortimento(p)} title="Clicca per il riassortimento" style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
+      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{p.stockTotale}</td>
+      <td style={tdStyle}>
+        <input
+          style={{ ...cellInputStyle, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY }}
+          inputMode="numeric" value={stockTotaleInput} title="Scrivi il nuovo stock totale: la differenza va in magazzino"
+          onChange={(e) => setStockTotaleInput(e.target.value)}
+          onBlur={salvaStockTotale}
+          onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+        />
+      </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
           <span style={{ ...fontBody, fontSize: 13, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
@@ -22411,7 +22407,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriRiassortimento, ricarica, on
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack, onModificaProdotto }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -22422,7 +22418,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
-  const [prodottoRiassortimento, setProdottoRiassortimento] = useState(null);
   const [mostraNuovoProdotto, setMostraNuovoProdotto] = useState(false);
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
@@ -22659,7 +22654,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
             </div>
           </div>
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Magazzino fisico e shop online insieme. Clicca sul nome di un prodotto per il riassortimento.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Magazzino fisico e shop online insieme. Clicca sul nome per modificare il prodotto, sullo stock totale per aggiornare il magazzino.</div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
@@ -22769,7 +22764,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               </thead>
               <tbody>
                 {prodottiOrdinati.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriRiassortimento={setProdottoRiassortimento} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={onModificaProdotto} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -22789,13 +22784,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         </div>
       </div>
 
-      {prodottoRiassortimento && (
-        <ModaleRiassortimento
-          prodotto={prodottoRiassortimento}
-          onClose={() => setProdottoRiassortimento(null)}
-          onFatto={() => { setProdottoRiassortimento(null); ricarica(["prodotti_shop"]); }}
-        />
-      )}
       {mostraNuovoProdotto && (
         <ModaleNuovoProdotto
           categorieProdotti={categorieProdotti}
@@ -27202,7 +27190,7 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack, apriProdottoIdIniziale }) {
   const isMobile = useIsMobile();
   const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
   const [collassate, setCollassate] = useState(() => new Set());
@@ -27292,6 +27280,20 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setMsgErrore(""); setMsgSuccesso("");
     if (isMobile) setVistaMobile("dettaglio");
   }
+
+  // arrivo da "Gestione magazzino" (click sul nome di un prodotto): apre
+  // subito quel prodotto nell'editor completo. Il ref (non lo stato)
+  // ricorda quale id è già stato aperto, così un ricalcolo di
+  // prodottiShop non riapre da capo lo stesso prodotto sovrascrivendo
+  // eventuali modifiche in corso — niente callback verso il chiamante:
+  // l'unico altro modo di rientrare in questa pagina è dal menu, che
+  // azzera sempre apriProdottoIdIniziale prima di navigare
+  const prodottoApertoIniziale = useRef(null);
+  useEffect(() => {
+    if (!apriProdottoIdIniziale || prodottoApertoIniziale.current === apriProdottoIdIniziale) return;
+    const p = (prodottiShop || []).find((pp) => pp.id === apriProdottoIdIniziale);
+    if (p) { apriProdotto(p); prodottoApertoIniziale.current = apriProdottoIdIniziale; }
+  }, [apriProdottoIdIniziale, prodottiShop]);
 
   function nuovoProdotto() {
     setProdottoForm({
@@ -31546,6 +31548,11 @@ export default function App() {
   });
   const isMobile = useIsMobile();
   const [view, setView] = useState("home");
+  // prodotto da aprire subito in "Gestione shop": valorizzato solo dal
+  // click sul nome in "Gestione magazzino" (RigaProdottoMagazzino), che
+  // vuole l'editor completo (immagini, descrizioni, categorie multiple)
+  // invece della vecchia modale di riassortimento
+  const [prodottoDaAprireInShop, setProdottoDaAprireInShop] = useState(null);
   // login venditore dalla home: vanno dichiarati qui (prima dei return
   // anticipati di Gate/Caricamento più sotto), altrimenti in alcuni render
   // questi due hook non verrebbero chiamati per niente, violando le regole
@@ -32390,7 +32397,8 @@ export default function App() {
   function apriGestioneLocation() { setView("gestionelocation"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
-  function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
+  function apriGestioneShop() { setProdottoDaAprireInShop(null); apriViewProtetta("gestioneshop"); }
+  function apriGestioneShopSuProdotto(prodottoId) { setProdottoDaAprireInShop(prodottoId); apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPos() { apriViewProtetta("pos"); }
@@ -32945,6 +32953,7 @@ export default function App() {
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          onModificaProdotto={apriGestioneShopSuProdotto}
         />
       )}
 
@@ -32961,6 +32970,7 @@ export default function App() {
         <PaginaGestioneShop
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          apriProdottoIdIniziale={prodottoDaAprireInShop}
         />
       )}
 
