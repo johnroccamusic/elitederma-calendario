@@ -28,13 +28,25 @@ const corsHeaders = {
 
 function inizialiMaster(nome: string): string {
   const parole = (nome || "").trim().split(/\s+/).filter(Boolean);
-  const iniziali = parole.map((p) => p[0]).join("").toUpperCase().replace(/[^A-Z]/g, "");
-  return iniziali.slice(0, 3) || "MM";
+  const lettereNome = parole.map((p) => p[0]).join("").toUpperCase().replace(/[^A-Z]/g, "");
+  if (lettereNome.length >= 2) return lettereNome.slice(0, 2);
+  const soloLettere = (nome || "").toUpperCase().replace(/[^A-Z]/g, "");
+  return (soloLettere.slice(0, 2) || "MM").padEnd(2, "X");
 }
+// 2 iniziali fisse in testa + 3 cifre e 1 lettera casuali, mescolati fra
+// loro (non sempre cifre-poi-lettera) — stessa regola usata lato client
+// in App.jsx (codiceReferralCasuale), duplicata qui perché le due
+// funzioni girano in runtime diversi e non possono condividere codice
 function codiceCasuale(nome: string): string {
-  const cifre = String(Math.floor(1000 + Math.random() * 9000));
-  const lettere = Array.from({ length: 2 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)]).join("");
-  return `${inizialiMaster(nome)}${cifre}${lettere}`;
+  const parti = [
+    ...Array.from({ length: 3 }, () => "0123456789"[Math.floor(Math.random() * 10)]),
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)],
+  ];
+  for (let i = parti.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [parti[i], parti[j]] = [parti[j], parti[i]];
+  }
+  return `${inizialiMaster(nome)}${parti.join("")}`;
 }
 function addGiorniIso(dataIso: string, giorni: number): string {
   const d = new Date(dataIso + "T00:00:00Z");
