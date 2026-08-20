@@ -5939,7 +5939,7 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
     </div>
   );
 }
-function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, ricarica, onBack }) {
+function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, segnalazioniMagazzino, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricercaIntero, setRicercaIntero] = useState("");
   const [ricercaAperto, setRicercaAperto] = useState("");
@@ -5950,6 +5950,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   const [notaAperto, setNotaAperto] = useState("");
   const [salvandoAperto, setSalvandoAperto] = useState(false);
   const [mostraCongruita, setMostraCongruita] = useState(false);
+  const [testoSegnalazione, setTestoSegnalazione] = useState("");
+  const [inviandoSegnalazione, setInviandoSegnalazione] = useState(false);
   const loc = location.find((l) => l.id === corsoData?.location_id) || null;
   // catalogo delle attrezzature (gestito dall'admin in Impostazioni): qui
   // è solo il bacino da cui cercare — quali di queste sono davvero
@@ -6109,6 +6111,24 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   function trasmettiInventario() {
     if (!window.confirm("Trasmettere l'inventario a Raf? Da questo momento Prodotti interi e mancanti saranno visibili in Logistica prodotti.")) return;
     salvaCampiStatoEdizione({ inventario_trasmesso_ts: new Date().toISOString() });
+  }
+
+  // "Segnalazioni": problemi sulla sede visti durante il corso (uno
+  // sgabello senza rotellina, un lettino tagliato…) — appartengono alla
+  // sede del corso, non a questa singola edizione: compaiono nella
+  // scheda di quella sede in "Magazzini esterni", dove restano finché
+  // chi gestisce il magazzino non scrive una nota di risoluzione
+  const segnalazioniCorso = (segnalazioniMagazzino || []).filter((s) => s.corso_data_id === corsoData?.id).sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+  async function inviaSegnalazione() {
+    if (!testoSegnalazione.trim()) return;
+    setInviandoSegnalazione(true);
+    const { error } = await supabase.from("segnalazioni_magazzino").insert({
+      corso_data_id: corsoData.id, location_id: corsoData.location_id, master_id: masterLoggataId || null, testo: testoSegnalazione.trim(),
+    });
+    setInviandoSegnalazione(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setTestoSegnalazione("");
+    ricarica(["segnalazioni_magazzino"]);
   }
 
   // verifica di congruità: Inviati − Venduti − Rispediti − Restano = Da
@@ -6319,7 +6339,33 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
           </div>
         </div>
 
-        <div style={{ marginTop: 24, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", ...cardStyle, padding: 16 }}>
+        <div style={{ marginTop: 24, ...cardStyle, padding: 16 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Segnalazioni</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10 }}>
+            Problemi visti in sede (es. "uno sgabello è senza una rotellina", "un lettino è tagliato") — compaiono nella scheda di {toTitleCase(loc?.nome || "questa sede")} in Magazzini esterni.
+          </div>
+          <textarea
+            value={testoSegnalazione} onChange={(e) => setTestoSegnalazione(e.target.value)} rows={2}
+            style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }}
+            placeholder="Scrivi la segnalazione…"
+          />
+          <Button onClick={inviaSegnalazione} disabled={inviandoSegnalazione || !testoSegnalazione.trim()}>{inviandoSegnalazione ? "Invio…" : "Aggiungi segnalazione e invia"}</Button>
+          {segnalazioniCorso.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              {segnalazioniCorso.map((s) => (
+                <div key={s.id} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{s.testo}</div>
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2 }}>{new Date(s.ts).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
+                  {s.nota_risoluzione && (
+                    <div style={{ ...fontBody, fontSize: 12, color: "#2E7D32", fontStyle: "italic", marginTop: 3 }}>Risolto: {s.nota_risoluzione}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", ...cardStyle, padding: 16 }}>
           <div>
             <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Verifica di congruità</div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
@@ -22869,10 +22915,21 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
 // Attrezzature restano gli unici due dati fisicamente presenti in sede,
 // e si aggiornano solo da dove vengono dichiarati (Inventario Master a
 // fine corso), mai da qui
-function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventarioSede, prodottiShop, costiSottocategorie, onBack }) {
+function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventarioSede, prodottiShop, costiSottocategorie, segnalazioniMagazzino, corsi, corsiDate, master, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const sediConMagazzino = (location || []).filter((l) => l.magazzino_locale).sort((a, b) => (a.nome_sede || a.nome || "").localeCompare(b.nome_sede || b.nome || ""));
   const attrezzatureCatalogo = costiSottocategorie || [];
+  function fonteSegnalazione(s) {
+    const cd = (corsiDate || []).find((c) => c.id === s.corso_data_id);
+    const nomeCorso = cd ? (corsi || []).find((c) => c.id === cd.corso_id)?.nome : null;
+    const nomeMaster = (master || []).find((m) => m.id === s.master_id)?.nome;
+    return [nomeCorso, cd ? fmtData(cd.data_inizio) : null, nomeMaster].filter(Boolean).join(" · ");
+  }
+  async function salvaNotaRisoluzione(id, nota) {
+    const { error } = await supabase.from("segnalazioni_magazzino").update({ nota_risoluzione: nota.trim() || null }).eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["segnalazioni_magazzino"]);
+  }
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -22921,16 +22978,49 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
 
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Attrezzature</div>
               {attrezzatureSede.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna dichiarata ancora.</div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuna dichiarata ancora.</div>
               ) : attrezzatureSede.map((r) => (
                 <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
                   <span>{attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "—"}</span><span>{r.quantita}x</span>
                 </div>
               ))}
+
+              {(() => {
+                const segnalazioniSede = (segnalazioniMagazzino || []).filter((s) => s.location_id === l.id).sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+                return (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Segnalazioni</div>
+                    {segnalazioniSede.length === 0 ? (
+                      <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna segnalazione.</div>
+                    ) : segnalazioniSede.map((s) => (
+                      <RigaSegnalazioneMagazzino key={s.id} segnalazione={s} fonte={fonteSegnalazione(s)} onSalvaNota={(nota) => salvaNotaRisoluzione(s.id, nota)} />
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+// una segnalazione della master su una sede: la nota di risoluzione è
+// libera, salvata onBlur come prezzo/costo altrove — nessun bisogno di
+// un tasto "salva" a parte, e nessuno stato "risolta/aperta": la nota
+// stessa è il segnale che qualcuno se ne sta occupando
+function RigaSegnalazioneMagazzino({ segnalazione, fonte, onSalvaNota }) {
+  const [nota, setNota] = useState(segnalazione.nota_risoluzione || "");
+  return (
+    <div style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{segnalazione.testo}</div>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2, marginBottom: 6 }}>
+        {new Date(segnalazione.ts).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}{fonte ? ` · ${fonte}` : ""}
+      </div>
+      <input
+        style={{ ...inputStyle, padding: "6px 8px", fontSize: 12.5 }} value={nota} onChange={(e) => setNota(e.target.value)}
+        onBlur={() => onSalvaNota(nota)} placeholder="Nota di risoluzione…"
+      />
     </div>
   );
 }
@@ -31915,6 +32005,7 @@ export default function App() {
   // una riga per prodotto+edizione, sommate per prodotto in Logistica
   // prodotti — alimentato dal tasto "Prodotti rientrati"
   const [prodottiApertiMagazzino, setProdottiApertiMagazzino] = useState([]);
+  const [segnalazioniMagazzino, setSegnalazioniMagazzino] = useState([]);
   // stock persistente per città dei consumabili di servizio parzialmente
   // usati (Inventario Post Corso), con livello a pallini 1-5
   const [magazzinoLocaleConsumabili, setMagazzinoLocaleConsumabili] = useState([]);
@@ -32054,6 +32145,7 @@ export default function App() {
     agenda_voci: async () => setAgendaVoci((await supabase.from("agenda_voci").select("*")).data || []),
     inventario_sede: async () => setInventarioSede((await supabase.from("inventario_sede").select("*")).data || []),
     prodotti_aperti_magazzino: async () => setProdottiApertiMagazzino((await supabase.from("prodotti_aperti_magazzino").select("*")).data || []),
+    segnalazioni_magazzino: async () => setSegnalazioniMagazzino((await supabase.from("segnalazioni_magazzino").select("*").order("ts", { ascending: false })).data || []),
     agenda_note_settimanali: async () => setAgendaNoteSettimanali((await supabase.from("agenda_note_settimanali").select("*")).data || []),
     acconti_da_verificare: async () => setAccontiDaVerificare((await supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false })).data || []),
     target_vendite_prodotti: async () => setTargetVenditeProdotti((await supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false })).data || []),
@@ -32146,7 +32238,7 @@ export default function App() {
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
-    magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie"],
+    magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
     catalogocategoriecosti: ["costi_categorie", "costi_sottocategorie", "spese", "costi_soglie_allerta"],
@@ -32158,7 +32250,7 @@ export default function App() {
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
     dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi"],
+    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
@@ -33100,6 +33192,7 @@ export default function App() {
         <PaginaMagazziniEsterni
           location={location} magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioSede={inventarioSede}
           prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie} onBack={() => setView("magazzinoshop")}
+          segnalazioniMagazzino={segnalazioniMagazzino} corsi={corsi} corsiDate={corsiDate} master={master} ricarica={fetchDati}
         />
       )}
 
@@ -33208,6 +33301,7 @@ export default function App() {
           inventarioSede={inventarioSede} masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiApertiMagazzino={prodottiApertiMagazzino}
           magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioAmmanchi={inventarioAmmanchi}
+          segnalazioniMagazzino={segnalazioniMagazzino}
           ricarica={fetchDati} onBack={() => setView("dashboardmaster")}
         />
       )}
