@@ -5,6 +5,12 @@
 // woo_order_id, così un webhook ripetuto o un aggiornamento successivo
 // dello stesso ordine non crea righe duplicate).
 //
+// Se l'ordine ha usato un coupon che è un referral code di una master
+// (coupon.master_id valorizzato), la vendita viene attribuita a quella
+// master con GLI STESSI CAMPI già usati per le vendite POS (operatore_
+// tipo/id/nome) — così compare nella sua dashboard esattamente come una
+// vendita al banco, distinta solo da origine="woocommerce".
+//
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   WC_WEBHOOK_SECRET  — lo stesso "Segreto" impostato nel webhook di WooCommerce
 // SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY sono già forniti automaticamente
@@ -84,6 +90,28 @@ Deno.serve(async (req) => {
     // corpo firmato correttamente ma senza un vero ordine dentro: non
     // c'è niente da salvare, ma la richiesta era legittima
     return new Response("ok (nessun ordine nel payload)", { status: 200 });
+  }
+
+  // referral code: se uno dei coupon usati sull'ordine è associato a una
+  // master, la vendita va attribuita a lei — un ordine può avere più
+  // coupon_lines, basta trovarne uno che sia un referral code
+  const codiciUsati: string[] = Array.isArray(ordine.coupon_lines)
+    ? ordine.coupon_lines.map((c: any) => String(c.code || "").toLowerCase()).filter(Boolean)
+    : [];
+  if (codiciUsati.length > 0) {
+    const { data: couponReferral } = await supabase
+      .from("coupon")
+      .select("master_id")
+      .in("codice", codiciUsati)
+      .not("master_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+    if (couponReferral?.master_id) {
+      const { data: masterRiga } = await supabase.from("master").select("nome").eq("id", couponReferral.master_id).maybeSingle();
+      riga.operatore_tipo = "master";
+      riga.operatore_id = couponReferral.master_id;
+      riga.operatore_nome = masterRiga?.nome || null;
+    }
   }
 
   const { error } = await supabase.from("vendite_shop").upsert(riga, { onConflict: "woo_order_id" });

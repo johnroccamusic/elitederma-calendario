@@ -5732,6 +5732,19 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     const righeMese = righeMaster.filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= meseInizio && d <= meseFine; });
     return { mese: somma(righeMese), totale: somma(righeMaster) };
   }, [venditeShop, masterSelId]);
+  // vendite online attribuite a questa master tramite il suo referral
+  // code (woo-webhook le marca operatore_tipo="master" allo stesso modo
+  // del POS, distinte solo da origine="woocommerce") — "utilizzi" conta
+  // gli ordini, non l'incasso: è la prova che il codice viene usato,
+  // il fatturato vero e proprio è già in "Vendite su shop"
+  const venditeShopMaster = useMemo(() => {
+    const righe = (venditeShop || []).filter((v) => v.origine === "woocommerce" && v.operatore_tipo === "master" && v.operatore_id === masterSelId);
+    return { totale: round2(righe.reduce((s, v) => s + (v.totale || 0), 0)), utilizzi: righe.length };
+  }, [venditeShop, masterSelId]);
+  // "Punti" (§9 glossario): unità alternativa all'euro per gli obiettivi
+  // di vendita — qui 5 punti per ogni euro di prodotto venduto dalla
+  // master, su tutti i canali (POS + shop online via referral)
+  const puntiAccumulati = Math.round((incassiPos.totale + venditeShopMaster.totale) * 5);
 
   if (mostraRiepilogoPos && masterSel) {
     return <PaginaRiepilogoVenditeProdotti soggettoTipo="master" soggettoId={masterSel.id} nomeSoggetto={masterSel.nome} venditeShop={venditeShop} onBack={() => setMostraRiepilogoPos(false)} />;
@@ -5793,6 +5806,22 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — totale</div>
               <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(incassiPos.totale)}</div>
+            </div>
+          </div>
+        )}
+        {masterSel && (
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite su shop</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(venditeShopMaster.totale)}</div>
+            </div>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral code</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{venditeShopMaster.utilizzi} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>utilizzi</span></div>
+            </div>
+            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Punti accumulati</div>
+              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: GOLD }}>{puntiAccumulati.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pt</span></div>
             </div>
           </div>
         )}
@@ -18845,8 +18874,24 @@ function idsLocaliDaWoo(idsWoo, elenco, campoWoo) {
   return new Set((idsWoo || []).map((id) => mappa.get(id)).filter((v) => v != null));
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica, onBack }) {
+// genera un codice suggerito per il referral di una master: iniziali +
+// 4 cifre casuali + 2 lettere casuali — stessa identica regola usata
+// dalla Edge Function "genera-referral-automatico" per il cron, così i
+// codici nati a mano e quelli automatici si somigliano
+function inizialiMasterReferral(nome) {
+  const parole = (nome || "").trim().split(/\s+/).filter(Boolean);
+  const iniziali = parole.map((p) => p[0]).join("").toUpperCase().replace(/[^A-Z]/g, "");
+  return iniziali.slice(0, 3) || "MM";
+}
+function codiceReferralCasuale(nome) {
+  const cifre = String(Math.floor(1000 + Math.random() * 9000));
+  const lettere = Array.from({ length: 2 }, () => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)]).join("");
+  return `${inizialiMasterReferral(nome)}${cifre}${lettere}`;
+}
+
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, regoleReferralAutomatico, ricarica, onBack }) {
   const isMobile = useIsMobile();
+  const [tab, setTab] = useState("manuale");
   const [codice, setCodice] = useState("");
   const [descrizione, setDescrizione] = useState("");
   const [tipoSconto, setTipoSconto] = useState("percent");
@@ -18959,6 +19004,98 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
     setMsgTipo("successo"); setMsg(`Coupon "${riga.codice}" creato su WooCommerce.`);
     ricarica(["coupon"]);
   }
+  const [eliminandoId, setEliminandoId] = useState(null);
+  async function eliminaCoupon(riga) {
+    if (!window.confirm(`Eliminare il coupon "${riga.codice.toUpperCase()}"?${riga.woo_coupon_id ? " Verrà rimosso anche da WooCommerce." : ""}`)) return;
+    setEliminandoId(riga.id); setMsg("");
+    const { data, error } = await supabase.functions.invoke("woo-elimina-coupon", { body: { couponId: riga.id } });
+    setEliminandoId(null);
+    if (error || data?.errore) { setMsgTipo("errore"); setMsg("Errore eliminazione: " + (data?.errore || error.message)); return; }
+    setMsgTipo("successo"); setMsg(`Coupon "${riga.codice.toUpperCase()}" eliminato.`);
+    ricarica(["coupon"]);
+  }
+
+  // ---------- tab "Genera referral code" ----------
+  // un referral code per master, per sempre (non uno per corso): la
+  // lista mostra chi ne ha già uno e chi no, generarne uno nuovo lo crea
+  // subito su WooCommerce con le regole del template automatico
+  const couponPerMasterId = useMemo(() => {
+    const mappa = {};
+    (coupon || []).filter((c) => c.master_id).forEach((c) => { mappa[c.master_id] = c; });
+    return mappa;
+  }, [coupon]);
+  const [codiceProposto, setCodiceProposto] = useState({});
+  const [masterCreandoId, setMasterCreandoId] = useState(null);
+  function proponiCodiceReferral(m) {
+    setCodiceProposto((prev) => ({ ...prev, [m.id]: codiceReferralCasuale(m.nome) }));
+  }
+  async function confermaReferral(m) {
+    if (!regoleReferralAutomatico) { setMsgTipo("errore"); setMsg('Configura prima le regole nella tab "Generazione automatica".'); return; }
+    const codiceScelto = (codiceProposto[m.id] || codiceReferralCasuale(m.nome)).toLowerCase();
+    setMasterCreandoId(m.id); setMsg("");
+    const r = regoleReferralAutomatico;
+    const { data: riga, error: erroreInsert } = await supabase.from("coupon").insert({
+      codice: codiceScelto,
+      descrizione: `Referral — ${m.nome}`,
+      tipo_sconto: "percent",
+      valore: r.percentuale_sconto,
+      valido_da: null,
+      valido_fino_a: null,
+      ambito: "tutto",
+      utilizzi_max: r.utilizzi_max,
+      utilizzi_max_per_utente: r.utilizzi_max_per_cliente,
+      spesa_minima: r.spesa_minima,
+      non_cumulabile: r.non_cumulabile,
+      stato: "bozza",
+      master_id: m.id,
+      generato_da_cron: false,
+      creato_da: "manuale",
+    }).select().single();
+    if (erroreInsert || !riga) { setMasterCreandoId(null); setMsgTipo("errore"); setMsg("Errore: " + erroreInsert?.message); return; }
+    const { data, error: erroreAttiva } = await supabase.functions.invoke("woo-crea-coupon", { body: { couponId: riga.id } });
+    setMasterCreandoId(null);
+    if (erroreAttiva || data?.errore) { setMsgTipo("errore"); setMsg("Coupon salvato ma non creato su WooCommerce: " + (data?.errore || erroreAttiva.message)); ricarica(["coupon"]); return; }
+    setMsgTipo("successo"); setMsg(`Referral code "${codiceScelto.toUpperCase()}" creato per ${toTitleCase(m.nome)}.`);
+    setCodiceProposto((prev) => { const n = { ...prev }; delete n[m.id]; return n; });
+    ricarica(["coupon"]);
+  }
+  const masterOrdinate = useMemo(() => [...(master || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "")), [master]);
+
+  // ---------- tab "Generazione automatica" ----------
+  const [regoleForm, setRegoleForm] = useState(null);
+  const [salvandoRegole, setSalvandoRegole] = useState(false);
+  const [generandoOggi, setGenerandoOggi] = useState(false);
+  useEffect(() => {
+    if (regoleReferralAutomatico && !regoleForm) setRegoleForm(regoleReferralAutomatico);
+  }, [regoleReferralAutomatico]);
+  async function salvaRegole() {
+    if (!regoleForm) return;
+    setSalvandoRegole(true); setMsg("");
+    const { error } = await supabase.from("regole_referral_automatico").update({
+      percentuale_sconto: parseNum(regoleForm.percentuale_sconto) || 0,
+      giorni_validita_dopo_corso: Number(regoleForm.giorni_validita_dopo_corso) || 0,
+      valido_durante_corso: !!regoleForm.valido_durante_corso,
+      non_cumulabile: !!regoleForm.non_cumulabile,
+      utilizzi_max: regoleForm.utilizzi_max === "" || regoleForm.utilizzi_max == null ? null : Number(regoleForm.utilizzi_max),
+      utilizzi_max_per_cliente: regoleForm.utilizzi_max_per_cliente === "" || regoleForm.utilizzi_max_per_cliente == null ? null : Number(regoleForm.utilizzi_max_per_cliente),
+      spesa_minima: regoleForm.spesa_minima === "" || regoleForm.spesa_minima == null ? null : parseNum(regoleForm.spesa_minima),
+      aggiornato_ts: new Date().toISOString(),
+    }).eq("id", regoleForm.id);
+    setSalvandoRegole(false);
+    if (error) { setMsgTipo("errore"); setMsg("Errore: " + error.message); return; }
+    setMsgTipo("successo"); setMsg("Regole salvate.");
+    ricarica(["regole_referral_automatico"]);
+  }
+  async function generaCodiciOggi() {
+    setGenerandoOggi(true); setMsg("");
+    const { data, error } = await supabase.functions.invoke("genera-referral-automatico", { body: {} });
+    setGenerandoOggi(false);
+    if (error || data?.errore) { setMsgTipo("errore"); setMsg("Errore: " + (data?.errore || error.message)); return; }
+    setMsgTipo("successo");
+    setMsg(data.creati > 0 ? `${data.creati} nuovo/i referral code generato/i.` : (data.motivo || "Nessun nuovo codice da generare oggi."));
+    ricarica(["coupon"]);
+  }
+  const couponAutomatici = useMemo(() => [...(coupon || [])].filter((c) => c.generato_da_cron).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")), [coupon]);
 
   const prodottiFiltrati = useMemo(() => {
     const q = ricercaProdotti.trim().toLowerCase();
@@ -18982,7 +19119,8 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
     );
   }
 
-  const couponOrdinati = useMemo(() => [...(coupon || [])].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")), [coupon]);
+  // solo i coupon generici (non i referral, che hanno la loro tab)
+  const couponOrdinati = useMemo(() => [...(coupon || [])].filter((c) => !c.master_id).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")), [coupon]);
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
@@ -18994,10 +19132,20 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Genera Coupon</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
+        <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
+          {[{ v: "manuale", l: "Generazione manuale" }, { v: "automatica", l: "Generazione automatica" }, { v: "referral", l: "Genera referral code" }].map((t) => (
+            <button key={t.v} onClick={() => { setTab(t.v); setMsg(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, padding: "9px 16px", borderRadius: 18, border: "none", background: tab === t.v ? NAVY : BG, color: tab === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
+              {t.l}
+            </button>
+          ))}
+        </div>
+
         {msg && (
           <div style={{ ...fontBody, fontSize: 12.5, color: msgTipo === "errore" ? "#C0392B" : "#2E7D32", marginBottom: 14, padding: "8px 10px", background: msgTipo === "errore" ? "#FBEAEA" : "#EAF5EC", borderRadius: 8 }}>{msg}</div>
         )}
 
+        {tab === "manuale" && (
+        <>
         <div ref={formRef} style={{ ...cardStyle }}>
           <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 12 }}>{couponInModifica ? "Modifica coupon" : "Nuovo coupon"}</div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -19075,13 +19223,109 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, ricarica,
                   {c.valido_fino_a ? ` · scade il ${fmtData(c.valido_fino_a)}` : ""}
                 </div>
               </div>
-              {(c.stato === "bozza" || c.stato === "programmato") && (
-                <Button onClick={() => attivaCoupon(c)} disabled={attivandoId === c.id}>{attivandoId === c.id ? "Creo…" : "Crea su WooCommerce"}</Button>
-              )}
-              {c.stato === "attivo" && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>ID WooCommerce: {c.woo_coupon_id}</div>}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {(c.stato === "bozza" || c.stato === "programmato") && (
+                  <Button onClick={() => attivaCoupon(c)} disabled={attivandoId === c.id}>{attivandoId === c.id ? "Creo…" : "Crea su WooCommerce"}</Button>
+                )}
+                {c.stato === "attivo" && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>ID WooCommerce: {c.woo_coupon_id}</div>}
+                <button onClick={() => eliminaCoupon(c)} disabled={eliminandoId === c.id} title="Elimina coupon" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+                </button>
+              </div>
             </div>
           );
         })}
+        </>
+        )}
+
+        {tab === "referral" && (
+          <div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
+              Un referral code per master, per sempre: crealo una volta, da quel momento le vendite fatte con quel codice risulteranno nella sua dashboard.
+            </div>
+            {masterOrdinate.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna master trovata.</div>
+            ) : masterOrdinate.map((m) => {
+              const esistente = couponPerMasterId[m.id];
+              return (
+                <div key={m.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{toTitleCase(m.nome)}</div>
+                  {esistente ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{esistente.codice}</span>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: (ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).colore, borderRadius: 20, padding: "2px 9px" }}>{(ETICHETTA_STATO_COUPON[esistente.stato] || ETICHETTA_STATO_COUPON.bozza).testo}</span>
+                    </div>
+                  ) : codiceProposto[m.id] ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: GOLD, textTransform: "uppercase" }}>{codiceProposto[m.id]}</span>
+                      <button onClick={() => proponiCodiceReferral(m)} title="Genera un altro codice" style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 10px", cursor: "pointer" }}>Rigenera</button>
+                      <Button onClick={() => confermaReferral(m)} disabled={masterCreandoId === m.id}>{masterCreandoId === m.id ? "Creo…" : "Conferma"}</Button>
+                    </div>
+                  ) : (
+                    <Button variant="ghost" onClick={() => proponiCodiceReferral(m)}>Genera codice</Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "automatica" && (
+          <div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
+              Regole usate per generare in automatico un referral code quando inizia il primo corso di una master che non ne ha ancora uno (una volta sola, per sempre — non uno per corso).
+            </div>
+            {!regoleForm ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
+            ) : (
+              <div style={{ ...cardStyle }}>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 180px" }}><Field label="Percentuale sconto (%)"><input type="number" min="0" step="0.01" style={inputStyle} value={regoleForm.percentuale_sconto} onChange={(e) => setRegoleForm({ ...regoleForm, percentuale_sconto: e.target.value })} /></Field></div>
+                  <div style={{ flex: "1 1 220px" }}><Field label="Validità dopo la fine del corso (giorni)"><input type="number" min="0" style={inputStyle} value={regoleForm.giorni_validita_dopo_corso} onChange={(e) => setRegoleForm({ ...regoleForm, giorni_validita_dopo_corso: e.target.value })} /></Field></div>
+                </div>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                  <input type="checkbox" checked={!!regoleForm.valido_durante_corso} onChange={(e) => setRegoleForm({ ...regoleForm, valido_durante_corso: e.target.checked })} style={{ width: 15, height: 15 }} />
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Valido già durante il corso (non solo dopo la fine)</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", margin: "4px 0 14px" }}>
+                  <input type="checkbox" checked={!!regoleForm.non_cumulabile} onChange={(e) => setRegoleForm({ ...regoleForm, non_cumulabile: e.target.checked })} style={{ width: 15, height: 15 }} />
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>Non cumulabile con altri coupon</span>
+                </label>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 150px" }}><Field label="Utilizzi massimi"><input type="number" min="0" style={inputStyle} value={regoleForm.utilizzi_max ?? ""} onChange={(e) => setRegoleForm({ ...regoleForm, utilizzi_max: e.target.value })} placeholder="Illimitati" /></Field></div>
+                  <div style={{ flex: "1 1 150px" }}><Field label="Utilizzi max per cliente"><input type="number" min="0" style={inputStyle} value={regoleForm.utilizzi_max_per_cliente ?? ""} onChange={(e) => setRegoleForm({ ...regoleForm, utilizzi_max_per_cliente: e.target.value })} placeholder="Illimitati" /></Field></div>
+                  <div style={{ flex: "1 1 150px" }}><Field label="Spesa minima (€)"><input type="number" min="0" step="0.01" style={inputStyle} value={regoleForm.spesa_minima ?? ""} onChange={(e) => setRegoleForm({ ...regoleForm, spesa_minima: e.target.value })} placeholder="Nessuna" /></Field></div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <Button onClick={salvaRegole} disabled={salvandoRegole}>{salvandoRegole ? "Salvo…" : "Salva regole"}</Button>
+                  <Button variant="ghost" onClick={generaCodiciOggi} disabled={generandoOggi}>{generandoOggi ? "Genero…" : "Genera i codici di oggi"}</Button>
+                </div>
+              </div>
+            )}
+
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, margin: "24px 0 10px" }}>Storico referral automatici ({couponAutomatici.length})</div>
+            {couponAutomatici.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun codice generato in automatico ancora.</div>
+            ) : couponAutomatici.map((c) => {
+              const m = (master || []).find((mm) => mm.id === c.master_id);
+              const statoInfo = ETICHETTA_STATO_COUPON[c.stato] || ETICHETTA_STATO_COUPON.bozza;
+              return (
+                <div key={c.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{m ? toTitleCase(m.nome) : "—"} · {c.valore}% {c.valido_fino_a ? `· scade il ${fmtData(c.valido_fino_a)}` : ""}</div>
+                  </div>
+                  <button onClick={() => eliminaCoupon(c)} disabled={eliminandoId === c.id} title="Elimina coupon" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -32173,6 +32417,7 @@ export default function App() {
   const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
   const [vociShopClassificazione, setVociShopClassificazione] = useState([]);
   const [coupon, setCoupon] = useState([]);
+  const [regoleReferralAutomatico, setRegoleReferralAutomatico] = useState(null);
   const [allieviCrm, setAllieviCrm] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
@@ -32313,6 +32558,7 @@ export default function App() {
     corsi_date_docenti: async () => setCorsiDateDocenti((await supabase.from("corsi_date_docenti").select("*")).data || []),
     voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
     coupon: async () => setCoupon((await supabase.from("coupon").select("*").order("created_at", { ascending: false })).data || []),
+    regole_referral_automatico: async () => setRegoleReferralAutomatico((await supabase.from("regole_referral_automatico").select("*").limit(1).maybeSingle()).data || null),
     impostazioni_categorie_gruppi: async () => setCategorieGruppi((await supabase.from("impostazioni_categorie_gruppi").select("*").limit(1)).data?.[0] || null),
     impostazioni_layout_assegnazione_master: async () => setLayoutAssegnazioneMaster((await supabase.from("impostazioni_layout_assegnazione_master").select("*").limit(1)).data?.[0] || null),
     impostazioni_layout_iscrizioni: async () => setLayoutIscrizioni((await supabase.from("impostazioni_layout_iscrizioni").select("*").limit(1)).data?.[0] || null),
@@ -32384,7 +32630,7 @@ export default function App() {
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
-    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop"],
+    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "regole_referral_automatico"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
@@ -33277,7 +33523,8 @@ export default function App() {
 
       {view === "generacoupon" && (
         <PaginaGeneraCoupon
-          coupon={coupon} categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
+          coupon={coupon} categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} master={master}
+          regoleReferralAutomatico={regoleReferralAutomatico}
           ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
         />
       )}
