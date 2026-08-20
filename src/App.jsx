@@ -23400,6 +23400,7 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
     ? consumabiliQui.filter((r) => (prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "").toLowerCase().includes(ricercaConsumabile.trim().toLowerCase()))
     : consumabiliQui;
   const pezziTotaliConsumabili = consumabiliQui.reduce((s, r) => s + (r.quantita || 0), 0);
+  const pezziTotaliAttrezzature = attrezzatureQui.reduce((s, r) => s + (r.quantita || 0), 0);
 
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -23489,33 +23490,76 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
         )}
       </div>
 
-      <div style={{ ...cardStyle, padding: 14, background: "#FBFAF6" }}>
-        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Attrezzature</div>
-        <div style={labelStyleInv}>Aggiungi solo quelle davvero presenti in questa sede.</div>
-        <div style={{ position: "relative" }}>
+      <div style={{ ...cardStyle, padding: 18, background: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FBF1D9", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <IconaClipboardErp size={22} />
+            </div>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Attrezzature</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Aggiungi solo quelle davvero presenti in questa sede.</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{attrezzatureQui.length} tip{attrezzatureQui.length === 1 ? "o" : "i"}</div>
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#FBF1D9", borderRadius: 10, padding: "6px 12px", whiteSpace: "nowrap" }}>{pezziTotaliAttrezzature.toLocaleString("it-IT")} pezzi totali</div>
+          </div>
+        </div>
+
+        <div style={{ position: "relative", marginBottom: 16 }}>
           <input style={inputStyle} value={ricercaAttrezzatura} onChange={(e) => setRicercaAttrezzatura(e.target.value)} placeholder="Cerca attrezzatura…" />
           {risultatiAttrezzatura.length > 0 && (
             <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, padding: "6px 10px" }}>Aggiungi una nuova attrezzatura</div>
               {risultatiAttrezzatura.map((sc) => (
                 <div key={sc.id} onClick={() => aggiungiAttrezzatura(sc)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{sc.nome}</div>
               ))}
             </div>
           )}
         </div>
+
         {attrezzatureQui.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessuna attrezzatura dichiarata ancora.</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna attrezzatura dichiarata ancora.</div>
         ) : (
-          <div style={{ marginTop: 10 }}>
-            {attrezzatureQui.map((r) => {
-              const sc = attrezzatureCatalogo.find((c) => c.id === r.riferimento);
-              return (
-                <RigaAttrezzaturaInventario
-                  key={r.id} riga={r} voce={{ id: r.riferimento, nome: sc?.nome || "—" }}
-                  onSalva={(id, q) => salvaVoce("attrezzatura", id, q)}
-                  onRimuovi={() => eliminaVoceInventario(r.id)}
-                />
-              );
-            })}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+              <thead>
+                <tr style={{ background: "#FAF8F2" }}>
+                  {["Prodotto", "Q.tà in magazzino", "Azioni"].map((et, i) => (
+                    <th key={et} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 2 ? "right" : "left", padding: "10px 14px", whiteSpace: "nowrap" }}>{et}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {attrezzatureQui.map((r) => {
+                  const sc = attrezzatureCatalogo.find((c) => c.id === r.riferimento);
+                  return (
+                    <tr key={r.id} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: BG, color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Foto non ancora caricata">
+                            <IconaClipboardErp size={16} />
+                          </div>
+                          <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{sc?.nome || "—"}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px", ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>{(r.quantita || 0).toLocaleString("it-IT")}</td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
+                          <input
+                            type="number" min="0" value={r.quantita}
+                            onChange={(e) => salvaVoce("attrezzatura", r.riferimento, Math.max(0, Number(e.target.value) || 0))}
+                            style={{ ...inputStyle, width: 60, padding: "5px 7px", fontSize: 12.5 }}
+                          />
+                          <button onClick={() => eliminaVoceInventario(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, fontWeight: 700, padding: 4 }}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
