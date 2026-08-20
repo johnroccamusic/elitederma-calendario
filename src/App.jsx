@@ -8937,7 +8937,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -8956,7 +8956,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [showCorsoModal, setShowCorsoModal] = useState(false);
   const [showTipiModellaModal, setShowTipiModellaModal] = useState(false);
   const [showMagazziniModal, setShowMagazziniModal] = useState(false);
-  const [showVenditoriModal, setShowVenditoriModal] = useState(false);
   const [showTargetMasterModal, setShowTargetMasterModal] = useState(false);
   const [showTargetVenditoriModal, setShowTargetVenditoriModal] = useState(false);
   // senza questo, un "Indietro" arrivato mentre si è dentro uno di questi
@@ -8971,7 +8970,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     const modaliAperti = [
       [showCorsoModal, setShowCorsoModal], [showTipiModellaModal, setShowTipiModellaModal],
       [showMagazziniModal, setShowMagazziniModal],
-      [showVenditoriModal, setShowVenditoriModal],
       [showTargetMasterModal, setShowTargetMasterModal], [showTargetVenditoriModal, setShowTargetVenditoriModal],
     ];
     const aperto = modaliAperti.find(([attivo]) => attivo);
@@ -8980,25 +8978,8 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   }, [
     registraInterceptaIndietro, vistaCorsiModal,
     showCorsoModal, showTipiModellaModal, showMagazziniModal,
-    showVenditoriModal, showTargetMasterModal, showTargetVenditoriModal,
+    showTargetMasterModal, showTargetVenditoriModal,
   ]);
-  // cellulare ed email vivono in colonne a sé, interrogate solo qui (non
-  // nel caricamento generale): così, se in futuro dovesse mai mancare o
-  // dare errore, non rischia di svuotare l'elenco venditori usato
-  // ovunque altrove (login, selezione "Tutor")
-  const [telefoniVenditori, setTelefoniVenditori] = useState({});
-  const [emailVenditori, setEmailVenditori] = useState({});
-  useEffect(() => {
-    if (!showVenditoriModal) return;
-    supabase.from("venditori").select("id, telefono, email").then(({ data }) => {
-      setTelefoniVenditori(Object.fromEntries((data || []).map((v) => [v.id, v.telefono || ""])));
-      setEmailVenditori(Object.fromEntries((data || []).map((v) => [v.id, v.email || ""])));
-    });
-    // si riallinea anche quando "venditori" cambia (es. dopo aver salvato
-    // un numero/email: ricarica() in GestioneListaSemplice rifà
-    // fetchDati, che non include più questi campi, quindi vanno ripresi
-    // da qui)
-  }, [showVenditoriModal, venditori]);
 
   const [corsoInModifica, setCorsoInModifica] = useState(null);
   const [modNomeCorso, setModNomeCorso] = useState("");
@@ -9199,7 +9180,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
         { etichetta: "Gestione Leve", Icona: IconaLeveRiga, onClick: onApriGestioneLeve },
         { etichetta: "Gestione Assistenti", Icona: IconaAssistentiRiga, onClick: onApriGestioneAssistenti },
         { etichetta: "Gestione Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
-        { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: () => setShowVenditoriModal(true) },
+        { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: onApriGestioneVenditori },
       ],
     },
     {
@@ -9464,23 +9445,6 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
         </Modal>
       )}
 
-      {showVenditoriModal && (
-        <Modal title="Gestione venditori" onClose={() => setShowVenditoriModal(false)}>
-          <div style={{ ...subStyle, marginTop: -4 }}>Nomi selezionabili come "Tutor" in fase di iscrizione, invece di scriverli a mano. Ogni venditore ha anche una password (per entrare dalla home nella propria Dashboard venditori) — parte da "0000" e si può cambiare qui in qualsiasi momento — e un numero di cellulare, che useremo per l'integrazione dei messaggi con WhatsApp.</div>
-          <GestioneListaSemplice
-            nomeSingolare="Venditore" nomeArticolo="un" tabella="venditori"
-            elementi={venditori.map((v) => ({ ...v, telefono: telefoniVenditori[v.id] || "", email: emailVenditori[v.id] || "" }))} ricarica={ricarica} msg={msg} setMsg={setMsg}
-            placeholder="es. MARIA ROSSI"
-            mostraPassword passwordDiDefault="0000"
-            onImpostaPassword={async (venditoreId, password) => {
-              const { error } = await supabase.from("venditori").update({ password }).eq("id", venditoreId);
-              if (error) setMsg("Errore password: " + error.message);
-              else ricarica(["venditori"]);
-            }}
-            mostraTelefono mostraEmail
-          />
-        </Modal>
-      )}
     </div>
   );
 }
@@ -17849,9 +17813,15 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
     return chiave;
   }
 
+  // una master collegata a un venditore (stessa persona, master.venditore_id)
+  // usa come chiave l'id del venditore invece del proprio nome: stesso
+  // aggancio esplicito già usato qui sotto per hotel/location→fornitore,
+  // così le due righe finiscono sempre nello stesso gruppo anche se i
+  // nomi registrati non coincidono esattamente
   (master || []).forEach((m) => aggiungi("master", m.id, m.nome, "master",
     { citta: m.citta, indirizzo: m.indirizzo, partitaIva: m.partita_iva, iban: m.iban, telefono: m.telefono, email: m.email },
-    categoriaNomePer(categoriaGruppoPer("master", categorieGruppi), costiSottocategorie)));
+    categoriaNomePer(categoriaGruppoPer("master", categorieGruppi), costiSottocategorie),
+    m.venditore_id ? `venditore_${m.venditore_id}` : undefined));
   (assistente || []).forEach((a) => aggiungi("assistente", a.id, a.nome, "assistente",
     { citta: a.citta, indirizzo: a.indirizzo, partitaIva: a.partita_iva, iban: a.iban, telefono: a.telefono, email: a.email },
     categoriaNomePer(categoriaGruppoPer("assistente", categorieGruppi), costiSottocategorie)));
@@ -17886,9 +17856,14 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
     { citta: l.nome || null, indirizzo: l.indirizzo, partitaIva: l.partita_iva, codiceFiscale: l.codice_fiscale, iban: l.iban, telefono: l.telefono, email: l.email },
     categoriaNomePer(l.sottocategoria_id, costiSottocategorie),
     l.fornitore_id ? chiavePerFornitoreId.get(l.fornitore_id) : undefined));
+  // chiave sempre esplicita (id proprio, non il nome): così un venditore
+  // collegato a una master converge nella stessa chiave `venditore_<id>`
+  // usata sopra per la master, indipendentemente dall'ordine con cui le
+  // due liste vengono lette
   (venditori || []).forEach((v) => aggiungi("venditori", v.id, v.nome, "venditore",
-    { citta: null, indirizzo: null, partitaIva: null, iban: null, telefono: v.telefono, email: v.email },
-    categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie)));
+    { citta: v.citta, indirizzo: v.indirizzo, partitaIva: v.partita_iva, iban: v.iban, telefono: v.telefono, email: v.email },
+    categoriaNomePer(categoriaGruppoPer("venditore", categorieGruppi), costiSottocategorie),
+    `venditore_${v.id}`));
 
   const ordinePriorita = ["fornitori", "master", "assistente", "hotel", "venditori", "location"];
   return Array.from(gruppi.values()).map((g) => {
@@ -24604,12 +24579,39 @@ function EditorFasceCompenso({ fasce, onCambia, opzioniImporta }) {
   );
 }
 
+// campi condivisi fra un master e un venditore quando sono la stessa
+// persona (collegati via master.venditore_id): l'import è UNA TANTUM,
+// al momento del collegamento — riempie solo i campi vuoti da un lato
+// col valore già presente dall'altro, non sovrascrive mai un campo già
+// valorizzato su nessuno dei due lati
+const CAMPI_CONDIVISI_MASTER_VENDITORE = [
+  "email", "telefono", "iban", "indirizzo", "civico", "citta", "partita_iva", "codice_destinatario", "pec",
+  "regime_fiscale", "note", "foto_url",
+  "diretto_indiretto", "fisso_variabile", "ricorrente_occasionale", "natura", "controllabilita", "riducibilita",
+  "essenzialita", "origine", "ricorrenza", "bene_durevole", "includi_analisi_costi", "budget_previsto",
+  "soglia_allerta_personalizzata", "responsabile_costo",
+];
+function campoVuoto(v) { return v == null || v === ""; }
+async function importaDatiCondivisi(masterRec, venditoreRec) {
+  if (!masterRec || !venditoreRec) return;
+  const versoMaster = {};
+  const versoVenditore = {};
+  CAMPI_CONDIVISI_MASTER_VENDITORE.forEach((campo) => {
+    const vm = masterRec[campo];
+    const vv = venditoreRec[campo];
+    if (campoVuoto(vm) && !campoVuoto(vv)) versoMaster[campo] = vv;
+    else if (campoVuoto(vv) && !campoVuoto(vm)) versoVenditore[campo] = vm;
+  });
+  if (Object.keys(versoMaster).length > 0) await supabase.from("master").update(versoMaster).eq("id", masterRec.id);
+  if (Object.keys(versoVenditore).length > 0) await supabase.from("venditori").update(versoVenditore).eq("id", venditoreRec.id);
+}
+
 // "Gestione Master": elenco master a sinistra (ricerca, filtro,
 // paginazione) + scheda dettagliata a destra con tab Corsi
 // associati/Compensi/Calendario/Note e documenti. Sostituisce il vecchio
 // modale "Master" — è la pagina che si apre da Impostazioni > Definisci
 // Master.
-function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDateDocenti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
+function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi, corsiDateDocenti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [filtro, setFiltro] = useState("tutti");
@@ -24718,6 +24720,20 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
     setSelezionatoId(null); ricarica(["master"]);
   }
   function toggleFirmato(checked) { return salvaCampoMaster("diploma_gia_firmato", checked); }
+  // collegamento a un venditore che è la stessa persona: un solo
+  // aggancio possibile (master.venditore_id), l'import dei campi vuoti
+  // scatta una tantum al momento della scelta
+  const [mostraCollegaVenditore, setMostraCollegaVenditore] = useState(false);
+  useEffect(() => { setMostraCollegaVenditore(!!selezionato?.venditore_id); }, [selezionatoId]);
+  async function collegaVenditore(venditoreId) {
+    const { error } = await supabase.from("master").update({ venditore_id: venditoreId || null }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    if (venditoreId) {
+      const venditoreRec = (venditori || []).find((v) => v.id === venditoreId);
+      await importaDatiCondivisi(selezionato, venditoreRec);
+    }
+    ricarica(["master", "venditori"]);
+  }
   // salvataggio diretto dei contatti/dati fiscali: nessun tasto "Salva",
   // ogni campo si registra da solo quando si esce da lì (onBlur) o al
   // cambio (select/checkbox della classificazione gestionale). classOverride
@@ -24946,6 +24962,20 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                       <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>MASTER</span>
                     </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
+                      <input
+                        type="checkbox" checked={mostraCollegaVenditore}
+                        onChange={(e) => { const checked = e.target.checked; setMostraCollegaVenditore(checked); if (!checked && selezionato.venditore_id) collegaVenditore(null); }}
+                        style={{ width: 15, height: 15 }}
+                      />
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>È anche un venditore, condividi i dati</span>
+                    </label>
+                    {mostraCollegaVenditore && (
+                      <select value={selezionato.venditore_id || ""} onChange={(e) => collegaVenditore(e.target.value || null)} style={{ ...inputStyle, width: 240, padding: "6px 8px", fontSize: 12.5, marginTop: 6 }}>
+                        <option value="">— scegli venditore —</option>
+                        {[...(venditori || [])].sort((a, b) => a.nome.localeCompare(b.nome)).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+                      </select>
+                    )}
                     <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                       <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
                       <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
@@ -25181,6 +25211,341 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
             })}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// "Gestione Venditori": stessa scheda ricca di PaginaGestioneMaster
+// (foto, contatti, indirizzo fiscale, classificazione gestionale e
+// budget), meno i tab legati ai corsi (Corsi associati/Compensi/
+// Calendario dipendono da master_corsi/corsi_date_docenti, che per un
+// venditore non esiste) — restano solo Regime fiscale e Note e
+// documenti. Sostituisce la vecchia modale minimale "Gestione
+// venditori" (nome/password/telefono/email).
+function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const [pagina, setPagina] = useState(0);
+  const PER_PAGINA = 10;
+  const [selezionatoId, setSelezionatoId] = useState(null);
+  const [tab, setTab] = useState("regime");
+  const [mostraForm, setMostraForm] = useState(false);
+  const [nomeNuovo, setNomeNuovo] = useState("");
+  const [emailMod, setEmailMod] = useState("");
+  const [telefonoMod, setTelefonoMod] = useState("");
+  const [ibanMod, setIbanMod] = useState("");
+  const [indirizzoMod, setIndirizzoMod] = useState("");
+  const [civicoMod, setCivicoMod] = useState("");
+  const [cittaMod, setCittaMod] = useState("");
+  const [partitaIvaMod, setPartitaIvaMod] = useState("");
+  const [codiceDestinatarioMod, setCodiceDestinatarioMod] = useState("");
+  const [pecMod, setPecMod] = useState("");
+  const [classMod, setClassMod] = useState(classificazioneVuota());
+  const [applicaClassATuttiVenditori, setApplicaClassATuttiVenditori] = useState(false);
+  const [note, setNote] = useState("");
+  const [msg, setMsg] = useState("");
+  const [caricandoFoto, setCaricandoFoto] = useState(false);
+  const [caricandoDocumento, setCaricandoDocumento] = useState(false);
+
+  const listaFiltrata = useMemo(() => {
+    let l = [...(venditori || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (ricerca.trim()) l = l.filter((v) => v.nome.toLowerCase().includes(ricerca.trim().toLowerCase()));
+    return l;
+  }, [venditori, ricerca]);
+
+  useEffect(() => {
+    if ((!selezionatoId || !listaFiltrata.some((v) => v.id === selezionatoId)) && listaFiltrata.length > 0) {
+      setSelezionatoId(listaFiltrata[0].id);
+    }
+  }, [listaFiltrata, selezionatoId]);
+
+  const totalePagine = Math.max(1, Math.ceil(listaFiltrata.length / PER_PAGINA));
+  const paginaClamp = Math.min(pagina, totalePagine - 1);
+  const listaPagina = listaFiltrata.slice(paginaClamp * PER_PAGINA, paginaClamp * PER_PAGINA + PER_PAGINA);
+
+  const [venditoreOverride, setVenditoreOverride] = useState({});
+  const selezionatoBase = (venditori || []).find((v) => v.id === selezionatoId);
+  const selezionato = selezionatoBase ? { ...selezionatoBase, ...(venditoreOverride[selezionatoId] || {}) } : null;
+  async function salvaCampoVenditore(campo, valore) {
+    setVenditoreOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), [campo]: valore } }));
+    const { error } = await supabase.from("venditori").update({ [campo]: valore }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["venditori"]);
+  }
+
+  // collegamento a una master che è la stessa persona: la scrittura va
+  // sempre sulla colonna master.venditore_id (unica fonte di verità,
+  // letta anche da PaginaGestioneMaster) — se questo venditore era già
+  // collegato a un'altra master, la sgancia prima di collegare la nuova
+  const masterCollegataAttuale = (master || []).find((m) => m.venditore_id === selezionatoId);
+  const [mostraCollegaMaster, setMostraCollegaMaster] = useState(false);
+  useEffect(() => {
+    setMostraCollegaMaster(!!(master || []).find((m) => m.venditore_id === selezionatoId));
+  }, [selezionatoId]);
+  async function collegaMaster(masterId) {
+    if (masterCollegataAttuale && masterCollegataAttuale.id !== masterId) {
+      await supabase.from("master").update({ venditore_id: null }).eq("id", masterCollegataAttuale.id);
+    }
+    if (!masterId) { ricarica(["master"]); return; }
+    const { error } = await supabase.from("master").update({ venditore_id: selezionatoId }).eq("id", masterId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    const masterRec = (master || []).find((m) => m.id === masterId);
+    await importaDatiCondivisi(masterRec, selezionato);
+    ricarica(["master", "venditori"]);
+  }
+
+  useEffect(() => {
+    setNote(selezionato?.note || "");
+    setEmailMod(selezionato?.email || "");
+    setTelefonoMod(selezionato?.telefono || "");
+    setIbanMod(selezionato?.iban || "");
+    setIndirizzoMod(selezionato?.indirizzo || "");
+    setCivicoMod(selezionato?.civico || "");
+    setCittaMod(selezionato?.citta || "");
+    setPartitaIvaMod(selezionato?.partita_iva || "");
+    setCodiceDestinatarioMod(selezionato?.codice_destinatario || "");
+    setPecMod(selezionato?.pec || "");
+    setClassMod(classificazioneDaRecord(selezionato));
+    setApplicaClassATuttiVenditori(false);
+    setTab("regime");
+    setMsg("");
+  }, [selezionatoId]);
+
+  async function aggiungiVenditore() {
+    if (!nomeNuovo.trim()) return;
+    const { error } = await supabase.from("venditori").insert({ nome: nomeNuovo.trim().toUpperCase(), password: "0000" });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setNomeNuovo(""); setMostraForm(false); ricarica(["venditori"]);
+  }
+  async function eliminaVenditore() {
+    if (!selezionatoId || !window.confirm("Sei sicuro di voler eliminare questo profilo? L'operazione è irreversibile.")) return;
+    const { error } = await supabase.from("venditori").delete().eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setSelezionatoId(null); ricarica(["venditori"]);
+  }
+  async function salvaContatti(classOverride, applicaOverride) {
+    const classPayload = classificazionePerPayload(classOverride || classMod);
+    const campi = {
+      email: emailMod.trim() || null, telefono: telefonoMod.trim() || null, iban: ibanMod.trim() || null,
+      indirizzo: indirizzoMod.trim() || null, civico: civicoMod.trim() || null, citta: cittaMod.trim() || null,
+      partita_iva: partitaIvaMod.trim() || null, codice_destinatario: codiceDestinatarioMod.trim().toUpperCase() || null, pec: pecMod.trim() || null,
+      ...classPayload,
+    };
+    setVenditoreOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), ...campi } }));
+    const { error } = await supabase.from("venditori").update(campi).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    if (applicaOverride !== undefined ? applicaOverride : applicaClassATuttiVenditori) {
+      await supabase.from("venditori").update(classPayload).neq("id", selezionatoId);
+    }
+    ricarica(["venditori"]);
+  }
+  function aggiornaClassMod(campo, valore) {
+    setClassMod((prev) => {
+      const nuovo = { ...prev, [campo]: valore };
+      salvaContatti(nuovo);
+      return nuovo;
+    });
+  }
+  function salvaRegimeFiscale(valore) { return salvaCampoVenditore("regime_fiscale", valore || null); }
+  async function caricaFoto(file) {
+    if (!file || !selezionatoId) return;
+    setCaricandoFoto(true);
+    const percorso = `${selezionatoId}/foto-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from("venditori-foto").upload(percorso, file, { upsert: true });
+    if (erroreUpload) { setCaricandoFoto(false); window.alert("Errore: " + erroreUpload.message); return; }
+    const { data: urlData } = supabase.storage.from("venditori-foto").getPublicUrl(percorso);
+    const { error } = await supabase.from("venditori").update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
+    setCaricandoFoto(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["venditori"]);
+  }
+  async function salvaNote() {
+    if ((selezionato?.note || "") === note.trim()) return;
+    const { error } = await supabase.from("venditori").update({ note: note.trim() || null }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["venditori"]);
+  }
+  async function caricaDocumento(file) {
+    if (!file || !selezionatoId) return;
+    setCaricandoDocumento(true); setMsg("");
+    const percorso = `${selezionatoId}/documento-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from("venditori-documenti").upload(percorso, file);
+    if (erroreUpload) { setCaricandoDocumento(false); setMsg("Errore: " + erroreUpload.message); return; }
+    const { error } = await supabase.from("venditori").update({ documento_file_path: percorso }).eq("id", selezionatoId);
+    setCaricandoDocumento(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["venditori"]);
+  }
+
+  const tabStyle = (attivo) => ({
+    ...fontBody, fontSize: 13.5, fontWeight: 700, color: attivo ? NAVY : MUTED,
+    background: "none", border: "none", borderBottom: attivo ? `2px solid ${GOLD}` : "2px solid transparent",
+    padding: "10px 4px", marginRight: 22, cursor: "pointer",
+  });
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1220, margin: "0 auto" }}>
+        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
+
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Venditori</div>
+        <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Contatti, dati fiscali e classificazione gestionale di ogni venditore.</div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => setMostraForm((v) => !v)} style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "11px 18px", cursor: "pointer" }}>+ Aggiungi Venditore</button>
+          <div style={{ flex: 1, minWidth: isMobile ? "100%" : 220, maxWidth: 320 }}>
+            <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); setPagina(0); }} placeholder="Cerca venditore…" />
+          </div>
+        </div>
+
+        {mostraForm && (
+          <div style={{ ...cardStyle, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input autoFocus value={nomeNuovo} onChange={(e) => setNomeNuovo(e.target.value)} onKeyDown={(e) => e.key === "Enter" && aggiungiVenditore()} placeholder="ES. MARIA ROSSI" style={{ ...inputStyle, flex: 1, minWidth: 200 }} />
+            <button onClick={aggiungiVenditore} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "9px 16px", cursor: "pointer" }}>Salva</button>
+            <button onClick={() => { setMostraForm(false); setNomeNuovo(""); }} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+          </div>
+        )}
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "300px 1fr", gap: 20, alignItems: "flex-start" }}>
+          <div style={{ ...cardStyle, padding: 16 }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, padding: "0 4px 10px" }}>Venditori ({listaFiltrata.length})</div>
+            {listaPagina.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 4px" }}>Nessun venditore trovato.</div>}
+            {listaPagina.map((v) => {
+              const attivo = v.id === selezionatoId;
+              return (
+                <div key={v.id} onClick={() => setSelezionatoId(v.id)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10, padding: "9px 8px", borderRadius: 10, cursor: "pointer", marginBottom: 4,
+                    background: attivo ? "#FBF1D9" : "transparent", border: attivo ? `1px solid ${GOLD}` : "1px solid transparent",
+                  }}
+                >
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+                    {v.foto_url ? <img src={v.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={18} />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(v.nome)}</div>
+                  </div>
+                  <IconaChevronDestra size={14} color={MUTED} />
+                </div>
+              );
+            })}
+            {totalePagine > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={paginaClamp === 0} style={{ background: "none", border: "none", cursor: paginaClamp === 0 ? "default" : "pointer", opacity: paginaClamp === 0 ? 0.35 : 1, display: "flex", color: NAVY, transform: "rotate(180deg)" }}><IconaChevronDestra size={14} color="currentColor" /></button>
+                {Array.from({ length: totalePagine }).map((_, i) => (
+                  <button key={i} onClick={() => setPagina(i)} style={{ width: 24, height: 24, borderRadius: "50%", border: "none", cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, background: i === paginaClamp ? NAVY : "transparent", color: i === paginaClamp ? "#fff" : MUTED }}>{i + 1}</button>
+                ))}
+                <button onClick={() => setPagina((p) => Math.min(totalePagine - 1, p + 1))} disabled={paginaClamp === totalePagine - 1} style={{ background: "none", border: "none", cursor: paginaClamp === totalePagine - 1 ? "default" : "pointer", opacity: paginaClamp === totalePagine - 1 ? 0.35 : 1, display: "flex", color: NAVY }}><IconaChevronDestra size={14} /></button>
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...cardStyle, padding: 20 }}>
+            {!selezionato ? (
+              <div style={{ textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun venditore selezionato.</div>
+            ) : (
+              <>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 16, marginBottom: 18, flexWrap: "wrap" }}>
+                  <div style={{ position: "relative", flexShrink: 0 }}>
+                    <div style={{ width: 72, height: 72, borderRadius: "50%", background: "#EFEFEF", display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                      {selezionato.foto_url ? <img src={selezionato.foto_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaAvatarGenerico size={38} />}
+                    </div>
+                    <label title="Carica foto" style={{ position: "absolute", bottom: -2, right: -2, width: 26, height: 26, borderRadius: "50%", background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", border: "2px solid #fff" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>
+                      <input type="file" accept="image/*" style={{ display: "none" }} disabled={caricandoFoto} onChange={(e) => caricaFoto(e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>VENDITORE</span>
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
+                      <input
+                        type="checkbox" checked={mostraCollegaMaster}
+                        onChange={(e) => { const checked = e.target.checked; setMostraCollegaMaster(checked); if (!checked && masterCollegataAttuale) collegaMaster(null); }}
+                        style={{ width: 15, height: 15 }}
+                      />
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>È anche una master, condividi i dati</span>
+                    </label>
+                    {mostraCollegaMaster && (
+                      <select value={masterCollegataAttuale?.id || ""} onChange={(e) => collegaMaster(e.target.value || null)} style={{ ...inputStyle, width: 240, padding: "6px 8px", fontSize: 12.5, marginTop: 6 }}>
+                        <option value="">— scegli master —</option>
+                        {[...(master || [])].sort((a, b) => a.nome.localeCompare(b.nome)).map((m) => <option key={m.id} value={m.id}>{m.nome.toUpperCase()}</option>)}
+                      </select>
+                    )}
+                    <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                      <input value={emailMod} onChange={(e) => setEmailMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="email@esempio.it" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={telefonoMod} onChange={(e) => setTelefonoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="+39 ..." style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={ibanMod} onChange={(e) => setIbanMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="IBAN" style={{ ...inputStyle, width: 220, padding: "6px 8px", fontSize: 12.5 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                      <input value={indirizzoMod} onChange={(e) => setIndirizzoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Indirizzo" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={civicoMod} onChange={(e) => setCivicoMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Civico" style={{ ...inputStyle, width: 80, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={cittaMod} onChange={(e) => setCittaMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Città" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                      <input value={partitaIvaMod} onChange={(e) => setPartitaIvaMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Partita IVA" style={{ ...inputStyle, width: 150, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={codiceDestinatarioMod} onChange={(e) => setCodiceDestinatarioMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="Codice destinatario" style={{ ...inputStyle, width: 160, padding: "6px 8px", fontSize: 12.5 }} />
+                      <input value={pecMod} onChange={(e) => setPecMod(e.target.value)} onBlur={() => salvaContatti()} placeholder="PEC" style={{ ...inputStyle, width: 200, padding: "6px 8px", fontSize: 12.5 }} />
+                    </div>
+                    <div style={{ marginTop: 10, maxWidth: 640 }}>
+                      <PannelloClassificazioneGestionale valori={classMod} onChange={aggiornaClassMod} />
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, cursor: "pointer" }}>
+                      <input type="checkbox" checked={applicaClassATuttiVenditori} onChange={(e) => { const checked = e.target.checked; setApplicaClassATuttiVenditori(checked); if (checked) salvaContatti(undefined, checked); }} style={{ width: 15, height: 15 }} />
+                      <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Applica classificazione e budget a tutti i venditori</span>
+                    </label>
+                  </div>
+
+                  <button onClick={eliminaVenditore} title="Elimina venditore" style={{ flexShrink: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 9, padding: 9, cursor: "pointer", color: "#C0392B", display: "flex" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: 18, overflowX: "auto" }}>
+                  <button onClick={() => setTab("regime")} style={tabStyle(tab === "regime")}>Regime fiscale</button>
+                  <button onClick={() => setTab("note")} style={tabStyle(tab === "note")}>Note e documenti</button>
+                </div>
+
+                {tab === "regime" && (
+                  <div style={{ maxWidth: 360 }}>
+                    <Field label="Regime fiscale">
+                      <select value={selezionato.regime_fiscale || ""} onChange={(e) => salvaRegimeFiscale(e.target.value)} style={inputStyle}>
+                        <option value="">— non impostato —</option>
+                        {REGIMI_FISCALI_MASTER.map((r) => <option key={r.chiave} value={r.chiave}>{r.etichetta}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+
+                {tab === "note" && (
+                  <div>
+                    <Field label="Note">
+                      <textarea value={note} onChange={(e) => setNote(e.target.value)} onBlur={salvaNote} rows={5} style={{ ...inputStyle, resize: "vertical" }} placeholder="Note libere su questo venditore…" />
+                    </Field>
+                    <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginTop: 14, marginBottom: 6 }}>Documento</div>
+                    {selezionato.documento_file_path ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <AllegatoLink percorso={selezionato.documento_file_path} etichetta="Apri il documento caricato" bucket="venditori-documenti" />
+                        <label style={{ ...fontBody, fontSize: 12, color: NAVY, textDecoration: "underline", cursor: "pointer" }}>
+                          Sostituisci
+                          <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={(e) => caricaDocumento(e.target.files?.[0] || null)} />
+                        </label>
+                      </div>
+                    ) : (
+                      <CampoFileTrascinabile accept="image/*,application/pdf" style={inputStyle} disabled={caricandoDocumento} onChange={(e) => caricaDocumento(e.target.files?.[0] || null)} />
+                    )}
+                    {caricandoDocumento && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
+                    {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -33158,7 +33523,8 @@ export default function App() {
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
     passwordmenu: ["password_menu", "utenti_app", "master", "agende", "venditori"],
     statisticamaster: ["vendite_shop", "prodotti_shop", "master", "target_vendite_prodotti"],
-    gestionemaster: ["master", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionemaster: ["master", "venditori", "corsi", "corsi_date", "master_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    gestionevenditori: ["venditori", "master"],
     gestioneleve: ["leva", "corsi", "corsi_date", "corsi_date_docenti"],
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
@@ -33519,6 +33885,7 @@ export default function App() {
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
+  function apriGestioneVenditori() { setView("gestionevenditori"); }
   function apriGestioneLeve() { setView("gestioneleve"); }
   function apriGestioneAssistenti() { setView("gestioneassistenti"); }
   function apriGestioneHotel() { setView("gestionehotel"); }
@@ -33887,7 +34254,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} />
       )}
 
       {view === "gestionedate" && (
@@ -34286,8 +34653,15 @@ export default function App() {
 
       {view === "gestionemaster" && (
         <PaginaGestioneMaster
-          master={master} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
+          master={master} venditori={venditori} corsi={corsi} corsiDate={corsiDate} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi}
+          ricarica={fetchDati} onBack={() => setView("impostazioni")}
+        />
+      )}
+
+      {view === "gestionevenditori" && (
+        <PaginaGestioneVenditori
+          venditori={venditori} master={master}
           ricarica={fetchDati} onBack={() => setView("impostazioni")}
         />
       )}
