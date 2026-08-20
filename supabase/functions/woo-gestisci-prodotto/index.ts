@@ -83,11 +83,15 @@ Deno.serve(async (req) => {
   }
   const auth = "Basic " + btoa(`${consumerKeyWrite}:${consumerSecretWrite}`);
 
-  // risolve una lista di uuid locali di categoria nei corrispondenti woo_category_id
+  // risolve una lista di uuid locali di categoria nei corrispondenti
+  // woo_category_id — scarta le categorie "solo locali" (create da
+  // Gestione magazzino, mai sincronizzate su Woo, woo_category_id null):
+  // mandarle a WooCommerce come { id: null } fa rifiutare l'intera
+  // richiesta di creazione/modifica del prodotto
   async function wooIdsDiCategorie(idsLocali: string[]): Promise<number[]> {
     if (!idsLocali?.length) return [];
     const { data } = await supabase.from("categorie_prodotti").select("id, woo_category_id").in("id", idsLocali);
-    return (data || []).map((c: any) => c.woo_category_id);
+    return (data || []).map((c: any) => c.woo_category_id).filter((id: any) => id != null);
   }
 
   function immaginiPerWoo(lista: any[] | undefined): { id?: number; src?: string }[] | undefined {
@@ -98,14 +102,22 @@ Deno.serve(async (req) => {
   // sostituisce per intero le righe locali di categorie/immagini di un
   // prodotto sulla base di quanto WooCommerce ha effettivamente salvato
   // (non di quanto richiesto: gli id delle immagini nuove li assegna Woo)
+  // — eccetto le categorie "solo locali" (woo_category_id null): Woo non
+  // le vedrà mai nella risposta perché non sono mai state inviate, quindi
+  // si ricollegano sempre così come richieste, altrimenti sceglierle su
+  // un prodotto con prezzo le farebbe silenziosamente sparire
   async function sincronizzaCollegamentiLocali(prodottoIdLocale: string, prodottoWoo: any, categorieRichieste: string[] | undefined) {
     if (categorieRichieste !== undefined) {
       await supabase.from("prodotti_categorie").delete().eq("prodotto_id", prodottoIdLocale);
       const categorieWooIds = new Set((prodottoWoo.categories || []).map((c: any) => c.id));
-      if (categorieWooIds.size > 0) {
-        const { data: categorieLocali } = await supabase.from("categorie_prodotti").select("id, woo_category_id").in("woo_category_id", [...categorieWooIds]);
-        const righe = (categorieLocali || []).map((c: any) => ({ prodotto_id: prodottoIdLocale, categoria_id: c.id }));
-        if (righe.length > 0) await supabase.from("prodotti_categorie").insert(righe);
+      const { data: categorieInfo } = categorieRichieste.length
+        ? await supabase.from("categorie_prodotti").select("id, woo_category_id").in("id", categorieRichieste)
+        : { data: [] as any[] };
+      const idsDaCollegare = (categorieInfo || [])
+        .filter((c: any) => c.woo_category_id == null || categorieWooIds.has(c.woo_category_id))
+        .map((c: any) => c.id);
+      if (idsDaCollegare.length > 0) {
+        await supabase.from("prodotti_categorie").insert(idsDaCollegare.map((id: string) => ({ prodotto_id: prodottoIdLocale, categoria_id: id })));
       }
     }
     if (immagini !== undefined) {
