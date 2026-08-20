@@ -5452,6 +5452,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   const coloreCorso = corso?.colore || NAVY;
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
+  // "IN CORSO" mentre si svolge, "Appena terminato" nei 5 giorni dopo la
+  // fine — la master deve accorgersi a colpo d'occhio del corso attivo
+  // o appena chiuso, senza dover guardare le date
+  const oggiStr = dataOggiStr();
+  const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
+  const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
   return (
     <div
       onClick={apribile ? () => onApriInventario(corsoData.id) : undefined}
@@ -5468,6 +5474,11 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
+        {(inCorso || appenaTerminato) && (
+          <div style={{ ...fontDisplay, fontSize: inCorso ? 28 : 19, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
+            {inCorso ? "IN CORSO" : "Appena terminato"}
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -5685,12 +5696,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const oggiStr = dataOggiStr();
-  // resta in lista anche fino a 2 giorni dopo la fine, così la card
-  // resta cliccabile (per aprire la scheda del corso) appena tornati
-  // dalla sede, non solo mentre il corso è in corso — finestra distinta
-  // da quella, più larga, dell'Inventario Post Corso qui sotto
+  // resta in lista anche fino a 5 giorni dopo la fine ("Appena
+  // terminato" in CardDataMaster), così la card resta cliccabile (per
+  // aprire la scheda del corso) e ben visibile appena tornati dalla
+  // sede, non solo mentre il corso è in corso. L'ordine per data_inizio
+  // crescente porta già naturalmente in cima i corsi appena finiti
+  // (data nel passato), senza bisogno di un ordinamento a parte
   const prossimeDate = useMemo(
-    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= addGiorni(cd.data_fine, 2)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
+    () => corsiDate.filter((cd) => cd.master_id === masterSelId && oggiStr <= addGiorni(cd.data_fine, 5)).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
     [corsiDate, masterSelId, oggiStr]
   );
   // Inventario Post Corso: eleggibile un corso in corso o finito da al
