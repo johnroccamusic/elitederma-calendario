@@ -5447,7 +5447,7 @@ function etichettaIntervalloGiorni(dataInizio, dataFine) {
 // Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
 // in lettura, il caricamento resta un compito di chi gestisce
 // l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, codiceReferral }) {
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   const coloreCorso = corso?.colore || NAVY;
@@ -5555,9 +5555,18 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         )}
       </div>
 
-      {apribile && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4 }}>
-          Inventario fine corso →
+      {(apribile || codiceReferral) && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+          {apribile ? (
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4 }}>
+              Inventario fine corso →
+            </div>
+          ) : <span />}
+          {codiceReferral && (
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#EA580C" }} onClick={(e) => e.stopPropagation()}>
+              Coupon code: {codiceReferral.toUpperCase()}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -5679,10 +5688,13 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, onApriInventarioSede, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
+  // un solo referral code per master, per sempre: se c'è, va mostrato sulle
+  // sue card corso in "Prossimi corsi", non solo nella tab Genera Coupon
+  const codiceReferralMaster = (coupon || []).find((c) => c.master_id === masterSelId)?.codice || null;
   const [mostraRiepilogoPos, setMostraRiepilogoPos] = useState(false);
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
@@ -5863,6 +5875,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
+                codiceReferral={codiceReferralMaster}
               />
             ))}
           </>
@@ -32650,7 +32663,7 @@ export default function App() {
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
-    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
+    dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon"],
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
@@ -33687,7 +33700,7 @@ export default function App() {
         <PaginaDashboardMaster
           master={master} corsi={corsi} location={location} corsiDate={corsiDate} hotel={hotel} iscritti={iscritti}
           masterLoggataId={utenteLoggato?.masterId || null}
-          venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
+          venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           onApriInventarioSede={apriInventarioSede}
           onBack={() => setView("home")}
         />
