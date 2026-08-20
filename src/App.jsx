@@ -22694,20 +22694,20 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
 // primo click su ciascuna (stile Windows Explorer): testo parte
 // crescente A→Z, numeri partono decrescente (più alto in cima)
 const COLONNE_MAGAZZINO = [
-  { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 220 },
-  { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 140 },
-  { label: "Unità di misura", campo: null, larghezza: 90 },
-  { label: "Stock totale", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 100 },
-  { label: "In magazzino", campo: null, larghezza: 110 },
-  { label: "Shop online", campo: null, larghezza: 110 },
-  { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc", larghezza: 90 },
-  { label: "Non sul POS", campo: null, larghezza: 90 },
-  { label: "Solo offline", campo: null, larghezza: 90 },
-  { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 100 },
-  { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 100 },
-  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 100 },
-  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 90 },
-  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 90 },
+  { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 170 },
+  { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 100 },
+  { label: "Unità di misura", campo: null, larghezza: 68 },
+  { label: "Stock totale", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "In magazzino", campo: null, larghezza: 82 },
+  { label: "Shop online", campo: null, larghezza: 82 },
+  { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc", larghezza: 64 },
+  { label: "Non sul POS", campo: null, larghezza: 64 },
+  { label: "Solo offline", campo: null, larghezza: 64 },
+  { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
+  { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
+  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
 ];
 
 function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -22968,23 +22968,23 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
     ricarica(["prodotti_shop"]);
   }
 
-  const tdStyle = { padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` };
-  const cellInputStyle = { ...inputStyle, width: 68, padding: "5px 7px", fontSize: 12.5 };
+  const tdStyle = { padding: "8px 6px", borderTop: `1px solid ${CREAM_BORDER}` };
+  const cellInputStyle = { ...inputStyle, width: 50, padding: "4px 5px", fontSize: 11 };
   function bottoneSposta(disabilitato, colore, onClick, titolo) {
     return (
       <button
         onClick={onClick} disabled={disabilitato} title={titolo}
-        style={{ width: 22, height: 22, borderRadius: "50%", border: "none", background: disabilitato ? "#E5E1D6" : colore, color: "#fff", fontSize: 14, lineHeight: "22px", padding: 0, cursor: disabilitato ? "default" : "pointer", flexShrink: 0 }}
+        style={{ width: 18, height: 18, borderRadius: "50%", border: "none", background: disabilitato ? "#E5E1D6" : colore, color: "#fff", fontSize: 12, lineHeight: "18px", padding: 0, cursor: disabilitato ? "default" : "pointer", flexShrink: 0 }}
       >+</button>
     );
   }
 
   return (
     <tr>
-      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
+      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
       <td style={tdStyle}>
-        <input style={{ ...cellInputStyle, width: 60 }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
+        <input style={{ ...cellInputStyle, width: 40 }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
       </td>
       <td style={tdStyle}>
         <input
@@ -22996,18 +22996,18 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
         />
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <span style={{ ...fontBody, fontSize: 13, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ ...fontBody, fontSize: 11, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 14, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
           {bottoneSposta(sincronizzandoMagazzini || (p.giacenza || 0) <= 0, "#3B6FA0", () => onSpostaLocale(p.id, "magazzino"), "Sposta un pezzo dallo Shop al Magazzino (in locale, da sincronizzare)")}
         </div>
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         {p.woo_product_id ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 18, textAlign: "right" }}>{p.giacenza || 0}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 14, textAlign: "right" }}>{p.giacenza || 0}</span>
             {bottoneSposta(sincronizzandoMagazzini || (p.giacenza_magazzino || 0) <= 0, GOLD, () => onSpostaLocale(p.id, "shop"), "Sposta un pezzo dal Magazzino allo Shop (in locale, da sincronizzare)")}
           </div>
-        ) : <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>—</span>}
+        ) : <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>}
       </td>
       <td style={tdStyle}>
         <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
@@ -23019,7 +23019,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
         <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>
+        <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
           {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
         </span>
       </td>
@@ -23029,8 +23029,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       <td style={tdStyle}>
         <input style={cellInputStyle} inputMode="decimal" value={costo} onChange={(e) => setCosto(e.target.value)} onBlur={salvaCosto} placeholder="—" />
       </td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
+      <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
     </tr>
   );
 }
@@ -23047,6 +23047,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
+  const [paginaMagazzino, setPaginaMagazzino] = useState(0);
   const [mostraNuovoProdotto, setMostraNuovoProdotto] = useState(false);
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
@@ -23271,6 +23272,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     return (va - vb) * dir;
   });
 
+  // 15 righe per pagina, con la stessa impaginazione a cerchi numerati
+  // già usata altrove nell'app — evita di scorrere centinaia di prodotti
+  const PER_PAGINA_MAGAZZINO = 15;
+  const totalePagineMagazzino = Math.max(1, Math.ceil(prodottiOrdinati.length / PER_PAGINA_MAGAZZINO));
+  const paginaMagazzinoClamp = Math.min(paginaMagazzino, totalePagineMagazzino - 1);
+  const prodottiPaginaMagazzino = prodottiOrdinati.slice(paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO, paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO + PER_PAGINA_MAGAZZINO);
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
@@ -23389,7 +23397,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                       key={col.label}
                       onClick={() => ordinaPer(col.campo)}
                       title={col.campo ? "Clicca per ordinare" : undefined}
-                      style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
+                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: "left", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
                     >
                       {col.label}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
                       <div
@@ -23405,7 +23413,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                 </tr>
               </thead>
               <tbody>
-                {prodottiOrdinati.map((p) => (
+                {prodottiPaginaMagazzino.map((p) => (
                   <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={onModificaProdotto} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
@@ -23414,6 +23422,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               </tbody>
             </table>
           </div>
+          {totalePagineMagazzino > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "12px 0", borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <button onClick={() => setPaginaMagazzino((p) => Math.max(0, p - 1))} disabled={paginaMagazzinoClamp === 0} style={{ background: "none", border: "none", cursor: paginaMagazzinoClamp === 0 ? "default" : "pointer", opacity: paginaMagazzinoClamp === 0 ? 0.35 : 1, display: "flex", color: NAVY, transform: "rotate(180deg)" }}><IconaChevronDestra size={14} color="currentColor" /></button>
+              {Array.from({ length: totalePagineMagazzino }).map((_, i) => (
+                <button key={i} onClick={() => setPaginaMagazzino(i)} style={{ width: 24, height: 24, borderRadius: "50%", border: "none", cursor: "pointer", ...fontBody, fontSize: 11.5, fontWeight: 700, background: i === paginaMagazzinoClamp ? NAVY : "transparent", color: i === paginaMagazzinoClamp ? "#fff" : MUTED }}>{i + 1}</button>
+              ))}
+              <button onClick={() => setPaginaMagazzino((p) => Math.min(totalePagineMagazzino - 1, p + 1))} disabled={paginaMagazzinoClamp === totalePagineMagazzino - 1} style={{ background: "none", border: "none", cursor: paginaMagazzinoClamp === totalePagineMagazzino - 1 ? "default" : "pointer", opacity: paginaMagazzinoClamp === totalePagineMagazzino - 1 ? 0.35 : 1, display: "flex", color: NAVY }}><IconaChevronDestra size={14} /></button>
+            </div>
+          )}
         </div>
 
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
