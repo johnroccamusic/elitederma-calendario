@@ -393,6 +393,14 @@ function IconaPin({ size = 15, color = GOLD }) {
     </svg>
   );
 }
+function IconaEdificioErp({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="3" width="16" height="18" rx="1.5" />
+      <path d="M9 21v-4h6v4M8 7h1M8 11h1M15 7h1M15 11h1" />
+    </svg>
+  );
+}
 function IconaDataAccento({ size = 26, color = GOLD }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -23711,18 +23719,25 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
           return (
             <div key={l.id} style={{ ...cardStyle, marginBottom: 16, padding: 18 }}>
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
-                <div>
-                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{toTitleCase(l.nome_sede || l.nome || "—")}</div>
-                  {(l.indirizzo || (l.nome_sede && l.nome)) && (
-                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
-                      {[l.indirizzo, l.nome_sede ? toTitleCase(l.nome) : null].filter(Boolean).join(" · ")}
-                    </div>
-                  )}
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: BG, color: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <IconaEdificioErp size={18} />
+                  </div>
+                  <div>
+                    <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{toTitleCase(l.nome_sede || l.nome || "—")}</div>
+                    {(l.indirizzo || (l.nome_sede && l.nome)) && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, ...fontBody, fontSize: 12.5, color: MUTED }}>
+                        <IconaPin size={12} color={MUTED} />
+                        {[l.indirizzo, l.nome_sede ? toTitleCase(l.nome) : null].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <button
                   onClick={() => setInventarioApertoId((v) => (v === l.id ? null : l.id))}
-                  style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: inventarioApertoId === l.id ? "#fff" : NAVY, background: inventarioApertoId === l.id ? NAVY : "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                  style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: inventarioApertoId === l.id ? "#fff" : NAVY, background: inventarioApertoId === l.id ? NAVY : "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
                 >
+                  <IconaScatolaErp size={13} />
                   Inventario
                 </button>
               </div>
@@ -23735,15 +23750,25 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
 
               {inventarioApertoId !== l.id && (
                 <>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Consumabili</div>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Consumabili</div>
                   {consumabiliSede.length === 0 ? (
                     <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuno dichiarato ancora.</div>
                   ) : (
-                    <div style={{ marginBottom: 14 }}>
+                    <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 8 }}>
                       {consumabiliSede.map((r) => (
-                        <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                          <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
-                          <div style={{ display: "flex", gap: 3 }}>
+                        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+                          <div style={{ minWidth: 52, padding: "6px 4px", borderRadius: 10, border: `1px solid #EAD9B0`, background: "#FBF3E0", textAlign: "center", flexShrink: 0 }}>
+                            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: GOLD, lineHeight: 1.1 }}>{r.quantita}</div>
+                            <div style={{ ...fontBody, fontSize: 9, color: GOLD, textTransform: "uppercase", letterSpacing: 0.3 }}>pezz{r.quantita === 1 ? "o" : "i"}</div>
+                          </div>
+                          <div style={{ width: 38, height: 38, borderRadius: 8, background: BG, color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <IconaScatolaErp size={16} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"}</div>
+                            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Confezione da {r.quantita} pezz{r.quantita === 1 ? "o" : "i"}</div>
+                          </div>
+                          <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
                             {[1, 2, 3, 4, 5].map((n) => (
                               <span key={n} style={{ width: 12, height: 12, borderRadius: "50%", border: `1px solid ${GOLD}`, background: n <= r.livello ? GOLD : "transparent", display: "inline-block" }} />
                             ))}
@@ -23753,14 +23778,25 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
                     </div>
                   )}
 
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Attrezzature</div>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Attrezzature</div>
                   {attrezzatureSede.length === 0 ? (
                     <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuna dichiarata ancora.</div>
-                  ) : attrezzatureSede.map((r) => (
-                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-                      <span>{attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "—"}</span><span>{r.quantita}x</span>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {attrezzatureSede.map((r) => (
+                        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
+                          <div style={{ minWidth: 52, padding: "6px 4px", borderRadius: 10, border: `1px solid #EAD9B0`, background: "#FBF3E0", textAlign: "center", flexShrink: 0 }}>
+                            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: GOLD, lineHeight: 1.1 }}>{r.quantita}</div>
+                            <div style={{ ...fontBody, fontSize: 9, color: GOLD, textTransform: "uppercase", letterSpacing: 0.3 }}>pezz{r.quantita === 1 ? "o" : "i"}</div>
+                          </div>
+                          <div style={{ width: 38, height: 38, borderRadius: 8, background: BG, color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                            <IconaScatolaErp size={16} />
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "—"}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </>
               )}
 
@@ -23791,9 +23827,9 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
 function RigaSegnalazioneMagazzino({ segnalazione, fonte, onSalvaNota }) {
   const [nota, setNota] = useState(segnalazione.nota_risoluzione || "");
   return (
-    <div style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>{segnalazione.testo}</div>
-      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2, marginBottom: 6 }}>
+    <div style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, borderLeft: `3px solid ${GOLD}` }}>
+      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{segnalazione.testo}</div>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 2, marginBottom: 8 }}>
         {new Date(segnalazione.ts).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}{fonte ? ` · ${fonte}` : ""}
       </div>
       <input
