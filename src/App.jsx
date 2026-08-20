@@ -18165,7 +18165,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon }) {
+function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -18189,6 +18189,7 @@ function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onAp
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(3, 1fr)", gap: isMobile ? 8 : 14 }}>
           <TileHome title="Gestione magazzino" descrizione="Controlla giacenze, movimenti e disponibilità dei prodotti." Icona={IconaTileGestioneMagazzino} onClick={onApriMagazzino} />
+          <TileHome title="Magazzini esterni" descrizione="Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master." Icona={IconaTileLogistica} onClick={onApriMagazziniEsterni} />
           <TileHome title="Gestione shop" descrizione="Gestisci prodotti, ordini, clienti e impostazioni dello shop." Icona={IconaTileGestioneShop} onClick={onApriGestioneShop} />
           <TileHome title="Vendite Shop Online" descrizione="Ordini e performance dello shop online WooCommerce." Icona={IconaTileVenditeShop} onClick={onApriVenditeShop} />
           <TileHome title="Vendite al banco" descrizione="Tutte le vendite fatte con il POS interno." Icona={IconaTilePos} onClick={onApriVenditeAlBanco} />
@@ -22859,6 +22860,77 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           ricarica={ricarica}
         />
       )}
+    </div>
+  );
+}
+
+// "Magazzini esterni": una scheda per ogni sede con un magazzino
+// locale (location.magazzino_locale), sola lettura — Consumabili e
+// Attrezzature restano gli unici due dati fisicamente presenti in sede,
+// e si aggiornano solo da dove vengono dichiarati (Inventario Master a
+// fine corso), mai da qui
+function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventarioSede, prodottiShop, costiSottocategorie, onBack }) {
+  const isMobile = useIsMobile();
+  const sediConMagazzino = (location || []).filter((l) => l.magazzino_locale).sort((a, b) => (a.nome_sede || a.nome || "").localeCompare(b.nome_sede || b.nome || ""));
+  const attrezzatureCatalogo = costiSottocategorie || [];
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Magazzini esterni</div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
+          Cosa c'è fisicamente in ogni sede: si aggiorna da solo con gli inventari che le master dichiarano a fine corso.
+        </div>
+
+        {sediConMagazzino.length === 0 ? (
+          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>
+            Nessuna sede è segnata come "con magazzino locale" (Gestione Location).
+          </div>
+        ) : sediConMagazzino.map((l) => {
+          const consumabiliSede = (magazzinoLocaleConsumabili || []).filter((c) => c.location_id === l.id);
+          const attrezzatureSede = (inventarioSede || []).filter((r) => r.location_id === l.id && r.tipo === "attrezzatura" && r.quantita > 0);
+          return (
+            <div key={l.id} style={{ ...cardStyle, marginBottom: 16, padding: 18 }}>
+              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{toTitleCase(l.nome_sede || l.nome || "—")}</div>
+              {(l.indirizzo || (l.nome_sede && l.nome)) && (
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+                  {[l.indirizzo, l.nome_sede ? toTitleCase(l.nome) : null].filter(Boolean).join(" · ")}
+                </div>
+              )}
+
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Consumabili</div>
+              {consumabiliSede.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuno dichiarato ancora.</div>
+              ) : (
+                <div style={{ marginBottom: 14 }}>
+                  {consumabiliSede.map((r) => (
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                      <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
+                      <div style={{ display: "flex", gap: 3 }}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <span key={n} style={{ width: 12, height: 12, borderRadius: "50%", border: `1px solid ${GOLD}`, background: n <= r.livello ? GOLD : "transparent", display: "inline-block" }} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Attrezzature</div>
+              {attrezzatureSede.length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna dichiarata ancora.</div>
+              ) : attrezzatureSede.map((r) => (
+                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
+                  <span>{attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "—"}</span><span>{r.quantita}x</span>
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -32074,6 +32146,7 @@ export default function App() {
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
+    magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
     catalogocategoriecosti: ["costi_categorie", "costi_sottocategorie", "spese", "costi_soglie_allerta"],
@@ -32461,6 +32534,7 @@ export default function App() {
   function apriGestioneLocation() { setView("gestionelocation"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
+  function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
   function apriGestioneShop() { setProdottoDaAprireInShop(null); apriViewProtetta("gestioneshop"); }
   function apriGestioneShopSuProdotto(prodottoId) { setProdottoDaAprireInShop(prodottoId); apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -32939,6 +33013,7 @@ export default function App() {
           onApriClassificazioneVoci={apriClassificazioneVoci}
           onApriCrmShop={apriCrmShop}
           onApriGeneraCoupon={apriGeneraCoupon}
+          onApriMagazziniEsterni={apriMagazziniEsterni}
         />
       )}
 
@@ -33018,6 +33093,13 @@ export default function App() {
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           onModificaProdotto={apriGestioneShopSuProdotto}
+        />
+      )}
+
+      {view === "magazzinoesterni" && (
+        <PaginaMagazziniEsterni
+          location={location} magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioSede={inventarioSede}
+          prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie} onBack={() => setView("magazzinoshop")}
         />
       )}
 
