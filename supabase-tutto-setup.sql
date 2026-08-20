@@ -3563,3 +3563,31 @@ alter table public.logistica_kit_edizioni
   add column if not exists riserva_per_kit jsonb not null default '{}'::jsonb;
 
 notify pgrst, 'reload schema';
+
+
+-- 132) Logistica prodotti / Inventario Master: "Consulenze" e Prodotti mancanti
+-- ---------------------------------------------------------
+-- "Consulenze": nuova sezione in Preparazione kit ("+Aggiungi", filtro
+-- sui prodotti che iniziano per "Consulenza") e nell'Inventario Master
+-- (colonna sinistra, dopo Attrezzature). Ogni consulenza spedita è una
+-- riga indipendente — lo stesso prodotto spedito due volte fa due righe
+-- distinte, ciascuna col proprio livello di riempimento a 5 pallini —
+-- quindi un array e non una mappa per prodotto: nuova colonna
+-- consulenze_edizione, [{ id, prodotto_id, livello }]. Additiva pura.
+--
+-- "Prodotti aperti" (Inventario Master) rinominato "Prodotti mancanti":
+-- ora attinge solo dai prodotti davvero spediti per quell'edizione
+-- (stessa lista già usata da "Prodotti interi"), non più da tutto il
+-- magazzino filtrato per il flag "rientro obbligatorio se aperto". La
+-- dichiarazione della master scrive nel campo rientro_prodotti_aperti
+-- (già esistente, mai scritto finora) invece che direttamente nella
+-- tabella prodotti_aperti_magazzino: diventa un ammanco vero e proprio
+-- solo quando Raf conferma il rientro da Logistica prodotti (stesso
+-- meccanismo già in uso per "Prodotti interi", solo mai collegato dal
+-- lato della master). Nessuna nuova colonna richiesta per questa parte.
+-- ---------------------------------------------------------
+
+alter table public.logistica_kit_edizioni
+  add column if not exists consulenze_edizione jsonb not null default '[]'::jsonb;
+
+notify pgrst, 'reload schema';
