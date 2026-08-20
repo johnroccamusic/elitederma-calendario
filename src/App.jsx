@@ -5468,10 +5468,6 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: statoViaggio.colore }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: statoViaggio.colore }} />
-          {statoViaggio.etichetta}
-        </div>
       </div>
 
       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -5479,7 +5475,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
           <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{iscrittiEdizione.length}</span>
           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>Allievi totali</span>
         </div>
-        <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
+        <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} mostraTotale={false} />
       </div>
 
       {loc && (
@@ -5497,10 +5493,17 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         </div>
       )}
 
-      {(biglietti.length > 0 || hotelAssociato) && (
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Dati di viaggio</div>
+      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Dati di viaggio</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: statoViaggio.colore }}>
+            <span style={{ width: 8, height: 8, borderRadius: "50%", background: statoViaggio.colore }} />
+            {statoViaggio.etichetta}
+          </div>
+        </div>
 
+        {(biglietti.length > 0 || hotelAssociato) && (
+          <>
           {biglietti.length > 0 && (
             <div style={{ marginBottom: hotelAssociato ? 12 : 0 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti scaricabili</div>
@@ -5537,8 +5540,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               </div>
             </div>
           )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {apribile && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
@@ -27684,13 +27688,13 @@ function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riserva
 // riepilogo "2 KIT PRO / 1 KIT BASE / 3 KIT TOTALI": quanti iscritti di
 // questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
 // riusato sia nella riga del corso sia in cima a "Preparazione kit"
-function RiepilogoKitPacchetti({ iscrittiEdizione, style }) {
+function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true }) {
   const conteggio = {};
   iscrittiEdizione.forEach((i) => { if (i.pacchetto_kit) conteggio[i.pacchetto_kit] = (conteggio[i.pacchetto_kit] || 0) + 1; });
   const voci = Object.entries(conteggio).sort((a, b) => b[1] - a[1]);
   if (voci.length === 0) return null;
   const totale = voci.reduce((s, [, n]) => s + n, 0);
-  const righe = [...voci.map(([nome, n]) => [n, `KIT ${nome.toUpperCase()}`]), [totale, "KIT TOTALI"]];
+  const righe = [...voci.map(([nome, n]) => [n, `KIT ${nome.toUpperCase()}`]), ...(mostraTotale ? [[totale, "KIT TOTALI"]] : [])];
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 5, ...style }}>
       {righe.map(([n, etichetta], idx) => (
