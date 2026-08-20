@@ -24605,6 +24605,19 @@ async function importaDatiCondivisi(masterRec, venditoreRec) {
   if (Object.keys(versoMaster).length > 0) await supabase.from("master").update(versoMaster).eq("id", masterRec.id);
   if (Object.keys(versoVenditore).length > 0) await supabase.from("venditori").update(versoVenditore).eq("id", venditoreRec.id);
 }
+// finché una master e un venditore restano collegati, i campi condivisi
+// vanno sempre allineati: non solo un import una tantum al momento del
+// collegamento, ma anche ogni modifica successiva su uno dei due lati —
+// sono la stessa persona, un dato come il telefono non può restare
+// diverso fra le due schede. Propaga SOLO i campi della lista condivisa
+// (mai, ad es., diploma_gia_firmato o i corsi, che restano personali)
+async function propagaSeCollegato(tabellaOpposta, idOpposto, campi) {
+  if (!idOpposto) return;
+  const daPropagare = {};
+  Object.keys(campi).forEach((campo) => { if (CAMPI_CONDIVISI_MASTER_VENDITORE.includes(campo)) daPropagare[campo] = campi[campo]; });
+  if (Object.keys(daPropagare).length === 0) return;
+  await supabase.from(tabellaOpposta).update(daPropagare).eq("id", idOpposto);
+}
 
 // "Gestione Master": elenco master a sinistra (ricerca, filtro,
 // paginazione) + scheda dettagliata a destra con tab Corsi
@@ -24681,7 +24694,8 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     setMasterOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), [campo]: valore } }));
     const { error } = await supabase.from("master").update({ [campo]: valore }).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["master"]);
+    await propagaSeCollegato("venditori", selezionato?.venditore_id, { [campo]: valore });
+    ricarica(["master", "venditori"]);
   }
 
   useEffect(() => {
@@ -24761,7 +24775,8 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     if (applicaOverride !== undefined ? applicaOverride : applicaClassATutteMaster) {
       await supabase.from("master").update(classPayload).neq("id", selezionatoId);
     }
-    ricarica(["master"]);
+    await propagaSeCollegato("venditori", selezionato?.venditore_id, campi);
+    ricarica(["master", "venditori"]);
   }
   function aggiornaClassMod(campo, valore) {
     setClassMod((prev) => {
@@ -24781,7 +24796,8 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     const { error } = await supabase.from("master").update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
     setCaricandoFoto(false);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["master"]);
+    await propagaSeCollegato("venditori", selezionato?.venditore_id, { foto_url: urlData.publicUrl });
+    ricarica(["master", "venditori"]);
   }
   async function aggiungiCorso() {
     if (!corsoScelto || !selezionatoId) return;
@@ -24829,7 +24845,8 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     if ((selezionato?.note || "") === note.trim()) return;
     const { error } = await supabase.from("master").update({ note: note.trim() || null }).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["master"]);
+    await propagaSeCollegato("venditori", selezionato?.venditore_id, { note: note.trim() || null });
+    ricarica(["master", "venditori"]);
   }
   async function caricaContratto(file) {
     if (!file || !selezionatoId) return;
@@ -25271,7 +25288,8 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     setVenditoreOverride((m) => ({ ...m, [selezionatoId]: { ...(m[selezionatoId] || {}), [campo]: valore } }));
     const { error } = await supabase.from("venditori").update({ [campo]: valore }).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["venditori"]);
+    await propagaSeCollegato("master", masterCollegataAttuale?.id, { [campo]: valore });
+    ricarica(["venditori", "master"]);
   }
 
   // collegamento a una master che è la stessa persona: la scrittura va
@@ -25338,7 +25356,8 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     if (applicaOverride !== undefined ? applicaOverride : applicaClassATuttiVenditori) {
       await supabase.from("venditori").update(classPayload).neq("id", selezionatoId);
     }
-    ricarica(["venditori"]);
+    await propagaSeCollegato("master", masterCollegataAttuale?.id, campi);
+    ricarica(["venditori", "master"]);
   }
   function aggiornaClassMod(campo, valore) {
     setClassMod((prev) => {
@@ -25358,13 +25377,15 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     const { error } = await supabase.from("venditori").update({ foto_url: urlData.publicUrl }).eq("id", selezionatoId);
     setCaricandoFoto(false);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["venditori"]);
+    await propagaSeCollegato("master", masterCollegataAttuale?.id, { foto_url: urlData.publicUrl });
+    ricarica(["venditori", "master"]);
   }
   async function salvaNote() {
     if ((selezionato?.note || "") === note.trim()) return;
     const { error } = await supabase.from("venditori").update({ note: note.trim() || null }).eq("id", selezionatoId);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["venditori"]);
+    await propagaSeCollegato("master", masterCollegataAttuale?.id, { note: note.trim() || null });
+    ricarica(["venditori", "master"]);
   }
   async function caricaDocumento(file) {
     if (!file || !selezionatoId) return;
