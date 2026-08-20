@@ -22587,6 +22587,7 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
 const COLONNE_MAGAZZINO = [
   { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 220 },
   { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 140 },
+  { label: "Unità di misura", campo: null, larghezza: 90 },
   { label: "Stock totale", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 100 },
   { label: "In magazzino", campo: null, larghezza: 110 },
   { label: "Shop online", campo: null, larghezza: 110 },
@@ -22786,6 +22787,7 @@ function GraficoTrendBarre({ voci }) {
 function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, sincronizzandoMagazzini }) {
   const [prezzo, setPrezzo] = useState(p.prezzo_vendita != null ? String(p.prezzo_vendita) : "");
   const [costo, setCosto] = useState(p.costo_acquisto != null ? String(p.costo_acquisto) : "");
+  const [unitaMisura, setUnitaMisura] = useState(p.unita_misura || "");
   const [scortaMin, setScortaMin] = useState(p.scorta_minima != null ? String(p.scorta_minima) : "");
   const [stockTotaleInput, setStockTotaleInput] = useState(String(p.stockTotale));
 
@@ -22808,6 +22810,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
     if (nuovo === p.costo_acquisto) return;
     const { error } = await supabase.from("prodotti_shop").update({ costo_acquisto: nuovo }).eq("id", p.id);
     if (error) { window.alert("Errore: " + error.message); setCosto(p.costo_acquisto != null ? String(p.costo_acquisto) : ""); return; }
+    ricarica(["prodotti_shop"]);
+  }
+  async function salvaUnitaMisura() {
+    const nuovo = unitaMisura.trim() === "" ? null : unitaMisura.trim();
+    if (nuovo === p.unita_misura) return;
+    const { error } = await supabase.from("prodotti_shop").update({ unita_misura: nuovo }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); setUnitaMisura(p.unita_misura || ""); return; }
     ricarica(["prodotti_shop"]);
   }
   async function salvaScortaMin() {
@@ -22865,6 +22874,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
     <tr>
       <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}>{p.nome}</td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 12.5, color: MUTED }}>{p.nomeCategorie || "—"}</td>
+      <td style={tdStyle}>
+        <input style={{ ...cellInputStyle, width: 60 }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
+      </td>
       <td style={tdStyle}>
         <input
           style={{ ...cellInputStyle, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY }}
@@ -23384,33 +23396,95 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
     ricarica(["magazzino_locale_consumabili"]);
   }
 
+  const consumabiliVisti = ricercaConsumabile.trim()
+    ? consumabiliQui.filter((r) => (prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "").toLowerCase().includes(ricercaConsumabile.trim().toLowerCase()))
+    : consumabiliQui;
+  const pezziTotaliConsumabili = consumabiliQui.reduce((s, r) => s + (r.quantita || 0), 0);
+
   return (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ ...cardStyle, marginBottom: 12, padding: 14, background: "#FBFAF6" }}>
-        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Consumabili</div>
-        <div style={labelStyleInv}>Dischetti, rotoli, guanti… con il livello di utilizzo rimasto.</div>
-        <div style={{ position: "relative" }}>
+      <div style={{ ...cardStyle, marginBottom: 12, padding: 18, background: "#fff" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: "#FBF1D9", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <IconaScatolaErp size={22} />
+            </div>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Consumabili</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Dischetti, rotoli, guanti… con il livello di utilizzo rimasto.</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{consumabiliQui.length} prodott{consumabiliQui.length === 1 ? "o" : "i"}</div>
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#FBF1D9", borderRadius: 10, padding: "6px 12px", whiteSpace: "nowrap" }}>{pezziTotaliConsumabili.toLocaleString("it-IT")} pezzi totali</div>
+          </div>
+        </div>
+
+        <div style={{ position: "relative", marginBottom: 16 }}>
           <CampoRicerca value={ricercaConsumabile} onChange={(e) => setRicercaConsumabile(e.target.value)} placeholder="Cerca prodotto…" />
-          {risultatiConsumabile.length > 0 && (
+          {ricercaConsumabile.trim() && risultatiConsumabile.length > 0 && (
             <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, padding: "6px 10px" }}>Aggiungi un nuovo consumabile</div>
               {risultatiConsumabile.map((p) => (
                 <div key={p.id} onClick={() => aggiungiConsumabile(p)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
               ))}
             </div>
           )}
         </div>
+
         {consumabiliQui.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun consumabile dichiarato ancora.</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun consumabile dichiarato ancora.</div>
         ) : (
-          <div style={{ marginTop: 10 }}>
-            {consumabiliQui.map((r) => (
-              <RigaConsumabileLocale
-                key={r.id} riga={r} nome={prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"}
-                onCambiaLivello={(livello) => aggiornaConsumabile(r.id, { livello })}
-                onCambiaQuantita={(quantita) => aggiornaConsumabile(r.id, { quantita })}
-                onRimuovi={() => rimuoviConsumabile(r.id)}
-              />
-            ))}
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+              <thead>
+                <tr style={{ background: "#FAF8F2" }}>
+                  {["Prodotto", "Unità di misura", "Q.tà in magazzino", "Livello di utilizzo", "Azioni"].map((et, i) => (
+                    <th key={et} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 4 ? "right" : "left", padding: "10px 14px", whiteSpace: "nowrap" }}>{et}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {consumabiliVisti.map((r) => {
+                  const nomeProdotto = prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—";
+                  const unita = prodottiShop.find((p) => p.id === r.prodotto_id)?.unita_misura;
+                  return (
+                    <tr key={r.id} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: BG, color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} title="Foto non ancora caricata">
+                            <IconaScatolaErp size={16} />
+                          </div>
+                          <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>{nomeProdotto}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px", ...fontBody, fontSize: 13, color: MUTED }}>{unita || "—"}</td>
+                      <td style={{ padding: "12px 14px", ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>{(r.quantita || 0).toLocaleString("it-IT")}</td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          {[1, 2, 3, 4, 5].map((n) => (
+                            <button key={n} onClick={() => aggiornaConsumabile(r.id, { livello: n === r.livello ? n - 1 : n })} title={`${n}/5`} style={{ width: 14, height: 14, borderRadius: "50%", border: `1px solid ${GOLD}`, background: n <= r.livello ? GOLD : "transparent", cursor: "pointer", padding: 0 }} />
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ padding: "12px 14px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10 }}>
+                          <input
+                            type="number" min="1" value={r.quantita}
+                            onChange={(e) => aggiornaConsumabile(r.id, { quantita: Math.max(1, Number(e.target.value) || 1) })}
+                            style={{ ...inputStyle, width: 60, padding: "5px 7px", fontSize: 12.5 }}
+                          />
+                          <button onClick={() => rimuoviConsumabile(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 16, fontWeight: 700, padding: 4 }}>✕</button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {consumabiliVisti.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: "16px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun consumabile trovato.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
