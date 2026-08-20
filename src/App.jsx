@@ -5955,8 +5955,10 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
 function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, segnalazioniMagazzino, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricercaIntero, setRicercaIntero] = useState("");
+  const [ricercaSciolti, setRicercaSciolti] = useState("");
   const [ricercaAperto, setRicercaAperto] = useState("");
   const [campoInteroAttivo, setCampoInteroAttivo] = useState(false);
+  const [campoScioltiAttivo, setCampoScioltiAttivo] = useState(false);
   const [campoApertoAttivo, setCampoApertoAttivo] = useState(false);
   const [ricercaConsumabile, setRicercaConsumabile] = useState("");
   const [prodottoApertoScelto, setProdottoApertoScelto] = useState(null); // prodotto in attesa di nota (flag SÌ)
@@ -6097,6 +6099,34 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     return mappa;
   }, [rientroInteri, corsiKitProdotti]);
 
+  // "Prodotti sciolti": spediti a questa edizione ma non legati a un kit
+  // specifico (accessori didattica del corso, prodotti extra kit) — non
+  // hanno un kit in cui raggrupparli, si scelgono uno per uno come i
+  // vecchi "Prodotti interi" prima di ragionare per kit
+  const idsProdottiDiKit = useMemo(() => {
+    const ids = new Set();
+    (corsiKitProdotti || []).forEach((r) => { if (r.kit_id && (r.tipo === "kit" || r.tipo === "accessorio")) ids.add(r.prodotto_id); });
+    return ids;
+  }, [corsiKitProdotti]);
+  const prodottiSciolti = prodottiSpediti.filter((p) => !idsProdottiDiKit.has(p.id));
+  const rientroSciolti = statoEdizione?.rientro_prodotti_sciolti || {};
+  function salvaRientroSciolti(nuovoOggetto) {
+    return salvaCampiStatoEdizione({ rientro_prodotti_sciolti: nuovoOggetto });
+  }
+  function aggiungiProdottoSciolto(prodottoId) {
+    setRicercaSciolti("");
+    if (!prodottoId || rientroSciolti[prodottoId] != null) return;
+    salvaRientroSciolti({ ...rientroSciolti, [prodottoId]: 1 });
+  }
+  const risultatiSciolti = prodottiSciolti
+    .filter((p) => rientroSciolti[p.id] == null)
+    .filter((p) => !ricercaSciolti.trim() || p.nome.toLowerCase().includes(ricercaSciolti.trim().toLowerCase()));
+  function rimuoviSciolto(prodottoId) {
+    const resto = { ...rientroSciolti };
+    delete resto[prodottoId];
+    salvaRientroSciolti(resto);
+  }
+
   // "Prodotti mancanti": presi dai kit durante il corso e che non
   // rientreranno in magazzino — stessa lista ristretta di "Prodotti
   // interi" (solo ciò che è stato davvero spedito), con nota
@@ -6194,7 +6224,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     .map((p) => {
       const inviati = inviatiPerProdottoId[p.id] || 0;
       const venduti = vendutiPerProdottoId[p.id] || 0;
-      const rispediti = (rispeditiInteriPerProdotto[p.id] || 0) + (Number(rientroAperti[p.id]?.quantita) || 0);
+      const rispediti = (rispeditiInteriPerProdotto[p.id] || 0) + (Number(rientroSciolti[p.id]) || 0) + (Number(rientroAperti[p.id]?.quantita) || 0);
       const restano = restanoPerProdottoId[p.id] || 0;
       const daGiustificare = Math.max(0, inviati - venduti - rispediti - restano);
       const giaGiustificato = (inventarioAmmanchi || []).filter((a) => a.corso_data_id === corsoData?.id && a.prodotto_id === p.id).reduce((s, a) => s + (a.quantita || 0), 0);
@@ -6315,7 +6345,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
           <div>
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Prodotti che sto per rispedire</div>
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti interi</div>
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Kit interi</div>
               <div style={labelStyleInv}>Kit interi spediti da Raf: tornano in magazzino così come sono.</div>
               <div style={{ position: "relative" }}>
                 <input
@@ -6338,6 +6368,34 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
                   key={kitId} nome={nomeKit(kitId)} quantita={q}
                   onQuantita={(v) => salvaRientroInteri({ ...rientroInteri, [kitId]: v })}
                   onRimuovi={() => rimuoviIntero(kitId)}
+                />
+              ))}
+            </div>
+
+            <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti inviati sciolti</div>
+              <div style={labelStyleInv}>Non appartengono a un kit (accessori didattica, extra kit): tornano così come sono.</div>
+              <div style={{ position: "relative" }}>
+                <input
+                  style={inputStyle} value={ricercaSciolti} onChange={(e) => setRicercaSciolti(e.target.value)} placeholder="Cerca tra i prodotti spediti…"
+                  onFocus={() => setCampoScioltiAttivo(true)} onBlur={() => setTimeout(() => setCampoScioltiAttivo(false), 150)}
+                />
+                {campoScioltiAttivo && risultatiSciolti.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
+                    {risultatiSciolti.map((p) => (
+                      <div key={p.id} onClick={() => aggiungiProdottoSciolto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div style={{ marginBottom: 10 }} />
+              {Object.keys(rientroSciolti).length === 0 ? (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun prodotto ancora.</div>
+              ) : Object.entries(rientroSciolti).map(([pid, q]) => (
+                <RigaRientroProdotto
+                  key={pid} nome={prodottiShop.find((p) => p.id === pid)?.nome || "—"} quantita={q}
+                  onQuantita={(v) => salvaRientroSciolti({ ...rientroSciolti, [pid]: v })}
+                  onRimuovi={() => rimuoviSciolto(pid)}
                 />
               ))}
             </div>
@@ -28185,16 +28243,20 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // due volte lo stesso magazzino), gli aperti con l'ultima quantità già
   // registrata nel mucchio per QUESTA edizione (l'upsert la sovrascrive sempre)
   const rientroInteri = statoEdizione.rientro_prodotti_interi || {};
+  const rientroSciolti = statoEdizione.rientro_prodotti_sciolti || {};
   const rientroAperti = statoEdizione.rientro_prodotti_aperti || {};
   const interiProcessato = statoEdizione.rientro_interi_processato || {};
+  const scioltiProcessato = statoEdizione.rientro_sciolti_processato || {};
   const apertiPileQui = (prodottiApertiMagazzino || []).filter((r) => r.corso_data_id === corsoData.id);
   // resta nascosta finché la master non preme "Trasmetti inventario"
   // (Inventario Master): prima di allora potrebbe essere a metà lavoro
   const inventarioTrasmesso = !!statoEdizione.inventario_trasmesso_ts;
   const interiDaRientrare = inventarioTrasmesso && Object.keys(rientroInteri).length > 0;
+  const scioltiDaRientrare = inventarioTrasmesso && Object.keys(rientroSciolti).length > 0;
   const apertiDaRientrare = inventarioTrasmesso && Object.keys(rientroAperti).length > 0;
   const rientriDaProcessare =
     Object.entries(rientroInteri).some(([pid, q]) => (q || 0) !== (interiProcessato[pid] || 0)) ||
+    Object.entries(rientroSciolti).some(([pid, q]) => (q || 0) !== (scioltiProcessato[pid] || 0)) ||
     Object.entries(rientroAperti).some(([pid, r]) => (r?.quantita || 0) !== (apertiPileQui.find((a) => a.prodotto_id === pid)?.quantita || 0));
 
   return (
@@ -28363,15 +28425,25 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         </div>
       )}
 
-      {(interiDaRientrare || apertiDaRientrare) && (
+      {(interiDaRientrare || scioltiDaRientrare || apertiDaRientrare) && (
         <div style={{ marginTop: 20 }}>
           <div style={labelStyle}>Materiali da rientrare</div>
           {interiDaRientrare && (
-            <div style={{ marginBottom: apertiDaRientrare ? 10 : 0 }}>
+            <div style={{ marginBottom: (scioltiDaRientrare || apertiDaRientrare) ? 10 : 0 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Kit interi</div>
               {Object.entries(rientroInteri).map(([kitId, q]) => (
                 <div key={kitId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" }}>
                   <span>{nomeKit(kitId)}</span><span>{q || 0}x</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {scioltiDaRientrare && (
+            <div style={{ marginBottom: apertiDaRientrare ? 10 : 0 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Prodotti sciolti</div>
+              {Object.entries(rientroSciolti).map(([pid, q]) => (
+                <div key={pid} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" }}>
+                  <span>{nomeProdotto(pid)}</span><span>{q || 0}x</span>
                 </div>
               ))}
             </div>
@@ -28425,6 +28497,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       kit_speciale_id: null, kit_speciale_per_iscritti: null, kit_speciale_di_riserva: null, kit_speciale_scaricato: 0,
       checklist: {}, accessori_quantita: {}, accessori_scaricati: {}, scarico_per_kit: {},
       gestione_rientro_attiva: false, fase_rientro: null, consulenze_edizione: [],
+      rientro_prodotti_sciolti: {}, rientro_sciolti_processato: {},
     };
   }
   async function salvaCampiEdizione(corsoDataId, campi) {
@@ -28601,9 +28674,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   async function processaRientro(corsoData) {
     const stato = statoDi(corsoData.id);
     const rientroInteri = stato.rientro_prodotti_interi || {};
+    const rientroSciolti = stato.rientro_prodotti_sciolti || {};
     const rientroAperti = stato.rientro_prodotti_aperti || {};
     const processatoAttuale = stato.rientro_interi_processato || {};
+    const scioltiProcessatoAttuale = stato.rientro_sciolti_processato || {};
     const nuovoProcessato = { ...processatoAttuale };
+    const nuovoScioltiProcessato = { ...scioltiProcessatoAttuale };
     const scritture = [];
     const deltaPerProdotto = {};
     Object.entries(rientroInteri).forEach(([kitId, q]) => {
@@ -28615,6 +28691,15 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * delta;
         });
         nuovoProcessato[kitId] = target;
+      }
+    });
+    Object.entries(rientroSciolti).forEach(([prodottoId, q]) => {
+      const target = q || 0;
+      const giaFatto = scioltiProcessatoAttuale[prodottoId] || 0;
+      const delta = target - giaFatto;
+      if (delta !== 0) {
+        deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + delta;
+        nuovoScioltiProcessato[prodottoId] = target;
       }
     });
     Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
@@ -28629,7 +28714,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     }
     if (scritture.length === 0) return;
     await Promise.all(scritture);
-    await salvaCampiEdizione(corsoData.id, { rientro_interi_processato: nuovoProcessato });
+    await salvaCampiEdizione(corsoData.id, { rientro_interi_processato: nuovoProcessato, rientro_sciolti_processato: nuovoScioltiProcessato });
   }
 
   const pileAperti = useMemo(() => {
