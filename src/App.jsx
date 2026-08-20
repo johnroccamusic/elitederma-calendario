@@ -22360,12 +22360,16 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
   const [qtaShop, setQtaShop] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  const [soloOfflineChk, setSoloOfflineChk] = useState(false);
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const haPrezzo = prezzo.trim() !== "";
-  // categoria "solo offline" (Gestisci categorie): anche con un prezzo,
-  // il prodotto non va mai su WooCommerce — il prezzo resta solo per
+  // "solo offline" può venire dalla categoria scelta (forzato, vale per
+  // tutti i prodotti di quella categoria) oppure impostato a mano sul
+  // singolo prodotto: anche con un prezzo, se uno dei due è attivo il
+  // prodotto non va mai su WooCommerce — il prezzo resta solo per
   // valorizzare il magazzino fisico
-  const soloOffline = !!(categorieProdotti || []).find((c) => c.id === categoriaId)?.solo_offline;
+  const categoriaSoloOffline = !!(categorieProdotti || []).find((c) => c.id === categoriaId)?.solo_offline;
+  const soloOffline = categoriaSoloOffline || soloOfflineChk;
   const vaSuWoo = haPrezzo && !soloOffline;
 
   async function crea() {
@@ -22396,12 +22400,12 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
       return;
     }
 
-    // nessun prezzo, oppure categoria "solo offline": prodotto solo
-    // locale, mai su WooCommerce (il prezzo, se c'è, resta comunque
-    // salvato per valorizzare il magazzino)
+    // nessun prezzo, oppure "solo offline": prodotto solo locale, mai su
+    // WooCommerce (il prezzo, se c'è, resta comunque salvato per
+    // valorizzare il magazzino)
     const { data: riga, error: erroreInsert } = await supabase
       .from("prodotti_shop")
-      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, prezzo_vendita: prezzoNum, attivo: true })
+      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, prezzo_vendita: prezzoNum, attivo: true, solo_offline: soloOfflineChk })
       .select().single();
     if (erroreInsert) { setSalvando(false); setMsg("Errore: " + erroreInsert.message); return; }
     if (categoriaId) {
@@ -22423,9 +22427,13 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
           {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.solo_offline ? " (solo offline)" : ""}</option>)}
         </select>
       </Field>
+      <label title={categoriaSoloOffline ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: categoriaSoloOffline ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: categoriaSoloOffline ? MUTED : NAVY, marginBottom: 10 }}>
+        <input type="checkbox" checked={soloOffline} disabled={categoriaSoloOffline} onChange={(e) => setSoloOfflineChk(e.target.checked)} style={{ width: 14, height: 14 }} />
+        Solo offline (mai su WooCommerce, anche con un prezzo)
+      </label>
       {soloOffline && (
         <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
-          Categoria solo offline: il prodotto resta nel magazzino fisico, non viene mai creato su WooCommerce anche con un prezzo.
+          {categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino fisico, non viene creato su WooCommerce.
         </div>
       )}
       <Field label="Prezzo di vendita (lascia vuoto se non è in vendita: materiale di consumo, arredo, altro)">
@@ -22490,14 +22498,21 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["categorie_prodotti"]);
   }
+  // il flag sulla categoria flagga automaticamente TUTTI i prodotti che
+  // ci appartengono (letto come OR fra categoria e prodotto ovunque nel
+  // codice, vedi prodottiVendibili nel POS e ModaleNuovoProdotto): quando
+  // è attivo qui, il flag del singolo prodotto in Gestione magazzino
+  // resta forzato a "true" e non modificabile; disattivandolo qui si
+  // torna a poterlo impostare prodotto per prodotto
   async function toggleEsclusaVenditaDiretta(c) {
     const { error } = await supabase.from("categorie_prodotti").update({ escludi_vendita_diretta: !c.escludi_vendita_diretta }).eq("id", c.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["categorie_prodotti"]);
   }
   // categorie locali (mai su Woo) che restano sempre offline: un
-  // prodotto creato qui non viene mai spedito a WooCommerce, anche con
-  // un prezzo — il prezzo resta solo per valorizzare il magazzino
+  // prodotto creato in questa categoria non viene mai spedito a
+  // WooCommerce, anche con un prezzo — il prezzo resta solo per
+  // valorizzare il magazzino
   async function toggleSoloOffline(c) {
     const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: !c.solo_offline }).eq("id", c.id);
     if (error) { setMsg("Errore: " + error.message); return; }
@@ -22538,7 +22553,7 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
                     Non sul POS
                   </label>
                   {!dalloShop && (
-                    <label title="I prodotti creati in questa categoria non vengono mai spediti a WooCommerce, anche con un prezzo: il prezzo resta solo per valorizzare il magazzino" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
+                    <label title="I prodotti di questa categoria non vengono mai spediti a WooCommerce, anche con un prezzo: il prezzo resta solo per valorizzare il magazzino" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
                       <input type="checkbox" checked={!!c.solo_offline} onChange={() => toggleSoloOffline(c)} style={{ width: 13, height: 13 }} />
                       Solo offline
                     </label>
@@ -22576,6 +22591,8 @@ const COLONNE_MAGAZZINO = [
   { label: "Shop online", campo: null },
   { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc" },
   { label: "Rientro se aperto", campo: null },
+  { label: "Non sul POS", campo: null },
+  { label: "Solo offline", campo: null },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc" },
   { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc" },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc" },
@@ -22806,6 +22823,20 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["prodotti_shop"]);
   }
+  // "Non sul POS" e "Solo offline" possono arrivare anche dalla categoria
+  // (forzatoEscludi/forzatoSoloOffline, vedi PaginaMagazzino): in quel
+  // caso la checkbox qui è bloccata a "true", perché toglierla va fatto
+  // sulla categoria (Gestisci categorie), non sul singolo prodotto
+  async function salvaFlagEscludiVenditaDiretta(checked) {
+    const { error } = await supabase.from("prodotti_shop").update({ escludi_vendita_diretta: checked }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["prodotti_shop"]);
+  }
+  async function salvaFlagSoloOffline(checked) {
+    const { error } = await supabase.from("prodotti_shop").update({ solo_offline: checked }).eq("id", p.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["prodotti_shop"]);
+  }
   // scrivere qui sopra imposta lo STOCK TOTALE desiderato: la differenza
   // rispetto ad oggi va sempre e solo nel magazzino fisico, mai sullo
   // shop online — che quindi resta esattamente quello che è
@@ -22868,6 +22899,12 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       </td>
       <td style={{ ...tdStyle, textAlign: "center" }} title="Se aperto, questo prodotto deve sempre rientrare in sede (inventario post corso)">
         <input type="checkbox" checked={!!p.rientro_obbligatorio_se_aperto} onChange={(e) => salvaFlagRientro(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
+      </td>
+      <td style={{ ...tdStyle, textAlign: "center" }} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
+        <input type="checkbox" checked={p.forzatoEscludi || !!p.escludi_vendita_diretta} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />
+      </td>
+      <td style={{ ...tdStyle, textAlign: "center" }} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
+        <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "3px 9px" }}>
@@ -23042,6 +23079,11 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     const venduto = venditePerNome[chiave] || { quantita: 0, fatturato: 0 };
     const margine = p.costo_acquisto != null && p.prezzo_vendita > 0 ? round1Erp(((p.prezzo_vendita - p.costo_acquisto) / p.prezzo_vendita) * 100) : null;
     const categorieIds = categorieIdPerProdottoId[p.id] || [];
+    // se una delle categorie del prodotto ha il flag attivo, il flag del
+    // prodotto è forzato a "true" e non modificabile da qui (si toglie
+    // dalla categoria in "Gestisci categorie", non dal singolo prodotto)
+    const forzatoEscludi = categorieIds.some((cid) => (categorieProdotti || []).find((c) => c.id === cid)?.escludi_vendita_diretta);
+    const forzatoSoloOffline = categorieIds.some((cid) => (categorieProdotti || []).find((c) => c.id === cid)?.solo_offline);
     // gli spostamenti magazzino<->shop non ancora sincronizzati si vedono
     // già qui (tabella e riquadri in alto), pur restando solo locali: il
     // resto dell'app (POS compreso) continua a vedere i valori veri finché
@@ -23067,6 +23109,8 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       stockTotale,
       sottoScorta: p.scorta_minima != null && stockTotale < p.scorta_minima,
       esaurito: stockTotale <= 0,
+      forzatoEscludi,
+      forzatoSoloOffline,
     };
   });
 
@@ -26740,7 +26784,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   // categorie escluse dalla vendita diretta ("Non sul POS", Gestisci
   // categorie in Magazzino): né la categoria compare nel filtro, né i
-  // suoi prodotti tra quelli vendibili al banco
+  // suoi prodotti tra quelli vendibili al banco — un prodotto può avere
+  // lo stesso flag anche per conto suo (Gestione magazzino, per
+  // prodotto), letto qui in OR con quello della categoria
   const categorieIdEscluseVenditaDiretta = new Set((categorieProdotti || []).filter((c) => c.escludi_vendita_diretta).map((c) => c.id));
   const categorieOrdinate = [...(categorieProdotti || [])].filter((c) => !c.escludi_vendita_diretta).sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
@@ -26750,9 +26796,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   // solo prodotti con un prezzo possono essere venduti al banco: quelli
   // senza (materiali di consumo, arredi…) restano fuori dal POS, così
-  // come quelli con almeno una categoria esclusa dalla vendita diretta
+  // come quelli col flag "Non sul POS" (sul prodotto, o su una delle sue categorie)
   const prodottiVendibili = (prodottiShop || []).filter((p) =>
-    p.attivo !== false && p.prezzo_vendita != null
+    p.attivo !== false && p.prezzo_vendita != null && !p.escludi_vendita_diretta
     && !(categorieIdPerProdottoId[p.id] || []).some((cid) => categorieIdEscluseVenditaDiretta.has(cid))
   );
 
