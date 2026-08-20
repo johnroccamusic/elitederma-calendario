@@ -23286,13 +23286,140 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   );
 }
 
+// pannello di modifica diretta dello stock di UNA sede, richiamabile da
+// "Magazzini esterni" col tasto "Inventario" — stessa identica logica di
+// scrittura di "Inventario Master a fine corso" (PaginaInventarioSede:
+// upsert su inventario_sede per le attrezzature, insert/update/delete su
+// magazzino_locale_consumabili per i consumabili), ma qui NON legata a
+// un corso appena finito: serve per un controllo scorte periodico fatto
+// dall'admin, in qualunque momento — corso_data_id e master_id restano
+// null per distinguere queste righe da una vera dichiarazione di fine
+// corso, pur contando allo stesso modo nei totali (l'upsert per
+// attrezzature usa "location_id,tipo,riferimento", non il corso: la
+// stessa riga si aggiorna comunque)
+function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocategorie, inventarioSede, magazzinoLocaleConsumabili, ricarica }) {
+  const [ricercaConsumabile, setRicercaConsumabile] = useState("");
+  const [ricercaAttrezzatura, setRicercaAttrezzatura] = useState("");
+  const labelStyleInv = { ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 };
+
+  const attrezzatureCatalogo = (costiSottocategorie || [])
+    .filter((sc) => sc.categoria_id === "attrezzature_corsi" && sc.attiva && !sc.automatico)
+    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+  const attrezzatureQui = (inventarioSede || []).filter((r) => r.location_id === locationId && r.tipo === "attrezzatura");
+  const risultatiAttrezzatura = ricercaAttrezzatura.trim()
+    ? attrezzatureCatalogo.filter((sc) => !attrezzatureQui.some((r) => r.riferimento === sc.id) && sc.nome.toLowerCase().includes(ricercaAttrezzatura.trim().toLowerCase()))
+    : [];
+  async function salvaVoce(tipo, riferimento, quantita) {
+    const { error } = await supabase.from("inventario_sede").upsert(
+      { location_id: locationId, tipo, riferimento, quantita, corso_data_id: null, master_id: null },
+      { onConflict: "location_id,tipo,riferimento" }
+    );
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["inventario_sede"]);
+  }
+  async function eliminaVoceInventario(id) {
+    const { error } = await supabase.from("inventario_sede").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["inventario_sede"]);
+  }
+  function aggiungiAttrezzatura(sc) { setRicercaAttrezzatura(""); salvaVoce("attrezzatura", sc.id, 1); }
+
+  const consumabiliQui = (magazzinoLocaleConsumabili || []).filter((r) => r.location_id === locationId);
+  const risultatiConsumabile = ricercaConsumabile.trim()
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && p.nome.toLowerCase().includes(ricercaConsumabile.trim().toLowerCase())).slice(0, 8)
+    : [];
+  async function aggiungiConsumabile(p) {
+    setRicercaConsumabile("");
+    const { error } = await supabase.from("magazzino_locale_consumabili").insert({
+      location_id: locationId, prodotto_id: p.id, quantita: 1, livello: 5, corso_data_id: null, master_id: null,
+    });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["magazzino_locale_consumabili"]);
+  }
+  async function aggiornaConsumabile(id, campi) {
+    const { error } = await supabase.from("magazzino_locale_consumabili").update(campi).eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["magazzino_locale_consumabili"]);
+  }
+  async function rimuoviConsumabile(id) {
+    const { error } = await supabase.from("magazzino_locale_consumabili").delete().eq("id", id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["magazzino_locale_consumabili"]);
+  }
+
+  return (
+    <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...cardStyle, marginBottom: 12, padding: 14, background: "#FBFAF6" }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Consumabili</div>
+        <div style={labelStyleInv}>Dischetti, rotoli, guanti… con il livello di utilizzo rimasto.</div>
+        <div style={{ position: "relative" }}>
+          <CampoRicerca value={ricercaConsumabile} onChange={(e) => setRicercaConsumabile(e.target.value)} placeholder="Cerca prodotto…" />
+          {risultatiConsumabile.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+              {risultatiConsumabile.map((p) => (
+                <div key={p.id} onClick={() => aggiungiConsumabile(p)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        {consumabiliQui.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun consumabile dichiarato ancora.</div>
+        ) : (
+          <div style={{ marginTop: 10 }}>
+            {consumabiliQui.map((r) => (
+              <RigaConsumabileLocale
+                key={r.id} riga={r} nome={prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"}
+                onCambiaLivello={(livello) => aggiornaConsumabile(r.id, { livello })}
+                onCambiaQuantita={(quantita) => aggiornaConsumabile(r.id, { quantita })}
+                onRimuovi={() => rimuoviConsumabile(r.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 14, background: "#FBFAF6" }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Attrezzature</div>
+        <div style={labelStyleInv}>Aggiungi solo quelle davvero presenti in questa sede.</div>
+        <div style={{ position: "relative" }}>
+          <input style={inputStyle} value={ricercaAttrezzatura} onChange={(e) => setRicercaAttrezzatura(e.target.value)} placeholder="Cerca attrezzatura…" />
+          {risultatiAttrezzatura.length > 0 && (
+            <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
+              {risultatiAttrezzatura.map((sc) => (
+                <div key={sc.id} onClick={() => aggiungiAttrezzatura(sc)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{sc.nome}</div>
+              ))}
+            </div>
+          )}
+        </div>
+        {attrezzatureQui.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessuna attrezzatura dichiarata ancora.</div>
+        ) : (
+          <div style={{ marginTop: 10 }}>
+            {attrezzatureQui.map((r) => {
+              const sc = attrezzatureCatalogo.find((c) => c.id === r.riferimento);
+              return (
+                <RigaAttrezzaturaInventario
+                  key={r.id} riga={r} voce={{ id: r.riferimento, nome: sc?.nome || "—" }}
+                  onSalva={(id, q) => salvaVoce("attrezzatura", id, q)}
+                  onRimuovi={() => eliminaVoceInventario(r.id)}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // "Magazzini esterni": una scheda per ogni sede con un magazzino
-// locale (location.magazzino_locale), sola lettura — Consumabili e
-// Attrezzature restano gli unici due dati fisicamente presenti in sede,
-// e si aggiornano solo da dove vengono dichiarati (Inventario Master a
-// fine corso), mai da qui
+// locale (location.magazzino_locale) — Consumabili e Attrezzature sono i
+// due dati fisicamente presenti in sede: si aggiornano da soli con gli
+// inventari di fine corso delle master, oppure a mano in qualunque
+// momento col tasto "Inventario" (PannelloInventarioMagazzino), per un
+// controllo scorte periodico non legato alla fine di un corso
 function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventarioSede, prodottiShop, costiSottocategorie, segnalazioniMagazzino, corsi, corsiDate, master, ricarica, onBack }) {
   const isMobile = useIsMobile();
+  const [inventarioApertoId, setInventarioApertoId] = useState(null);
   const sediConMagazzino = (location || []).filter((l) => l.magazzino_locale).sort((a, b) => (a.nome_sede || a.nome || "").localeCompare(b.nome_sede || b.nome || ""));
   const attrezzatureCatalogo = costiSottocategorie || [];
   function fonteSegnalazione(s) {
@@ -23327,39 +23454,59 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
           const attrezzatureSede = (inventarioSede || []).filter((r) => r.location_id === l.id && r.tipo === "attrezzatura" && r.quantita > 0);
           return (
             <div key={l.id} style={{ ...cardStyle, marginBottom: 16, padding: 18 }}>
-              <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{toTitleCase(l.nome_sede || l.nome || "—")}</div>
-              {(l.indirizzo || (l.nome_sede && l.nome)) && (
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
-                  {[l.indirizzo, l.nome_sede ? toTitleCase(l.nome) : null].filter(Boolean).join(" · ")}
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 14 }}>
+                <div>
+                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{toTitleCase(l.nome_sede || l.nome || "—")}</div>
+                  {(l.indirizzo || (l.nome_sede && l.nome)) && (
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+                      {[l.indirizzo, l.nome_sede ? toTitleCase(l.nome) : null].filter(Boolean).join(" · ")}
+                    </div>
+                  )}
                 </div>
+                <button
+                  onClick={() => setInventarioApertoId((v) => (v === l.id ? null : l.id))}
+                  style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: inventarioApertoId === l.id ? "#fff" : NAVY, background: inventarioApertoId === l.id ? NAVY : "#fff", border: `1px solid ${NAVY}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+                >
+                  Inventario
+                </button>
+              </div>
+              {inventarioApertoId === l.id && (
+                <PannelloInventarioMagazzino
+                  locationId={l.id} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
+                  inventarioSede={inventarioSede} magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} ricarica={ricarica}
+                />
               )}
 
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Consumabili</div>
-              {consumabiliSede.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuno dichiarato ancora.</div>
-              ) : (
-                <div style={{ marginBottom: 14 }}>
-                  {consumabiliSede.map((r) => (
-                    <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                      <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
-                      <div style={{ display: "flex", gap: 3 }}>
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <span key={n} style={{ width: 12, height: 12, borderRadius: "50%", border: `1px solid ${GOLD}`, background: n <= r.livello ? GOLD : "transparent", display: "inline-block" }} />
-                        ))}
-                      </div>
+              {inventarioApertoId !== l.id && (
+                <>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Consumabili</div>
+                  {consumabiliSede.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuno dichiarato ancora.</div>
+                  ) : (
+                    <div style={{ marginBottom: 14 }}>
+                      {consumabiliSede.map((r) => (
+                        <div key={r.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                          <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—"} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
+                          <div style={{ display: "flex", gap: 3 }}>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <span key={n} style={{ width: 12, height: 12, borderRadius: "50%", border: `1px solid ${GOLD}`, background: n <= r.livello ? GOLD : "transparent", display: "inline-block" }} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Attrezzature</div>
+                  {attrezzatureSede.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuna dichiarata ancora.</div>
+                  ) : attrezzatureSede.map((r) => (
+                    <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
+                      <span>{attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "—"}</span><span>{r.quantita}x</span>
                     </div>
                   ))}
-                </div>
+                </>
               )}
-
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Attrezzature</div>
-              {attrezzatureSede.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14 }}>Nessuna dichiarata ancora.</div>
-              ) : attrezzatureSede.map((r) => (
-                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-                  <span>{attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "—"}</span><span>{r.quantita}x</span>
-                </div>
-              ))}
 
               {(() => {
                 const segnalazioniSede = (segnalazioniMagazzino || []).filter((s) => s.location_id === l.id).sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
