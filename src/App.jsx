@@ -6016,13 +6016,23 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
 
   // "Prodotti del corso": merce vendibile davvero inviata a questa
   // edizione (kit scelto + accessori didattica) — unica fonte per
-  // "Prodotti interi"/"Prodotti mancanti" e per la verifica di congruità
+  // "Prodotti mancanti" e per la verifica di congruità
   const statoEdizione = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData?.id) || null;
   const idsSpediti = useMemo(
     () => prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti),
     [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti]
   );
   const prodottiSpediti = idsSpediti.map((id) => prodottiShop.find((p) => p.id === id)).filter(Boolean);
+  // i kit richiesti per questa edizione (uno per pacchetto scelto dagli
+  // iscritti): "Prodotti interi" ragiona per kit intero spedito, non
+  // per singolo prodotto sciolto — un kit intero che torna comprende
+  // sia il contenuto vero e proprio sia gli accessori specifici di quel
+  // kit (es. "Matita marrone" legata a KIT BASE)
+  const kitRichiesti = useMemo(
+    () => kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData?.id), kitDefinizioni || [], corso?.id || null),
+    [iscritti, kitDefinizioni, corso, corsoData]
+  );
+  const nomeKit = (id) => (kitDefinizioni || []).find((k) => k.id === id)?.nome || "—";
   const rientroInteri = statoEdizione?.rientro_prodotti_interi || {};
   const rientroAperti = statoEdizione?.rientro_prodotti_aperti || {};
   const consulenzeEdizione = statoEdizione?.consulenze_edizione || [];
@@ -6042,24 +6052,37 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   function salvaRientroInteri(nuovoOggetto) {
     return salvaCampiStatoEdizione({ rientro_prodotti_interi: nuovoOggetto });
   }
-  function aggiungiInteroProdotto(prodottoId) {
+  // selezionare un kit aggiunge TUTTE le sue unità richieste: se serve
+  // rispedirne solo una parte, la quantità si corregge dopo con lo
+  // stesso input numerico usato per gli altri elenchi
+  function aggiungiKitIntero(kitId) {
     setRicercaIntero("");
-    if (!prodottoId || rientroInteri[prodottoId] != null) return;
-    salvaRientroInteri({ ...rientroInteri, [prodottoId]: 1 });
+    if (!kitId || rientroInteri[kitId] != null) return;
+    salvaRientroInteri({ ...rientroInteri, [kitId]: kitRichiesti[kitId] || 1 });
   }
-  // solo i prodotti davvero spediti a questa edizione (kit scelti +
-  // accessori didattica): non ha senso far rispedire in blocco qualcosa
-  // che Raf non ha mai mandato a questo corso — lista già piccola e
-  // curata, quindi si vede tutta a campo vuoto (come "Consulenze"),
-  // non solo digitando
-  const risultatiIntero = prodottiSpediti
-    .filter((p) => rientroInteri[p.id] == null)
-    .filter((p) => !ricercaIntero.trim() || p.nome.toLowerCase().includes(ricercaIntero.trim().toLowerCase()));
-  function rimuoviIntero(prodottoId) {
+  const risultatiIntero = Object.keys(kitRichiesti)
+    .filter((kitId) => rientroInteri[kitId] == null)
+    .map((kitId) => ({ id: kitId, nome: nomeKit(kitId) }))
+    .filter((k) => !ricercaIntero.trim() || k.nome.toLowerCase().includes(ricercaIntero.trim().toLowerCase()));
+  function rimuoviIntero(kitId) {
     const resto = { ...rientroInteri };
-    delete resto[prodottoId];
+    delete resto[kitId];
     salvaRientroInteri(resto);
   }
+  // espande le quantità di kit interi rientrati nei singoli prodotti che
+  // li compongono (kit + accessori specifici del kit), per la verifica
+  // di congruità che invece ragiona per prodotto — stessa identica
+  // logica di sincronizzaMagazzino/processaRientro in Logistica prodotti
+  const rispeditiInteriPerProdotto = useMemo(() => {
+    const mappa = {};
+    Object.entries(rientroInteri).forEach(([kitId, qtaKit]) => {
+      if (!qtaKit) return;
+      (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && (r.tipo === "kit" || r.tipo === "accessorio")).forEach((r) => {
+        mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + r.quantita * qtaKit;
+      });
+    });
+    return mappa;
+  }, [rientroInteri, corsiKitProdotti]);
 
   // "Prodotti mancanti": presi dai kit durante il corso e che non
   // rientreranno in magazzino — stessa lista ristretta di "Prodotti
@@ -6158,7 +6181,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     .map((p) => {
       const inviati = inviatiPerProdottoId[p.id] || 0;
       const venduti = vendutiPerProdottoId[p.id] || 0;
-      const rispediti = (Number(rientroInteri[p.id]) || 0) + (Number(rientroAperti[p.id]?.quantita) || 0);
+      const rispediti = (rispeditiInteriPerProdotto[p.id] || 0) + (Number(rientroAperti[p.id]?.quantita) || 0);
       const restano = restanoPerProdottoId[p.id] || 0;
       const daGiustificare = Math.max(0, inviati - venduti - rispediti - restano);
       const giaGiustificato = (inventarioAmmanchi || []).filter((a) => a.corso_data_id === corsoData?.id && a.prodotto_id === p.id).reduce((s, a) => s + (a.quantita || 0), 0);
@@ -6185,10 +6208,12 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Inventario {corso?.nome || "—"}</div>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>
+            Inventario {corso?.nome || "—"} {toTitleCase(loc?.nome || "—")} ({fmtDataCompatta(corsoData.data_inizio, corsoData.data_fine)})
+          </div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
-          {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} — rendiconta cosa hai venduto, cosa rispedisci e cosa resta in magazzino locale.
+          Rendiconta cosa hai venduto, cosa rispedisci e cosa resta in magazzino locale.
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, alignItems: "flex-start" }}>
@@ -6278,28 +6303,28 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Prodotti che sto per rispedire</div>
             <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti interi</div>
-              <div style={labelStyleInv}>Tornano in magazzino così come sono.</div>
+              <div style={labelStyleInv}>Kit interi spediti da Raf: tornano in magazzino così come sono.</div>
               <div style={{ position: "relative" }}>
                 <input
-                  style={inputStyle} value={ricercaIntero} onChange={(e) => setRicercaIntero(e.target.value)} placeholder="Cerca tra i prodotti spediti…"
+                  style={inputStyle} value={ricercaIntero} onChange={(e) => setRicercaIntero(e.target.value)} placeholder="Cerca tra i kit spediti…"
                   onFocus={() => setCampoInteroAttivo(true)} onBlur={() => setTimeout(() => setCampoInteroAttivo(false), 150)}
                 />
                 {campoInteroAttivo && risultatiIntero.length > 0 && (
                   <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
-                    {risultatiIntero.map((p) => (
-                      <div key={p.id} onClick={() => aggiungiInteroProdotto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
+                    {risultatiIntero.map((k) => (
+                      <div key={k.id} onClick={() => aggiungiKitIntero(k.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{k.nome}</div>
                     ))}
                   </div>
                 )}
               </div>
               <div style={{ marginBottom: 10 }} />
               {Object.keys(rientroInteri).length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun prodotto ancora.</div>
-              ) : Object.entries(rientroInteri).map(([pid, q]) => (
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit ancora.</div>
+              ) : Object.entries(rientroInteri).map(([kitId, q]) => (
                 <RigaRientroProdotto
-                  key={pid} nome={prodottiShop.find((p) => p.id === pid)?.nome || "—"} quantita={q}
-                  onQuantita={(v) => salvaRientroInteri({ ...rientroInteri, [pid]: v })}
-                  onRimuovi={() => rimuoviIntero(pid)}
+                  key={kitId} nome={nomeKit(kitId)} quantita={q}
+                  onQuantita={(v) => salvaRientroInteri({ ...rientroInteri, [kitId]: v })}
+                  onRimuovi={() => rimuoviIntero(kitId)}
                 />
               ))}
             </div>
@@ -28138,11 +28163,11 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   }
 
   // "Materiali da rientrare": quello che la master ha dichiarato di
-  // rispedire (Inventario di sede > "Materiali che vengono rispediti") —
-  // i prodotti interi si confrontano con la stessa baseline "già
-  // applicato" del resto (mai ripristinare due volte lo stesso
-  // magazzino), gli aperti con l'ultima quantità già registrata nel
-  // mucchio per QUESTA edizione (l'upsert la sovrascrive sempre)
+  // rispedire (Inventario di sede > "Prodotti interi") — ora per KIT
+  // intero, non più per singolo prodotto sciolto: i kit si confrontano
+  // con la stessa baseline "già applicato" del resto (mai ripristinare
+  // due volte lo stesso magazzino), gli aperti con l'ultima quantità già
+  // registrata nel mucchio per QUESTA edizione (l'upsert la sovrascrive sempre)
   const rientroInteri = statoEdizione.rientro_prodotti_interi || {};
   const rientroAperti = statoEdizione.rientro_prodotti_aperti || {};
   const interiProcessato = statoEdizione.rientro_interi_processato || {};
@@ -28320,10 +28345,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           <div style={labelStyle}>Materiali da rientrare</div>
           {interiDaRientrare && (
             <div style={{ marginBottom: apertiDaRientrare ? 10 : 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Prodotti interi</div>
-              {Object.entries(rientroInteri).map(([pid, q]) => (
-                <div key={pid} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" }}>
-                  <span>{nomeProdotto(pid)}</span><span>{q || 0}x</span>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Kit interi</div>
+              {Object.entries(rientroInteri).map(([kitId, q]) => (
+                <div key={kitId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" }}>
+                  <span>{nomeKit(kitId)}</span><span>{q || 0}x</span>
                 </div>
               ))}
             </div>
@@ -28539,10 +28564,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     }
     salvaCampiEdizione(corsoData.id, { fase_rientro: faseTarget });
   }
-  // "Prodotti rientrati": i prodotti interi dichiarati dalla master
+  // "Prodotti rientrati": i kit interi dichiarati dalla master
   // (Inventario di sede) ripristinano la giacenza per la sola
   // DIFFERENZA rispetto a quanto già applicato (stesso principio di
-  // sincronizzaMagazzino); i prodotti mancanti non toccano la giacenza,
+  // sincronizzaMagazzino) — un kit intero si espande nei singoli
+  // prodotti che lo compongono (kit + accessori specifici di quel kit),
+  // accumulati per prodotto perché due kit diversi potrebbero condividere
+  // lo stesso articolo; i prodotti mancanti non toccano la giacenza,
   // qui è dove diventano un ammanco vero — finiscono/si aggiornano nel
   // mucchio "prodotti_aperti_magazzino" per questa edizione, con la nota
   // scritta dalla master (l'upsert riflette sempre l'ultimo valore
@@ -28554,15 +28582,21 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     const processatoAttuale = stato.rientro_interi_processato || {};
     const nuovoProcessato = { ...processatoAttuale };
     const scritture = [];
-    Object.entries(rientroInteri).forEach(([prodottoId, q]) => {
+    const deltaPerProdotto = {};
+    Object.entries(rientroInteri).forEach(([kitId, q]) => {
       const target = q || 0;
-      const giaFatto = processatoAttuale[prodottoId] || 0;
+      const giaFatto = processatoAttuale[kitId] || 0;
       const delta = target - giaFatto;
       if (delta !== 0) {
-        const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-        if (prodotto) scritture.push(supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId));
-        nuovoProcessato[prodottoId] = target;
+        corsiKitProdotti.filter((r) => r.kit_id === kitId && (r.tipo === "kit" || r.tipo === "accessorio")).forEach((r) => {
+          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * delta;
+        });
+        nuovoProcessato[kitId] = target;
       }
+    });
+    Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
+      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+      if (prodotto) scritture.push(supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId));
     });
     const righeAperti = Object.entries(rientroAperti).map(([prodottoId, r]) => ({
       prodotto_id: prodottoId, corso_data_id: corsoData.id, quantita: r?.quantita || 0, nota: r?.nota || null, stato: "da_valutare",
