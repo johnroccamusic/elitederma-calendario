@@ -4605,14 +4605,28 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
 
 // ---------- Dashboard venditori ----------
 // tasto "pillola" per le tab (In programmazione/Archivio, Elenco/Calendario)
-function TabPillola({ attivo, onClick, children, compatto }) {
+// "urgente" (es. "Da pagare" con almeno una spesa scoperta) sovrasta il
+// colore normale con un rosso lampeggiante, per farsi notare anche fra
+// tante altre pillole — usato solo dove esplicitamente richiesto, il
+// resto delle TabPillola dell'app non cambia
+function TabPillola({ attivo, onClick, children, compatto, urgente }) {
   return (
-    <button
-      onClick={onClick}
-      style={{ ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 600, padding: compatto ? "7px 8px" : "9px 14px", borderRadius: 16, border: attivo ? "none" : `1px solid ${CREAM_BORDER}`, background: attivo ? NAVY : "#fff", color: attivo ? "#fff" : NAVY, cursor: "pointer", display: "flex", alignItems: "center", gap: compatto ? 3 : 6, whiteSpace: "nowrap", flexShrink: 0 }}
-    >
-      {children}
-    </button>
+    <>
+      {urgente && <style>{`@keyframes lampeggiaTabPillola { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>}
+      <button
+        onClick={onClick}
+        style={{
+          ...fontBody, fontSize: compatto ? 11 : 13, fontWeight: 600, padding: compatto ? "7px 8px" : "9px 14px", borderRadius: 16,
+          border: urgente || attivo ? "none" : `1px solid ${CREAM_BORDER}`,
+          background: urgente ? "#C0392B" : attivo ? NAVY : "#fff",
+          color: urgente || attivo ? "#fff" : NAVY,
+          cursor: "pointer", display: "flex", alignItems: "center", gap: compatto ? 3 : 6, whiteSpace: "nowrap", flexShrink: 0,
+          animation: urgente ? "lampeggiaTabPillola 1.1s ease-in-out infinite" : "none",
+        }}
+      >
+        {children}
+      </button>
+    </>
   );
 }
 
@@ -21363,7 +21377,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
         {tab === "passivo" && (
           <div>
             <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <TabPillola attivo={subTabPassivo === "dapagare"} onClick={() => setSubTabPassivo("dapagare")}>Da pagare ({daPagare.length})</TabPillola>
+              <TabPillola attivo={subTabPassivo === "dapagare"} onClick={() => setSubTabPassivo("dapagare")} urgente={daPagare.length > 0}>Da pagare ({daPagare.length})</TabPillola>
               <TabPillola attivo={subTabPassivo === "evase"} onClick={() => setSubTabPassivo("evase")}>Evase ({speseEvase.length})</TabPillola>
               <button onClick={onApriNuovaSpesaDaPagare} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto" }}>
                 + Nuova spesa da pagare
