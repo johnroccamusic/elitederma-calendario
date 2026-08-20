@@ -12231,9 +12231,15 @@ function CampoRicerca({ value, onChange, placeholder, style }) {
 // ma l'area attorno accetta anche un file trascinato dal Finder/Explorer.
 // "style" va sul contenitore (mantiene lo stesso ingombro/aspetto di prima
 // nei layout flex esistenti): l'input vero dentro resta trasparente e
-// riempie il contenitore
+// riempie il contenitore.
+// Un file trascinato (a differenza di uno scelto col click) aggiorna solo
+// lo stato React: l'etichetta nativa del browser accanto al tasto resta
+// scritta "Nessun file selezionato" perché non è lei ad aver ricevuto il
+// file — senza un riscontro nostro sembrerebbe che il trascinamento non
+// abbia funzionato, anche se in realtà onChange è già stato chiamato
 function CampoFileTrascinabile({ style, onChange, ...resto }) {
   const [trascinandoSopra, setTrascinandoSopra] = useState(false);
+  const [fileTrascinato, setFileTrascinato] = useState(null);
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setTrascinandoSopra(true); }}
@@ -12241,11 +12247,13 @@ function CampoFileTrascinabile({ style, onChange, ...resto }) {
       onDrop={(e) => {
         e.preventDefault();
         setTrascinandoSopra(false);
-        if (e.dataTransfer.files?.length) onChange({ target: { files: e.dataTransfer.files } });
+        const file = e.dataTransfer.files?.[0];
+        if (file) { setFileTrascinato(file); onChange({ target: { files: e.dataTransfer.files } }); }
       }}
       style={{ ...style, boxSizing: "border-box", outline: trascinandoSopra ? `2px dashed ${GOLD}` : "none", outlineOffset: 2 }}
     >
-      <input type="file" onChange={onChange} style={{ width: "100%", display: "block", border: "none", background: "transparent", padding: 0 }} {...resto} />
+      <input type="file" onChange={(e) => { setFileTrascinato(null); onChange(e); }} style={{ width: "100%", display: "block", border: "none", background: "transparent", padding: 0 }} {...resto} />
+      {fileTrascinato && <div style={{ ...fontBody, fontSize: 11.5, color: "#2E7D32", marginTop: 3 }}>{fileTrascinato.name} — trascinato, pronto</div>}
     </div>
   );
 }
@@ -21631,7 +21639,7 @@ function PaginaInserimentoCostiRicavi({
     const fornitore = s.fornitore_id ? fornitoriById[s.fornitore_id] : null;
     const sottocategoria = costiSottocategorieById[s.sottocategoria_id];
     return {
-      id: s.id, virtuale: false, dataDocumento: s.data_documento,
+      id: s.id, virtuale: false, dataDocumento: s.data_pagamento || s.data_documento,
       descrizione: s.descrizione || sottocategoria?.nome || "Spesa",
       sottotitolo: (categoria?.nome || "—") + (fornitore ? ` · ${fornitore.nome}` : ""),
       chips: [sottocategoria?.nome, fornitore?.nome].filter(Boolean),
@@ -21646,10 +21654,16 @@ function PaginaInserimentoCostiRicavi({
   // Da pagare, finché non viene segnato "Pagato" lì. Il badge "non
   // pagate" qui sotto è solo un promemoria incrociato: non aggiunge
   // righe a questo libro cassa, che deve restare "solo movimenti veri".
-  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && s.data_documento);
+  //
+  // Un libro cassa ragiona per data di INCASSO/PAGAMENTO reale, non per
+  // data del documento: una fattura emessa il 7 ma saldata il 20 va
+  // vista/ordinata al 20. data_documento resta solo un fallback per le
+  // (poche) righe storiche senza data_pagamento salvata.
+  function dataCassaPN(s) { return s.data_pagamento || s.data_documento; }
+  const spesePagate = (spese || []).filter((s) => s.stato === "pagata" && dataCassaPN(s));
   const speseRealiFiltrate = spesePagate
-    .filter((s) => s.data_documento >= range.inizio && s.data_documento <= range.fine)
-    .sort((a, b) => (b.data_documento || "").localeCompare(a.data_documento || ""));
+    .filter((s) => dataCassaPN(s) >= range.inizio && dataCassaPN(s) <= range.fine)
+    .sort((a, b) => (dataCassaPN(b) || "").localeCompare(dataCassaPN(a) || ""));
   // la ricerca filtra le spese vere PRIMA di normalizzarle e prima di
   // calcolare le top categorie qui sotto, così tutto quello che si vede
   // (elenco, conteggio, totale, top categorie) resta coerente con
@@ -21671,7 +21685,7 @@ function PaginaInserimentoCostiRicavi({
   // confronto col periodo precedente, stessa granularità e durata
   const periodoPrecPN = periodoPrecedentePrimaNota(annoPN, granularitaPN, mesePN, trimestrePN);
   const rangePrecPN = rangeGranularitaPrimaNota(periodoPrecPN.anno, granularitaPN, periodoPrecPN.mese, periodoPrecPN.trimestre);
-  const totalePrecedentePN = round2(spesePagate.filter((s) => s.data_documento >= rangePrecPN.inizio && s.data_documento <= rangePrecPN.fine).reduce((s, r) => s + (r.totale || 0), 0));
+  const totalePrecedentePN = round2(spesePagate.filter((s) => dataCassaPN(s) >= rangePrecPN.inizio && dataCassaPN(s) <= rangePrecPN.fine).reduce((s, r) => s + (r.totale || 0), 0));
   const variazionePctPN = personalizzatoPN ? null : variazionePctErp(totaleSpese, totalePrecedentePN);
 
   // "N non pagate": spese non ancora pagate con data nel periodo in
@@ -21686,7 +21700,9 @@ function PaginaInserimentoCostiRicavi({
 
   // barra dei mesi/trimestri: importo pagato per mese, sull'anno in
   // vista — usata sia per i pulsanti sia per la barretta sotto ciascuno
-  const riepilogoMesePN = riepilogoMensilePrimaNota(spesePagate.filter((s) => s.data_documento.slice(0, 4) === String(annoPN)));
+  const riepilogoMesePN = riepilogoMensilePrimaNota(
+    spesePagate.filter((s) => dataCassaPN(s).slice(0, 4) === String(annoPN)).map((s) => ({ data_documento: dataCassaPN(s), totale: s.totale }))
+  );
   const maxMensilePN = Math.max(1, ...Object.values(riepilogoMesePN));
 
   // top 4 sotto-categorie per spesa nel periodo in vista — dove sono
