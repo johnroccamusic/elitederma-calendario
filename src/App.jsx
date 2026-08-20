@@ -171,6 +171,7 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 100, 130, 90, 100, 150, 110, 82,
 // il valore vecchio in localStorage vince sempre su quello nuovo
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v9";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
+const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
@@ -22584,20 +22585,19 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
 // primo click su ciascuna (stile Windows Explorer): testo parte
 // crescente A→Z, numeri partono decrescente (più alto in cima)
 const COLONNE_MAGAZZINO = [
-  { label: "Prodotto", campo: "nome", direzioneIniziale: "asc" },
-  { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc" },
-  { label: "Stock totale", campo: "stockTotale", direzioneIniziale: "desc" },
-  { label: "In magazzino", campo: null },
-  { label: "Shop online", campo: null },
-  { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc" },
-  { label: "Non sul POS", campo: null },
-  { label: "Solo offline", campo: null },
-  { label: "Stato", campo: "esaurito", direzioneIniziale: "desc" },
-  { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc" },
-  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc" },
-  { label: "Margine %", campo: "margine", direzioneIniziale: "desc" },
-  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc" },
-  { label: "Fatturato", campo: "fatturato", direzioneIniziale: "desc" },
+  { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 220 },
+  { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 140 },
+  { label: "Stock totale", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 100 },
+  { label: "In magazzino", campo: null, larghezza: 110 },
+  { label: "Shop online", campo: null, larghezza: 110 },
+  { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc", larghezza: 90 },
+  { label: "Non sul POS", campo: null, larghezza: 90 },
+  { label: "Solo offline", campo: null, larghezza: 90 },
+  { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 100 },
+  { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 100 },
+  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 100 },
+  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 90 },
+  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 90 },
 ];
 
 function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -22910,7 +22910,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       </td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.fatturato)}</td>
     </tr>
   );
 }
@@ -22931,6 +22930,34 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
+
+  // larghezza delle colonne trascinabile col mouse (stesso pattern di
+  // Assegnazione Master/Statistica Venditori): mappa "etichetta colonna"
+  // -> px, salvata per sempre in questo browser
+  const [larghezze, setLarghezze] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_MAGAZZINO) || "{}"); } catch { return {}; }
+  });
+  function larghezzaDi(etichetta, larghezzaDefault) { return larghezze[etichetta] ?? larghezzaDefault; }
+  const ridimensionamentoRef = React.useRef(null);
+  function iniziaRidimensionamento(e, etichetta, larghezzaAttuale) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ridimensionamentoRef.current = { etichetta, pointerId: e.pointerId, startX: e.clientX, startWidth: larghezzaAttuale };
+  }
+  function muoviRidimensionamento(e) {
+    const r = ridimensionamentoRef.current;
+    if (!r || e.pointerId !== r.pointerId) return;
+    const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
+    setLarghezze((precedenti) => ({ ...precedenti, [r.etichetta]: nuovaLarghezza }));
+  }
+  function fineRidimensionamento() {
+    if (!ridimensionamentoRef.current) return;
+    ridimensionamentoRef.current = null;
+    setLarghezze((attuali) => {
+      try { localStorage.setItem(CHIAVE_LARGHEZZE_MAGAZZINO, JSON.stringify(attuali)); } catch { /* ignora */ }
+      return attuali;
+    });
+  }
 
   // spostamenti magazzino<->shop: SOLO locali finché non si preme
   // "Sincronizza magazzini" — ogni "+" prima chiamava subito WooCommerce,
@@ -22992,6 +23019,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     if (!campo) return;
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
+  const larghezzaTabellaMagazzino = COLONNE_MAGAZZINO.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
 
   async function sincronizzaCatalogo() {
     setSincronizzando(true);
@@ -23231,7 +23259,8 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1180 }}>
+            <table style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
+              <colgroup>{COLONNE_MAGAZZINO.map((col) => <col key={col.label} style={{ width: larghezzaDi(col.label, col.larghezza) }} />)}</colgroup>
               <thead>
                 <tr>
                   {COLONNE_MAGAZZINO.map((col) => (
@@ -23239,9 +23268,17 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
                       key={col.label}
                       onClick={() => ordinaPer(col.campo)}
                       title={col.campo ? "Clicca per ordinare" : undefined}
-                      style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", cursor: col.campo ? "pointer" : "default", userSelect: "none" }}
+                      style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
                     >
                       {col.label}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => iniziaRidimensionamento(e, col.label, larghezzaDi(col.label, col.larghezza))}
+                        onPointerMove={muoviRidimensionamento}
+                        onPointerUp={fineRidimensionamento}
+                        onPointerCancel={fineRidimensionamento}
+                        style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+                      />
                     </th>
                   ))}
                 </tr>
