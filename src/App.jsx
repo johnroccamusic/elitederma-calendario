@@ -5879,6 +5879,7 @@ function RigaAttrezzaturaInventario({ riga, voce, onSalva, onRimuovi }) {
 // per la sezione "Materiali da rientrare" in Logistica prodotti
 function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti) {
   if (!corsoData) return [];
+  const stato = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData.id) || {};
   const richiesti = kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni || [], corso?.id || null);
   const ids = new Set();
   (corsiKitProdotti || []).forEach((r) => {
@@ -5890,6 +5891,12 @@ function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, 
     const appartieneAlKit = r.kit_id && richiesti[r.kit_id] > 0 && (r.tipo === "kit" || r.tipo === "accessorio");
     const accessorioDidattica = r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null);
     if (appartieneAlKit || accessorioDidattica) ids.add(r.prodotto_id);
+  });
+  // "Prodotti extra kit": pescati a mano dall'intero magazzino per questa
+  // singola edizione (chiave "extra::prodottoId" su accessori_quantita) —
+  // non appartengono a nessun template, quindi l'unica traccia è qui
+  Object.keys(stato.accessori_quantita || {}).forEach((chiave) => {
+    if (chiave.startsWith("extra::")) ids.add(chiave.slice(7));
   });
   return Array.from(ids);
 }
@@ -5916,6 +5923,12 @@ function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitPr
   });
   (corsiKitProdotti || []).filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null)).forEach((r) => {
     mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + (r.quantita || 0);
+  });
+  // "Prodotti extra kit": stessa chiave "extra::prodottoId" di prodottiSpeditiIds
+  Object.entries(stato.accessori_quantita || {}).forEach(([chiave, q]) => {
+    if (!chiave.startsWith("extra::")) return;
+    const prodottoId = chiave.slice(7);
+    mappa[prodottoId] = (mappa[prodottoId] || 0) + (q || 0);
   });
   return mappa;
 }
@@ -28109,6 +28122,9 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   const righeKitRichiesti = Object.entries(kitRichiesti).sort(
     (a, b) => (kitDefinizioni.find((k) => k.id === a[0])?.ordine || 0) - (kitDefinizioni.find((k) => k.id === b[0])?.ordine || 0)
   );
+  // il contenuto del kit non serve sempre in vista: si apre solo
+  // cliccando sul nome, qui nella stessa riga del kit
+  const [kitEspansi, setKitEspansi] = useState(() => new Set());
   function cambiaRiservaKit(kitId, valore) {
     onSalvaCampi({ riserva_per_kit: { ...riservaPerKit, [kitId]: valore === "" ? 0 : Math.max(0, Number(valore)) } });
   }
@@ -28212,19 +28228,40 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 40, ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, paddingRight: 2 }}>
               <span>Iscritti</span><span>Di riserva</span>
             </div>
-            {righeKitRichiesti.map(([kitId, quantitaIscritti]) => (
-              <div key={kitId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{nomeKit(kitId)}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                  <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, width: 24, textAlign: "center" }}>{quantitaIscritti}</span>
-                  <input
-                    type="number" min="0" style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
-                    value={riservaPerKit[kitId] ?? ""} placeholder="0"
-                    onChange={(e) => cambiaRiservaKit(kitId, e.target.value)}
-                  />
+            {righeKitRichiesti.map(([kitId, quantitaIscritti]) => {
+              const espanso = kitEspansi.has(kitId);
+              const contenutoKit = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
+              return (
+                <div key={kitId} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                    <span
+                      onClick={() => setKitEspansi((prev) => { const n = new Set(prev); if (n.has(kitId)) n.delete(kitId); else n.add(kitId); return n; })}
+                      title="Clicca per vedere il contenuto del kit"
+                      style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}
+                    >
+                      {nomeKit(kitId)}
+                    </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                      <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, width: 24, textAlign: "center" }}>{quantitaIscritti}</span>
+                      <input
+                        type="number" min="0" style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
+                        value={riservaPerKit[kitId] ?? ""} placeholder="0"
+                        onChange={(e) => cambiaRiservaKit(kitId, e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {espanso && contenutoKit.length > 0 && (
+                    <div style={{ marginTop: 8, paddingLeft: 2 }}>
+                      {contenutoKit.map((r) => (
+                        <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 12.5, color: MUTED, padding: "3px 0" }}>
+                          <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </>
         )}
       </div>
@@ -28307,20 +28344,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         )}
       </div>
 
-      {righeKitRichiesti.map(([kitId]) => {
-        const contenuto = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
-        if (contenuto.length === 0) return null;
-        return (
-          <div key={kitId} style={{ marginTop: 20 }}>
-            <div style={labelStyle}>Contenuto {nomeKit(kitId)}</div>
-            {contenuto.map((r) => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0" }}>
-                <span>{nomeProdotto(r.prodotto_id)} {giaInSede(r.prodotto_id) && <span style={{ color: MUTED, fontSize: 11 }}>· già in sede: {giaInSede(r.prodotto_id).quantita}</span>}</span><span>{r.quantita}x</span>
-              </div>
-            ))}
-          </div>
-        );
-      })}
 
       {tuttiAccessori.length > 0 && (
         <div style={{ marginTop: 20 }}>
