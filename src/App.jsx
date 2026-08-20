@@ -5882,7 +5882,12 @@ function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, 
   const richiesti = kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni || [], corso?.id || null);
   const ids = new Set();
   (corsiKitProdotti || []).forEach((r) => {
-    const appartieneAlKit = r.kit_id && richiesti[r.kit_id] > 0 && r.tipo === "kit";
+    // sia il contenuto del kit sia gli accessori specifici DI QUEL kit
+    // (kit_id valorizzato, es. "Matita marrone" legato a KIT BASE) sono
+    // stati davvero spediti — quantitaInviataPerProdotto li conta
+    // entrambi, quindi vanno inclusi anche qui o non sarebbe mai
+    // possibile dichiararli rispediti o mancanti
+    const appartieneAlKit = r.kit_id && richiesti[r.kit_id] > 0 && (r.tipo === "kit" || r.tipo === "accessorio");
     const accessorioDidattica = r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null);
     if (appartieneAlKit || accessorioDidattica) ids.add(r.prodotto_id);
   });
@@ -5938,6 +5943,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   const isMobile = useIsMobile();
   const [ricercaIntero, setRicercaIntero] = useState("");
   const [ricercaAperto, setRicercaAperto] = useState("");
+  const [campoInteroAttivo, setCampoInteroAttivo] = useState(false);
+  const [campoApertoAttivo, setCampoApertoAttivo] = useState(false);
   const [ricercaConsumabile, setRicercaConsumabile] = useState("");
   const [prodottoApertoScelto, setProdottoApertoScelto] = useState(null); // prodotto in attesa di nota (flag SÌ)
   const [notaAperto, setNotaAperto] = useState("");
@@ -6017,6 +6024,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   const rientroInteri = statoEdizione?.rientro_prodotti_interi || {};
   const rientroAperti = statoEdizione?.rientro_prodotti_aperti || {};
   const consulenzeEdizione = statoEdizione?.consulenze_edizione || [];
+  const inventarioTrasmessoTs = statoEdizione?.inventario_trasmesso_ts || null;
 
   // upsert invece di "trova o inserisci": se due salvataggi partono
   // vicini prima che statoEdizione si aggiorni, entrambi vedrebbero
@@ -6039,10 +6047,12 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   }
   // solo i prodotti davvero spediti a questa edizione (kit scelti +
   // accessori didattica): non ha senso far rispedire in blocco qualcosa
-  // che Raf non ha mai mandato a questo corso
-  const risultatiIntero = ricercaIntero.trim()
-    ? prodottiSpediti.filter((p) => rientroInteri[p.id] == null && p.nome.toLowerCase().includes(ricercaIntero.trim().toLowerCase()))
-    : [];
+  // che Raf non ha mai mandato a questo corso — lista già piccola e
+  // curata, quindi si vede tutta a campo vuoto (come "Consulenze"),
+  // non solo digitando
+  const risultatiIntero = prodottiSpediti
+    .filter((p) => rientroInteri[p.id] == null)
+    .filter((p) => !ricercaIntero.trim() || p.nome.toLowerCase().includes(ricercaIntero.trim().toLowerCase()));
   function rimuoviIntero(prodottoId) {
     const resto = { ...rientroInteri };
     delete resto[prodottoId];
@@ -6058,9 +6068,9 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   // conferma il rientro da Logistica prodotti (processaRientro), che è
   // il momento in cui questi pezzi finiscono davvero nel mucchio da
   // smaltire — qui la master sta solo dichiarando, non ancora chiudendo
-  const risultatiAperto = ricercaAperto.trim()
-    ? prodottiSpediti.filter((p) => rientroAperti[p.id] == null && p.nome.toLowerCase().includes(ricercaAperto.trim().toLowerCase()))
-    : [];
+  const risultatiAperto = prodottiSpediti
+    .filter((p) => rientroAperti[p.id] == null)
+    .filter((p) => !ricercaAperto.trim() || p.nome.toLowerCase().includes(ricercaAperto.trim().toLowerCase()));
   function selezionaProdottoAperto(p) {
     setRicercaAperto("");
     setProdottoApertoScelto(p);
@@ -6090,6 +6100,15 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   // riempimento a pallini, non può aggiungerne o rimuoverne
   function aggiornaLivelloConsulenza(id, livello) {
     salvaCampiStatoEdizione({ consulenze_edizione: consulenzeEdizione.map((r) => (r.id === id ? { ...r, livello } : r)) });
+  }
+
+  // "Trasmetti inventario": finché non si preme, "Materiali da
+  // rientrare" in Logistica prodotti resta nascosta — Raf non deve
+  // vedere Prodotti interi/mancanti a metà lavoro, solo quando la
+  // master dichiara di aver finito
+  function trasmettiInventario() {
+    if (!window.confirm("Trasmettere l'inventario a Raf? Da questo momento Prodotti interi e mancanti saranno visibili in Logistica prodotti.")) return;
+    salvaCampiStatoEdizione({ inventario_trasmesso_ts: new Date().toISOString() });
   }
 
   // verifica di congruità: Inviati − Venduti − Rispediti − Restano = Da
@@ -6241,8 +6260,11 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti interi</div>
               <div style={labelStyleInv}>Tornano in magazzino così come sono.</div>
               <div style={{ position: "relative" }}>
-                <input style={inputStyle} value={ricercaIntero} onChange={(e) => setRicercaIntero(e.target.value)} placeholder="Cerca tra i prodotti spediti…" />
-                {risultatiIntero.length > 0 && (
+                <input
+                  style={inputStyle} value={ricercaIntero} onChange={(e) => setRicercaIntero(e.target.value)} placeholder="Cerca tra i prodotti spediti…"
+                  onFocus={() => setCampoInteroAttivo(true)} onBlur={() => setTimeout(() => setCampoInteroAttivo(false), 150)}
+                />
+                {campoInteroAttivo && risultatiIntero.length > 0 && (
                   <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
                     {risultatiIntero.map((p) => (
                       <div key={p.id} onClick={() => aggiungiInteroProdotto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
@@ -6266,9 +6288,12 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: GOLD, marginBottom: 4 }}>Prodotti mancanti</div>
               <div style={labelStyleInv}>Presi dai kit durante il corso, non rientrano: scegli il prodotto e scrivi il motivo.</div>
               <div style={{ position: "relative" }}>
-                <input style={inputStyle} value={ricercaAperto} onChange={(e) => setRicercaAperto(e.target.value)} placeholder="Cerca tra i prodotti spediti…" />
-                {risultatiAperto.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2 }}>
+                <input
+                  style={inputStyle} value={ricercaAperto} onChange={(e) => setRicercaAperto(e.target.value)} placeholder="Cerca tra i prodotti spediti…"
+                  onFocus={() => setCampoApertoAttivo(true)} onBlur={() => setTimeout(() => setCampoApertoAttivo(false), 150)}
+                />
+                {campoApertoAttivo && risultatiAperto.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
                     {risultatiAperto.map((p) => (
                       <div key={p.id} onClick={() => selezionaProdottoAperto(p)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
                     ))}
@@ -6302,6 +6327,16 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             </div>
           </div>
           <Button onClick={() => setMostraCongruita(true)}>Verifica e conferma</Button>
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", ...cardStyle, padding: 16 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Trasmetti inventario</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+              {inventarioTrasmessoTs ? `Trasmesso a Raf il ${new Date(inventarioTrasmessoTs).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}.` : "Raf non vede ancora Prodotti interi e mancanti: sono visibili in Logistica prodotti solo dopo la trasmissione."}
+            </div>
+          </div>
+          <Button onClick={trasmettiInventario}>{inventarioTrasmessoTs ? "Ritrasmetti" : "Trasmetti inventario"}</Button>
         </div>
       </div>
 
@@ -27950,8 +27985,11 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   const rientroAperti = statoEdizione.rientro_prodotti_aperti || {};
   const interiProcessato = statoEdizione.rientro_interi_processato || {};
   const apertiPileQui = (prodottiApertiMagazzino || []).filter((r) => r.corso_data_id === corsoData.id);
-  const interiDaRientrare = Object.keys(rientroInteri).length > 0;
-  const apertiDaRientrare = Object.keys(rientroAperti).length > 0;
+  // resta nascosta finché la master non preme "Trasmetti inventario"
+  // (Inventario Master): prima di allora potrebbe essere a metà lavoro
+  const inventarioTrasmesso = !!statoEdizione.inventario_trasmesso_ts;
+  const interiDaRientrare = inventarioTrasmesso && Object.keys(rientroInteri).length > 0;
+  const apertiDaRientrare = inventarioTrasmesso && Object.keys(rientroAperti).length > 0;
   const rientriDaProcessare =
     Object.entries(rientroInteri).some(([pid, q]) => (q || 0) !== (interiProcessato[pid] || 0)) ||
     Object.entries(rientroAperti).some(([pid, r]) => (r?.quantita || 0) !== (apertiPileQui.find((a) => a.prodotto_id === pid)?.quantita || 0));
