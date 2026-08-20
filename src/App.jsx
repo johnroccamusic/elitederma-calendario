@@ -22590,7 +22590,6 @@ const COLONNE_MAGAZZINO = [
   { label: "In magazzino", campo: null },
   { label: "Shop online", campo: null },
   { label: "Scorta min.", campo: "scorta_minima", direzioneIniziale: "desc" },
-  { label: "Rientro se aperto", campo: null },
   { label: "Non sul POS", campo: null },
   { label: "Solo offline", campo: null },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc" },
@@ -22818,11 +22817,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
     if (error) { window.alert("Errore: " + error.message); setScortaMin(p.scorta_minima != null ? String(p.scorta_minima) : ""); return; }
     ricarica(["prodotti_shop"]);
   }
-  async function salvaFlagRientro(checked) {
-    const { error } = await supabase.from("prodotti_shop").update({ rientro_obbligatorio_se_aperto: checked }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["prodotti_shop"]);
-  }
   // "Non sul POS" e "Solo offline" possono arrivare anche dalla categoria
   // (forzatoEscludi/forzatoSoloOffline, vedi PaginaMagazzino): in quel
   // caso la checkbox qui è bloccata a "true", perché toglierla va fatto
@@ -22896,9 +22890,6 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       </td>
       <td style={tdStyle}>
         <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
-      </td>
-      <td style={{ ...tdStyle, textAlign: "center" }} title="Se aperto, questo prodotto deve sempre rientrare in sede (inventario post corso)">
-        <input type="checkbox" checked={!!p.rientro_obbligatorio_se_aperto} onChange={(e) => salvaFlagRientro(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
       </td>
       <td style={{ ...tdStyle, textAlign: "center" }} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
         <input type="checkbox" checked={p.forzatoEscludi || !!p.escludi_vendita_diretta} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />
