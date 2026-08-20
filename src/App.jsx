@@ -5908,7 +5908,7 @@ function RigaAttrezzaturaInventario({ riga, voce, onSalva, onRimuovi }) {
       </div>
       {!inModifica ? (
         <button onClick={apriModifica} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", marginTop: 4 }}>
-          Conferma quantità
+          Aggiorna quantità
         </button>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
