@@ -20183,15 +20183,35 @@ async function caricaRicevutaSpesa(file) {
 // locale) e PaginaInserimentoCostiRicavi/Prima nota cassa (da dove riapre
 // Amministrazione già sulla scheda scelta): senza, da Prima nota cassa non
 // si poteva più saltare direttamente alle altre
+// scheda di navigazione di Amministrazione: icona in pastiglia colorata
+// (un colore per famiglia di dato) + etichetta, piena in navy quando
+// attiva — stesso principio delle TileHome ma più compatta, per stare
+// in una riga di 6
+function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderRadius: 14,
+        border: `1px solid ${attivo ? NAVY : bordo}`, background: attivo ? NAVY : sfondo, cursor: "pointer", textAlign: "left",
+      }}
+    >
+      <span style={{ width: 30, height: 30, borderRadius: 8, background: attivo ? "rgba(255,255,255,0.18)" : "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icona size={16} color={attivo ? "#fff" : coloreIcona} />
+      </span>
+      <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: attivo ? "#fff" : NAVY }}>{children}</span>
+    </button>
+  );
+}
 function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, passivoCount, attivoCount, abbonamentiCount }) {
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-      <TabPillola attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa}>Prima nota cassa</TabPillola>
-      <TabPillola attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")}>Quadro impegni ({impegniCount})</TabPillola>
-      <TabPillola attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")}>Registro documenti fornitore ({documentiCount})</TabPillola>
-      <TabPillola attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")}>Scadenziario Passivo ({passivoCount})</TabPillola>
-      <TabPillola attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")}>Scadenziario Attivo ({attivoCount})</TabPillola>
-      <TabPillola attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</TabPillola>
+    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Prima nota cassa</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Registro documenti fornitore ({documentiCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
     </div>
   );
 }
@@ -21376,13 +21396,45 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
 
         {tab === "passivo" && (
           <div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <TabPillola attivo={subTabPassivo === "dapagare"} onClick={() => setSubTabPassivo("dapagare")} urgente={daPagare.length > 0}>Da pagare ({daPagare.length})</TabPillola>
-              <TabPillola attivo={subTabPassivo === "evase"} onClick={() => setSubTabPassivo("evase")}>Evase ({speseEvase.length})</TabPillola>
-              <button onClick={onApriNuovaSpesaDaPagare} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto" }}>
-                + Nuova spesa da pagare
+            <div style={{ ...cardStyle, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 0, padding: 14 }}>
+              <button
+                onClick={() => setSubTabPassivo("dapagare")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 14, cursor: "pointer", textAlign: "left",
+                  border: `1px solid ${daPagare.length > 0 ? "#E7B3AC" : "#BFDFC4"}`, background: daPagare.length > 0 ? "#FBEAE8" : "#EAF6EC",
+                  outline: subTabPassivo === "dapagare" ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
+                }}
+              >
+                <span style={{ width: 32, height: 32, borderRadius: "50%", background: daPagare.length > 0 ? "#C0392B" : "#2E7D32", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontDisplay, fontSize: 16, fontWeight: 700 }}>
+                  {daPagare.length > 0 ? "!" : ""}
+                </span>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: daPagare.length > 0 ? "#C0392B" : "#2E7D32" }}>Da pagare</div>
+                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: daPagare.length > 0 ? "#C0392B" : "#2E7D32" }}>{daPagare.length}</div>
+                </div>
+              </button>
+              <button
+                onClick={() => setSubTabPassivo("evase")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", borderRadius: 14, cursor: "pointer", textAlign: "left",
+                  border: `1px solid #EAD9B0`, background: "#FBF3E0",
+                  outline: subTabPassivo === "evase" ? `2px solid ${NAVY}` : "none", outlineOffset: 1,
+                }}
+              >
+                <span style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <IconaClessidraErp size={16} />
+                </span>
+                <div>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY }}>Evase</div>
+                  <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{speseEvase.length}</div>
+                </div>
+              </button>
+              <button onClick={onApriNuovaSpesaDaPagare} style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "10px 18px", cursor: "pointer", marginLeft: "auto" }}>
+                <span style={{ width: 18, height: 18, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, lineHeight: 1, flexShrink: 0 }}>+</span>
+                Nuova spesa da pagare
               </button>
             </div>
+            <div style={{ marginBottom: 12 }} />
 
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -28011,6 +28063,23 @@ function IconaCartellaShop({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+    </svg>
+  );
+}
+function IconaPersonaSemplice({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 21c0-4 3-6.5 7-6.5s7 2.5 7 6.5" />
+    </svg>
+  );
+}
+function IconaClessidraErp({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 2h12M6 22h12" />
+      <path d="M6 2c0 5 5 7 6 8 1-1 6-3 6-8" />
+      <path d="M6 22c0-5 5-7 6-8 1 1 6 3 6 8" />
     </svg>
   );
 }
