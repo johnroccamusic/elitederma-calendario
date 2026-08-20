@@ -24641,6 +24641,8 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   // rispettivi compensi di default)
   const [vistaGestione, setVistaGestione] = useState("master");
   const [corsoCompensiEspansoId, setCorsoCompensiEspansoId] = useState(null);
+  const [nomeMod, setNomeMod] = useState("");
+  const [editandoNome, setEditandoNome] = useState(false);
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
   const [ibanMod, setIbanMod] = useState("");
@@ -24699,6 +24701,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   }
 
   useEffect(() => {
+    setNomeMod(selezionato?.nome || "");
     setNote(selezionato?.note || "");
     setEmailMod(selezionato?.email || "");
     setTelefonoMod(selezionato?.telefono || "");
@@ -24714,7 +24717,15 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
     setTab("corsi");
     setCorsoEspansoId(null);
     setMsg("");
+    setEditandoNome(false);
   }, [selezionatoId]);
+
+  function salvaNomeMaster() {
+    const nuovo = nomeMod.trim();
+    setEditandoNome(false);
+    if (!nuovo || nuovo === selezionato?.nome) { setNomeMod(selezionato?.nome || ""); return; }
+    salvaCampoMaster("nome", nuovo);
+  }
 
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const assegnazioni = (masterCorsi || []).filter((mc) => mc.master_id === selezionatoId);
@@ -24976,7 +24987,16 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
 
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
+                      {editandoNome ? (
+                        <input
+                          autoFocus value={nomeMod} onChange={(e) => setNomeMod(e.target.value)}
+                          onBlur={salvaNomeMaster}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setNomeMod(selezionato.nome || ""); setEditandoNome(false); } }}
+                          style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid ${MUTED}`, background: "transparent", padding: 0, outline: "none", minWidth: 160 }}
+                        />
+                      ) : (
+                        <div onClick={() => setEditandoNome(true)} title="Clicca per correggere il nome" style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{toTitleCase(selezionato.nome)}</div>
+                      )}
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>MASTER</span>
                     </div>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
@@ -25249,6 +25269,8 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
   const [tab, setTab] = useState("regime");
   const [mostraForm, setMostraForm] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
+  const [nomeMod, setNomeMod] = useState("");
+  const [editandoNome, setEditandoNome] = useState(false);
   const [emailMod, setEmailMod] = useState("");
   const [telefonoMod, setTelefonoMod] = useState("");
   const [ibanMod, setIbanMod] = useState("");
@@ -25314,6 +25336,7 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
   }
 
   useEffect(() => {
+    setNomeMod(selezionato?.nome || "");
     setNote(selezionato?.note || "");
     setEmailMod(selezionato?.email || "");
     setTelefonoMod(selezionato?.telefono || "");
@@ -25328,7 +25351,15 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
     setApplicaClassATuttiVenditori(false);
     setTab("regime");
     setMsg("");
+    setEditandoNome(false);
   }, [selezionatoId]);
+
+  function salvaNomeVenditore() {
+    const nuovo = nomeMod.trim();
+    setEditandoNome(false);
+    if (!nuovo || nuovo === selezionato?.nome) { setNomeMod(selezionato?.nome || ""); return; }
+    salvaCampoVenditore("nome", nuovo);
+  }
 
   async function aggiungiVenditore() {
     if (!nomeNuovo.trim()) return;
@@ -25480,7 +25511,16 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
 
                   <div style={{ flex: 1, minWidth: 200 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{toTitleCase(selezionato.nome)}</div>
+                      {editandoNome ? (
+                        <input
+                          autoFocus value={nomeMod} onChange={(e) => setNomeMod(e.target.value)}
+                          onBlur={salvaNomeVenditore}
+                          onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setNomeMod(selezionato.nome || ""); setEditandoNome(false); } }}
+                          style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, border: "none", borderBottom: `1px solid ${MUTED}`, background: "transparent", padding: 0, outline: "none", minWidth: 160 }}
+                        />
+                      ) : (
+                        <div onClick={() => setEditandoNome(true)} title="Clicca per correggere il nome" style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, cursor: "pointer" }}>{toTitleCase(selezionato.nome)}</div>
+                      )}
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 20, padding: "3px 10px", letterSpacing: 0.5 }}>VENDITORE</span>
                     </div>
                     <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, cursor: "pointer" }}>
