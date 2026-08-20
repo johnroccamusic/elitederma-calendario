@@ -21904,16 +21904,21 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
   const [msg, setMsg] = useState("");
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const haPrezzo = prezzo.trim() !== "";
+  // categoria "solo offline" (Gestisci categorie): anche con un prezzo,
+  // il prodotto non va mai su WooCommerce — il prezzo resta solo per
+  // valorizzare il magazzino fisico
+  const soloOffline = !!(categorieProdotti || []).find((c) => c.id === categoriaId)?.solo_offline;
+  const vaSuWoo = haPrezzo && !soloOffline;
 
   async function crea() {
     if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
     const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
+    const prezzoNum = haPrezzo ? parseNum(prezzo) : null;
+    if (haPrezzo && !(prezzoNum > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
     setSalvando(true);
     setMsg("");
 
-    if (haPrezzo) {
-      const prezzoNum = parseNum(prezzo);
-      if (!(prezzoNum > 0)) { setSalvando(false); setMsg("Il prezzo deve essere maggiore di zero."); return; }
+    if (vaSuWoo) {
       const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
         body: { azione: "crea", nome: nome.trim(), prezzo: prezzoNum, stato: "publish", categorieIds: categoriaId ? [categoriaId] : [] },
       });
@@ -21933,10 +21938,12 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
       return;
     }
 
-    // nessun prezzo: prodotto solo locale, mai su WooCommerce
+    // nessun prezzo, oppure categoria "solo offline": prodotto solo
+    // locale, mai su WooCommerce (il prezzo, se c'è, resta comunque
+    // salvato per valorizzare il magazzino)
     const { data: riga, error: erroreInsert } = await supabase
       .from("prodotti_shop")
-      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, attivo: true })
+      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, prezzo_vendita: prezzoNum, attivo: true })
       .select().single();
     if (erroreInsert) { setSalvando(false); setMsg("Errore: " + erroreInsert.message); return; }
     if (categoriaId) {
@@ -21955,9 +21962,14 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
       <Field label="Categoria">
         <select style={inputStyle} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
           <option value="">— nessuna —</option>
-          {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.solo_offline ? " (solo offline)" : ""}</option>)}
         </select>
       </Field>
+      {soloOffline && (
+        <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
+          Categoria solo offline: il prodotto resta nel magazzino fisico, non viene mai creato su WooCommerce anche con un prezzo.
+        </div>
+      )}
       <Field label="Prezzo di vendita (lascia vuoto se non è in vendita: materiale di consumo, arredo, altro)">
         <input style={inputStyle} inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} placeholder="Nessun prezzo" />
       </Field>
@@ -21969,7 +21981,7 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
         </div>
         <div style={{ flex: 1 }}>
           <Field label="Quantità shop online">
-            <input style={{ ...inputStyle, ...(haPrezzo ? {} : { background: "#EFEFEF", color: MUTED }) }} inputMode="numeric" value={qtaShop} onChange={(e) => setQtaShop(e.target.value)} placeholder="0" disabled={!haPrezzo} />
+            <input style={{ ...inputStyle, ...(vaSuWoo ? {} : { background: "#EFEFEF", color: MUTED }) }} inputMode="numeric" value={qtaShop} onChange={(e) => setQtaShop(e.target.value)} placeholder="0" disabled={!vaSuWoo} />
           </Field>
         </div>
       </div>
@@ -22025,6 +22037,14 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["categorie_prodotti"]);
   }
+  // categorie locali (mai su Woo) che restano sempre offline: un
+  // prodotto creato qui non viene mai spedito a WooCommerce, anche con
+  // un prezzo — il prezzo resta solo per valorizzare il magazzino
+  async function toggleSoloOffline(c) {
+    const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: !c.solo_offline }).eq("id", c.id);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["categorie_prodotti"]);
+  }
 
   return (
     <Modal title="Gestisci categorie" onClose={onClose} maxWidth={560}>
@@ -22059,6 +22079,12 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
                     <input type="checkbox" checked={!!c.escludi_vendita_diretta} onChange={() => toggleEsclusaVenditaDiretta(c)} style={{ width: 13, height: 13 }} />
                     Non sul POS
                   </label>
+                  {!dalloShop && (
+                    <label title="I prodotti creati in questa categoria non vengono mai spediti a WooCommerce, anche con un prezzo: il prezzo resta solo per valorizzare il magazzino" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
+                      <input type="checkbox" checked={!!c.solo_offline} onChange={() => toggleSoloOffline(c)} style={{ width: 13, height: 13 }} />
+                      Solo offline
+                    </label>
+                  )}
                   {dalloShop ? (
                     <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }} title="Modificabile solo da Gestione shop">Dallo shop</span>
                   ) : (
