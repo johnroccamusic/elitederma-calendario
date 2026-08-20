@@ -1983,7 +1983,7 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
             ) : !soloLettura ? (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
+                  <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => onBonificoFile && onBonificoFile(e.target.files?.[0] || null)} />
                   {valori.bonificoFileNuovo && <BadgeFileCaricato />}
                 </div>
                 {mostraSaltaFile && onBonificoSkip && (
@@ -3475,7 +3475,7 @@ function ModalePagamentoVenditore({ iscritto, venditoreNome, ricarica, onChiudi,
             Attuale: <AllegatoLink percorso={accontoEsistente.file_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo
           </div>
         )}
-        <input type="file" accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <CampoFileTrascinabile accept="application/pdf,image/*" style={inputStyle} onChange={(e) => setFile(e.target.files?.[0] || null)} />
       </Field>
       <Field label="Nota">
         <textarea
@@ -6678,7 +6678,7 @@ function ModaleCongruitaInventario({ corsoData, masterLoggataId, righeCongruita,
                 <Button onClick={() => assegnaCausale(r)} disabled={salvando} style={{ padding: "8px 14px" }}>Aggiungi</Button>
               </div>
               {campo(r.prodotto.id).causale === "Rotti" && (
-                <input type="file" accept="image/*" onChange={(e) => aggiornaCampo(r.prodotto.id, { file: e.target.files?.[0] || null })} style={inputStyle} />
+                <CampoFileTrascinabile accept="image/*" onChange={(e) => aggiornaCampo(r.prodotto.id, { file: e.target.files?.[0] || null })} style={inputStyle} />
               )}
               {campo(r.prodotto.id).causale === "Prodotto aperto" && (
                 <textarea value={campo(r.prodotto.id).nota} onChange={(e) => aggiornaCampo(r.prodotto.id, { nota: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Perché è stato aperto? Es. sostituito un prodotto fallato nel kit di un'allieva." />
@@ -9302,7 +9302,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
               </div>
               <Field label="Diploma (PDF, opzionale)">
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoNuovo(e.target.files?.[0] || null)} />
+                  <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoNuovo(e.target.files?.[0] || null)} />
                   {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                 </div>
               </Field>
@@ -9366,7 +9366,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                     <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink bucket="diploma-templates" percorso={c.diploma_template_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
                   )}
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoModifica(e.target.files?.[0] || null)} />
+                    <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoModifica(e.target.files?.[0] || null)} />
                     {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                   </div>
                 </Field>
@@ -10540,7 +10540,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
         </Field>
         <Field label="File diploma (PDF)">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileEccezione(e.target.files?.[0] || null)} />
+            <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileEccezione(e.target.files?.[0] || null)} />
             {fileEccezione ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file caricato</span>}
           </div>
         </Field>
@@ -10585,7 +10585,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
                     </Field>
                     <Field label="File diploma (PDF) — scegline uno nuovo solo se vuoi sostituire la grafica">
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <input type="file" accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileModificaEccezione(e.target.files?.[0] || null)} />
+                        <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileModificaEccezione(e.target.files?.[0] || null)} />
                         {fileModificaEccezione ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file nuovo scelto — resta quello attuale</span>}
                       </div>
                     </Field>
@@ -10611,8 +10611,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
         ].map(({ campo, etichetta }) => (
           <Field key={campo} label={etichetta}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input
-                type="file"
+              <CampoFileTrascinabile
                 accept=".ttf,.otf,font/ttf,font/otf"
                 style={{ ...inputStyle, flex: 1, minWidth: 200 }}
                 onChange={(e) => gestisciUploadFont(e.target.files?.[0] || null, campo)}
@@ -10623,8 +10622,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
         ))}
         <Field label="Font segnaposto">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input
-              type="file"
+            <CampoFileTrascinabile
               accept=".ttf,.otf,font/ttf,font/otf"
               style={{ ...inputStyle, flex: 1, minWidth: 200 }}
               onChange={(e) => gestisciUploadFontSegnaposti(e.target.files?.[0] || null)}
@@ -10643,8 +10641,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
           per quel nome.
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <input
-            type="file"
+          <CampoFileTrascinabile
             accept="application/pdf"
             style={{ ...inputStyle, flex: 1, minWidth: 200 }}
             onChange={(e) => gestisciUploadRiferimento(e.target.files?.[0] || null)}
@@ -10781,8 +10778,7 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
         </div>
         <Field label="Segnaposti di riferimento (PDF A4)">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input
-              type="file"
+            <CampoFileTrascinabile
               accept="application/pdf"
               style={{ ...inputStyle, flex: 1, minWidth: 200 }}
               onChange={(e) => gestisciUploadRiferimentoSegnaposti(e.target.files?.[0] || null)}
@@ -11129,7 +11125,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
         <div style={{ flex: "1 1 200px" }}>
           <Field label="Logo nero (diventa il riferimento qui sotto)">
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_nero_path")} />
+              <CampoFileTrascinabile accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_nero_path")} />
               {srcNero && <BadgeFileCaricato />}
             </div>
           </Field>
@@ -11138,7 +11134,7 @@ function CategoriaLogo({ categoria, ricarica, famigliaNome }) {
           <div style={{ flex: "1 1 200px" }}>
             <Field label="Logo bianco (diventa il riferimento qui sotto)">
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                <input type="file" accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_bianco_path")} />
+                <CampoFileTrascinabile accept="image/*" style={{ ...inputStyle, flex: 1, minWidth: 160 }} onChange={(e) => caricaLogo(e.target.files?.[0] || null, "logo_bianco_path")} />
                 {srcBianco && <BadgeFileCaricato />}
               </div>
             </Field>
@@ -11264,13 +11260,13 @@ function SettingLoghi({ loghiImpostazioni, loghiCategorie, ricarica, onBack }) {
         <div style={hStyle}>Font e contatore</div>
         <Field label="Font nome allieva">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input type="file" accept=".ttf,.otf,font/ttf,font/otf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => caricaFont(e.target.files?.[0] || null, "font_nome_path")} />
+            <CampoFileTrascinabile accept=".ttf,.otf,font/ttf,font/otf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => caricaFont(e.target.files?.[0] || null, "font_nome_path")} />
             {config.font_nome_path && <BadgeFileCaricato />}
           </div>
         </Field>
         <Field label="Font codice progressivo">
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <input type="file" accept=".ttf,.otf,font/ttf,font/otf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => caricaFont(e.target.files?.[0] || null, "font_numero_path")} />
+            <CampoFileTrascinabile accept=".ttf,.otf,font/ttf,font/otf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => caricaFont(e.target.files?.[0] || null, "font_numero_path")} />
             {config.font_numero_path && <BadgeFileCaricato />}
           </div>
         </Field>
@@ -12227,6 +12223,29 @@ function CampoRicerca({ value, onChange, placeholder, style }) {
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
       </button>
+    </div>
+  );
+}
+// sostituto drop-in di <input type="file">, ovunque nell'app: stesso
+// "Sfoglia..." nativo del browser (stesso onChange, stesso e.target.files),
+// ma l'area attorno accetta anche un file trascinato dal Finder/Explorer.
+// "style" va sul contenitore (mantiene lo stesso ingombro/aspetto di prima
+// nei layout flex esistenti): l'input vero dentro resta trasparente e
+// riempie il contenitore
+function CampoFileTrascinabile({ style, onChange, ...resto }) {
+  const [trascinandoSopra, setTrascinandoSopra] = useState(false);
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); setTrascinandoSopra(true); }}
+      onDragLeave={() => setTrascinandoSopra(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setTrascinandoSopra(false);
+        if (e.dataTransfer.files?.length) onChange({ target: { files: e.dataTransfer.files } });
+      }}
+      style={{ ...style, boxSizing: "border-box", outline: trascinandoSopra ? `2px dashed ${GOLD}` : "none", outlineOffset: 2 }}
+    >
+      <input type="file" onChange={onChange} style={{ width: "100%", display: "block", border: "none", background: "transparent", padding: 0 }} {...resto} />
     </div>
   );
 }
@@ -15932,7 +15951,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
+              <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
               <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione || soloLettura}>Leggi dati dal modulo</Button>
               {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
             </div>
@@ -16396,7 +16415,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
+              <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
               {(fileScreenAcconto || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto)) && <BadgeFileCaricato />}
             </div>
           </Field>
@@ -16405,7 +16424,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input type="file" accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
+              <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
               {(fileScreenRecap || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap)) && <BadgeFileCaricato />}
             </div>
           </Field>
@@ -20244,7 +20263,7 @@ function RigaScadenziarioDaPagare({ nome, corsoLabel, fornitore, oggetto, dataDe
       {!disabilitato && (
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
           <input type="date" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} />
-          <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
+          <CampoFileTrascinabile onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
           <button onClick={confermaPagato} disabled={salvando} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando ? 0.6 : 1, flexShrink: 0 }}>
             {salvando ? "Salvo…" : "Pagato"}
           </button>
@@ -20314,7 +20333,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
             <input type="text" placeholder="Numero fattura" style={{ ...inputStyle, flex: "1 1 130px" }} value={numeroFattura} onChange={(e) => setNumeroFattura(e.target.value)} />
             <input type="date" title="Data fattura" style={{ ...inputStyle, flex: "0 0 148px" }} value={dataFattura} onChange={(e) => setDataFattura(e.target.value)} />
             <input type="date" title="Scadenza pagamento" style={{ ...inputStyle, flex: "0 0 148px" }} value={scadenza} onChange={(e) => setScadenza(e.target.value)} />
-            <input type="file" onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
+            <CampoFileTrascinabile onChange={(e) => setFile(e.target.files[0] || null)} style={{ ...fontBody, fontSize: 12, flex: "1 1 160px", minWidth: 0 }} />
             <button onClick={salva} disabled={salvando || !pronto} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", opacity: salvando || !pronto ? 0.6 : 1, flexShrink: 0 }}>
               {salvando ? "Salvo…" : "Conferma"}
             </button>
@@ -24971,7 +24990,7 @@ function PaginaGestioneMaster({ master, corsi, corsiDate, masterCorsi, corsiDate
                         </label>
                       </div>
                     ) : (
-                      <input type="file" accept="image/*,application/pdf" style={inputStyle} disabled={caricandoContratto} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
+                      <CampoFileTrascinabile accept="image/*,application/pdf" style={inputStyle} disabled={caricandoContratto} onChange={(e) => caricaContratto(e.target.files?.[0] || null)} />
                     )}
                     {caricandoContratto && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
                     {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
@@ -25511,7 +25530,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                         </label>
                       </div>
                     ) : (
-                      <input type="file" accept="image/*,application/pdf" style={inputStyle} disabled={caricandoDocumento} onChange={(e) => caricaDocumento(e.target.files?.[0] || null)} />
+                      <CampoFileTrascinabile accept="image/*,application/pdf" style={inputStyle} disabled={caricandoDocumento} onChange={(e) => caricaDocumento(e.target.files?.[0] || null)} />
                     )}
                     {caricandoDocumento && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 6 }}>Carico…</div>}
                     {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 6 }}>{msg}</div>}
@@ -31597,7 +31616,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
             </div>
           </Field>
           <Field label="Allegato (fattura/ricevuta)">
-            <input type="file" onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
+            <CampoFileTrascinabile onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
             {allegatoPathEsistente && !allegatoFile && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Allegato già presente — scegli un file per sostituirlo.</div>}
           </Field>
           <Field label="Note"><textarea style={{ ...inputStyle, minHeight: 60 }} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
@@ -32021,7 +32040,7 @@ function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, even
             </div>
           </Field>
           <Field label="Allegato (contratto)">
-            <input type="file" onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
+            <CampoFileTrascinabile onChange={(e) => setAllegatoFile(e.target.files?.[0] || null)} />
             {allegatoPathEsistente && !allegatoFile && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>Allegato già presente — scegli un file per sostituirlo.</div>}
           </Field>
           <Field label="Note"><textarea style={{ ...inputStyle, minHeight: 60 }} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
@@ -32260,7 +32279,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
       <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
         Colonne attese: descrizione, categoria_id, sottocategoria_id, imponibile, iva_percentuale, data_documento
       </div>
-      <input type="file" accept=".csv" onChange={onFile} style={{ marginBottom: 14 }} />
+      <CampoFileTrascinabile accept=".csv" onChange={onFile} style={{ marginBottom: 14 }} />
       {righe.length > 0 && (
         <div style={{ maxHeight: 280, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, marginBottom: 14 }}>
           {righe.map((r, i) => (
