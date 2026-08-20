@@ -22932,9 +22932,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
-  const [periodo, setPeriodo] = useState("annuale");
-  const [anno, setAnno] = useState(oggi.getFullYear());
-  const [meseSel, setMeseSel] = useState(oggi.getMonth());
   const [categoriaSel, setCategoriaSel] = useState("");
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
@@ -23005,17 +23002,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
 
-  // cambiando periodo, l'anno selezionato deve restare sensato: "Annuale"
-  // vuole l'anno solare corrente, "Trimestrale/Semestrale" l'anno
-  // scolastico in corso (che può essere l'anno solare precedente, es. ad
-  // agosto siamo ancora nell'anno scolastico iniziato a settembre scorso)
-  function selezionaPeriodo(nuovoPeriodo) {
-    setPeriodo(nuovoPeriodo);
-    if (nuovoPeriodo === "annuale") setAnno(oggi.getFullYear());
-    else if (nuovoPeriodo === "trimestrale" || nuovoPeriodo === "semestrale") setAnno(annoScolasticoDi(oggiStr));
-    else if (nuovoPeriodo === "mensile") { setAnno(oggi.getFullYear()); setMeseSel(oggi.getMonth()); }
-  }
-
   async function sincronizzaCatalogo() {
     setSincronizzando(true);
     setMsgSync("");
@@ -23026,22 +23012,19 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     ricarica(["categorie_prodotti", "prodotti_shop"]);
   }
 
-  const range = rangeMagazzino(periodo, anno, meseSel);
-  const anniDisponibili = [...new Set([oggi.getFullYear(), ...(venditeShop || []).map((v) => (v.data_ordine ? parseInt(v.data_ordine.slice(0, 4), 10) : null)).filter(Boolean)])].sort((a, b) => b - a);
-
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
   (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
 
   // il collegamento vendita<->prodotto è per nome: vendite_shop non ha
-  // un riferimento diretto al prodotto, solo la descrizione della riga
-  function aggregaVenditePerNome(inizio, fine) {
+  // un riferimento diretto al prodotto, solo la descrizione della riga.
+  // Venduto/Fatturato sono sempre sull'intero storico: il selettore di
+  // periodo che c'era qui non serviva, tolto
+  function aggregaVenditePerNome() {
     const mappa = {};
     (venditeShop || []).forEach((v) => {
       if (v.tipo_movimento === "omaggio") return; // regalato, non venduto
-      const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
-      if (!d || d < inizio || d > fine) return;
       (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
         const chiave = (p.nome || "").trim().toLowerCase();
         if (!chiave) return;
@@ -23052,7 +23035,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
     });
     return mappa;
   }
-  const venditePerNome = aggregaVenditePerNome(range.inizio, range.fine);
+  const venditePerNome = aggregaVenditePerNome();
 
   // "fermi da oltre 90 giorni": guarda TUTTO lo storico vendite, non solo il
   // periodo selezionato — un omaggio non è un movimento commerciale, non
@@ -23184,30 +23167,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Magazzino fisico e shop online insieme. Clicca sul nome per modificare il prodotto, sullo stock totale per aggiornare il magazzino.</div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-            {[{ v: "annuale", l: "Annuale" }, { v: "semestrale", l: "Semestrale" }, { v: "trimestrale", l: "Trimestrale" }, { v: "mensile", l: "Mensile" }, { v: "settimanale", l: "Settimanale" }].map((p) => (
-              <button key={p.v} onClick={() => selezionaPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : "transparent", color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                {p.l}
-              </button>
-            ))}
-          </div>
-          {periodo === "mensile" && (
-            <select style={{ ...inputStyle, width: "auto" }} value={meseSel} onChange={(e) => setMeseSel(Number(e.target.value))}>
-              {MESI.map((m, i) => <option key={m} value={i}>{m}</option>)}
-            </select>
-          )}
-          {(periodo === "annuale" || periodo === "trimestrale" || periodo === "semestrale" || periodo === "mensile") && (
-            <select style={{ ...inputStyle, width: "auto" }} value={anno} onChange={(e) => setAnno(Number(e.target.value))}>
-              {anniDisponibili.map((a) => <option key={a} value={a}>{periodo === "annuale" || periodo === "mensile" ? a : `${a}/${String((a + 1) % 100).padStart(2, "0")}`}</option>)}
-            </select>
-          )}
-          <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
-            <option value="">Tutte le categorie</option>
-            {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </select>
-        </div>
-
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
@@ -23261,7 +23220,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
+            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+              <option value="">Tutte le categorie</option>
+              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
             <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
