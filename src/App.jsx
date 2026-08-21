@@ -30265,10 +30265,12 @@ function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop,
       onDragOver={(e) => { e.preventDefault(); onDragOver && onDragOver(); }}
       onDrop={() => onDrop && onDrop(kit.id)}
       style={{
-        display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "4px 0",
+        display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "14px",
+        border: `2px solid ${trascinando ? GOLD : evidenziatoBersaglio ? NAVY : CREAM_BORDER}`,
+        borderRadius: 10, background: "#fff",
         opacity: trascinando ? 0.4 : 1,
         transform: evidenziatoBersaglio ? "translateY(4px)" : "none",
-        transition: "transform 0.1s ease",
+        transition: "transform 0.1s ease, border-color 0.1s ease",
       }}
     >
       <span
@@ -30280,7 +30282,7 @@ function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop,
       >
         ⠿
       </span>
-      <div style={{ flex: 1, borderTop: `2px solid ${evidenziatoBersaglio ? NAVY : CREAM_BORDER}` }} />
+      <div style={{ flex: 1, height: 4, borderRadius: 2, background: "#5C3A21" }} />
       <button onClick={elimina} title="Elimina divisore" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 2, flexShrink: 0 }}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
       </button>
