@@ -29168,6 +29168,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [vistaMobile, setVistaMobile] = useState("albero");
   const trascinamento = useRef(null);
 
+  // due viste nettamente separate: "frontoffice" (di sola consultazione,
+  // rispecchia esattamente la struttura Categoria/Sottocategoria/Prodotti
+  // che il cliente vede sullo shop vero) e "backoffice" (l'editor
+  // completo, quello che questa pagina era per intero prima) — un
+  // prodotto aperto da "Gestione magazzino" atterra sempre nel back
+  // office, mai nel front office di sola lettura
+  const [vista, setVista] = useState(apriProdottoIdIniziale ? "backoffice" : "frontoffice");
+  const [foRootId, setFoRootId] = useState(null);
+  const [foSubId, setFoSubId] = useState(null);
+  const [vistaMobileFo, setVistaMobileFo] = useState("categorie");
+
   // questa pagina è il catalogo WooCommerce: le categorie create in
   // "Gestisci categorie" (Magazzino) sono locali, mai spedite a Woo, e
   // non devono comparire qui — altrimenti sembrano "sullo shop" quando
@@ -29264,7 +29275,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   useEffect(() => {
     if (!apriProdottoIdIniziale || prodottoApertoIniziale.current === apriProdottoIdIniziale) return;
     const p = (prodottiShop || []).find((pp) => pp.id === apriProdottoIdIniziale);
-    if (p) { apriProdotto(p); prodottoApertoIniziale.current = apriProdottoIdIniziale; }
+    if (p) { setVista("backoffice"); apriProdotto(p); prodottoApertoIniziale.current = apriProdottoIdIniziale; }
   }, [apriProdottoIdIniziale, prodottiShop]);
 
   function nuovoProdotto() {
@@ -29359,11 +29370,29 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     });
   }
 
-  function toggleCategoriaProdotto(categoriaId) {
+  // "Categoria Front Office di destinazione": fra tutte le categorie
+  // assegnate a un prodotto, la primaria è quella che decide dove il
+  // cliente lo trova nel Front Office — si preferisce una sottocategoria
+  // (ha un padre) a una categoria radice, perché è la più specifica delle
+  // due, esattamente come oggi WooCommerce le assegna insieme in coppia
+  // (es. "Aghi" + "Aghi Universali"). Le altre restano "extra": pochi
+  // prodotti (es. "Diluente") devono davvero comparire in più punti
+  function categoriaPrimariaEExtra(ids) {
+    const primariaId = ids.find((id) => !!categorieAttive.find((c) => c.id === id)?.categoria_padre_id) || ids[0] || null;
+    return { primariaId, extraIds: ids.filter((id) => id !== primariaId) };
+  }
+  function impostaCategoriaPrimaria(nuovoId) {
     setProdottoForm((f) => {
-      const presente = f.categorieIds.includes(categoriaId);
-      return { ...f, categorieIds: presente ? f.categorieIds.filter((id) => id !== categoriaId) : [...f.categorieIds, categoriaId] };
+      const { extraIds } = categoriaPrimariaEExtra(f.categorieIds);
+      return { ...f, categorieIds: nuovoId ? [nuovoId, ...extraIds.filter((id) => id !== nuovoId)] : extraIds };
     });
+  }
+  function aggiungiCategoriaExtra(categoriaId) {
+    if (!categoriaId) return;
+    setProdottoForm((f) => (f.categorieIds.includes(categoriaId) ? f : { ...f, categorieIds: [...f.categorieIds, categoriaId] }));
+  }
+  function rimuoviCategoriaExtra(categoriaId) {
+    setProdottoForm((f) => ({ ...f, categorieIds: f.categorieIds.filter((id) => id !== categoriaId) }));
   }
 
   async function salvaCategoria() {
@@ -29557,17 +29586,51 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           </Field>
         </div>
       </div>
-      <Field label="Categorie">
-        <div style={{ maxHeight: 160, overflow: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 8 }}>
-          {categorieAppiattite().map((c) => (
-            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 7, padding: "3px 4px", paddingLeft: 4 + c.profondita * 16, cursor: "pointer" }}>
-              <input type="checkbox" checked={prodottoForm.categorieIds.includes(c.id)} onChange={() => toggleCategoriaProdotto(c.id)} />
-              <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>{c.nome}</span>
-            </label>
-          ))}
-          {categorieAppiattite().length === 0 && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessuna categoria disponibile.</div>}
-        </div>
-      </Field>
+      {(() => {
+        const { primariaId, extraIds } = categoriaPrimariaEExtra(prodottoForm.categorieIds);
+        const opzioni = categorieAppiattite();
+        const opzioniExtra = opzioni.filter((c) => c.id !== primariaId && !extraIds.includes(c.id));
+        return (
+          <>
+            <Field label="Categoria Front Office di destinazione">
+              <select style={inputStyle} value={primariaId || ""} onChange={(e) => impostaCategoriaPrimaria(e.target.value || null)}>
+                <option value="">— nessuna —</option>
+                {opzioni.map((c) => (
+                  <option key={c.id} value={c.id}>{c.profondita > 0 ? "— " : ""}{c.nome}</option>
+                ))}
+              </select>
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>È la sottocategoria (o categoria) dove il cliente trova questo prodotto nel Front Office.</div>
+            </Field>
+            {(extraIds.length > 0 || opzioniExtra.length > 0) && (
+              <Field label="Compare anche in (opzionale)">
+                {extraIds.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                    {extraIds.map((id) => {
+                      const c = opzioni.find((o) => o.id === id);
+                      return (
+                        <span key={id} style={{ display: "flex", alignItems: "center", gap: 5, ...fontBody, fontSize: 12, color: NAVY, background: BG, borderRadius: 14, padding: "3px 6px 3px 10px" }}>
+                          {c ? c.nome : "—"}
+                          <button onClick={() => rimuoviCategoriaExtra(id)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: MUTED, display: "flex", padding: 2 }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {opzioniExtra.length > 0 && (
+                  <select style={inputStyle} value="" onChange={(e) => aggiungiCategoriaExtra(e.target.value)}>
+                    <option value="">+ aggiungi un'altra sottocategoria…</option>
+                    {opzioniExtra.map((c) => (
+                      <option key={c.id} value={c.id}>{c.profondita > 0 ? "— " : ""}{c.nome}</option>
+                    ))}
+                  </select>
+                )}
+              </Field>
+            )}
+          </>
+        );
+      })()}
     </div>
   );
 
@@ -29607,6 +29670,101 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
   const paneDettaglio = paneDettaglioProdotto || paneDettaglioCategoria || panePlaceholder;
 
+  // ---------- Front Office: sola consultazione, rispecchia esattamente
+  // Categoria → Sottocategoria → Prodotti così come li vede il cliente
+  // sullo shop vero (stessi filtri già usati sopra per "Online": solo
+  // categorie vere su Woo, solo prodotti con un woo_product_id reale e
+  // non in bozza) ----------
+  function foIsOnline(p) { return !!p.woo_product_id && p.stato !== "draft"; }
+  function foProdottiDiCategoria(categoriaId) {
+    return (prodottiShop || [])
+      .filter((p) => p.attivo !== false && foIsOnline(p) && (categorieIdPerProdotto[p.id] || []).includes(categoriaId))
+      .sort((a, b) => a.nome.localeCompare(b.nome));
+  }
+  const foFiglie = foRootId ? (figliDi[foRootId] || []) : [];
+  // una categoria radice senza sotto-categorie è essa stessa lo scaffale
+  // dei prodotti (es. "Dermografo", "Needling"): niente colonna di mezzo
+  // vuota da selezionare, si passa dritti ai prodotti
+  const foCategoriaProdottiId = foFiglie.length > 0 ? foSubId : foRootId;
+  const foRootSelezionata = categorieAttive.find((c) => c.id === foRootId) || null;
+  const foSubSelezionata = categorieAttive.find((c) => c.id === foSubId) || null;
+
+  function foSelezionaRoot(id) {
+    setFoRootId(id); setFoSubId(null);
+    if (isMobile) { const figli = figliDi[id] || []; setVistaMobileFo(figli.length > 0 ? "sottocategorie" : "prodotti"); }
+  }
+  function foSelezionaSub(id) {
+    setFoSubId(id);
+    if (isMobile) setVistaMobileFo("prodotti");
+  }
+
+  const paneFoCategorie = (
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Categoria</div>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {radiciCategorie.map((c) => (
+          <div
+            key={c.id}
+            onClick={() => foSelezionaRoot(c.id)}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 2, background: foRootId === c.id ? "#FBF3E4" : "transparent", border: foRootId === c.id ? `1px solid ${GOLD}` : "1px solid transparent" }}
+          >
+            <span style={{ color: GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
+            <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nome}</span>
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdottiDiretti(c.id)}</span>
+          </div>
+        ))}
+        {radiciCategorie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna categoria sincronizzata con WooCommerce.</div>}
+      </div>
+    </div>
+  );
+
+  const paneFoSotto = (
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{foRootSelezionata ? foRootSelezionata.nome : "Sottocategoria"}</div>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {!foRootId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli prima una categoria.</div>}
+        {foRootId && foFiglie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna sottocategoria: i prodotti sono qui sotto.</div>}
+        {foFiglie.map((s) => (
+          <div
+            key={s.id}
+            onClick={() => foSelezionaSub(s.id)}
+            style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 2, background: foSubId === s.id ? "#FBF3E4" : "transparent", border: foSubId === s.id ? `1px solid ${GOLD}` : "1px solid transparent" }}
+          >
+            <span style={{ color: GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
+            <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.nome}</span>
+            <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdottiDiretti(s.id)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const paneFoProdotti = (
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
+        {foSubSelezionata ? foSubSelezionata.nome : foRootSelezionata ? foRootSelezionata.nome : "Prodotti"}
+      </div>
+      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+        {!foCategoriaProdottiId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli una categoria per vedere i prodotti che il cliente trova lì.</div>}
+        {foCategoriaProdottiId && foProdottiDiCategoria(foCategoriaProdottiId).map((p) => {
+          const immagini = immaginiPerProdotto[p.id] || [];
+          return (
+            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, background: "#FAF8F2", border: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: BG, flexShrink: 0, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {immagini[0] ? <img src={immagini[0].url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: MUTED }}><IconaImmagineShop size={14} /></span>}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}</div>
+              </div>
+            </div>
+          );
+        })}
+        {foCategoriaProdottiId && foProdottiDiCategoria(foCategoriaProdottiId).length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto online qui.</div>}
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1500, margin: "0 auto" }}>
@@ -29616,13 +29774,41 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione Shop</div>
-            <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Categorie, prodotti e immagini dello shop online, sincronizzati con WooCommerce.</div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{vista === "backoffice" ? "Back Office prodotti" : "Shop Online"}</div>
+            <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>
+              {vista === "backoffice"
+                ? "Categorie, prodotti e immagini dello shop online, sincronizzati con WooCommerce."
+                : "Struttura del negozio così come la vede il cliente: categoria → sottocategoria → prodotti."}
+            </div>
           </div>
-          <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} placeholder="Cerca prodotto…" style={{ minWidth: 220 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {vista === "backoffice" && <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} placeholder="Cerca prodotto…" style={{ minWidth: 220 }} />}
+            <Button onClick={() => setVista(vista === "backoffice" ? "frontoffice" : "backoffice")}>
+              {vista === "backoffice" ? "← Front Office" : "Back Office prodotti"}
+            </Button>
+          </div>
         </div>
 
-        {isMobile ? (
+        {vista === "frontoffice" ? (
+          isMobile ? (
+            <>
+              {vistaMobileFo !== "categorie" && (
+                <button onClick={() => setVistaMobileFo(vistaMobileFo === "prodotti" ? (foFiglie.length > 0 ? "sottocategorie" : "categorie") : "categorie")} style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                  <IconaFrecciaSinistra size={14} /> {vistaMobileFo === "prodotti" ? (foFiglie.length > 0 ? "Sottocategorie" : "Categorie") : "Categorie"}
+                </button>
+              )}
+              {vistaMobileFo === "categorie" && paneFoCategorie}
+              {vistaMobileFo === "sottocategorie" && paneFoSotto}
+              {vistaMobileFo === "prodotti" && paneFoProdotti}
+            </>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "260px 260px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
+              {paneFoCategorie}
+              {paneFoSotto}
+              {paneFoProdotti}
+            </div>
+          )
+        ) : isMobile ? (
           <>
             {vistaMobile !== "albero" && (
               <button onClick={() => setVistaMobile(vistaMobile === "dettaglio" ? "lista" : "albero")} style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
