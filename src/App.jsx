@@ -30390,13 +30390,16 @@ function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop,
     </div>
   );
 }
-function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio }) {
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
   // contenuto ripiegato di default: con molti prodotti nel kit la pagina
-  // diventava una lista lunghissima da scorrere per ogni pacchetto
-  const [aperto, setAperto] = useState(false);
+  // diventava una lista lunghissima da scorrere per ogni pacchetto — solo
+  // un pacchetto alla volta può essere aperto in tutta la pagina (stato
+  // condiviso in PaginaContenutoKit), così è sempre chiaro quale sia
+  // l'eventuale fonte di una copia
+  const aperto = kitApertoId === kit.id;
 
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
   const idsUsati = new Set(prodottiKit.map((r) => r.prodotto_id));
@@ -30445,6 +30448,22 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["corsi_kit_prodotti"]);
   }
+  // "Incolla" sostituisce per intero il contenuto di QUESTO pacchetto con
+  // quello copiato da un altro (cancella prima le righe esistenti, poi
+  // inserisce la copia) — non un'aggiunta: rispecchia "si incolla tutto
+  // il contenuto" richiesto esplicitamente
+  async function incolla() {
+    if (!kitCopiato || kitCopiato.id === kit.id) return;
+    const { error: erroreDelete } = await supabase.from("corsi_kit_prodotti").delete().eq("kit_id", kit.id).eq("tipo", "kit");
+    if (erroreDelete) { window.alert("Errore: " + erroreDelete.message); return; }
+    if (kitCopiato.prodotti.length > 0) {
+      const { error: erroreInsert } = await supabase.from("corsi_kit_prodotti").insert(
+        kitCopiato.prodotti.map((p) => ({ kit_id: kit.id, prodotto_id: p.prodotto_id, tipo: "kit", quantita: p.quantita }))
+      );
+      if (erroreInsert) { window.alert("Errore: " + erroreInsert.message); return; }
+    }
+    ricarica(["corsi_kit_prodotti"]);
+  }
 
   const risultatiKit = ricercaKit.trim()
     ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaKit.trim().toLowerCase())).slice(0, 8)
@@ -30481,12 +30500,21 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           style={{ ...fontDisplay, fontSize: 14.5, fontWeight: 700, color: NAVY, border: "none", background: "transparent", padding: 0, flex: 1, minWidth: 120 }}
         />
         <button
-          onClick={() => setAperto((v) => !v)}
+          onClick={() => onImpostaAperto(aperto ? null : kit.id)}
           style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "4px 2px", display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}
         >
           {prodottiKit.length} prodott{prodottiKit.length === 1 ? "o" : "i"} <span style={{ display: "inline-block", transform: aperto ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
         </button>
-        <button onClick={() => { setMostraRicercaKit((v) => !v); setAperto(true); }} style={pillBtn}>+ Prodotto</button>
+        {/* Copia/Incolla per duplicare il contenuto di un pacchetto su un
+            altro: compaiono solo quando un pacchetto (in tutta la pagina)
+            è aperto — quello aperto mostra "Copia", ogni altro "Incolla" */}
+        {aperto && (
+          <button onClick={() => onCopia(kit.id, prodottiKit.map((r) => ({ prodotto_id: r.prodotto_id, quantita: r.quantita })))} style={pillBtn}>Copia</button>
+        )}
+        {kitApertoId != null && !aperto && kitCopiato && kitCopiato.id !== kit.id && (
+          <button onClick={incolla} style={pillBtn}>Incolla</button>
+        )}
+        <button onClick={() => { setMostraRicercaKit((v) => !v); onImpostaAperto(kit.id); }} style={pillBtn}>+ Prodotto</button>
         <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
 
@@ -30631,7 +30659,7 @@ function SchedaAccessoriCorso({ corso, righe, tuttiCorsiKitProdotti, corsi, prod
 // pacchetti speciali senza corso) con i suoi pacchetti sotto e il tasto
 // per crearne uno nuovo — sempre visibile, senza bisogno di "creare" un
 // contenitore prima di poter vedere l'elenco dei corsi
-function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni }) {
+function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prodottiShop, ricarica, setKitDefinizioni, kitApertoId, onImpostaAperto, kitCopiato, onCopia }) {
   const [mostraNuovo, setMostraNuovo] = useState(false);
   const [nomeNuovo, setNomeNuovo] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -30748,6 +30776,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
             onDragEnd={() => { setTrascinatoId(null); setTrascinatoSuId(null); }}
             trascinando={trascinatoId === k.id}
             evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
+            kitApertoId={kitApertoId} onImpostaAperto={onImpostaAperto} kitCopiato={kitCopiato} onCopia={onCopia}
           />
         )
       ))}
@@ -30764,6 +30793,13 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
   const corsiOrdinati = corsi.slice().sort((a, b) => a.nome.localeCompare(b.nome));
   const ordinaPacchetti = (arr) => arr.slice().sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
   const pacchettiSpeciali = ordinaPacchetti(kitDefinizioni.filter((k) => !k.corso_id));
+  // un solo pacchetto aperto alla volta in tutta la pagina (qualunque
+  // corso): quello aperto mostra "Copia", ogni altro "Incolla" — condiviso
+  // fra tutte le sezioni corso, non solo quella cliccata, così si può
+  // copiare da un corso e incollare su un pacchetto di un altro
+  const [kitApertoId, setKitApertoId] = useState(null);
+  const [kitCopiato, setKitCopiato] = useState(null);
+  function onCopia(kitId, prodotti) { setKitCopiato({ id: kitId, prodotti }); }
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -30784,6 +30820,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
             pacchetti={ordinaPacchetti(kitDefinizioni.filter((k) => k.corso_id === c.id))}
             corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
             setKitDefinizioni={setKitDefinizioni}
+            kitApertoId={kitApertoId} onImpostaAperto={setKitApertoId} kitCopiato={kitCopiato} onCopia={onCopia}
           />
         ))}
 
@@ -30791,6 +30828,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
           corso={null} pacchetti={pacchettiSpeciali}
           corsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica}
           setKitDefinizioni={setKitDefinizioni}
+          kitApertoId={kitApertoId} onImpostaAperto={setKitApertoId} kitCopiato={kitCopiato} onCopia={onCopia}
         />
       </div>
     </div>
