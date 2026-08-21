@@ -20854,9 +20854,14 @@ function PaginaRiconciliazione({
   );
 }
 
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
+  // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
+  // pagina (es. la scheda di un allievo da Scadenziario Attivo) e poi si
+  // torna "Indietro", questa pagina viene rimontata da zero e deve
+  // ripartire dall'ultimo tab attivo, non da quello di default
+  useEffect(() => { onCambiaTab?.(tab); }, [tab]);
   const [subTabPassivo, setSubTabPassivo] = useState("dapagare");
   const [subTabImpegni, setSubTabImpegni] = useState("attivi");
   const [subTabAttivo, setSubTabAttivo] = useState("attive");
@@ -34419,6 +34424,7 @@ export default function App() {
           onApriNuovaSpesaDaFatturaFic={apriNuovaSpesaDaFatturaFic}
           onApriRiconciliazione={apriRiconciliazione}
           tabIniziale={amministrazioneTabIniziale}
+          onCambiaTab={setAmministrazioneTabIniziale}
         />
       )}
 
