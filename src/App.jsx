@@ -29101,6 +29101,54 @@ function ModaleNuovaCategoriaShop({ padreNome, onClose, onCrea, salvando }) {
   );
 }
 
+// crea o modifica una voce del menu Front Office reale (WordPress),
+// tramite il ponte wp-gestisci-menu: o è agganciata a una vera categoria
+// WooCommerce ("taxonomy", il cliente ci trova i prodotti), o è un link
+// personalizzato — una voce già "pagina" (post_type) modificata da qui
+// diventa un link personalizzato verso la stessa pagina: resta
+// funzionante per il cliente, cambia solo come WordPress la classifica
+function ModaleVoceMenuFo({ categorieWoo, valoreIniziale, onClose, onSalva, salvando }) {
+  const [titolo, setTitolo] = useState(valoreIniziale?.titolo || "");
+  const [tipo, setTipo] = useState(valoreIniziale?.tipo === "taxonomy" ? "taxonomy" : "custom");
+  const [oggettoId, setOggettoId] = useState(valoreIniziale?.tipo === "taxonomy" ? String(valoreIniziale.oggetto_id) : "");
+  const [url, setUrl] = useState(valoreIniziale?.tipo !== "taxonomy" ? (valoreIniziale?.url || "") : "");
+  const categorieOrdinate = [...(categorieWoo || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  return (
+    <Modal title={valoreIniziale ? "Modifica voce di menu" : "Nuova voce di menu"} onClose={onClose}>
+      <Field label="Titolo (come lo vede il cliente)">
+        <input style={inputStyle} autoFocus value={titolo} onChange={(e) => setTitolo(e.target.value)} />
+      </Field>
+      <Field label="Tipo">
+        <select style={inputStyle} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+          <option value="taxonomy">Categoria WooCommerce reale</option>
+          <option value="custom">Link personalizzato</option>
+        </select>
+      </Field>
+      {tipo === "taxonomy" ? (
+        <Field label="Categoria collegata">
+          <select style={inputStyle} value={oggettoId} onChange={(e) => setOggettoId(e.target.value)}>
+            <option value="">— scegli —</option>
+            {categorieOrdinate.map((c) => <option key={c.woo_category_id} value={c.woo_category_id}>{c.nome}</option>)}
+          </select>
+        </Field>
+      ) : (
+        <Field label="Indirizzo (URL)">
+          <input style={inputStyle} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://elitederma.shop/…" />
+        </Field>
+      )}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
+        <Button variant="ghost" onClick={onClose}>Annulla</Button>
+        <Button
+          onClick={() => onSalva({ titolo: titolo.trim(), tipo, oggettoId: tipo === "taxonomy" ? Number(oggettoId) : null, url: tipo === "custom" ? url.trim() : null })}
+          disabled={salvando || !titolo.trim() || (tipo === "taxonomy" && !oggettoId)}
+        >
+          {salvando ? "Salvo…" : "Salva"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
 // editor di testo con formattazione (grassetto/corsivo/elenco) invece di un
 // campo dove si vedrebbe il codice HTML grezzo: WooCommerce salva le
 // descrizioni come HTML, ma chi lavora in magazzino non deve scriverlo a
@@ -29168,16 +29216,34 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [vistaMobile, setVistaMobile] = useState("albero");
   const trascinamento = useRef(null);
 
-  // due viste nettamente separate: "frontoffice" (di sola consultazione,
-  // rispecchia esattamente la struttura Categoria/Sottocategoria/Prodotti
-  // che il cliente vede sullo shop vero) e "backoffice" (l'editor
-  // completo, quello che questa pagina era per intero prima) — un
-  // prodotto aperto da "Gestione magazzino" atterra sempre nel back
-  // office, mai nel front office di sola lettura
+  // due viste nettamente separate: "frontoffice" (il menu vero di
+  // WordPress — Aspetto → Menu, letto/scritto tramite il ponte
+  // wp-gestisci-menu, non la tassonomia WooCommerce: il menu reale
+  // mischia vere categorie, pagine costruite col page builder e link
+  // personalizzati, cosa che la sola tassonomia non può rappresentare)
+  // e "backoffice" (l'editor completo, quello che questa pagina era per
+  // intero prima) — un prodotto aperto da "Gestione magazzino" atterra
+  // sempre nel back office, mai nel front office
   const [vista, setVista] = useState(apriProdottoIdIniziale ? "backoffice" : "frontoffice");
   const [foRootId, setFoRootId] = useState(null);
   const [foSubId, setFoSubId] = useState(null);
   const [vistaMobileFo, setVistaMobileFo] = useState("categorie");
+  const [menuId, setMenuId] = useState(null);
+  const [menuVoci, setMenuVoci] = useState(null); // null = non ancora caricato
+  const [caricandoMenu, setCaricandoMenu] = useState(false);
+  const [erroreMenu, setErroreMenu] = useState("");
+  const [modaleVoceMenu, setModaleVoceMenu] = useState(null); // { genitoreId, voce? }
+  const [salvandoMenu, setSalvandoMenu] = useState(false);
+
+  async function caricaMenuFo() {
+    setCaricandoMenu(true); setErroreMenu("");
+    const { data, error } = await supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "leggi" } });
+    setCaricandoMenu(false);
+    if (error || data?.errore) { setErroreMenu(data?.errore || error.message); return; }
+    setMenuId(data.menu_id);
+    setMenuVoci(data.voci || []);
+  }
+  useEffect(() => { caricaMenuFo(); }, []);
 
   // questa pagina è il catalogo WooCommerce: le categorie create in
   // "Gestisci categorie" (Magazzino) sono locali, mai spedite a Woo, e
@@ -29670,83 +29736,155 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
   const paneDettaglio = paneDettaglioProdotto || paneDettaglioCategoria || panePlaceholder;
 
-  // ---------- Front Office: sola consultazione, rispecchia esattamente
-  // Categoria → Sottocategoria → Prodotti così come li vede il cliente
-  // sullo shop vero (stessi filtri già usati sopra per "Online": solo
-  // categorie vere su Woo, solo prodotti con un woo_product_id reale e
-  // non in bozza) ----------
+  // ---------- Front Office: il menu VERO di WordPress (Aspetto → Menu),
+  // letto e modificato tramite il ponte wp-gestisci-menu — non la
+  // tassonomia WooCommerce, che da sola non basta: il menu reale mischia
+  // vere categorie prodotto, pagine costruite col page builder e link
+  // personalizzati senza nessuna categoria dietro ----------
   function foIsOnline(p) { return !!p.woo_product_id && p.stato !== "draft"; }
-  function foProdottiDiCategoria(categoriaId) {
+  const menuPerGenitore = useMemo(() => {
+    const mappa = {};
+    (menuVoci || []).forEach((v) => { (mappa[v.genitore_id] ||= []).push(v); });
+    Object.values(mappa).forEach((lista) => lista.sort((a, b) => a.ordine - b.ordine));
+    return mappa;
+  }, [menuVoci]);
+  const menuRadici = menuPerGenitore[0] || [];
+  const foFiglie = foRootId ? (menuPerGenitore[foRootId] || []) : [];
+  // una voce radice senza sotto-voci è essa stessa lo scaffale dei
+  // prodotti: niente colonna di mezzo vuota da selezionare
+  const foFoglia = foFiglie.length > 0 ? (menuVoci || []).find((v) => v.id === foSubId) : (menuVoci || []).find((v) => v.id === foRootId);
+  const foRootSelezionata = (menuVoci || []).find((v) => v.id === foRootId) || null;
+  const foSubSelezionata = (menuVoci || []).find((v) => v.id === foSubId) || null;
+
+  // solo le voci "taxonomy" sono vere categorie WooCommerce: solo lì si
+  // possono davvero mostrare i prodotti collegati (categoria locale
+  // trovata via woo_category_id, stesso legame usato in Gestione shop)
+  function foProdottiDiVoce(voce) {
+    if (!voce || voce.tipo !== "taxonomy") return [];
+    const categoriaLocale = categorieAttive.find((c) => c.woo_category_id === voce.oggetto_id);
+    if (!categoriaLocale) return [];
     return (prodottiShop || [])
-      .filter((p) => p.attivo !== false && foIsOnline(p) && (categorieIdPerProdotto[p.id] || []).includes(categoriaId))
+      .filter((p) => p.attivo !== false && foIsOnline(p) && (categorieIdPerProdotto[p.id] || []).includes(categoriaLocale.id))
       .sort((a, b) => a.nome.localeCompare(b.nome));
   }
-  const foFiglie = foRootId ? (figliDi[foRootId] || []) : [];
-  // una categoria radice senza sotto-categorie è essa stessa lo scaffale
-  // dei prodotti (es. "Dermografo", "Needling"): niente colonna di mezzo
-  // vuota da selezionare, si passa dritti ai prodotti
-  const foCategoriaProdottiId = foFiglie.length > 0 ? foSubId : foRootId;
-  const foRootSelezionata = categorieAttive.find((c) => c.id === foRootId) || null;
-  const foSubSelezionata = categorieAttive.find((c) => c.id === foSubId) || null;
 
   function foSelezionaRoot(id) {
     setFoRootId(id); setFoSubId(null);
-    if (isMobile) { const figli = figliDi[id] || []; setVistaMobileFo(figli.length > 0 ? "sottocategorie" : "prodotti"); }
+    if (isMobile) { const figli = menuPerGenitore[id] || []; setVistaMobileFo(figli.length > 0 ? "sottocategorie" : "prodotti"); }
   }
   function foSelezionaSub(id) {
     setFoSubId(id);
     if (isMobile) setVistaMobileFo("prodotti");
   }
 
+  // scrive una voce (nuova se senza itemId) e ricarica il menu — stessa
+  // funzione per creare e modificare, come già fa salvaCategoria/creaCategoria
+  async function salvaVoceMenu({ itemId, titolo, genitoreId, ordine, tipo, oggettoId, url }) {
+    if (!menuId) return false;
+    setSalvandoMenu(true);
+    const { data, error } = await supabase.functions.invoke("wp-gestisci-menu", {
+      body: { azione: "crea_modifica", menuId, itemId: itemId || undefined, titolo, genitoreId: genitoreId || 0, ordine, tipo, oggettoId, url },
+    });
+    setSalvandoMenu(false);
+    if (error || data?.errore) { window.alert("Errore: " + (data?.errore || error.message)); return false; }
+    await caricaMenuFo();
+    return true;
+  }
+  async function eliminaVoceMenu(voce) {
+    const figli = menuPerGenitore[voce.id] || [];
+    const messaggio = figli.length > 0
+      ? `"${voce.titolo}" ha ${figli.length} sotto-vo${figli.length === 1 ? "ce" : "ci"}: verranno spostate al primo livello. Continuare?`
+      : `Cancellare la voce "${voce.titolo}" dal menu?`;
+    if (!window.confirm(messaggio)) return;
+    const { data, error } = await supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "elimina", itemId: voce.id } });
+    if (error || data?.errore) { window.alert("Errore: " + (data?.errore || error.message)); return; }
+    if (foRootId === voce.id) setFoRootId(null);
+    if (foSubId === voce.id) setFoSubId(null);
+    await caricaMenuFo();
+  }
+  // scambia l'ordine con la voce adiacente (stessa fetta di fratelli):
+  // niente drag and drop, due frecce bastano e sono già lo stile usato
+  // altrove nell'app per liste corte
+  function spostaVoceMenu(voce, direzione) {
+    const fratelli = menuPerGenitore[voce.genitore_id] || [];
+    const idx = fratelli.findIndex((f) => f.id === voce.id);
+    const altro = fratelli[idx + direzione];
+    if (!altro) return;
+    const tipoDi = (v) => (v.tipo === "taxonomy" ? "taxonomy" : "custom");
+    Promise.all([
+      supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "crea_modifica", menuId, itemId: voce.id, titolo: voce.titolo, genitoreId: voce.genitore_id, ordine: altro.ordine, tipo: tipoDi(voce), oggettoId: voce.oggetto_id, url: voce.url } }),
+      supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "crea_modifica", menuId, itemId: altro.id, titolo: altro.titolo, genitoreId: altro.genitore_id, ordine: voce.ordine, tipo: tipoDi(altro), oggettoId: altro.oggetto_id, url: altro.url } }),
+    ]).then(caricaMenuFo);
+  }
+
+  function rigaVoceMenu(v, selezionata, onSeleziona, indice, totale) {
+    return (
+      <div
+        key={v.id}
+        onClick={() => onSeleziona(v.id)}
+        style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 2, background: selezionata ? "#FBF3E4" : "transparent", border: selezionata ? `1px solid ${GOLD}` : "1px solid transparent" }}
+      >
+        <span style={{ color: v.tipo === "taxonomy" ? GOLD : MUTED, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
+        <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.titolo}</span>
+        {v.tipo !== "taxonomy" && <span title={v.tipo === "post_type" ? "Pagina, non una categoria reale" : "Link personalizzato, non una categoria reale"} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: BG, borderRadius: 8, padding: "2px 6px", flexShrink: 0 }}>{v.tipo === "post_type" ? "Pagina" : "Link"}</span>}
+        <button onClick={(e) => { e.stopPropagation(); spostaVoceMenu(v, -1); }} disabled={indice === 0} title="Sposta su" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: indice === 0 ? "default" : "pointer", color: indice === 0 ? "#D8D2C4" : MUTED, flexShrink: 0 }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); spostaVoceMenu(v, 1); }} disabled={indice === totale - 1} title="Sposta giù" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: indice === totale - 1 ? "default" : "pointer", color: indice === totale - 1 ? "#D8D2C4" : MUTED, flexShrink: 0 }}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); setModaleVoceMenu({ genitoreId: v.genitore_id, voce: v }); }} title="Rinomina/modifica" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: "pointer", color: MUTED, flexShrink: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>
+        </button>
+        <button onClick={(e) => { e.stopPropagation(); eliminaVoceMenu(v); }} title="Cancella dal menu" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: "pointer", color: MUTED, flexShrink: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0-1 14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2L4 6" /></svg>
+        </button>
+      </div>
+    );
+  }
+
   const paneFoCategorie = (
     <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Categoria</div>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Menu (voce principale)</div>
       <div style={{ flex: 1, overflow: "auto" }}>
-        {radiciCategorie.map((c) => (
-          <div
-            key={c.id}
-            onClick={() => foSelezionaRoot(c.id)}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 2, background: foRootId === c.id ? "#FBF3E4" : "transparent", border: foRootId === c.id ? `1px solid ${GOLD}` : "1px solid transparent" }}
-          >
-            <span style={{ color: GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
-            <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nome}</span>
-            <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdottiDiretti(c.id)}</span>
-          </div>
-        ))}
-        {radiciCategorie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna categoria sincronizzata con WooCommerce.</div>}
+        {caricandoMenu && menuVoci === null && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Carico il menu da WordPress…</div>}
+        {erroreMenu && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", padding: "10px 4px" }}>{erroreMenu}</div>}
+        {menuRadici.map((v, i) => rigaVoceMenu(v, foRootId === v.id, foSelezionaRoot, i, menuRadici.length))}
+        {menuVoci && menuRadici.length === 0 && !erroreMenu && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Il menu è vuoto.</div>}
       </div>
+      {menuId && (
+        <button onClick={() => setModaleVoceMenu({ genitoreId: 0 })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi voce</button>
+      )}
     </div>
   );
 
   const paneFoSotto = (
     <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{foRootSelezionata ? foRootSelezionata.nome : "Sottocategoria"}</div>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{foRootSelezionata ? foRootSelezionata.titolo : "Sotto-voce"}</div>
       <div style={{ flex: 1, overflow: "auto" }}>
-        {!foRootId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli prima una categoria.</div>}
-        {foRootId && foFiglie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna sottocategoria: i prodotti sono qui sotto.</div>}
-        {foFiglie.map((s) => (
-          <div
-            key={s.id}
-            onClick={() => foSelezionaSub(s.id)}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 2, background: foSubId === s.id ? "#FBF3E4" : "transparent", border: foSubId === s.id ? `1px solid ${GOLD}` : "1px solid transparent" }}
-          >
-            <span style={{ color: GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
-            <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.nome}</span>
-            <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdottiDiretti(s.id)}</span>
-          </div>
-        ))}
+        {!foRootId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli prima una voce a sinistra.</div>}
+        {foRootId && foFiglie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna sotto-voce: i prodotti sono qui sotto (se è una categoria reale).</div>}
+        {foFiglie.map((v, i) => rigaVoceMenu(v, foSubId === v.id, foSelezionaSub, i, foFiglie.length))}
       </div>
+      {foRootId && (
+        <button onClick={() => setModaleVoceMenu({ genitoreId: foRootId })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi sotto-voce</button>
+      )}
     </div>
   );
 
   const paneFoProdotti = (
     <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
-        {foSubSelezionata ? foSubSelezionata.nome : foRootSelezionata ? foRootSelezionata.nome : "Prodotti"}
+        {foSubSelezionata ? foSubSelezionata.titolo : foRootSelezionata ? foRootSelezionata.titolo : "Prodotti"}
       </div>
       <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
-        {!foCategoriaProdottiId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli una categoria per vedere i prodotti che il cliente trova lì.</div>}
-        {foCategoriaProdottiId && foProdottiDiCategoria(foCategoriaProdottiId).map((p) => {
+        {!foFoglia && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli una voce per vedere i prodotti che il cliente trova lì.</div>}
+        {foFoglia && foFoglia.tipo !== "taxonomy" && (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>
+            {foFoglia.tipo === "post_type" ? "È una pagina costruita a mano, non una categoria WooCommerce: i suoi prodotti non sono gestiti da questo gestionale." : "È un link personalizzato, non una categoria WooCommerce: nessun prodotto collegato qui."}
+          </div>
+        )}
+        {foFoglia && foFoglia.tipo === "taxonomy" && foProdottiDiVoce(foFoglia).map((p) => {
           const immagini = immaginiPerProdotto[p.id] || [];
           return (
             <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: 8, borderRadius: 10, background: "#FAF8F2", border: `1px solid ${CREAM_BORDER}` }}>
@@ -29760,7 +29898,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             </div>
           );
         })}
-        {foCategoriaProdottiId && foProdottiDiCategoria(foCategoriaProdottiId).length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto online qui.</div>}
+        {foFoglia && foFoglia.tipo === "taxonomy" && foProdottiDiVoce(foFoglia).length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto online qui.</div>}
       </div>
     </div>
   );
@@ -29834,6 +29972,27 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           onClose={() => setModaleCategoria(null)}
           onCrea={(nome) => creaCategoria(nome, modaleCategoria.padreId)}
           salvando={salvando}
+        />
+      )}
+      {modaleVoceMenu && (
+        <ModaleVoceMenuFo
+          categorieWoo={categorieAttive}
+          valoreIniziale={modaleVoceMenu.voce}
+          salvando={salvandoMenu}
+          onClose={() => setModaleVoceMenu(null)}
+          onSalva={async (dati) => {
+            const fratelli = menuPerGenitore[modaleVoceMenu.genitoreId] || [];
+            const ok = await salvaVoceMenu({
+              itemId: modaleVoceMenu.voce?.id,
+              titolo: dati.titolo,
+              genitoreId: modaleVoceMenu.genitoreId,
+              ordine: modaleVoceMenu.voce ? modaleVoceMenu.voce.ordine : fratelli.length,
+              tipo: dati.tipo,
+              oggettoId: dati.oggettoId,
+              url: dati.url,
+            });
+            if (ok) setModaleVoceMenu(null);
+          }}
         />
       )}
     </div>
