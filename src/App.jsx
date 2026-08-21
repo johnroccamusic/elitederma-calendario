@@ -16374,23 +16374,21 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                         <select
                           style={{ ...inputStyle, flex: 1 }}
                           value={m.tipo}
-                          onChange={(e) => setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, tipo: e.target.value } : x)))}
+                          onChange={(e) => {
+                            const tipoScelto = e.target.value;
+                            // il giorno è deciso dal trattamento (definito una volta
+                            // per tutte in "Definisci corsi" → corsi_giorni), non il
+                            // contrario: cambiare trattamento sposta in automatico
+                            // anche il giorno assegnato alla modella
+                            const giornoObj = giorniAllieviCorso.find((g) => g.tipo_modella_allievi === tipoScelto);
+                            setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, tipo: tipoScelto, giorno: giornoObj ? giornoObj.numero_giorno : x.giorno } : x)));
+                          }}
                         >
                           <option value="">— scegli —</option>
                           {opzioniTipoModellaCorso.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
                         </select>
                         {giorniAllieviCorso.length > 1 && (
-                          <select
-                            style={{ ...inputStyle, flex: 1 }}
-                            value={m.giorno || ""}
-                            onChange={(e) => {
-                              const giornoScelto = e.target.value ? Number(e.target.value) : null;
-                              const giornoObj = giorniAllieviCorso.find((g) => g.numero_giorno === giornoScelto);
-                              // scegliendo il giorno si suggerisce anche il suo trattamento
-                              // previsto, restando comunque modificabile a mano se serve
-                              setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, giorno: giornoScelto, tipo: giornoObj?.tipo_modella_allievi || x.tipo } : x)));
-                            }}
-                          >
+                          <select style={{ ...inputStyle, flex: 1, background: "#EFEFEF", color: MUTED }} value={m.giorno || ""} disabled>
                             <option value="">— giorno —</option>
                             {giorniAllieviCorso.map((g) => (
                               <option key={g.numero_giorno} value={g.numero_giorno}>Giorno {g.numero_giorno}{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}</option>
