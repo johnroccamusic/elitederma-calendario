@@ -30301,10 +30301,24 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   const idsUsati = new Set(prodottiKit.map((r) => r.prodotto_id));
 
   async function salvaNome() {
-    if (!nome.trim() || nome.trim() === kit.nome) { setNome(kit.nome); return; }
-    const { error } = await supabase.from("kit_definizioni").update({ nome: nome.trim() }).eq("id", kit.id);
+    const nuovo = nome.trim();
+    if (!nuovo || nuovo === kit.nome) { setNome(kit.nome); return; }
+    const vecchio = kit.nome;
+    const { error } = await supabase.from("kit_definizioni").update({ nome: nuovo }).eq("id", kit.id);
     if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["kit_definizioni"]);
+    // iscritti.pacchetto_kit è una copia del nome al momento della scelta,
+    // non un riferimento vivo al kit: rinominare qui deve aggiornare anche
+    // le schede che avevano già scelto questo pacchetto, altrimenti restano
+    // per sempre con la dicitura vecchia. Scoperto per un kit legato a un
+    // corso: si aggiornano solo gli iscritti di edizioni di QUEL corso (un
+    // kit "speciale" senza corso aggiorna invece qualunque iscritto)
+    let query = supabase.from("iscritti").update({ pacchetto_kit: nuovo }).eq("pacchetto_kit", vecchio);
+    if (kit.corso_id) {
+      const { data: edizioni } = await supabase.from("corsi_date").select("id").eq("corso_id", kit.corso_id);
+      query = query.in("corso_data_id", (edizioni || []).map((e) => e.id));
+    }
+    await query;
+    ricarica(["kit_definizioni", "iscritti"]);
   }
   async function elimina() {
     if (!window.confirm(`Eliminare il pacchetto "${kit.nome}"? Rimuove anche il suo contenuto (non tocca le edizioni che lo hanno già usato).`)) return;
