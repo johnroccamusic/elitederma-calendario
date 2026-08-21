@@ -172,6 +172,7 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 100, 130, 90, 100, 150, 110, 82,
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v9";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
+const CHIAVE_LARGHEZZE_FRONTOFFICE = "shopOnline_larghezzeColonneFrontOffice";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
 // sola (colonne strette, per non occupare spazio in larghezza). Il
@@ -29247,6 +29248,49 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [salvandoMenu, setSalvandoMenu] = useState(false);
   const [pagineWp, setPagineWp] = useState([]); // pagine reali di WordPress, per il tipo "Pagina" nella modale voce di menu
 
+  // larghezza delle due colonne strette del Front Office trascinabile col
+  // mouse (stesso pattern di "Dettaglio prodotti"/Assegnazione Master),
+  // salvata per sempre in questo browser — evita i titoli mozzati quando
+  // il nome di una voce è lungo
+  const [largFo, setLargFo] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_FRONTOFFICE) || "{}"); } catch { return {}; }
+  });
+  function larghezzaFoDi(chiave, larghezzaDefault) { return largFo[chiave] ?? larghezzaDefault; }
+  const ridimFoRef = React.useRef(null);
+  function iniziaRidimFo(e, chiave, larghezzaAttuale) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ridimFoRef.current = { chiave, pointerId: e.pointerId, startX: e.clientX, startWidth: larghezzaAttuale };
+  }
+  function muoviRidimFo(e) {
+    const r = ridimFoRef.current;
+    if (!r || e.pointerId !== r.pointerId) return;
+    const nuovaLarghezza = Math.max(140, r.startWidth + (e.clientX - r.startX));
+    setLargFo((precedenti) => ({ ...precedenti, [r.chiave]: nuovaLarghezza }));
+  }
+  function fineRidimFo() {
+    if (!ridimFoRef.current) return;
+    ridimFoRef.current = null;
+    setLargFo((attuali) => {
+      try { localStorage.setItem(CHIAVE_LARGHEZZE_FRONTOFFICE, JSON.stringify(attuali)); } catch { /* ignora */ }
+      return attuali;
+    });
+  }
+  function manigliaColonnaFo(chiave, larghezzaAttuale) {
+    return (
+      <div
+        onPointerDown={(e) => iniziaRidimFo(e, chiave, larghezzaAttuale)}
+        onPointerMove={muoviRidimFo}
+        onPointerUp={fineRidimFo}
+        onPointerCancel={fineRidimFo}
+        title="Trascina per allargare/restringere"
+        style={{ position: "absolute", top: 0, right: -8, bottom: 0, width: 16, cursor: "col-resize", touchAction: "none", zIndex: 3, display: "flex", justifyContent: "center" }}
+      >
+        <div style={{ width: 1, height: "100%", background: CREAM_BORDER }} />
+      </div>
+    );
+  }
+
   async function caricaMenuFo() {
     setCaricandoMenu(true); setErroreMenu("");
     const { data, error } = await supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "leggi" } });
@@ -29861,7 +29905,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
 
   const paneFoCategorie = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Menu (voce principale)</div>
       <div style={{ flex: 1, overflow: "auto" }}>
         {caricandoMenu && menuVoci === null && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Carico il menu da WordPress…</div>}
@@ -29872,20 +29916,22 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       {menuId && (
         <button onClick={() => setModaleVoceMenu({ genitoreId: 0 })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi voce</button>
       )}
+      {!isMobile && manigliaColonnaFo("categorie", larghezzaFoDi("categorie", 260))}
     </div>
   );
 
   const paneFoSotto = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{foRootSelezionata ? foRootSelezionata.titolo : "Sotto-voce"}</div>
       <div style={{ flex: 1, overflow: "auto" }}>
         {!foRootId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli prima una voce a sinistra.</div>}
-        {foRootId && foFiglie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna sotto-voce: i prodotti sono qui sotto (se è una categoria reale).</div>}
+        {foRootId && foFiglie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna sotto-voce: guarda la colonna Prodotti a destra (se è una categoria reale).</div>}
         {foFiglie.map((v, i) => rigaVoceMenu(v, foSubId === v.id, foSelezionaSub, i, foFiglie.length))}
       </div>
       {foRootId && (
         <button onClick={() => setModaleVoceMenu({ genitoreId: foRootId })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi sotto-voce</button>
       )}
+      {!isMobile && manigliaColonnaFo("sotto", larghezzaFoDi("sotto", 260))}
     </div>
   );
 
@@ -29957,7 +30003,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               {vistaMobileFo === "prodotti" && paneFoProdotti}
             </>
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "260px 260px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `${larghezzaFoDi("categorie", 260)}px ${larghezzaFoDi("sotto", 260)}px minmax(0,1fr)`, gap: 16, alignItems: "start" }}>
               {paneFoCategorie}
               {paneFoSotto}
               {paneFoProdotti}
