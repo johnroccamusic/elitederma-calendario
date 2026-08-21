@@ -14065,6 +14065,23 @@ const LIMITI_SPAZI_ISCRIZIONI = {
 // trascinando la maniglia "⠿" (solo ruoloUtente "programmatore"),
 // salvato per tutti nella stessa riga di impostazioni_layout_iscrizioni
 const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzativi"];
+// stesso principio, un livello più fine: l'ordine delle singole righe di
+// campi dentro ciascuna delle tre sezioni (impostazioni_layout_iscrizioni
+// .ordine_righe, forma { anagrafica: [...], contabili: [...], organizzativi: [...] })
+const ORDINE_RIGHE_ISCRITTO_DEFAULT = {
+  anagrafica: ["modulo", "nomeCognome", "tutorTelefono", "fatturazione"],
+  contabili: ["totalePattuito", "pacchettoKit", "quotaAcconto", "quotaPrecorso", "daAvereAlCorso", "pagheraInTotale"],
+  organizzativi: ["accordiCommerciali", "richiedeModelle", "tagliaDivisa", "screenAcconto", "screenRecap", "note"],
+};
+// una chiave/default/limite "spazioDopoRiga<Sezione><Riga>" per ciascuna
+// riga elencata sopra, generate qui invece che scritte a mano una per una
+Object.entries(ORDINE_RIGHE_ISCRITTO_DEFAULT).forEach(([sezione, righe]) => {
+  righe.forEach((riga) => {
+    const chiave = `spazioDopoRiga${sezione[0].toUpperCase()}${sezione.slice(1)}${riga[0].toUpperCase()}${riga.slice(1)}`;
+    SPAZI_ISCRIZIONI_DEFAULT[chiave] = 14;
+    LIMITI_SPAZI_ISCRIZIONI[chiave] = [0, 80];
+  });
+});
 // maniglia trascinabile stile "ridimensiona colonna" di Excel: in
 // verticale (striscia con linea tratteggiata orizzontale) per gli spazi,
 // in orizzontale (pallino) per i font — visibili solo quando
@@ -15546,6 +15563,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     return {
       style: {
         ...cardStyle,
+        display: "flex", flexDirection: "column",
         order: ordineSezioni.indexOf(chiave),
         marginBottom: spaziIscrizioni[`spazioDopo${chiave[0].toUpperCase()}${chiave.slice(1)}`] ?? 18,
         opacity: sezioneTrascinata === chiave ? 0.5 : 1,
@@ -15555,6 +15573,83 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       onDragOver: (e) => { if (ruoloUtente === "programmatore") { e.preventDefault(); setSezioneSuCursore(chiave); } },
       onDrop: () => { if (ruoloUtente === "programmatore") rilasciaSezione(chiave); },
     };
+  }
+
+  // stesso meccanismo di ordineSezioni/rilasciaSezione, un livello più
+  // fine: l'ordine delle righe DENTRO ciascuna delle tre sezioni. Un solo
+  // set di stato/funzioni generiche, parametrizzate per sezione, invece
+  // di tre copie identiche
+  const [ordineRighe, setOrdineRighe] = useState(() => ({ ...ORDINE_RIGHE_ISCRITTO_DEFAULT, ...(layoutIscrizioni?.ordine_righe || {}) }));
+  useEffect(() => {
+    setOrdineRighe({ ...ORDINE_RIGHE_ISCRITTO_DEFAULT, ...(layoutIscrizioni?.ordine_righe || {}) });
+  }, [layoutIscrizioni]);
+  const trascinamentoRigaRef = React.useRef(null);
+  const [rigaTrascinata, setRigaTrascinata] = useState(null); // { sezione, chiave }
+  const [rigaSuCursore, setRigaSuCursore] = useState(null);
+  function iniziaTrascinamentoRiga(sezione, chiave) {
+    trascinamentoRigaRef.current = { sezione, chiave };
+    setRigaTrascinata({ sezione, chiave });
+  }
+  async function rilasciaRiga(sezione, chiaveDestinazione) {
+    const origine = trascinamentoRigaRef.current;
+    trascinamentoRigaRef.current = null;
+    setRigaTrascinata(null);
+    setRigaSuCursore(null);
+    if (!origine || origine.sezione !== sezione || origine.chiave === chiaveDestinazione) return;
+    const nuovo = [...(ordineRighe[sezione] || ORDINE_RIGHE_ISCRITTO_DEFAULT[sezione])];
+    const idxOrigine = nuovo.indexOf(origine.chiave);
+    const idxDestinazione = nuovo.indexOf(chiaveDestinazione);
+    if (idxOrigine < 0 || idxDestinazione < 0) return;
+    const [spostata] = nuovo.splice(idxOrigine, 1);
+    nuovo.splice(idxDestinazione, 0, spostata);
+    const ordineRigheNuovo = { ...ordineRighe, [sezione]: nuovo };
+    setOrdineRighe(ordineRigheNuovo);
+    const { error } = await supabase.from("impostazioni_layout_iscrizioni").update({ ordine_righe: ordineRigheNuovo }).eq("id", ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI);
+    if (error) { window.alert("Errore nel salvare il nuovo ordine: " + error.message); ricarica(["impostazioni_layout_iscrizioni"]); return; }
+    ricarica(["impostazioni_layout_iscrizioni"]);
+  }
+  function manigliaRiga(sezione, chiave) {
+    if (ruoloUtente !== "programmatore") return null;
+    return (
+      <span
+        draggable
+        onDragStart={() => iniziaTrascinamentoRiga(sezione, chiave)}
+        onDragEnd={() => { setRigaTrascinata(null); setRigaSuCursore(null); }}
+        title="Trascina per riordinare questa riga (salvato per tutti)"
+        style={{ cursor: "grab", color: MUTED, fontSize: 14, lineHeight: 1, padding: "0 4px 0 0", userSelect: "none", flexShrink: 0 }}
+      >
+        ⠿
+      </span>
+    );
+  }
+  // avvolge una riga di campi in un contenitore con "order" (posizione
+  // dentro la sezione, da ordineRighe), spazio verticale sotto per
+  // identità di riga, ed evidenza di bersaglio/trascinamento — stesso
+  // principio di propsSezione, ma per una riga dentro una sezione
+  function propsRiga(sezione, chiave) {
+    const ordineSez = ordineRighe[sezione] || ORDINE_RIGHE_ISCRITTO_DEFAULT[sezione];
+    const chiaveSpazio = `spazioDopoRiga${sezione[0].toUpperCase()}${sezione.slice(1)}${chiave[0].toUpperCase()}${chiave.slice(1)}`;
+    const inTrascinamento = rigaTrascinata?.sezione === sezione && rigaTrascinata?.chiave === chiave;
+    const bersaglio = rigaTrascinata && rigaTrascinata.sezione === sezione && rigaTrascinata.chiave !== chiave && rigaSuCursore?.sezione === sezione && rigaSuCursore?.chiave === chiave;
+    return {
+      style: {
+        order: ordineSez.indexOf(chiave),
+        marginBottom: spaziIscrizioni[chiaveSpazio] ?? 14,
+        opacity: inTrascinamento ? 0.5 : 1,
+        outline: bersaglio ? `2px solid ${NAVY}` : "none",
+        outlineOffset: 2,
+      },
+      onDragOver: (e) => { if (ruoloUtente === "programmatore") { e.preventDefault(); setRigaSuCursore({ sezione, chiave }); } },
+      onDrop: () => { if (ruoloUtente === "programmatore") rilasciaRiga(sezione, chiave); },
+    };
+  }
+  // maniglia per regolare lo spazio DOPO questa riga (stessa chiave usata
+  // sopra in propsRiga per il marginBottom) — va messa come ultimo figlio
+  // dentro il contenitore della riga, esattamente come manigliaSpazio(...)
+  // è già l'ultimo figlio del contenitore di ogni sezione
+  function spaziatoreRiga(sezione, chiave) {
+    const chiaveSpazio = `spazioDopoRiga${sezione[0].toUpperCase()}${sezione.slice(1)}${chiave[0].toUpperCase()}${chiave.slice(1)}`;
+    return manigliaSpazio(chiaveSpazio);
   }
 
   // riga "etichetta / importo / metodo" della sezione Pagamenti: da
@@ -16041,62 +16136,85 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
           )}
 
-          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
+          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column" }}>
 
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Anagrafica</div>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14, order: -1 }}>Anagrafica</div>
           <>
-          <Field label="Modulo iscrizione (PDF)">
-            {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
-              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-            )}
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
-              <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione || soloLettura}>Leggi dati dal modulo</Button>
-              {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
-            </div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
-              <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
-            </div>
-          </Field>
-
-          <div style={{ display: "flex", gap: 14, marginTop: 14 }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
-            </div>
-            <div style={{ flex: 1 }}>
-              <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ flex: "2 1 140px" }}>
-              <Field label="Tutor">
-                <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...inputStyle, textTransform: "uppercase" }}>
-                  <option value="">— scegli venditore —</option>
-                  {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
-                  {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
-                  {tutor && !(venditori || []).some((v) => v.nome.toUpperCase() === tutor.toUpperCase()) && (
-                    <option value={tutor}>{tutor} (non in elenco)</option>
-                  )}
-                </select>
+          <div {...propsRiga("anagrafica", "modulo")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("anagrafica", "modulo")}
+              <div style={{ flex: 1, minWidth: 0 }}>
+              <Field label="Modulo iscrizione (PDF)">
+                {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
+                  <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+                )}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
+                  <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione || soloLettura}>Leggi dati dal modulo</Button>
+                  {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
+                  <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
+                </div>
               </Field>
+              </div>
             </div>
-            <div style={{ flex: "2 1 140px" }}>
-              <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+            {spaziatoreRiga("anagrafica", "modulo")}
+          </div>
+
+          <div {...propsRiga("anagrafica", "nomeCognome")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("anagrafica", "nomeCognome")}
+              <div style={{ display: "flex", gap: 14, flex: 1 }}>
+                <div style={{ flex: 1 }}>
+                  <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+                </div>
+              </div>
             </div>
-            <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
-                <input
-                  type="checkbox"
-                  checked={richiedeFattura}
-                  onChange={(e) => { setRichiedeFattura(e.target.checked); if (!e.target.checked) svuotaCampiFattura(); }}
-                />
-                Richiede fattura
-              </label>
+            {spaziatoreRiga("anagrafica", "nomeCognome")}
+          </div>
+          <div {...propsRiga("anagrafica", "tutorTelefono")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("anagrafica", "tutorTelefono")}
+              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", flex: 1 }}>
+                <div style={{ flex: "2 1 140px" }}>
+                  <Field label="Tutor">
+                    <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...inputStyle, textTransform: "uppercase" }}>
+                      <option value="">— scegli venditore —</option>
+                      {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
+                      {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
+                      {tutor && !(venditori || []).some((v) => v.nome.toUpperCase() === tutor.toUpperCase()) && (
+                        <option value={tutor}>{tutor} (non in elenco)</option>
+                      )}
+                    </select>
+                  </Field>
+                </div>
+                <div style={{ flex: "2 1 140px" }}>
+                  <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+                </div>
+                <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
+                    <input
+                      type="checkbox"
+                      checked={richiedeFattura}
+                      onChange={(e) => { setRichiedeFattura(e.target.checked); if (!e.target.checked) svuotaCampiFattura(); }}
+                    />
+                    Richiede fattura
+                  </label>
+                </div>
+              </div>
             </div>
+            {spaziatoreRiga("anagrafica", "tutorTelefono")}
           </div>
 
           {richiedeFattura && (
-            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 14 }}>
+            <div {...propsRiga("anagrafica", "fatturazione")}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+                {manigliaRiga("anagrafica", "fatturazione")}
+                <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, flex: 1 }}>
               <Field label="Nome ditta">
                 <input value={fatturaDitta} onChange={(e) => setFatturaDitta(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
               </Field>
@@ -16146,6 +16264,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   </Field>
                 </div>
               </div>
+                </div>
+              </div>
+              {spaziatoreRiga("anagrafica", "fatturazione")}
             </div>
           )}
           </>
@@ -16172,8 +16293,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         </div>
 
         <div {...propsSezione("contabili")}>
-          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14, order: -1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               {manigliaSezione("contabili")}
               <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Dati contabili</div>
@@ -16183,7 +16304,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             )}
           </div>
           <>
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
+          <div {...propsRiga("contabili", "totalePattuito")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "totalePattuito")}
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, flex: 1 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
@@ -16216,8 +16340,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 La quota speciale sostituisce ovunque la quota venditore del 7%.
               </div>
             )}
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "totalePattuito")}
           </div>
-          <div style={{ display: "flex", gap: 14 }}>
+          <div {...propsRiga("contabili", "pacchettoKit")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "pacchettoKit")}
+              <div style={{ display: "flex", gap: 14, flex: 1 }}>
             <div style={{ flex: 1 }}>
               <Field label="Pacchetto/Kit">
                 <CampoPacchettoKit
@@ -16232,7 +16362,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 <input value={tipoOfferta} onChange={(e) => setTipoOfferta(e.target.value)} style={inputStyle} />
               </Field>
             </div>
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "pacchettoKit")}
           </div>
+          <div {...propsRiga("contabili", "quotaAcconto")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "quotaAcconto")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
@@ -16290,11 +16427,19 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <button
             type="button"
             onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%", marginBottom: 14 }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%" }}
           >
             + Aggiungi un altro acconto
           </button>
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "quotaAcconto")}
+          </div>
 
+          <div {...propsRiga("contabili", "quotaPrecorso")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "quotaPrecorso")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <BloccoQuota
             titolo="Quota pre corso"
             valori={pagPrecorso}
@@ -16330,11 +16475,19 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <button
             type="button"
             onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%", marginBottom: 14 }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%" }}
           >
             + Aggiungi un'altra quota pre corso
           </button>
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "quotaPrecorso")}
+          </div>
 
+          <div {...propsRiga("contabili", "daAvereAlCorso")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "daAvereAlCorso")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <BloccoQuota
             titolo="Da avere al corso"
             valori={pagSaldo}
@@ -16344,6 +16497,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             onMetodo={(v) => setPagSaldo((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
             onBonificoFile={(f) => setPagSaldo((prev) => ({ ...prev, bonificoFileNuovo: f }))}
           />
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "daAvereAlCorso")}
+          </div>
+          <div {...propsRiga("contabili", "pagheraInTotale")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "pagheraInTotale")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           {(() => {
             // l'iva di una quota è "totale - imponibile", ma quando
             // l'imponibile è vuoto (Cash no iva) non c'è nessun calcolo da
@@ -16414,21 +16575,37 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               </div>
             );
           })()}
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "pagheraInTotale")}
+          </div>
           </>
           </fieldset>
           {manigliaSpazio("spazioDopoContabili")}
         </div>
 
         <div {...propsSezione("organizzativi")}>
-          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+          <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14, order: -1 }}>
             {manigliaSezione("organizzativi")}
             <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Dati organizzativi</div>
           </div>
           <>
+          <div {...propsRiga("organizzativi", "accordiCommerciali")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("organizzativi", "accordiCommerciali")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Accordi commerciali">
             <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
           </Field>
+              </div>
+            </div>
+            {spaziatoreRiga("organizzativi", "accordiCommerciali")}
+          </div>
+          <div {...propsRiga("organizzativi", "richiedeModelle")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("organizzativi", "richiedeModelle")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Richiede modelle a pagamento?">
             <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
               {[["si", "Sì"], ["no", "No"]].map(([val, lab]) => (
@@ -16505,7 +16682,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               )}
             </>
           )}
+              </div>
+            </div>
+            {spaziatoreRiga("organizzativi", "richiedeModelle")}
+          </div>
 
+          <div {...propsRiga("organizzativi", "tagliaDivisa")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("organizzativi", "tagliaDivisa")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Taglia divisa">
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", ...fontBody, fontSize: 14, color: NAVY }}>
               {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((taglia) => (
@@ -16516,6 +16701,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               ))}
             </div>
           </Field>
+              </div>
+            </div>
+            {spaziatoreRiga("organizzativi", "tagliaDivisa")}
+          </div>
+          <div {...propsRiga("organizzativi", "screenAcconto")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("organizzativi", "screenAcconto")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Screen acconto (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
@@ -16525,6 +16718,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               {(fileScreenAcconto || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto)) && <BadgeFileCaricato />}
             </div>
           </Field>
+              </div>
+            </div>
+            {spaziatoreRiga("organizzativi", "screenAcconto")}
+          </div>
+          <div {...propsRiga("organizzativi", "screenRecap")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("organizzativi", "screenRecap")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Screen di recap (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
               <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
@@ -16534,7 +16735,19 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               {(fileScreenRecap || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap)) && <BadgeFileCaricato />}
             </div>
           </Field>
+              </div>
+            </div>
+            {spaziatoreRiga("organizzativi", "screenRecap")}
+          </div>
+          <div {...propsRiga("organizzativi", "note")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("organizzativi", "note")}
+              <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Note (opzionale)"><input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+              </div>
+            </div>
+            {spaziatoreRiga("organizzativi", "note")}
+          </div>
           </>
 
           </fieldset>
