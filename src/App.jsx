@@ -22957,7 +22957,7 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto, prodotto, ca
 // sola lettura qui, modificabili solo dalla Gestione shop — quelle create
 // da qui invece sono locali (woo_category_id null), mai mandate online,
 // utili per organizzare il solo magazzino interno
-function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica }) {
+function ModaleGestioneCategorieMagazzino({ categorieProdotti, prodottiShop, onClose, ricarica }) {
   const [ricerca, setRicerca] = useState("");
   const [nomeNuova, setNomeNuova] = useState("");
   const [inModificaId, setInModificaId] = useState(null);
@@ -23007,11 +23007,26 @@ function ModaleGestioneCategorieMagazzino({ categorieProdotti, onClose, ricarica
   // categorie locali (mai su Woo) che restano sempre offline: un
   // prodotto creato in questa categoria non viene mai spedito a
   // WooCommerce, anche con un prezzo — il prezzo resta solo per
-  // valorizzare il magazzino
+  // valorizzare il magazzino. Quando si attiva qui, stacca subito anche
+  // i prodotti di questa categoria che fossero già pubblicati su
+  // WooCommerce da prima (stessa regola del singolo prodotto in
+  // Gestione magazzino: cancellato se non ha mai venduto nulla,
+  // altrimenti solo messo in bozza per non perdere lo storico)
   async function toggleSoloOffline(c) {
-    const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: !c.solo_offline }).eq("id", c.id);
+    const nuovoValore = !c.solo_offline;
+    const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: nuovoValore }).eq("id", c.id);
     if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["categorie_prodotti"]);
+    if (nuovoValore) {
+      const daStaccare = (prodottiShop || []).filter((p) => (p.categorieIds || []).includes(c.id) && p.woo_product_id);
+      for (const p of daStaccare) {
+        if ((p.quantitaVenduta || 0) > 0) {
+          await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: p.id, stato: "draft" } });
+        } else {
+          await supabase.functions.invoke("woo-elimina-prodotto", { body: { prodottoId: p.id } });
+        }
+      }
+    }
+    ricarica(["categorie_prodotti", "prodotti_shop"]);
   }
 
   return (
@@ -29153,7 +29168,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [vistaMobile, setVistaMobile] = useState("albero");
   const trascinamento = useRef(null);
 
-  const categorieAttive = categorieProdotti || [];
+  // questa pagina è il catalogo WooCommerce: le categorie create in
+  // "Gestisci categorie" (Magazzino) sono locali, mai spedite a Woo, e
+  // non devono comparire qui — altrimenti sembrano "sullo shop" quando
+  // non lo sono affatto (vedi anche isOnlineWoo più sotto)
+  const categorieAttive = (categorieProdotti || []).filter((c) => c.woo_category_id != null);
   const figliDi = useMemo(() => costruisciAlberoCategorie(categorieAttive), [categorieAttive]);
   const radiciCategorie = figliDi["_root"] || [];
 
@@ -29181,15 +29200,21 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     ? (prodottiShop || []).filter((p) => p.attivo !== false)
     : (prodottiShop || []).filter((p) => p.attivo !== false && (categorieIdPerProdotto[p.id] || []).includes(categoriaSelId));
 
+  // "Online" richiede un woo_product_id vero, non solo lo stato locale
+  // (che di default è "publish" anche per un prodotto mai spedito a
+  // WooCommerce): altrimenti un prodotto solo offline risulta "Online"
+  // qui solo perché nessuno ha mai cambiato quel campo
+  function isOnlineWoo(p) { return !!p.woo_product_id && p.stato !== "draft"; }
+
   const prodottiFiltrati = prodottiBase
     .filter((p) => !ricerca.trim() || p.nome.toLowerCase().includes(ricerca.trim().toLowerCase()))
-    .filter((p) => filtroStato === "tutti" || (filtroStato === "online" ? p.stato !== "draft" : p.stato === "draft"))
+    .filter((p) => filtroStato === "tutti" || (filtroStato === "online" ? isOnlineWoo(p) : !isOnlineWoo(p)))
     .sort((a, b) => a.nome.localeCompare(b.nome));
 
   const conteggiStato = {
     tutti: prodottiBase.length,
-    online: prodottiBase.filter((p) => p.stato !== "draft").length,
-    bozze: prodottiBase.filter((p) => p.stato === "draft").length,
+    online: prodottiBase.filter((p) => isOnlineWoo(p)).length,
+    bozze: prodottiBase.filter((p) => !isOnlineWoo(p)).length,
   };
 
   function categorieAppiattite() {
@@ -29452,7 +29477,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
                 <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}</div>
               </div>
-              <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: p.stato === "draft" ? "#F4EEDB" : "#E6F2E8", color: p.stato === "draft" ? "#8A6D1D" : "#2E7D32", flexShrink: 0 }}>{p.stato === "draft" ? "Bozza" : "Online"}</span>
+              {(() => {
+                const etichetta = !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : "Online";
+                const colori = !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : { bg: "#E6F2E8", fg: "#2E7D32" };
+                return <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>;
+              })()}
             </div>
           );
         })}
