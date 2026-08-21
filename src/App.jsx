@@ -14045,6 +14045,11 @@ const SPAZI_ISCRIZIONI_DEFAULT = {
   paddingTop: 18, paddingBottom: 18,
   dopoEyebrow: 6, dopoTitolo: 12, dopoDateBox: 12, dopoDivider: 10, dopoSecondari: 28,
   titoloFontSize: 28, pillolaFontSize: 16, pillolaPaddingV: 4, dateBoxPaddingV: 10,
+  // spazio sotto ciascuna delle tre card di "Modifica iscritto" (stesso
+  // 18px di cardStyle.marginBottom di default): tenuto per identità della
+  // card, non per posizione, così resta quello scelto anche se l'ordine
+  // delle tre cambia
+  spazioDopoAnagrafica: 18, spazioDopoContabili: 18, spazioDopoOrganizzativi: 18,
 };
 // min/max per ciascuna chiave regolabile: gli spazi verticali vanno da 0
 // a 80px, i due font (titolo/pillola città) hanno un range proprio,
@@ -14054,7 +14059,12 @@ const LIMITI_SPAZI_ISCRIZIONI = {
   paddingTop: [0, 80], paddingBottom: [0, 80],
   dopoEyebrow: [0, 80], dopoTitolo: [0, 80], dopoDateBox: [0, 80], dopoDivider: [0, 80], dopoSecondari: [0, 80],
   titoloFontSize: [18, 64], pillolaFontSize: [10, 36], pillolaPaddingV: [2, 40], dateBoxPaddingV: [4, 60],
+  spazioDopoAnagrafica: [0, 80], spazioDopoContabili: [0, 80], spazioDopoOrganizzativi: [0, 80],
 };
+// ordine di default delle tre card di "Modifica iscritto" — regolabile
+// trascinando la maniglia "⠿" (solo ruoloUtente "programmatore"),
+// salvato per tutti nella stessa riga di impostazioni_layout_iscrizioni
+const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzativi"];
 // maniglia trascinabile stile "ridimensiona colonna" di Excel: in
 // verticale (striscia con linea tratteggiata orizzontale) per gli spazi,
 // in orizzontale (pallino) per i font — visibili solo quando
@@ -15476,6 +15486,77 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     );
   }
 
+  // ordine delle tre card di "Modifica iscritto" — stesso principio di
+  // spaziIscrizioni sopra (condiviso, salvato per tutti, regolabile solo
+  // da ruoloUtente "programmatore"), ma per il RIORDINO invece che per lo
+  // spazio: riusa lo stesso trascina-e-rilascia già scritto per i
+  // pacchetti kit in "Tipologie di kit" (kit_definizioni.ordine), qui
+  // applicato a un array di 3 chiavi invece che a righe di un elenco
+  const [ordineSezioni, setOrdineSezioni] = useState(() => layoutIscrizioni?.ordine_sezioni || ORDINE_SEZIONI_ISCRITTO_DEFAULT);
+  useEffect(() => {
+    setOrdineSezioni(layoutIscrizioni?.ordine_sezioni || ORDINE_SEZIONI_ISCRITTO_DEFAULT);
+  }, [layoutIscrizioni]);
+  const trascinamentoSezioneRef = React.useRef(null);
+  const [sezioneTrascinata, setSezioneTrascinata] = useState(null);
+  const [sezioneSuCursore, setSezioneSuCursore] = useState(null);
+  function iniziaTrascinamentoSezione(chiave) {
+    trascinamentoSezioneRef.current = chiave;
+    setSezioneTrascinata(chiave);
+  }
+  async function rilasciaSezione(chiaveDestinazione) {
+    const chiaveOrigine = trascinamentoSezioneRef.current;
+    trascinamentoSezioneRef.current = null;
+    setSezioneTrascinata(null);
+    setSezioneSuCursore(null);
+    if (!chiaveOrigine || chiaveOrigine === chiaveDestinazione) return;
+    const nuovo = [...ordineSezioni];
+    const idxOrigine = nuovo.indexOf(chiaveOrigine);
+    const idxDestinazione = nuovo.indexOf(chiaveDestinazione);
+    if (idxOrigine < 0 || idxDestinazione < 0) return;
+    const [spostata] = nuovo.splice(idxOrigine, 1);
+    nuovo.splice(idxDestinazione, 0, spostata);
+    setOrdineSezioni(nuovo);
+    const { error } = await supabase.from("impostazioni_layout_iscrizioni").update({ ordine_sezioni: nuovo }).eq("id", ID_IMPOSTAZIONI_LAYOUT_ISCRIZIONI);
+    if (error) { window.alert("Errore nel salvare il nuovo ordine: " + error.message); ricarica(["impostazioni_layout_iscrizioni"]); return; }
+    ricarica(["impostazioni_layout_iscrizioni"]);
+  }
+  // maniglia "⠿" nell'intestazione di una card: solo programmatore, avvia
+  // il trascinamento della card stessa; ogni card riceve anche
+  // onDragOver/onDrop per fare da bersaglio (vedi propsSezione sotto)
+  function manigliaSezione(chiave) {
+    if (ruoloUtente !== "programmatore") return null;
+    return (
+      <span
+        draggable
+        onDragStart={() => iniziaTrascinamentoSezione(chiave)}
+        onDragEnd={() => { setSezioneTrascinata(null); setSezioneSuCursore(null); }}
+        title="Trascina per riordinare questa sezione (salvato per tutti)"
+        style={{ cursor: "grab", color: MUTED, fontSize: 16, lineHeight: 1, padding: "0 4px", userSelect: "none" }}
+      >
+        ⠿
+      </span>
+    );
+  }
+  // stile+handler da spargere sul <div style={cardStyle}> di ogni sezione:
+  // "order" CSS per riordinarla visivamente senza spostarne la JSX
+  // (il contenitore esterno del form ha display:flex/column apposta), più
+  // il proprio spazio verticale sotto (per identità, non per posizione) e,
+  // solo per programmatore, l'evidenza di bersaglio/trascinamento
+  function propsSezione(chiave) {
+    return {
+      style: {
+        ...cardStyle,
+        order: ordineSezioni.indexOf(chiave),
+        marginBottom: spaziIscrizioni[`spazioDopo${chiave[0].toUpperCase()}${chiave.slice(1)}`] ?? 18,
+        opacity: sezioneTrascinata === chiave ? 0.5 : 1,
+        outline: sezioneTrascinata && sezioneTrascinata !== chiave && sezioneSuCursore === chiave ? `2px solid ${NAVY}` : "none",
+        outlineOffset: 2,
+      },
+      onDragOver: (e) => { if (ruoloUtente === "programmatore") { e.preventDefault(); setSezioneSuCursore(chiave); } },
+      onDrop: () => { if (ruoloUtente === "programmatore") rilasciaSezione(chiave); },
+    };
+  }
+
   // riga "etichetta / importo / metodo" della sezione Pagamenti: da
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "40px 20px 160px" }}>
@@ -15932,10 +16013,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             // nel frattempo è disabled) non scatta: serve un secondo click
             if (modificandoId && !soloLettura && !(e.relatedTarget && e.relatedTarget.tagName === "BUTTON")) autosalva();
           }}
+          style={{ display: "flex", flexDirection: "column" }}
         >
-        <div style={cardStyle}>
+        <div {...propsSezione("anagrafica")}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div style={hStyle}>{soloLettura ? "Scheda iscritto" : modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {manigliaSezione("anagrafica")}
+              <div style={hStyle}>{soloLettura ? "Scheda iscritto" : modificandoId ? "Modifica iscritto" : "Iscrivi allievo"}</div>
+            </div>
             {adminSbloccato && !soloLettura && (
               <label
                 title="L'iscrizione non compare tra le iscrizioni/statistiche di oggi: finisce nell'elenco Statistiche → Ultime iscrizioni → Mesi precedenti"
@@ -16065,8 +16150,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           )}
           </>
           </fieldset>
+          {manigliaSpazio("spazioDopoAnagrafica")}
         </div>
 
+        <div style={{ order: ordineSezioni.indexOf("anagrafica") }}>
         {adminSbloccato && modificandoId && (accontiDaVerificare || [])
           .filter((a) => {
             if (a.stato !== "in_attesa" || (a.origine || "manuale") !== "manuale") return false;
@@ -16082,11 +16169,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           .map((integrazione) => (
             <BloccoIntegrazioneDaApprovare key={integrazione.id} integrazione={integrazione} onContabilizza={contabilizzaIntegrazione} ricarica={ricarica} />
           ))}
+        </div>
 
-        <div style={cardStyle}>
+        <div {...propsSezione("contabili")}>
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Dati contabili</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {manigliaSezione("contabili")}
+              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Dati contabili</div>
+            </div>
             {(nome.trim() || cognome.trim()) && (
               <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{`${nome.trim()} ${cognome.trim()}`.trim()}</div>
             )}
@@ -16325,11 +16416,15 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           })()}
           </>
           </fieldset>
+          {manigliaSpazio("spazioDopoContabili")}
         </div>
 
-        <div style={cardStyle}>
+        <div {...propsSezione("organizzativi")}>
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Dati organizzativi</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
+            {manigliaSezione("organizzativi")}
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Dati organizzativi</div>
+          </div>
           <>
           <Field label="Accordi commerciali">
             <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
@@ -16443,7 +16538,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </>
 
           </fieldset>
+          {manigliaSpazio("spazioDopoOrganizzativi")}
+        </div>
 
+        {/* Salva/Annulla/messaggio: sempre per ultimo, qualunque sia
+            l'ordine scelto per le tre sezioni sopra (order più alto di
+            qualsiasi indice possibile in ordineSezioni) */}
+        <div style={{ order: 99 }}>
           <div style={{ display: "flex", gap: 10 }}>
             {soloLettura ? (
               <Button variant="ghost" onClick={annullaForm}>&larr; Torna alla lista</Button>
