@@ -1679,6 +1679,21 @@ function conMetodoAggiornato(prev, v) {
   }
   return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
 }
+// come conMetodoAggiornato, ma per le quote dove "Cash no iva" non blocca
+// la casella imponibile (Quota pre corso, Da avere al corso): resta
+// modificabile e viene tenuta uguale al totale, così l'IVA (totale meno
+// imponibile) risulta zero invece di apparire vuota
+function conMetodoAggiornatoSenzaBlocco(prev, v) {
+  if (v === "Cash no iva") {
+    if (prev.totale !== "") return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: prev.totale };
+    if (prev.imponibile !== "") return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", totale: prev.imponibile };
+    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+  }
+  if (prev.metodo === "Cash no iva" && prev.totale !== "") {
+    return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "", imponibile: String(round2(parseNum(prev.totale) / 1.22)) };
+  }
+  return { ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" };
+}
 function ivaDiQuota(q) {
   // imponibile vuoto (es. "Cash no iva": la casella resta bloccata
   // e non si riempie mai da sola) significa "nessuna IVA da mostrare",
@@ -14317,7 +14332,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // questi importi, non sul totale generale della classe
   const incassiExtraContanti = round2(incassiExtra.filter((c) => c.metodo === "Contanti").reduce((s, c) => s + parseNum(c.valore), 0));
   const incassiExtraPos = round2(incassiExtra.filter((c) => c.metodo === "Pos").reduce((s, c) => s + parseNum(c.valore), 0));
-  const contantiClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Contanti" ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
+  const contantiClasse = round2(listaIscritti.reduce((s, i) => s + ((i.saldo_metodo === "Contanti" || i.saldo_metodo === "Cash no iva") ? (i.saldo_totale || 0) : 0) + modelleTotaleDi(i), 0) + incassiExtraContanti);
   const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
   const daIncassareClasse = round2(contantiClasse + posClasse);
 
@@ -15951,7 +15966,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
           </Field>
 
-          <div style={{ display: "flex", gap: 14 }}>
+          <div style={{ display: "flex", gap: 14, marginTop: 14 }}>
             <div style={{ flex: 1 }}>
               <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
             </div>
@@ -16184,10 +16199,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <BloccoQuota
             titolo="Quota pre corso"
             valori={pagPrecorso}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
-            onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, true))}
-            onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, true))}
-            onMetodo={(v) => setPagPrecorso((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+            onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
+            onTotale={(v) => setPagPrecorso((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
+            onMetodo={(v) => setPagPrecorso((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
             onInteressi={(v) => setPagPrecorso((prev) => ({ ...prev, interessi: v }))}
             pagato={pagPrecorsoPagato}
             onPagato={setPagPrecorsoPagato}
@@ -16200,10 +16215,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               key={idx}
               titolo={`Pre corso aggiuntivo ${idx + 1}`}
               valori={riga}
-              opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Rate"]}
-              onImponibile={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, true) : r)))}
-              onTotale={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conTotaleAggiornato(r, v, true) : r)))}
-              onMetodo={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conMetodoAggiornato(r, v) : r)))}
+              opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+              onImponibile={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, r.metodo !== "Cash no iva") : r)))}
+              onTotale={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conTotaleAggiornato(r, v, r.metodo !== "Cash no iva") : r)))}
+              onMetodo={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? conMetodoAggiornatoSenzaBlocco(r, v) : r)))}
               onInteressi={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, interessi: v } : r)))}
               pagato={riga.pagato}
               onPagato={(v) => setPrecorsoExtra((prev) => prev.map((r, i) => (i === idx ? { ...r, pagato: v } : r)))}
@@ -16224,16 +16239,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <BloccoQuota
             titolo="Da avere al corso"
             valori={pagSaldo}
-            onImponibile={(v) => setPagSaldo((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Contanti"))}
-            onTotale={(v) => setPagSaldo((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Contanti"))}
-            onMetodo={(v) =>
-              setPagSaldo((prev) => {
-                const applicaIva = v !== "Contanti";
-                const imp = parseNum(prev.imponibile);
-                const totale = prev.imponibile === "" ? "" : String(applicaIva ? round2(imp * 1.22) : imp);
-                return { ...prev, metodo: v, totale };
-              })
-            }
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva"]}
+            onImponibile={(v) => setPagSaldo((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
+            onTotale={(v) => setPagSaldo((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
+            onMetodo={(v) => setPagSaldo((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
             onBonificoFile={(f) => setPagSaldo((prev) => ({ ...prev, bonificoFileNuovo: f }))}
           />
           {(() => {
