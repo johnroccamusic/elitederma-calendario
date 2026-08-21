@@ -13749,14 +13749,18 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
 // resta in modalità libera così com'è, senza toccarlo, finché qualcuno
 // non lo sostituisce scegliendo un pacchetto dalla lista
 function CampoPacchettoKit({ value, onChange, opzioni }) {
-  const nomiOpzioni = opzioni.map((o) => o.nome);
-  const [modoLibero, setModoLibero] = useState(() => (!!value && !nomiOpzioni.includes(value)) || opzioni.length === 0);
+  // stesso ordine (trascinabile) della pagina "Tipologie di kit": un
+  // eventuale divisore compare qui nella stessa posizione relativa, come
+  // separatore non selezionabile, non come pacchetto scegliibile
+  const opzioniOrdinate = [...opzioni].sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
+  const nomiOpzioni = opzioniOrdinate.filter((o) => o.tipo !== "divisore").map((o) => o.nome);
+  const [modoLibero, setModoLibero] = useState(() => (!!value && !nomiOpzioni.includes(value)) || nomiOpzioni.length === 0);
 
   if (modoLibero) {
     return (
       <div>
         <input value={value} onChange={(e) => onChange(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Scrivi il pacchetto/kit" />
-        {opzioni.length > 0 && (
+        {nomiOpzioni.length > 0 && (
           <button type="button" onClick={() => setModoLibero(false)} style={{ ...fontBody, fontSize: 12, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "6px 0 0" }}>
             Scegli da un pacchetto già definito
           </button>
@@ -13771,7 +13775,11 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
       style={inputStyle}
     >
       <option value="">— scegli pacchetto —</option>
-      {opzioni.map((o) => <option key={o.id} value={o.nome}>{o.nome}</option>)}
+      {opzioniOrdinate.map((o) => (
+        o.tipo === "divisore"
+          ? <option key={o.id} value="" disabled>──────────</option>
+          : <option key={o.id} value={o.nome}>{o.nome}</option>
+      ))}
     </select>
   );
 }
@@ -30241,6 +30249,44 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
 // aggiungi prodotti (con quantità per kit) e "altri accessori" (senza
 // quantità: la scrive chi prepara la spedizione, edizione per edizione)
 // — il "+" per aggiungere prodotti sta sulla riga del nome del pacchetto
+// linea divisoria fra pacchetti: una riga "kit_definizioni" con
+// tipo="divisore" (senza nome/prodotti), riordinabile ed eliminabile
+// come un pacchetto vero, che serve solo a separare visivamente gruppi
+// di kit — compare anche nella tendina Pacchetto/Kit come separatore
+// non selezionabile
+function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio }) {
+  async function elimina() {
+    const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["kit_definizioni"]);
+  }
+  return (
+    <div
+      onDragOver={(e) => { e.preventDefault(); onDragOver && onDragOver(); }}
+      onDrop={() => onDrop && onDrop(kit.id)}
+      style={{
+        display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "4px 0",
+        opacity: trascinando ? 0.4 : 1,
+        transform: evidenziatoBersaglio ? "translateY(4px)" : "none",
+        transition: "transform 0.1s ease",
+      }}
+    >
+      <span
+        draggable
+        onDragStart={() => onDragStart && onDragStart(kit.id)}
+        onDragEnd={() => onDragEnd && onDragEnd()}
+        title="Trascina per riordinare"
+        style={{ cursor: "grab", color: MUTED, fontSize: 15, lineHeight: 1, padding: "0 2px", flexShrink: 0, userSelect: "none" }}
+      >
+        ⠿
+      </span>
+      <div style={{ flex: 1, borderTop: `2px solid ${evidenziatoBersaglio ? NAVY : CREAM_BORDER}` }} />
+      <button onClick={elimina} title="Elimina divisore" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 2, flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+      </button>
+    </div>
+  );
+}
 function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
@@ -30481,10 +30527,15 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
   async function creaPacchetto() {
     if (!nomeNuovo.trim()) return;
     setSalvando(true);
-    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corso?.id || null, ordine: pacchetti.length });
+    const { error } = await supabase.from("kit_definizioni").insert({ nome: nomeNuovo.trim(), corso_id: corso?.id || null, ordine: pacchetti.length, tipo: "kit" });
     setSalvando(false);
     if (error) { window.alert("Errore: " + error.message); return; }
     setNomeNuovo(""); setMostraNuovo(false);
+    ricarica(["kit_definizioni"]);
+  }
+  async function creaDivisore() {
+    const { error } = await supabase.from("kit_definizioni").insert({ nome: "", corso_id: corso?.id || null, ordine: pacchetti.length, tipo: "divisore" });
+    if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["kit_definizioni"]);
   }
   // trascina-e-rilascia per riordinare i pacchetti di questo corso: al
@@ -30528,6 +30579,12 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
             Accessori didattica
           </button>
           <button
+            onClick={creaDivisore}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+          >
+            Genera divisore
+          </button>
+          <button
             onClick={() => setMostraNuovo((v) => !v)}
             style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
           >
@@ -30555,15 +30612,27 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
       {pacchetti.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun pacchetto ancora.</div>
       ) : pacchetti.map((k) => (
-        <SchedaPacchetto
-          key={k.id} kit={k} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica}
-          onDragStart={iniziaTrascinamento}
-          onDragOver={() => setTrascinatoSuId(k.id)}
-          onDrop={rilascia}
-          onDragEnd={() => { setTrascinatoId(null); setTrascinatoSuId(null); }}
-          trascinando={trascinatoId === k.id}
-          evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
-        />
+        k.tipo === "divisore" ? (
+          <RigaDivisorePacchetto
+            key={k.id} kit={k} ricarica={ricarica}
+            onDragStart={iniziaTrascinamento}
+            onDragOver={() => setTrascinatoSuId(k.id)}
+            onDrop={rilascia}
+            onDragEnd={() => { setTrascinatoId(null); setTrascinatoSuId(null); }}
+            trascinando={trascinatoId === k.id}
+            evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
+          />
+        ) : (
+          <SchedaPacchetto
+            key={k.id} kit={k} righe={corsiKitProdotti.filter((r) => r.kit_id === k.id)} prodottiShop={prodottiShop} ricarica={ricarica}
+            onDragStart={iniziaTrascinamento}
+            onDragOver={() => setTrascinatoSuId(k.id)}
+            onDrop={rilascia}
+            onDragEnd={() => { setTrascinatoId(null); setTrascinatoSuId(null); }}
+            trascinando={trascinatoId === k.id}
+            evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
+          />
+        )
       ))}
       <SchedaAccessoriCorso corso={corso} righe={accessoriCorso} tuttiCorsiKitProdotti={corsiKitProdotti} corsi={corsi} prodottiShop={prodottiShop} ricarica={ricarica} aperto={mostraAccessori} onChiudi={() => setMostraAccessori(false)} />
     </div>
