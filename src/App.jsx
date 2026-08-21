@@ -29102,36 +29102,47 @@ function ModaleNuovaCategoriaShop({ padreNome, onClose, onCrea, salvando }) {
 }
 
 // crea o modifica una voce del menu Front Office reale (WordPress),
-// tramite il ponte wp-gestisci-menu: o è agganciata a una vera categoria
-// WooCommerce ("taxonomy", il cliente ci trova i prodotti), o è un link
-// personalizzato — una voce già "pagina" (post_type) modificata da qui
-// diventa un link personalizzato verso la stessa pagina: resta
-// funzionante per il cliente, cambia solo come WordPress la classifica
-function ModaleVoceMenuFo({ categorieWoo, valoreIniziale, onClose, onSalva, salvando }) {
+// tramite il ponte wp-gestisci-menu: agganciata a una vera categoria
+// WooCommerce ("taxonomy", il cliente ci trova i prodotti), a una pagina
+// esistente ("post_type", stessa classificazione che ha già in
+// WordPress), oppure un link personalizzato
+function ModaleVoceMenuFo({ categorieWoo, pagineWp, valoreIniziale, onClose, onSalva, salvando }) {
+  const tipoIniziale = valoreIniziale?.tipo === "taxonomy" || valoreIniziale?.tipo === "post_type" ? valoreIniziale.tipo : "custom";
   const [titolo, setTitolo] = useState(valoreIniziale?.titolo || "");
-  const [tipo, setTipo] = useState(valoreIniziale?.tipo === "taxonomy" ? "taxonomy" : "custom");
-  const [oggettoId, setOggettoId] = useState(valoreIniziale?.tipo === "taxonomy" ? String(valoreIniziale.oggetto_id) : "");
-  const [url, setUrl] = useState(valoreIniziale?.tipo !== "taxonomy" ? (valoreIniziale?.url || "") : "");
+  const [tipo, setTipo] = useState(tipoIniziale);
+  const [oggettoId, setOggettoId] = useState(tipoIniziale !== "custom" ? String(valoreIniziale.oggetto_id) : "");
+  const [url, setUrl] = useState(tipoIniziale === "custom" ? (valoreIniziale?.url || "") : "");
   const categorieOrdinate = [...(categorieWoo || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+  const pagineOrdinate = [...(pagineWp || [])].sort((a, b) => a.titolo.localeCompare(b.titolo));
   return (
     <Modal title={valoreIniziale ? "Modifica voce di menu" : "Nuova voce di menu"} onClose={onClose}>
       <Field label="Titolo (come lo vede il cliente)">
         <input style={inputStyle} autoFocus value={titolo} onChange={(e) => setTitolo(e.target.value)} />
       </Field>
       <Field label="Tipo">
-        <select style={inputStyle} value={tipo} onChange={(e) => setTipo(e.target.value)}>
+        <select style={inputStyle} value={tipo} onChange={(e) => { setTipo(e.target.value); setOggettoId(""); }}>
           <option value="taxonomy">Categoria WooCommerce reale</option>
+          <option value="post_type">Pagina esistente</option>
           <option value="custom">Link personalizzato</option>
         </select>
       </Field>
-      {tipo === "taxonomy" ? (
+      {tipo === "taxonomy" && (
         <Field label="Categoria collegata">
           <select style={inputStyle} value={oggettoId} onChange={(e) => setOggettoId(e.target.value)}>
             <option value="">— scegli —</option>
             {categorieOrdinate.map((c) => <option key={c.woo_category_id} value={c.woo_category_id}>{c.nome}</option>)}
           </select>
         </Field>
-      ) : (
+      )}
+      {tipo === "post_type" && (
+        <Field label="Pagina collegata">
+          <select style={inputStyle} value={oggettoId} onChange={(e) => setOggettoId(e.target.value)}>
+            <option value="">— scegli —</option>
+            {pagineOrdinate.map((p) => <option key={p.id} value={p.id}>{p.titolo}</option>)}
+          </select>
+        </Field>
+      )}
+      {tipo === "custom" && (
         <Field label="Indirizzo (URL)">
           <input style={inputStyle} value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://elitederma.shop/…" />
         </Field>
@@ -29139,8 +29150,8 @@ function ModaleVoceMenuFo({ categorieWoo, valoreIniziale, onClose, onSalva, salv
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
         <Button variant="ghost" onClick={onClose}>Annulla</Button>
         <Button
-          onClick={() => onSalva({ titolo: titolo.trim(), tipo, oggettoId: tipo === "taxonomy" ? Number(oggettoId) : null, url: tipo === "custom" ? url.trim() : null })}
-          disabled={salvando || !titolo.trim() || (tipo === "taxonomy" && !oggettoId)}
+          onClick={() => onSalva({ titolo: titolo.trim(), tipo, oggettoId: tipo !== "custom" ? Number(oggettoId) : null, url: tipo === "custom" ? url.trim() : null })}
+          disabled={salvando || !titolo.trim() || (tipo !== "custom" && !oggettoId)}
         >
           {salvando ? "Salvo…" : "Salva"}
         </Button>
@@ -29234,6 +29245,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [erroreMenu, setErroreMenu] = useState("");
   const [modaleVoceMenu, setModaleVoceMenu] = useState(null); // { genitoreId, voce? }
   const [salvandoMenu, setSalvandoMenu] = useState(false);
+  const [pagineWp, setPagineWp] = useState([]); // pagine reali di WordPress, per il tipo "Pagina" nella modale voce di menu
 
   async function caricaMenuFo() {
     setCaricandoMenu(true); setErroreMenu("");
@@ -29244,6 +29256,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setMenuVoci(data.voci || []);
   }
   useEffect(() => { caricaMenuFo(); }, []);
+  useEffect(() => {
+    supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "pagine" } }).then(({ data, error }) => {
+      if (!error && !data?.errore) setPagineWp(Array.isArray(data) ? data : []);
+    });
+  }, []);
 
   // questa pagina è il catalogo WooCommerce: le categorie create in
   // "Gestisci categorie" (Magazzino) sono locali, mai spedite a Woo, e
@@ -29810,7 +29827,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const idx = fratelli.findIndex((f) => f.id === voce.id);
     const altro = fratelli[idx + direzione];
     if (!altro) return;
-    const tipoDi = (v) => (v.tipo === "taxonomy" ? "taxonomy" : "custom");
+    const tipoDi = (v) => (v.tipo === "taxonomy" || v.tipo === "post_type" ? v.tipo : "custom");
     Promise.all([
       supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "crea_modifica", menuId, itemId: voce.id, titolo: voce.titolo, genitoreId: voce.genitore_id, ordine: altro.ordine, tipo: tipoDi(voce), oggettoId: voce.oggetto_id, url: voce.url } }),
       supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "crea_modifica", menuId, itemId: altro.id, titolo: altro.titolo, genitoreId: altro.genitore_id, ordine: voce.ordine, tipo: tipoDi(altro), oggettoId: altro.oggetto_id, url: altro.url } }),
@@ -29977,6 +29994,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       {modaleVoceMenu && (
         <ModaleVoceMenuFo
           categorieWoo={categorieAttive}
+          pagineWp={pagineWp}
           valoreIniziale={modaleVoceMenu.voce}
           salvando={salvandoMenu}
           onClose={() => setModaleVoceMenu(null)}

@@ -13,11 +13,11 @@
 //   WP_MENU_BRIDGE_SECRET     — la chiave scritta anche nello snippet WordPress
 //
 // Chiamata dall'app: supabase.functions.invoke('wp-gestisci-menu', { body: {
-//   azione: 'leggi' | 'crea_modifica' | 'elimina',
+//   azione: 'leggi' | 'pagine' | 'crea_modifica' | 'elimina',
 //   posizione,                              // solo 'leggi', default 'primary'
 //   menuId, itemId, titolo, genitoreId,      // solo 'crea_modifica' (itemId assente = crea nuova voce)
-//   ordine, tipo,                            // tipo: 'taxonomy' | 'custom'
-//   oggettoId, url,                          // oggettoId per 'taxonomy' (id categoria Woo), url per 'custom'
+//   ordine, tipo,                            // tipo: 'taxonomy' | 'post_type' | 'custom'
+//   oggettoId, url,                          // oggettoId per 'taxonomy'/'post_type' (id categoria Woo o id pagina), url per 'custom'
 //   itemId,                                  // solo 'elimina'
 // }})
 
@@ -42,7 +42,7 @@ Deno.serve(async (req) => {
   }
 
   const { azione } = corpo || {};
-  if (!["leggi", "crea_modifica", "elimina"].includes(azione)) {
+  if (!["leggi", "pagine", "crea_modifica", "elimina"].includes(azione)) {
     return new Response(JSON.stringify({ errore: "Parametro 'azione' non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
@@ -62,21 +62,29 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify(dati), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    if (azione === "pagine") {
+      const risposta = await fetch(`${siteUrl}/wp-json/elitederma/v1/pagine`, { headers });
+      const dati = await risposta.json();
+      if (!risposta.ok) return new Response(JSON.stringify({ errore: dati?.message || `WordPress ha risposto ${risposta.status}` }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify(dati), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     if (azione === "crea_modifica") {
       const { menuId, itemId, titolo, genitoreId, ordine, tipo, oggettoId, url } = corpo;
       if (!menuId || !titolo?.trim()) {
         return new Response(JSON.stringify({ errore: "menuId e titolo sono obbligatori" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
+      const tipoValido = tipo === "taxonomy" || tipo === "post_type" ? tipo : "custom";
       const payload: Record<string, unknown> = {
         menu_id: menuId,
         item_id: itemId || 0,
         titolo: titolo.trim(),
         genitore_id: genitoreId || 0,
         ordine: ordine ?? 0,
-        tipo: tipo === "taxonomy" ? "taxonomy" : "custom",
+        tipo: tipoValido,
       };
-      if (tipo === "taxonomy") payload.oggetto_id = oggettoId;
-      else payload.url = url || "#";
+      if (tipoValido === "custom") payload.url = url || "#";
+      else payload.oggetto_id = oggettoId;
 
       const risposta = await fetch(`${siteUrl}/wp-json/elitederma/v1/menu-item`, { method: "POST", headers, body: JSON.stringify(payload) });
       const dati = await risposta.json();
