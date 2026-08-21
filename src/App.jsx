@@ -22569,15 +22569,15 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // riflette in locale, poi si imposta lo stock iniziale. Senza prezzo
 // (materiali di consumo, arredi, altro non in vendita) resta solo
 // locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
-function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
-  const [nome, setNome] = useState("");
-  const [categoriaId, setCategoriaId] = useState("");
-  const [prezzo, setPrezzo] = useState("");
-  const [qtaMagazzino, setQtaMagazzino] = useState("");
-  const [qtaShop, setQtaShop] = useState("");
+function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto, prodotto, categoriaIdIniziale }) {
+  const [nome, setNome] = useState(prodotto?.nome || "");
+  const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
+  const [prezzo, setPrezzo] = useState(prodotto?.prezzo_vendita != null ? String(prodotto.prezzo_vendita) : "");
+  const [qtaMagazzino, setQtaMagazzino] = useState(prodotto?.giacenza_magazzino != null ? String(prodotto.giacenza_magazzino) : "");
+  const [qtaShop, setQtaShop] = useState(prodotto?.giacenza != null ? String(prodotto.giacenza) : "");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
-  const [soloOfflineChk, setSoloOfflineChk] = useState(false);
+  const [soloOfflineChk, setSoloOfflineChk] = useState(!!prodotto?.solo_offline);
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const haPrezzo = prezzo.trim() !== "";
   // "solo offline" può venire dalla categoria scelta (forzato, vale per
@@ -22633,8 +22633,58 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
     onFatto();
   }
 
+  // modifica di un prodotto già esistente (stessa scheda con cui è stato
+  // creato, riaperta cliccando il nome in "Dettaglio prodotti"): se il
+  // prodotto è (o deve diventare) in vendita online passa da
+  // woo-gestisci-prodotto — la stessa Edge Function usata per "crea", che
+  // qui riceve azione "modifica" se il prodotto ha già un woo_product_id,
+  // "crea" se sta passando da solo locale a online adesso — altrimenti
+  // resta un aggiornamento locale, come per un prodotto mai online
+  async function salva() {
+    if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
+    const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
+    const prezzoNum = haPrezzo ? parseNum(prezzo) : null;
+    if (haPrezzo && !(prezzoNum > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
+    setSalvando(true);
+    setMsg("");
+
+    if (vaSuWoo) {
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
+        body: {
+          azione: prodotto.woo_product_id ? "modifica" : "crea",
+          prodottoId: prodotto.id,
+          nome: nome.trim(), prezzo: prezzoNum, stato: "publish",
+          categorieIds: categoriaId ? [categoriaId] : [],
+        },
+      });
+      if (error || data?.errore) { setSalvando(false); setMsg("Errore salvataggio su WooCommerce: " + (data?.errore || error.message)); return; }
+      const { error: erroreLocale } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino, solo_offline: soloOfflineChk }).eq("id", prodotto.id);
+      if (erroreLocale) { setSalvando(false); setMsg("Salvato su WooCommerce, ma non in locale: " + erroreLocale.message); return; }
+      const shop = qtaShop === "" ? 0 : parseInt(parseNum(qtaShop), 10);
+      const { error: erroreStock } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, giacenza: shop } });
+      if (erroreStock) { setSalvando(false); setMsg("Salvato, ma la quantità shop non è stata aggiornata: " + erroreStock.message); return; }
+      setSalvando(false);
+      onFatto();
+      return;
+    }
+
+    // resta (o torna) solo locale: nessuna chiamata a WooCommerce
+    const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({
+      nome: nome.trim(), prezzo_vendita: prezzoNum, giacenza_magazzino: magazzino, solo_offline: soloOfflineChk,
+    }).eq("id", prodotto.id);
+    if (erroreUpdate) { setSalvando(false); setMsg("Errore: " + erroreUpdate.message); return; }
+    const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", prodotto.id);
+    if (erroreRimuoviCat) { setSalvando(false); setMsg("Prodotto salvato, ma la categoria non è stata aggiornata: " + erroreRimuoviCat.message); return; }
+    if (categoriaId) {
+      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert({ prodotto_id: prodotto.id, categoria_id: categoriaId });
+      if (erroreCat) { setSalvando(false); setMsg("Prodotto salvato, ma la categoria non è stata aggiornata: " + erroreCat.message); return; }
+    }
+    setSalvando(false);
+    onFatto();
+  }
+
   return (
-    <Modal title="Nuovo prodotto" onClose={onClose}>
+    <Modal title={prodotto ? "Modifica prodotto" : "Nuovo prodotto"} onClose={onClose}>
       <Field label="Nome">
         <input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
       </Field>
@@ -22669,7 +22719,9 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto }) {
         </div>
       </div>
       {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={crea} disabled={salvando} style={{ width: "100%" }}>{salvando ? "Creo…" : "Crea prodotto"}</Button>
+      <Button onClick={prodotto ? salva : crea} disabled={salvando} style={{ width: "100%" }}>
+        {prodotto ? (salvando ? "Salvo…" : "Salva modifiche") : (salvando ? "Creo…" : "Crea prodotto")}
+      </Button>
     </Modal>
   );
 }
@@ -23146,7 +23198,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack, onModificaProdotto }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -23156,6 +23208,10 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
   const [paginaMagazzino, setPaginaMagazzino] = useState(0);
   const [mostraNuovoProdotto, setMostraNuovoProdotto] = useState(false);
+  // cliccando il nome di un prodotto già esistente si riapre la stessa
+  // scheda con cui è stato creato (non quella completa di Gestione Shop,
+  // pensata per la scheda WooCommerce con immagini/descrizioni)
+  const [prodottoInModifica, setProdottoInModifica] = useState(null);
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
@@ -23521,7 +23577,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={onModificaProdotto} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -23555,6 +23611,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
           categorieProdotti={categorieProdotti}
           onClose={() => setMostraNuovoProdotto(false)}
           onFatto={() => { setMostraNuovoProdotto(false); ricarica(["prodotti_shop"]); }}
+        />
+      )}
+      {prodottoInModifica && (
+        <ModaleNuovoProdotto
+          categorieProdotti={categorieProdotti}
+          prodotto={prodottoInModifica}
+          categoriaIdIniziale={(prodottiCategorie || []).find((pc) => pc.prodotto_id === prodottoInModifica.id)?.categoria_id || ""}
+          onClose={() => setProdottoInModifica(null)}
+          onFatto={() => { setProdottoInModifica(null); ricarica(["prodotti_shop", "prodotti_categorie"]); }}
         />
       )}
       {mostraGestioneCategorie && (
@@ -29490,7 +29555,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onProdottiRientrati }) {
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onProdottiRientrati, onCambiaTagliaIscritto }) {
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -29665,6 +29730,31 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         )}
       </div>
 
+      {/* si autocompila dalla taglia scelta da ciascun iscritto nel modulo
+          di iscrizione (iscritti.taglia_divisa): qui solo la possibilità
+          di correggerla, per chi prepara davvero le divise da spedire */}
+      <div style={labelStyle}>Divise</div>
+      <div style={{ marginBottom: 20 }}>
+        {iscrittiEdizione.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "8px 0" }}>Nessun iscritto ancora.</div>
+        ) : iscrittiEdizione.map((i) => (
+          <div key={i.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>{toTitleCase(i.nome)} {toTitleCase(i.cognome)}</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Tg.</span>
+              <select
+                value={i.taglia_divisa || ""}
+                onChange={(e) => onCambiaTagliaIscritto(i.id, e.target.value || null)}
+                style={{ ...inputStyle, width: 92, padding: "6px 8px" }}
+              >
+                <option value="">—</option>
+                {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div style={labelStyle}>Consulenze</div>
       <div style={{ marginBottom: 20 }}>
         {consulenzeEdizione.map((r) => (
@@ -29826,6 +29916,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   const [edizioneSelId, setEdizioneSelId] = useState(null);
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
   const numeroSpedizioniDaEvadere = (spedizioniPos || []).filter((s) => s.stato === "da_spedire").length;
+  async function cambiaTagliaIscritto(iscrittoId, taglia) {
+    const { error } = await supabase.from("iscritti").update({ taglia_divisa: taglia }).eq("id", iscrittoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["iscritti"]);
+  }
 
   function statoDi(corsoDataId) {
     return logisticaKitEdizioni.find((e) => e.corso_data_id === corsoDataId) || {
@@ -30144,6 +30239,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
                 onProdottiRientrati={() => processaRientro(edizioneSel)}
+                onCambiaTagliaIscritto={cambiaTagliaIscritto}
               />
             )}
           </div>
@@ -34226,7 +34322,6 @@ export default function App() {
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
   function apriGestioneShop() { setProdottoDaAprireInShop(null); apriViewProtetta("gestioneshop"); }
-  function apriGestioneShopSuProdotto(prodottoId) { setProdottoDaAprireInShop(prodottoId); apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPos() { apriViewProtetta("pos"); }
@@ -34785,7 +34880,6 @@ export default function App() {
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
-          onModificaProdotto={apriGestioneShopSuProdotto}
         />
       )}
 
