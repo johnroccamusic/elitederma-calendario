@@ -15213,7 +15213,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     }
 
     if ((dati.accontoMetodo || dati.accontoImporto) && !salta(pagAcconto.totale !== "")) {
-      const metodo = ["Sito", "Bonifico", "Pos", "Contanti", "Rate"].find((m) => m.toLowerCase() === (dati.accontoMetodo || "").toLowerCase());
+      const metodo = ["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"].find((m) => m.toLowerCase() === (dati.accontoMetodo || "").toLowerCase());
       setPagAcconto((prev) => {
         let next = metodo ? { ...prev, metodo } : prev;
         if (dati.accontoImporto) next = conTotaleAggiornato(next, dati.accontoImporto.replace(",", "."), true);
@@ -16062,7 +16062,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
 
         <div style={cardStyle}>
           <fieldset disabled={soloLettura} style={{ border: "none", padding: 0, margin: 0 }}>
-          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 14 }}>Dati contabili</div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Dati contabili</div>
+            {(nome.trim() || cognome.trim()) && (
+              <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{`${nome.trim()} ${cognome.trim()}`.trim()}</div>
+            )}
+          </div>
           <>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10 }}>
             <div style={{ display: "flex", gap: 14 }}>
@@ -16117,7 +16122,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <BloccoQuota
             titolo="Quota acconto"
             valori={pagAcconto}
-            opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"]}
+            opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
             totaleBloccato={false}
             imponibileBloccato={pagAcconto.metodo === "Cash no iva"}
             onImponibile={(v) => setPagAcconto((prev) => conImponibileAggiornato(prev, v, true))}
@@ -16154,7 +16159,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               key={idx}
               titolo={`Acconto aggiuntivo ${idx + 1}`}
               valori={riga}
-              opzioniMetodo={["Sito", "Bonifico", "Pos", "Contanti", "Cash no iva", "Rate"]}
+              opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
               imponibileBloccato={riga.metodo === "Cash no iva"}
               onImponibile={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? conImponibileAggiornato(r, v, true) : r)))}
               onTotale={(v) => setAccontoExtra((prev) => prev.map((r, i) => (i === idx ? (r.metodo === "Cash no iva" ? { ...r, totale: v } : conTotaleAggiornato(r, v, true)) : r)))}
