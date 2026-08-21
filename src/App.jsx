@@ -16146,7 +16146,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ flex: 1, minWidth: 0 }}>
               <Field label="Modulo iscrizione (PDF)">
                 {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
-                  <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+                  <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
                 )}
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
@@ -16711,7 +16711,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Screen acconto (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
-              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+              <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
@@ -16728,7 +16728,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ flex: 1, minWidth: 0 }}>
           <Field label="Screen di recap (opzionale)">
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
-              <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
+              <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
@@ -22881,7 +22881,20 @@ function ModaleNuovoProdotto({ categorieProdotti, onClose, onFatto, prodotto, ca
       return;
     }
 
-    // resta (o torna) solo locale: nessuna chiamata a WooCommerce
+    // resta (o torna) solo locale: se prima era pubblicato su WooCommerce
+    // va staccato da lì, altrimenti "Solo offline" non lo sarebbe davvero.
+    // Cancellato del tutto (nuovo codice se un giorno torna online) solo
+    // se non ha mai generato una vendita; se invece ha storico, va solo
+    // in bozza su WooCommerce per non perderlo
+    if (prodotto.woo_product_id) {
+      if ((prodotto.quantitaVenduta || 0) > 0) {
+        const { error } = await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: prodotto.id, stato: "draft" } });
+        if (error) { setSalvando(false); setMsg("Errore nel mettere il prodotto in bozza su WooCommerce: " + error.message); return; }
+      } else {
+        const { error } = await supabase.functions.invoke("woo-elimina-prodotto", { body: { prodottoId: prodotto.id } });
+        if (error) { setSalvando(false); setMsg("Errore nel cancellare il prodotto da WooCommerce: " + error.message); return; }
+      }
+    }
     const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({
       nome: nome.trim(), prezzo_vendita: prezzoNum, giacenza_magazzino: magazzino, solo_offline: soloOfflineChk,
     }).eq("id", prodotto.id);
@@ -23374,7 +23387,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
         </div>
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
-        {p.woo_product_id ? (
+        {p.woo_product_id && !(p.forzatoSoloOffline || p.solo_offline) ? (
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <span style={{ ...fontBody, fontSize: 11, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 14, textAlign: "right" }}>{p.giacenza || 0}</span>
             {bottoneSposta(sincronizzandoMagazzini || (p.giacenza_magazzino || 0) <= 0, GOLD, () => onSpostaLocale(p.id, "shop"), "Sposta un pezzo dal Magazzino allo Shop (in locale, da sincronizzare)")}
