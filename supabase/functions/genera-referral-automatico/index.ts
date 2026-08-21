@@ -1,15 +1,22 @@
 // Edge Function "genera-referral-automatico"
-// Schedulata via pg_cron (vedi migrazione 20260820160000): ogni giorno
-// controlla se oggi inizia un corso per una master che non ha ancora un
-// referral code, e se sì gliene crea uno seguendo le regole di
-// regole_referral_automatico. UN SOLO referral code per master, per
-// sempre — non uno per corso: se la master ne ha già uno (creato qui o
-// a mano dalla tab "Genera referral code"), non viene toccato.
+// Schedulata via pg_cron (vedi migrazione 20260820170000): ogni giorno
+// controlla i corsi che iniziano oggi e genera, per ciascuna edizione
+// (corsi_date) che non ne ha già uno collegato, un referral code seguendo
+// le regole di regole_referral_automatico. UN coupon per EDIZIONE di corso
+// (non più uno per master per sempre): due edizioni della stessa master,
+// anche nello stesso giorno, ricevono ciascuna il proprio codice.
+//
+// Con body { backfill: true } (invocazione manuale una tantum, non
+// schedulata) elabora le corsi_date con una master associata GIÀ INIZIATE
+// (data_inizio <= oggi) prive di un coupon collegato — solo il pregresso:
+// le edizioni future restano al cron quotidiano del loro giorno, non le
+// tocca il backfill (altrimenti si genererebbero da subito coupon reali su
+// WooCommerce per corsi ancora lontani nel tempo).
 //
 // Non duplica la logica di creazione su WooCommerce: inserisce la riga
-// "coupon" (bozza, con master_id e generato_da_cron) e poi richiama la
-// stessa "woo-crea-coupon" già usata dalla creazione manuale, così i due
-// percorsi restano identici e non divergono nel tempo.
+// "coupon" (bozza, con master_id, corsi_date_id e generato_da_cron) e poi
+// richiama la stessa "woo-crea-coupon" già usata dalla creazione manuale,
+// così i due percorsi restano identici e non divergono nel tempo.
 //
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (già forniti automaticamente)
@@ -60,31 +67,44 @@ Deno.serve(async (req) => {
   }
   try {
     const oggi = new Date().toISOString().slice(0, 10);
+    let backfill = false;
+    try {
+      const body = await req.json();
+      backfill = body?.backfill === true;
+    } catch {
+      // body vuoto ({}) o assente: normale invocazione quotidiana del cron
+    }
 
     const { data: regole } = await supabase.from("regole_referral_automatico").select("*").limit(1).maybeSingle();
     if (!regole) {
       return new Response(JSON.stringify({ errore: "regole_referral_automatico non configurata" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data: corsiOggi } = await supabase.from("corsi_date").select("id, data_inizio, data_fine, master_id").eq("data_inizio", oggi).not("master_id", "is", null);
-    if (!corsiOggi?.length) {
-      return new Response(JSON.stringify({ ok: true, creati: 0, motivo: "Nessun corso inizia oggi" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    let queryCorsi = supabase.from("corsi_date").select("id, data_inizio, data_fine, master_id").not("master_id", "is", null);
+    queryCorsi = backfill ? queryCorsi.lte("data_inizio", oggi) : queryCorsi.eq("data_inizio", oggi);
+    const { data: corsiCandidati } = await queryCorsi;
+    if (!corsiCandidati?.length) {
+      return new Response(JSON.stringify({ ok: true, creati: 0, motivo: backfill ? "Nessuna edizione passata senza coupon" : "Nessun corso inizia oggi" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const masterIds = [...new Set(corsiOggi.map((c: any) => c.master_id as string))];
-    const { data: masterEsistenti } = await supabase.from("coupon").select("master_id").in("master_id", masterIds);
-    const masterConCodice = new Set((masterEsistenti || []).map((c: any) => c.master_id));
-    const masterDaGenerare = masterIds.filter((id) => !masterConCodice.has(id));
+    const corsiDateIds = corsiCandidati.map((c: any) => c.id as string);
+    const { data: edizioniConCoupon } = await supabase.from("coupon").select("corsi_date_id").in("corsi_date_id", corsiDateIds);
+    const edizioniConCodice = new Set((edizioniConCoupon || []).map((c: any) => c.corsi_date_id));
+    const corsiDaGenerare = corsiCandidati.filter((c: any) => !edizioniConCodice.has(c.id));
 
-    if (masterDaGenerare.length === 0) {
-      return new Response(JSON.stringify({ ok: true, creati: 0, motivo: "Le master di oggi hanno già un referral code" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (corsiDaGenerare.length === 0) {
+      return new Response(JSON.stringify({ ok: true, creati: 0, motivo: "Tutte le edizioni candidate hanno già un referral code" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data: masterInfo } = await supabase.from("master").select("id, nome").in("id", masterDaGenerare);
+    const masterIds = [...new Set(corsiDaGenerare.map((c: any) => c.master_id as string))];
+    const { data: masterInfo } = await supabase.from("master").select("id, nome").in("id", masterIds);
+    const masterById: Record<string, { id: string; nome: string }> = {};
+    (masterInfo || []).forEach((m: any) => { masterById[m.id] = m; });
 
-    const risultati: { master: string; codice?: string; errore?: string }[] = [];
-    for (const m of masterInfo || []) {
-      const corso = corsiOggi.find((c: any) => c.master_id === m.id);
+    const risultati: { master: string; corsoDataId: string; codice?: string; errore?: string }[] = [];
+    for (const corso of corsiDaGenerare as any[]) {
+      const m = masterById[corso.master_id];
+      if (!m) continue;
       let codice = codiceCasuale(m.nome);
       for (let tentativi = 0; tentativi < 5; tentativi++) {
         const { data: esiste } = await supabase.from("coupon").select("id").eq("codice", codice.toLowerCase()).maybeSingle();
@@ -92,8 +112,8 @@ Deno.serve(async (req) => {
         codice = codiceCasuale(m.nome);
       }
 
-      const validoFinoA = corso ? addGiorniIso(corso.data_fine, regole.giorni_validita_dopo_corso) : null;
-      const validoDa = regole.valido_durante_corso ? null : (corso?.data_fine || null);
+      const validoFinoA = addGiorniIso(corso.data_fine, regole.giorni_validita_dopo_corso);
+      const validoDa = regole.valido_durante_corso ? null : corso.data_fine;
 
       const { data: riga, error: erroreInsert } = await supabase.from("coupon").insert({
         codice: codice.toLowerCase(),
@@ -109,12 +129,13 @@ Deno.serve(async (req) => {
         non_cumulabile: regole.non_cumulabile,
         stato: "bozza",
         master_id: m.id,
+        corsi_date_id: corso.id,
         generato_da_cron: true,
-        creato_da: "cron",
+        creato_da: backfill ? "backfill" : "cron",
       }).select().single();
 
       if (erroreInsert || !riga) {
-        risultati.push({ master: m.nome, errore: erroreInsert?.message || "insert fallito" });
+        risultati.push({ master: m.nome, corsoDataId: corso.id, errore: erroreInsert?.message || "insert fallito" });
         continue;
       }
 
@@ -125,10 +146,10 @@ Deno.serve(async (req) => {
       });
       if (!rispostaCreazione.ok) {
         const dettaglio = await rispostaCreazione.text();
-        risultati.push({ master: m.nome, errore: "woo-crea-coupon: " + dettaglio });
+        risultati.push({ master: m.nome, corsoDataId: corso.id, errore: "woo-crea-coupon: " + dettaglio });
         continue;
       }
-      risultati.push({ master: m.nome, codice });
+      risultati.push({ master: m.nome, corsoDataId: corso.id, codice });
     }
 
     return new Response(JSON.stringify({ ok: true, creati: risultati.filter((r) => r.codice).length, risultati }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

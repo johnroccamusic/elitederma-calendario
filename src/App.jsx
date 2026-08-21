@@ -5715,9 +5715,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
-  // un solo referral code per master, per sempre: se c'è, va mostrato sulle
-  // sue card corso in "Prossimi corsi", non solo nella tab Genera Coupon
-  const codiceReferralMaster = (coupon || []).find((c) => c.master_id === masterSelId)?.codice || null;
   const [mostraRiepilogoPos, setMostraRiepilogoPos] = useState(false);
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
@@ -5898,7 +5895,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
                 apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
-                codiceReferral={codiceReferralMaster}
+                codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
               />
             ))}
           </>
@@ -18937,7 +18934,7 @@ function codiceReferralCasuale(nome) {
   return `${inizialiMasterReferral(nome)}${parti.join("")}`;
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, regoleReferralAutomatico, ricarica, onBack }) {
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("manuale");
   const [codice, setCodice] = useState("");
@@ -19069,7 +19066,12 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, r
   // subito su WooCommerce con le regole del template automatico
   const couponPerMasterId = useMemo(() => {
     const mappa = {};
-    (coupon || []).filter((c) => c.master_id).forEach((c) => { mappa[c.master_id] = c; });
+    // solo i codici "jolly" legati alla sola master (non quelli generati
+    // per una specifica edizione di corso, che hanno la loro origine nella
+    // tab "Generazione automatica"/storico) — altrimenti una master con
+    // già un coupon automatico per-corso risulterebbe erroneamente "già
+    // servita" anche qui, nascondendo il tasto "Genera codice"
+    (coupon || []).filter((c) => c.master_id && !c.corsi_date_id).forEach((c) => { mappa[c.master_id] = c; });
     return mappa;
   }, [coupon]);
   const [codiceProposto, setCodiceProposto] = useState({});
@@ -19321,7 +19323,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, r
         {tab === "automatica" && (
           <div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 16 }}>
-              Regole usate per generare in automatico un referral code quando inizia il primo corso di una master che non ne ha ancora uno (una volta sola, per sempre — non uno per corso).
+              Regole usate per generare in automatico un referral code quando inizia un corso: ogni edizione (sede + data + master) riceve il proprio codice dedicato.
             </div>
             {!regoleForm ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Caricamento regole…</div>
@@ -19356,6 +19358,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, r
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun codice generato in automatico ancora.</div>
             ) : couponAutomatici.map((c) => {
               const m = (master || []).find((mm) => mm.id === c.master_id);
+              const cd = (corsiDate || []).find((x) => x.id === c.corsi_date_id);
+              const corsoNome = cd ? (corsi || []).find((co) => co.id === cd.corso_id)?.nome : null;
+              const locNome = cd ? (location || []).find((l) => l.id === cd.location_id)?.nome : null;
+              const dettaglioCorso = cd ? `${corsoNome || "—"} · ${toTitleCase(locNome || "—")} · ${fmtData(cd.data_inizio)}–${fmtData(cd.data_fine)}` : null;
               const statoInfo = ETICHETTA_STATO_COUPON[c.stato] || ETICHETTA_STATO_COUPON.bozza;
               return (
                 <div key={c.id} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -19364,7 +19370,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, r
                       <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{c.codice}</span>
                       <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#fff", background: statoInfo.colore, borderRadius: 20, padding: "2px 9px" }}>{statoInfo.testo}</span>
                     </div>
-                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{m ? toTitleCase(m.nome) : "—"} · {c.valore}% {c.valido_fino_a ? `· scade il ${fmtData(c.valido_fino_a)}` : ""}</div>
+                    <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{m ? toTitleCase(m.nome) : "—"}{dettaglioCorso ? ` · ${dettaglioCorso}` : ""} · {c.valore}% {c.valido_fino_a ? `· scade il ${fmtData(c.valido_fino_a)}` : ""}</div>
                   </div>
                   <button onClick={() => eliminaCoupon(c)} disabled={eliminandoId === c.id} title="Elimina coupon" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
@@ -27371,7 +27377,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente }) {
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
   // programmatore — chi entra con la propria password di master o
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
@@ -27463,6 +27469,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [carrello, setCarrello] = useState([]); // { prodottoId, nome, prezzo, quantita, sku, disponibili }
   const [scontoTipo, setScontoTipo] = useState("percentuale"); // percentuale | importo
   const [scontoValore, setScontoValore] = useState("");
+  // sconto vendita (manuale) e coupon (dallo sconto dell'edizione di corso
+  // collegata) sono alternativi, mai cumulabili: si escludono a vicenda
+  const [couponValore, setCouponValore] = useState("");
   const [metodoPagamento, setMetodoPagamento] = useState("pos");
   const [note, setNote] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -27544,14 +27553,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
   function svuotaCarrello() { setCarrello([]); }
   function nuovaVendita() {
-    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
+    setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setCouponValore(""); setMetodoPagamento("pos"); setNote(""); setMsg("");
     setSpedizioneAttiva(false); setSpedIscrittoId(""); setSpedDestinatario(""); setSpedIndirizzo(""); setSpedCitta(""); setSpedCap("");
     setOmaggioAttivo(false);
   }
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
   const scontoNum = scontoValore === "" ? 0 : parseNum(scontoValore);
-  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum));
+  const couponNum = couponValore === "" ? 0 : parseNum(couponValore);
+  const scontoApplicato = subtotale <= 0 ? 0 : round2(Math.min(subtotale, couponNum > 0 ? subtotale * (couponNum / 100) : (scontoTipo === "percentuale" ? subtotale * (scontoNum / 100) : scontoNum)));
   const totaleNetto = round2(subtotale - scontoApplicato);
   const imponibile = round2(totaleNetto / 1.22);
   const iva = round2(totaleNetto - imponibile);
@@ -27734,10 +27744,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: isMobile ? 8 : 14 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: couponNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
         <div style={{ flex: 1 }}>
           <Field label="Sconto vendita">
-            <select style={inputStyle} value={scontoTipo} onChange={(e) => setScontoTipo(e.target.value)}>
+            <select style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
               <option value="percentuale">Percentuale</option>
               <option value="importo">Importo fisso</option>
             </select>
@@ -27745,10 +27755,25 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
         <div style={{ flex: 1 }}>
           <Field label={scontoTipo === "percentuale" ? "%" : "€"}>
-            <input style={inputStyle} inputMode="decimal" value={scontoValore} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
+            <input style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
           </Field>
         </div>
       </div>
+      {couponNum > 0 && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Svuota il campo Coupon per inserire uno sconto manuale.</div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: scontoNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Coupon (%)">
+            <input style={{ ...inputStyle, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => setCouponValore(e.target.value)} placeholder="0" />
+          </Field>
+        </div>
+      </div>
+      {scontoNum > 0 && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Svuota lo sconto vendita per usare un coupon.</div>
+      )}
+
       {scontoApplicato > 0 && (
         <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
           <span>Sconto applicato</span><span>− {fmtEuroErp2(scontoApplicato)}</span>
@@ -27777,7 +27802,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       {corsiEleggibiliPos.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
           <Field label="Corso in corso (opzionale)">
-            <select style={inputStyle} value={corsoPosId} onChange={(e) => { setCorsoPosId(e.target.value); setSpedIscrittoId(""); }}>
+            <select style={inputStyle} value={corsoPosId} onChange={(e) => {
+              const nuovoId = e.target.value;
+              setCorsoPosId(nuovoId); setSpedIscrittoId("");
+              const couponEdizione = (coupon || []).find((c) => c.corsi_date_id === nuovoId);
+              setCouponValore(couponEdizione ? String(couponEdizione.valore) : "");
+            }}>
               <option value="">— vendita non legata a un corso —</option>
               {corsiEleggibiliPos.map((cd) => (
                 <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}</option>
@@ -33554,7 +33584,7 @@ export default function App() {
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
-    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "regole_referral_automatico"],
+    generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
@@ -33564,7 +33594,7 @@ export default function App() {
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
-    pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti"],
+    pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
     catalogocategoriecosti: ["costi_categorie", "costi_sottocategorie", "spese", "costi_soglie_allerta"],
     budgetcosti: ["costi_categorie", "location", "corsi", "costi_budget"],
@@ -34450,6 +34480,7 @@ export default function App() {
       {view === "generacoupon" && (
         <PaginaGeneraCoupon
           coupon={coupon} categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} master={master}
+          corsi={corsi} corsiDate={corsiDate} location={location}
           regoleReferralAutomatico={regoleReferralAutomatico}
           ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
         />
@@ -34529,7 +34560,7 @@ export default function App() {
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
-          ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti}
+          ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti} coupon={coupon}
         />
       )}
 
