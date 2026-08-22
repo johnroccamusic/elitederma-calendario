@@ -5040,15 +5040,27 @@ function PaginaDashboardVenditori({
   const statsPrecedenti = useMemo(() => {
     if (!venditoreSel) return { count: 0, commissioni: 0 };
     const nomeNorm = venditoreSel.nome.trim().toUpperCase();
-    const righe = iscritti
+    const righeNormali = iscritti
       .filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm)
       .filter((i) => !i.vecchia_iscrizione)
       .filter((i) => {
         const d = (i.ts || "").slice(0, 10);
         return d >= rangePrecedente.inizio && d <= rangePrecedente.fine;
       });
+    // solo guardando "Ultimo trimestre": le vecchie iscrizioni (vendite reali
+    // recuperate a posteriori, la cui vera data non è databile con certezza)
+    // vanno TUTTE nel trimestre di confronto, mai in quello corrente — così
+    // il trimestre in corso resta un dato pulito e il recupero storico non
+    // sparisce, pesa solo sul raffronto storico. In "Ultimo mese" e
+    // "Periodo personalizzato" restano escluse come sempre: una finestra
+    // così stretta le farebbe risultare tutte concentrate nello stesso
+    // mese di inserimento, un artefatto del recupero dati, non una vendita
+    const righeVecchie = periodo === "trimestre"
+      ? iscritti.filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm && i.vecchia_iscrizione)
+      : [];
+    const righe = [...righeNormali, ...righeVecchie];
     return { count: righe.length, commissioni: righe.reduce((s, i) => s + (i.quota_venditore || 0), 0) };
-  }, [iscritti, venditoreSel, rangePrecedente]);
+  }, [iscritti, venditoreSel, rangePrecedente, periodo]);
   const numeroChiusurePrecedenti = statsPrecedenti.count;
 
   // "Performance" = commissione media per chiusura (somma commissioni /
@@ -5060,10 +5072,23 @@ function PaginaDashboardVenditori({
   const variazionePerformance = numeroChiusure > 0 && commissioneMediaPrecedente > 0
     ? Math.round(((commissioneMediaVenditore - commissioneMediaPrecedente) / commissioneMediaPrecedente) * 100)
     : null;
+  // "Da incassare"/"Commissioni in arrivo": indipendenti dal "Periodo di
+  // analisi" scelto sopra E dal flag "vecchia iscrizione" — una commissione
+  // è dovuta appena il corso finisce, non importa quando né in quale
+  // finestra di analisi è stata registrata la vendita. Guarda quindi TUTTE
+  // le vendite di questo venditore, non solo "chiusure" (che resta filtrata
+  // per periodo e vendite reali, per le tile di performance qui sopra)
+  const tutteLeVenditeVenditore = useMemo(() => {
+    if (!venditoreSel) return [];
+    const nomeNorm = venditoreSel.nome.trim().toUpperCase();
+    return iscritti
+      .filter((i) => (i.tutor || "").trim().toUpperCase() === nomeNorm)
+      .map((i) => ({ iscritto: i, corsoData: corsoDataById[i.corso_data_id] || null }));
+  }, [iscritti, venditoreSel, corsoDataById]);
   // la commissione diventa incassabile da sola alla fine del corso (stessa
   // logica già usata per "Archivio corsi", nessun interruttore manuale):
   // finché il corso non è concluso resta "in arrivo"
-  const chiusureInAttesa = chiusure.filter(({ corsoData }) => corsoData && corsoData.data_fine >= oggiStr);
+  const chiusureInAttesa = tutteLeVenditeVenditore.filter(({ corsoData }) => corsoData && corsoData.data_fine >= oggiStr);
   const daIncassare = round2(chiusureInAttesa.reduce((s, { iscritto }) => s + (iscritto.quota_venditore || 0), 0));
   const dataUltimaScadenza = chiusureInAttesa.reduce((max, { corsoData }) => (!max || corsoData.data_fine > max ? corsoData.data_fine : max), null);
   const corsiInAttesaCount = new Set(chiusureInAttesa.map(({ corsoData }) => corsoData?.id)).size;
