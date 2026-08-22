@@ -17,7 +17,7 @@
 // da Supabase a ogni Edge Function, non vanno impostati a mano.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mappaOrdine } from "../_shared/woo.ts";
+import { mappaOrdine, attribuisciMasterReferral } from "../_shared/woo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -94,25 +94,10 @@ Deno.serve(async (req) => {
 
   // referral code: se uno dei coupon usati sull'ordine è associato a una
   // master, la vendita va attribuita a lei — un ordine può avere più
-  // coupon_lines, basta trovarne uno che sia un referral code
-  const codiciUsati: string[] = Array.isArray(ordine.coupon_lines)
-    ? ordine.coupon_lines.map((c: any) => String(c.code || "").toLowerCase()).filter(Boolean)
-    : [];
-  if (codiciUsati.length > 0) {
-    const { data: couponReferral } = await supabase
-      .from("coupon")
-      .select("master_id")
-      .in("codice", codiciUsati)
-      .not("master_id", "is", null)
-      .limit(1)
-      .maybeSingle();
-    if (couponReferral?.master_id) {
-      const { data: masterRiga } = await supabase.from("master").select("nome").eq("id", couponReferral.master_id).maybeSingle();
-      riga.operatore_tipo = "master";
-      riga.operatore_id = couponReferral.master_id;
-      riga.operatore_nome = masterRiga?.nome || null;
-    }
-  }
+  // coupon_lines, la scelta fra più referral riconosciuti e il cancello
+  // sulla data di inizio raccolta vivono in attribuisciMasterReferral
+  // (condivisa con woo-import-storico, stessa identica regola)
+  await attribuisciMasterReferral(supabase, ordine, riga);
 
   const { error } = await supabase.from("vendite_shop").upsert(riga, { onConflict: "woo_order_id" });
   if (error) {

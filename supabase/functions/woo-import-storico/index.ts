@@ -12,7 +12,7 @@
 //   WC_CONSUMER_SECRET — Consumer secret della stessa chiave
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mappaOrdine } from "../_shared/woo.ts";
+import { mappaOrdine, attribuisciMasterReferral } from "../_shared/woo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -62,7 +62,16 @@ Deno.serve(async (req) => {
     const ordini = await risposta.json();
     if (!Array.isArray(ordini) || ordini.length === 0) { completato = true; break; }
 
-    const righe = ordini.map(mappaOrdine).filter((r): r is Record<string, unknown> => r !== null);
+    const righe: Record<string, unknown>[] = [];
+    for (const o of ordini) {
+      const riga = mappaOrdine(o);
+      if (!riga) continue;
+      // stessa attribuzione del referral code applicata da woo-webhook in
+      // tempo reale — prima mancava qui, quindi lo storico di un ordine mai
+      // arrivato via webhook restava senza operatore/coupon
+      await attribuisciMasterReferral(supabase, o, riga);
+      righe.push(riga);
+    }
     if (righe.length > 0) {
       const { error } = await supabase.from("vendite_shop").upsert(righe, { onConflict: "woo_order_id" });
       if (error) {

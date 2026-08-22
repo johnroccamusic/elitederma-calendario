@@ -22,6 +22,7 @@
 //   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (già forniti automaticamente)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../_shared/codiceReferral.js";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -33,27 +34,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-function inizialiMaster(nome: string): string {
-  const parole = (nome || "").trim().split(/\s+/).filter(Boolean);
-  const lettereNome = parole.map((p) => p[0]).join("").toUpperCase().replace(/[^A-Z]/g, "");
-  if (lettereNome.length >= 2) return lettereNome.slice(0, 2);
-  const soloLettere = (nome || "").toUpperCase().replace(/[^A-Z]/g, "");
-  return (soloLettere.slice(0, 2) || "MM").padEnd(2, "X");
-}
-// 2 iniziali fisse in testa + 3 cifre e 1 lettera casuali, mescolati fra
-// loro (non sempre cifre-poi-lettera) — stessa regola usata lato client
-// in App.jsx (codiceReferralCasuale), duplicata qui perché le due
-// funzioni girano in runtime diversi e non possono condividere codice
-function codiceCasuale(nome: string): string {
-  const parti = [
-    ...Array.from({ length: 3 }, () => "0123456789"[Math.floor(Math.random() * 10)]),
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[Math.floor(Math.random() * 26)],
-  ];
-  for (let i = parti.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [parti[i], parti[j]] = [parti[j], parti[i]];
+// genera un codice mai emesso prima, controllando il registro permanente
+// (non la tabella "coupon", che perde le righe cancellate): parte dal
+// livello dedotto contando quanti codici esistono già con le stesse
+// iniziali, sale di livello da sola se 12 tentativi di fila collidono —
+// nessun limite di tentativi, un codice già usato non si riassegna mai
+async function generaCodiceUnivoco(nome: string): Promise<string> {
+  const iniziali = inizialiMaster(nome);
+  const { count } = await supabase.from("codici_emessi").select("codice", { count: "exact", head: true }).ilike("codice", `${iniziali}%`);
+  let livello = livelloIniziale(count || 0);
+  let tentativiLivello = 0;
+  for (;;) {
+    const codice = generaCodiceCasuale(nome, livello).toLowerCase();
+    const { data: esiste } = await supabase.from("codici_emessi").select("codice").eq("codice", codice).maybeSingle();
+    if (!esiste) return codice;
+    tentativiLivello++;
+    if (tentativiLivello >= 12) { livello++; tentativiLivello = 0; }
   }
-  return `${inizialiMaster(nome)}${parti.join("")}`;
 }
 function addGiorniIso(dataIso: string, giorni: number): string {
   const d = new Date(dataIso + "T00:00:00Z");
@@ -105,18 +102,20 @@ Deno.serve(async (req) => {
     for (const corso of corsiDaGenerare as any[]) {
       const m = masterById[corso.master_id];
       if (!m) continue;
-      let codice = codiceCasuale(m.nome);
-      for (let tentativi = 0; tentativi < 5; tentativi++) {
-        const { data: esiste } = await supabase.from("coupon").select("id").eq("codice", codice.toLowerCase()).maybeSingle();
-        if (!esiste) break;
-        codice = codiceCasuale(m.nome);
+      const codice = await generaCodiceUnivoco(m.nome);
+      // nel registro PRIMA di creare il coupon vero: se qualcosa fallisce
+      // dopo, il codice resta comunque bruciato per sempre, mai riassegnato
+      const { error: erroreRegistro } = await supabase.from("codici_emessi").insert({ codice, origine: "auto", master_id: m.id, corsi_date_id: corso.id });
+      if (erroreRegistro) {
+        risultati.push({ master: m.nome, corsoDataId: corso.id, errore: "registro codici: " + erroreRegistro.message });
+        continue;
       }
 
       const validoFinoA = addGiorniIso(corso.data_fine, regole.giorni_validita_dopo_corso);
       const validoDa = regole.valido_durante_corso ? null : corso.data_fine;
 
       const { data: riga, error: erroreInsert } = await supabase.from("coupon").insert({
-        codice: codice.toLowerCase(),
+        codice,
         descrizione: `Referral automatico — ${m.nome}`,
         tipo_sconto: "percent",
         valore: regole.percentuale_sconto,
