@@ -22748,6 +22748,14 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
       .map((p) => ({ nome: p.nome, quantita: p.quantita, ricavo: round2(p.ricavo), nOrdini: p.ordini.size, prezzoMedio: p.quantita > 0 ? round2(p.ricavo / p.quantita) : 0 }))
       .sort((a, b) => (ordinePer === "quantita" ? b.quantita - a.quantita : b.ricavo - a.ricavo));
   })();
+  // stesse colonne di "Per prodotto" in Statistiche Vendite Prodotti
+  // (Prodotto/Pezzi netti/Ricavo netto), qui filtrata a questa sola
+  // origine — senza ricerca, i primi 20; un prodotto marginale (poche
+  // unità, magari nemmeno un ordine "completato") resta cercabile per nome
+  const [ricercaProdotto, setRicercaProdotto] = useState("");
+  const prodottiVisibili = ricercaProdotto.trim()
+    ? prodottiAggregati.filter((p) => p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase()))
+    : prodottiAggregati.slice(0, 20);
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -22757,7 +22765,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Vendite al banco" : "Vendite Shop Online"}</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
           {origine === "woocommerce" && (
             <div style={{ textAlign: "right" }}>
               <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
@@ -22845,13 +22853,16 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 28, marginBottom: 4 }}>
-          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Prodotti più venduti</div>
-          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-            {[{ v: "quantita", l: "Per quantità" }, { v: "ricavo", l: "Per ricavo" }].map((o) => (
-              <button key={o.v} onClick={() => setOrdinePer(o.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 12px", borderRadius: 16, border: "none", background: ordinePer === o.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
-                {o.l}
-              </button>
-            ))}
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Per prodotto</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
+            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+              {[{ v: "quantita", l: "Per quantità" }, { v: "ricavo", l: "Per ricavo" }].map((o) => (
+                <button key={o.v} onClick={() => setOrdinePer(o.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 12px", borderRadius: 16, border: "none", background: ordinePer === o.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
@@ -22859,36 +22870,34 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
         </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
               <thead>
                 <tr>
-                  {["Prodotto", "Quantità", "N. ordini", "Ricavo", "Prezzo medio"].map((th) => (
+                  {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
                     <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {prodottiAggregati.slice(0, 20).map((p, i) => (
+                {prodottiVisibili.map((p, i) => (
                   <tr key={p.nome}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
-                      {i === 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
+                      {i === 0 && !ricercaProdotto.trim() && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
                       {p.nome}
                     </td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.nOrdini}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.prezzoMedio)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
                   </tr>
                 ))}
-                {prodottiAggregati.length === 0 && (
-                  <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto nel periodo selezionato.</td></tr>
+                {prodottiVisibili.length === 0 && (
+                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessun prodotto nel periodo selezionato."}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          {prodottiAggregati.length > 20 && (
+          {!ricercaProdotto.trim() && prodottiAggregati.length > 20 && (
             <div style={{ padding: "10px 14px", ...fontBody, fontSize: 12, color: MUTED, borderTop: `1px solid ${CREAM_BORDER}` }}>
-              Mostrati i primi 20 di {prodottiAggregati.length} prodotti diversi.
+              Mostrati i primi 20 di {prodottiAggregati.length} prodotti diversi — cercali per nome se non sono in questa lista.
             </div>
           )}
         </div>
@@ -25002,6 +25011,13 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
     perProdotto[chiave].ricavo += (p.totale_riga || 0);
   }));
   const righeProdotti = Object.values(perProdotto).map((p) => ({ ...p, ricavo: round2(p.ricavo) })).filter((p) => p.pezzi !== 0).sort((a, b) => b.ricavo - a.ricavo);
+  // senza ricerca, solo i primi 30 (altrimenti la tabella sarebbe
+  // interminabile) — ma un prodotto marginale (poche unità, non in cima
+  // per ricavo) resta comunque cercabile per nome, senza questo limite
+  const [ricercaProdotto, setRicercaProdotto] = useState("");
+  const righeProdottiVisibili = ricercaProdotto.trim()
+    ? righeProdotti.filter((p) => p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase()))
+    : righeProdotti.slice(0, 30);
 
   const oggiStr = dataOggiStr();
   // solo target vendita prodotti: quelli sui corsi venduti sono un silo
@@ -25093,7 +25109,10 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           </div>
         </div>
 
-        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Per prodotto</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Per prodotto</div>
+          <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
+        </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
@@ -25105,15 +25124,15 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
                 </tr>
               </thead>
               <tbody>
-                {righeProdotti.slice(0, 30).map((p) => (
+                {righeProdottiVisibili.map((p) => (
                   <tr key={p.nome}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
                   </tr>
                 ))}
-                {righeProdotti.length === 0 && (
-                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita nel periodo selezionato.</td></tr>
+                {righeProdottiVisibili.length === 0 && (
+                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessuna vendita nel periodo selezionato."}</td></tr>
                 )}
               </tbody>
             </table>
