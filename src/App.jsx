@@ -22748,14 +22748,6 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
       .map((p) => ({ nome: p.nome, quantita: p.quantita, ricavo: round2(p.ricavo), nOrdini: p.ordini.size, prezzoMedio: p.quantita > 0 ? round2(p.ricavo / p.quantita) : 0 }))
       .sort((a, b) => (ordinePer === "quantita" ? b.quantita - a.quantita : b.ricavo - a.ricavo));
   })();
-  // stesse colonne di "Per prodotto" in Statistiche Vendite Prodotti
-  // (Prodotto/Pezzi netti/Ricavo netto), qui filtrata a questa sola
-  // origine — senza ricerca, i primi 20; un prodotto marginale (poche
-  // unità, magari nemmeno un ordine "completato") resta cercabile per nome
-  const [ricercaProdotto, setRicercaProdotto] = useState("");
-  const prodottiVisibili = ricercaProdotto.trim()
-    ? prodottiAggregati.filter((p) => p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase()))
-    : prodottiAggregati.slice(0, 20);
 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -22765,7 +22757,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
         </div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Vendite al banco" : "Vendite Shop Online"}</div>
           {origine === "woocommerce" && (
             <div style={{ textAlign: "right" }}>
               <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
@@ -22853,20 +22845,110 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginTop: 28, marginBottom: 4 }}>
-          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Per prodotto</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
-            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-              {[{ v: "quantita", l: "Per quantità" }, { v: "ricavo", l: "Per ricavo" }].map((o) => (
-                <button key={o.v} onClick={() => setOrdinePer(o.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 12px", borderRadius: 16, border: "none", background: ordinePer === o.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
-                  {o.l}
-                </button>
-              ))}
-            </div>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Prodotti più venduti</div>
+          <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
+            {[{ v: "quantita", l: "Per quantità" }, { v: "ricavo", l: "Per ricavo" }].map((o) => (
+              <button key={o.v} onClick={() => setOrdinePer(o.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 12px", borderRadius: 16, border: "none", background: ordinePer === o.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>
+                {o.l}
+              </button>
+            ))}
           </div>
         </div>
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
           Stesso periodo/stato filtrati sopra — con "Tutti gli stati" include anche annullati/rimborsati/falliti; per la vendita reale filtra su "Completato".
+        </div>
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+              <thead>
+                <tr>
+                  {["Prodotto", "Quantità", "N. ordini", "Ricavo", "Prezzo medio"].map((th) => (
+                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prodottiAggregati.slice(0, 20).map((p, i) => (
+                  <tr key={p.nome}>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+                      {i === 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
+                      {p.nome}
+                    </td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{p.nOrdini}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.prezzoMedio)}</td>
+                  </tr>
+                ))}
+                {prodottiAggregati.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto nel periodo selezionato.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {prodottiAggregati.length > 20 && (
+            <div style={{ padding: "10px 14px", ...fontBody, fontSize: 12, color: MUTED, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              Mostrati i primi 20 di {prodottiAggregati.length} prodotti diversi.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// "Statistiche Vendite Shop Online"/"Statistiche Vendite al Banco": i due
+// tasti dentro "Statistiche Vendite Prodotti" — a differenza di
+// PaginaVenditeShop (l'elenco ordine-per-ordine completo, raggiunto da
+// "Gestione magazzino e shop") qui serve SOLO la statistica di quanti
+// prodotti sono stati venduti su questo canale, stesse colonne della
+// pagina madre (Prodotto/Pezzi netti/Ricavo netto): niente elenco ordini,
+// niente incasso/IVA, niente "Recupera ordini mancanti" — quel dettaglio
+// vive già, per intero, nella sezione Magazzino/Shop
+function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("30giorni");
+  const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
+
+  const righeCanale = (venditeShop || []).filter((v) => v.origine === origine && v.tipo_movimento !== "omaggio").filter((v) => {
+    const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
+    return d && d >= range.inizio && d <= range.fine;
+  });
+
+  const perProdotto = {};
+  righeCanale.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+    const chiave = (p.nome || "").trim();
+    if (!chiave) return;
+    if (!perProdotto[chiave]) perProdotto[chiave] = { nome: chiave, pezzi: 0, ricavo: 0 };
+    perProdotto[chiave].pezzi += (p.quantita || 0);
+    perProdotto[chiave].ricavo += (p.totale_riga || 0);
+  }));
+  const righeProdotti = Object.values(perProdotto).map((p) => ({ ...p, ricavo: round2(p.ricavo) })).filter((p) => p.pezzi !== 0).sort((a, b) => b.ricavo - a.ricavo);
+
+  const [ricercaProdotto, setRicercaProdotto] = useState("");
+  const righeProdottiVisibili = ricercaProdotto.trim()
+    ? righeProdotti.filter((p) => p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase()))
+    : righeProdotti.slice(0, 30);
+
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        </div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Solo i prodotti venduti al banco con il POS interno." : "Solo i prodotti venduti sullo shop online WooCommerce."}</div>
+
+        <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
+          {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Per prodotto</div>
+          <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
         </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
@@ -22879,25 +22961,22 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
                 </tr>
               </thead>
               <tbody>
-                {prodottiVisibili.map((p, i) => (
+                {righeProdottiVisibili.map((p) => (
                   <tr key={p.nome}>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
-                      {i === 0 && !ricercaProdotto.trim() && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
-                      {p.nome}
-                    </td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
+                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
                   </tr>
                 ))}
-                {prodottiVisibili.length === 0 && (
-                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessun prodotto nel periodo selezionato."}</td></tr>
+                {righeProdottiVisibili.length === 0 && (
+                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessuna vendita nel periodo selezionato."}</td></tr>
                 )}
               </tbody>
             </table>
           </div>
-          {!ricercaProdotto.trim() && prodottiAggregati.length > 20 && (
+          {!ricercaProdotto.trim() && righeProdotti.length > 30 && (
             <div style={{ padding: "10px 14px", ...fontBody, fontSize: 12, color: MUTED, borderTop: `1px solid ${CREAM_BORDER}` }}>
-              Mostrati i primi 20 di {prodottiAggregati.length} prodotti diversi — cercali per nome se non sono in questa lista.
+              Mostrati i primi 30 di {righeProdotti.length} prodotti diversi — cercali per nome se non sono in questa lista.
             </div>
           )}
         </div>
@@ -34959,6 +35038,8 @@ export default function App() {
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
     generacoupon: ["coupon", "categorie_prodotti", "prodotti_shop", "master", "corsi", "corsi_date", "location", "regole_referral_automatico", "vendite_shop", "punti_master_regola_base", "punti_master_periodi_speciali", "punti_master_impostazioni"],
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
+    statvenditeshop: ["vendite_shop"],
+    statvenditealbanco: ["vendite_shop"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
     dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     venditeshop: ["vendite_shop"],
@@ -35353,6 +35434,12 @@ export default function App() {
   function apriCrmShop() { apriViewProtetta("crmshop"); }
   function apriGeneraCoupon() { apriViewProtetta("generacoupon"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
+  // raggiungibili solo dai due tasti dentro "Statistiche Vendite
+  // Prodotti" (già un'area protetta): nessun secondo cancello password,
+  // a differenza di "venditeshop"/"venditealbanco" che sono anche tasti
+  // Home a sé
+  function apriStatVenditeShop() { setView("statvenditeshop"); }
+  function apriStatVenditeAlBanco() { setView("statvenditealbanco"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
   function apriGestioneVenditori() { setView("gestionevenditori"); }
@@ -35871,9 +35958,17 @@ export default function App() {
         <PaginaStatisticheVenditeProdotti
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
           targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
-          onApriVenditeShop={() => apriVenditeShop("statistichevenditeprodotti")}
-          onApriVenditeAlBanco={() => apriVenditeAlBanco("statistichevenditeprodotti")}
+          onApriVenditeShop={apriStatVenditeShop}
+          onApriVenditeAlBanco={apriStatVenditeAlBanco}
         />
+      )}
+
+      {view === "statvenditeshop" && (
+        <PaginaStatisticheVenditeCanale venditeShop={venditeShop} origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")} />
+      )}
+
+      {view === "statvenditealbanco" && (
+        <PaginaStatisticheVenditeCanale venditeShop={venditeShop} origine="pos" onBack={() => setView("statistichevenditeprodotti")} />
       )}
 
       {view === "inserimentocostiricavi" && (
