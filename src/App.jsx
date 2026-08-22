@@ -25042,8 +25042,8 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-          <Button variant="ghost" onClick={onApriVenditeShop}>Vendite Shop Online</Button>
-          <Button variant="ghost" onClick={onApriVenditeAlBanco}>Vendite al banco</Button>
+          <Button variant="ghost" onClick={onApriVenditeShop}>Statistiche Vendite Shop Online</Button>
+          <Button variant="ghost" onClick={onApriVenditeAlBanco}>Statistiche Vendite al Banco</Button>
         </div>
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
