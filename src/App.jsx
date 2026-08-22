@@ -4968,9 +4968,11 @@ function PaginaDashboardVenditori({
     if (periodo === "mese") {
       return { inizio: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0)) };
     }
+    // "Ultimi 3 mesi": finestra mobile che finisce oggi, non il trimestre
+    // solare fisso (lug-set, ott-dic...) — stessa convenzione già usata
+    // altrove nell'app per "trimestre"/"semestre" (vedi rangeRiepilogoPos)
     if (periodo === "trimestre") {
-      const t = Math.floor(oggi.getMonth() / 3);
-      return { inizio: fmtDataIso(new Date(oggi.getFullYear(), t * 3, 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), t * 3 + 3, 0)) };
+      return { inizio: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() - 3, oggi.getDate() + 1)), fine: fmtDataIso(oggi) };
     }
     return { inizio: customDa || oggiStr, fine: customA || oggiStr };
   }, [periodo, customDa, customA, oggiStr]);
@@ -5013,17 +5015,16 @@ function PaginaDashboardVenditori({
   const commissioniGenerate = round2(chiusure.reduce((s, { iscritto }) => s + (iscritto.quota_venditore || 0), 0));
 
   // periodo immediatamente precedente a quello scelto, stessa durata:
-  // mese prima se "Ultimo mese", trimestre prima se "Ultimo trimestre",
-  // altrimenti (personalizzato) lo stesso numero di giorni appena prima
-  // dell'inizio scelto — dà un confronto, non solo il numero assoluto
+  // mese prima se "Ultimo mese", altrimenti (trimestre mobile o
+  // personalizzato) lo stesso numero di giorni appena prima dell'inizio
+  // scelto — dà un confronto, non solo il numero assoluto. "Ultimi 3 mesi"
+  // non ha un ramo suo: essendo già una finestra mobile di N giorni
+  // (uguale a "personalizzato" nella forma), il calcolo generico qui sotto
+  // produce da solo i 3 mesi immediatamente precedenti
   const rangePrecedente = useMemo(() => {
     const oggi = new Date();
     if (periodo === "mese") {
       return { inizio: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() - 1, 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 0)) };
-    }
-    if (periodo === "trimestre") {
-      const t = Math.floor(oggi.getMonth() / 3);
-      return { inizio: fmtDataIso(new Date(oggi.getFullYear(), (t - 1) * 3, 1)), fine: fmtDataIso(new Date(oggi.getFullYear(), t * 3, 0)) };
     }
     const [ay, am, ad] = range.inizio.split("-").map(Number);
     const [by, bm, bd] = range.fine.split("-").map(Number);
@@ -5036,7 +5037,7 @@ function PaginaDashboardVenditori({
     inizioPrecedente.setDate(inizioPrecedente.getDate() - (giorni - 1));
     return { inizio: fmtDataIso(inizioPrecedente), fine: fmtDataIso(finePrecedente) };
   }, [periodo, range]);
-  const etichettaPeriodoPrecedente = periodo === "mese" ? "Mese precedente" : periodo === "trimestre" ? "Trimestre precedente" : "Periodo precedente";
+  const etichettaPeriodoPrecedente = periodo === "mese" ? "Mese precedente" : periodo === "trimestre" ? "Tre mesi precedenti" : "Periodo precedente";
   const statsPrecedenti = useMemo(() => {
     if (!venditoreSel) return { count: 0, commissioni: 0 };
     const nomeNorm = venditoreSel.nome.trim().toUpperCase();
@@ -5047,11 +5048,11 @@ function PaginaDashboardVenditori({
         const d = (i.ts || "").slice(0, 10);
         return d >= rangePrecedente.inizio && d <= rangePrecedente.fine;
       });
-    // solo guardando "Ultimo trimestre": le vecchie iscrizioni (vendite reali
+    // solo guardando "Ultimi 3 mesi": le vecchie iscrizioni (vendite reali
     // recuperate a posteriori, la cui vera data non è databile con certezza)
-    // vanno TUTTE nel trimestre di confronto, mai in quello corrente — così
-    // il trimestre in corso resta un dato pulito e il recupero storico non
-    // sparisce, pesa solo sul raffronto storico. In "Ultimo mese" e
+    // vanno TUTTE nel periodo di confronto, mai in quello corrente — così
+    // gli ultimi 3 mesi in corso restano un dato pulito e il recupero
+    // storico non sparisce, pesa solo sul raffronto storico. In "Ultimo mese" e
     // "Periodo personalizzato" restano escluse come sempre: una finestra
     // così stretta le farebbe risultare tutte concentrate nello stesso
     // mese di inserimento, un artefatto del recupero dati, non una vendita
@@ -5257,7 +5258,7 @@ function PaginaDashboardVenditori({
             <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Periodo di analisi</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
               <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2 }}>
-                {[["mese", "Ultimo mese"], ["trimestre", "Ultimo trimestre"], ["personalizzato", "Periodo personalizzato"]].map(([v, l]) => (
+                {[["mese", "Ultimo mese"], ["trimestre", "Ultimi 3 mesi"], ["personalizzato", "Periodo personalizzato"]].map(([v, l]) => (
                   <button key={v} onClick={() => setPeriodo(v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === v ? NAVY : "transparent", color: periodo === v ? "#fff" : NAVY, cursor: "pointer" }}>{l}</button>
                 ))}
               </div>
@@ -5757,7 +5758,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
-  const [mostraRiepilogoPos, setMostraRiepilogoPos] = useState(false);
   // target vendite prodotti in corso per la master selezionata (mai per
   // il team vendite corsi: i due silos restano separati, vedi Target
   // Master in Impostazioni)
@@ -5791,60 +5791,45 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     [corsiDate, masterSelId, oggiStr]
   );
   const [mostraListaInventario, setMostraListaInventario] = useState(false);
-  // l'incasso generato dai corsi (quanto incassa l'accademia dalle
-  // iscrizioni) non è un dato che la master deve vedere — qui compare
-  // solo l'incasso delle SUE vendite prodotti al POS, vedi incassiPos
-  // incasso vendite PRODOTTI al POS di questa master: dato separato da
-  // "incassi" qui sopra (silo corsi) — somma netta (resi/annullamenti/
-  // cambio già inclusi come righe negative, vedi Resi/Cambio nel POS)
-  const incassiPos = useMemo(() => {
-    const oggi = new Date();
-    const meseInizio = fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth(), 1));
-    const meseFine = fmtDataIso(new Date(oggi.getFullYear(), oggi.getMonth() + 1, 0));
-    const righeMaster = (venditeShop || []).filter((v) => v.origine === "pos" && v.operatore_tipo === "master" && v.operatore_id === masterSelId);
-    function somma(righe) { return round2(righe.reduce((s, v) => s + (v.totale || 0), 0)); }
-    const righeMese = righeMaster.filter((v) => { const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null; return d && d >= meseInizio && d <= meseFine; });
-    return { mese: somma(righeMese), totale: somma(righeMaster) };
-  }, [venditeShop, masterSelId]);
-  // vendite online attribuite a questa master tramite il suo referral
-  // code (woo-webhook le marca operatore_tipo="master" allo stesso modo
-  // del POS, distinte solo da origine="woocommerce") — "utilizzi" conta
-  // gli ordini, non l'incasso: è la prova che il codice viene usato,
-  // il fatturato vero e proprio è già in "Vendite su shop"
-  const venditeShopMaster = useMemo(() => {
-    const righe = (venditeShop || []).filter((v) => v.origine === "woocommerce" && v.operatore_tipo === "master" && v.operatore_id === masterSelId);
-    return { totale: round2(righe.reduce((s, v) => s + (v.totale || 0), 0)), utilizzi: righe.length };
-  }, [venditeShop, masterSelId]);
-  // "Punti" (§9 glossario): unità alternativa all'euro per gli obiettivi
-  // di vendita — qui 5 punti per ogni euro di prodotto venduto dalla
-  // master, su tutti i canali (POS + shop online via referral)
-  const puntiAccumulati = Math.round((incassiPos.totale + venditeShopMaster.totale) * 5);
 
-  // raccolta punti premi (§ nuova, non va confusa con "Punti accumulati" qui
-  // sopra: quello è il vecchio "punti = 5× euro" degli obiettivi di vendita,
-  // questo è la raccolta punti/premi basata sulle regole di Gestione Premi,
-  // sulle stesse vendite ma con una propria tabella di conversione punti/euro
-  // che può cambiare nel tempo) — righe raggruppate per codice referral usato
-  // (o "Vendite POS senza referral" quando manca), sia online sia al banco
+  // quale coupon corrisponde a un codice (per distinguere, sulla raccolta
+  // punti qui sotto, un referral "dei corsi" — legato a un'edizione, con
+  // corsi_date_id — da uno "personale" della master, sempre valido)
+  const couponPerCodice = useMemo(() => {
+    const mappa = {};
+    (coupon || []).forEach((c) => { mappa[(c.codice || "").toLowerCase()] = c; });
+    return mappa;
+  }, [coupon]);
+
+  // raccolta punti premi: la master vede SOLO quanta gente ha comprato e
+  // quanti punti ha maturato, mai quanto hanno speso — l'importo in euro
+  // resta un dato per l'amministrazione, non per la master. "Vendite" conta
+  // solo le righe con totale positivo (un reso/annullamento non è un
+  // "acquisto effettuato"); i punti invece riflettono anche i resi
+  // (negativi), perché sono la sostanza vera della raccolta punti
   const raccoltaPuntiMaster = useMemo(() => {
-    if (!masterSelId || !puntiMasterImpostazioni) return { venditeEffettuate: 0, punti: 0, gruppi: [] };
+    const vuoto = { venditeTotale: 0, venditeCorsi: 0, venditePersonale: 0, puntiTotale: 0, puntiCorsi: 0, puntiPersonale: 0, gruppi: [] };
+    if (!masterSelId || !puntiMasterImpostazioni) return vuoto;
     const righe = (venditeShop || []).filter((v) => venditaContaPerMaster(v, masterSelId, puntiMasterImpostazioni));
-    const venditeEffettuate = round2(righe.reduce((s, v) => s + (v.totale || 0), 0));
-    const punti = righe.reduce((s, v) => s + puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase), 0);
+    let venditeTotale = 0, venditeCorsi = 0, venditePersonale = 0;
+    let puntiTotale = 0, puntiCorsi = 0, puntiPersonale = 0;
     const perGruppo = {};
     righe.forEach((v) => {
+      const punti = puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase);
+      const contaComeVendita = (v.totale || 0) > 0;
+      puntiTotale += punti;
+      if (contaComeVendita) venditeTotale += 1;
+      const infoCoupon = v.codice_coupon ? couponPerCodice[v.codice_coupon.toLowerCase()] : null;
+      if (infoCoupon?.corsi_date_id) { if (contaComeVendita) venditeCorsi += 1; puntiCorsi += punti; }
+      else if (infoCoupon) { if (contaComeVendita) venditePersonale += 1; puntiPersonale += punti; }
       const chiave = v.codice_coupon ? v.codice_coupon.toUpperCase() : "__pos_senza_referral__";
-      if (!perGruppo[chiave]) perGruppo[chiave] = { etichetta: v.codice_coupon ? v.codice_coupon.toUpperCase() : "Vendite POS senza referral", righe: [] };
-      perGruppo[chiave].righe.push(v);
+      if (!perGruppo[chiave]) perGruppo[chiave] = { etichetta: v.codice_coupon ? v.codice_coupon.toUpperCase() : "Vendite POS senza referral", vendite: 0, punti: 0 };
+      if (contaComeVendita) perGruppo[chiave].vendite += 1;
+      perGruppo[chiave].punti += punti;
     });
-    const gruppi = Object.values(perGruppo).map((g) => ({
-      etichetta: g.etichetta,
-      numeroVendite: g.righe.filter((v) => (v.totale || 0) > 0).length,
-      euro: round2(g.righe.reduce((s, v) => s + (v.totale || 0), 0)),
-      punti: g.righe.reduce((s, v) => s + puntiMasterDiVendita(v, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase), 0),
-    })).sort((a, b) => b.euro - a.euro);
-    return { venditeEffettuate, punti, gruppi };
-  }, [venditeShop, masterSelId, puntiMasterImpostazioni, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase]);
+    const gruppi = Object.values(perGruppo).sort((a, b) => b.vendite - a.vendite);
+    return { venditeTotale, venditeCorsi, venditePersonale, puntiTotale, puntiCorsi, puntiPersonale, gruppi };
+  }, [venditeShop, masterSelId, puntiMasterImpostazioni, puntiMasterPeriodiSpeciali, puntiMasterRegolaBase, couponPerCodice]);
   const [mostraDettaglioPunti, setMostraDettaglioPunti] = useState(false);
 
   if (mostraDettaglioPunti && masterSel) {
@@ -5855,14 +5840,14 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             <button onClick={() => setMostraDettaglioPunti(false)} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
             <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Raccolta punti — dettaglio</div>
           </div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono punti ed euro.</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono i punti.</div>
           {raccoltaPuntiMaster.gruppi.length === 0 ? (
             <div style={{ ...cardStyle, color: MUTED, ...fontBody, fontSize: 13 }}>Nessuna vendita nella finestra della raccolta punti.</div>
           ) : raccoltaPuntiMaster.gruppi.map((g) => (
             <div key={g.etichetta} style={{ ...cardStyle, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: g.etichetta === "Vendite POS senza referral" ? "none" : "uppercase" }}>{g.etichetta}</div>
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{g.numeroVendite} vendit{g.numeroVendite === 1 ? "a" : "e"} · {fmtEuroErp2(g.euro)}</div>
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3 }}>{g.vendite} vendit{g.vendite === 1 ? "a" : "e"}</div>
               </div>
               <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: g.punti < 0 ? "#C0392B" : GOLD }}>{g.punti} pt</div>
             </div>
@@ -5870,10 +5855,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         </div>
       </div>
     );
-  }
-
-  if (mostraRiepilogoPos && masterSel) {
-    return <PaginaRiepilogoVenditeProdotti soggettoTipo="master" soggettoId={masterSel.id} nomeSoggetto={masterSel.nome} venditeShop={venditeShop} onBack={() => setMostraRiepilogoPos(false)} />;
   }
 
   if (mostraListaInventario) {
@@ -5923,34 +5904,6 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         </div>
         {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area master</div>}
 
-        {masterSel && (
-          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — mese corrente</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(incassiPos.mese)}</div>
-            </div>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite POS — totale</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(incassiPos.totale)}</div>
-            </div>
-          </div>
-        )}
-        {masterSel && (
-          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite su shop</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(venditeShopMaster.totale)}</div>
-            </div>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral code</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{venditeShopMaster.utilizzi} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>utilizzi</span></div>
-            </div>
-            <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Punti accumulati</div>
-              <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: GOLD }}>{puntiAccumulati.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pt</span></div>
-            </div>
-          </div>
-        )}
         {masterSel && puntiMasterImpostazioni && (
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Raccolta punti premi</div>
@@ -5958,19 +5911,24 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
             <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
               <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
                 <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite effettuate</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(raccoltaPuntiMaster.venditeEffettuate)}</div>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditeTotale}</div>
               </div>
               <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Punti raccolta premi</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: GOLD }}>{raccoltaPuntiMaster.punti} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pt</span></div>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral dei corsi</div>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditeCorsi}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{raccoltaPuntiMaster.puntiCorsi} pt</div>
+              </div>
+              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral personale</div>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditePersonale}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{raccoltaPuntiMaster.puntiPersonale} pt</div>
+              </div>
+              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Punti accumulati</div>
+                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: GOLD }}>{raccoltaPuntiMaster.puntiTotale} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pt</span></div>
               </div>
             </div>
             <Button variant="ghost" onClick={() => setMostraDettaglioPunti(true)}>Dettaglio per codice</Button>
-          </div>
-        )}
-        {masterSel && (
-          <div style={{ marginBottom: 20 }}>
-            <Button variant="ghost" onClick={() => setMostraRiepilogoPos(true)}>Riepilogo vendita prodotti</Button>
           </div>
         )}
 
