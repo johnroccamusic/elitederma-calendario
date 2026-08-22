@@ -13435,7 +13435,7 @@ const TASTI_HOME = [
   { chiave: "gestionedate", etichetta: "Gestione corsi" },
   { chiave: "dashboardvenditori", etichetta: "Dashboard venditori" },
   { chiave: "dashboardmaster", etichetta: "Dashboard master" },
-  { chiave: "erp", etichetta: "Amministrazione" },
+  { chiave: "erp", etichetta: "Utenti Amministrazione" },
   { chiave: "magazzinoshop", etichetta: "Gestione magazzino e shop" },
   { chiave: "pos", etichetta: "POS Vendita diretta" },
   { chiave: "logisticaprodotti", etichetta: "Logistica prodotti" },
@@ -24633,26 +24633,29 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
 // filtrato a origine="pos": mai un ordine WooCommerce qui dentro, mai
 // una cifra di "Vendite Corsi" (tutt'altra pagina) — §7 della specifica
 // vuole i due mondi inequivocabili anche nei nomi delle sezioni
-function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack }) {
+function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriVenditeShop, onApriVenditeAlBanco }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
 
-  // gli omaggi hanno una pagina propria ("Omaggi"): qui contano solo le
-  // vendite vere, altrimenti i pezzi regalati gonfierebbero le statistiche
-  const righePos = (venditeShop || []).filter((v) => v.origine === "pos" && v.tipo_movimento !== "omaggio").filter((v) => {
+  // qui la vista è globale, somma di entrambe le origini (shop online +
+  // banco): "Vendite Shop Online" e "Vendite al banco" sono le due viste
+  // filtrate a parte, raggiungibili dai due tasti sotto. Gli omaggi hanno
+  // una pagina propria ("Omaggi"): qui contano solo le vendite vere,
+  // altrimenti i pezzi regalati gonfierebbero le statistiche
+  const righeGlobali = (venditeShop || []).filter((v) => (v.origine === "pos" || v.origine === "woocommerce") && v.tipo_movimento !== "omaggio").filter((v) => {
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     return d && d >= range.inizio && d <= range.fine;
   });
 
   const kpi = {
-    incasso: round2(righePos.reduce((s, v) => s + (v.totale || 0), 0)),
-    pezzi: righePos.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
-    vendite: righePos.filter((v) => v.tipo_movimento === "vendita").length,
+    incasso: round2(righeGlobali.reduce((s, v) => s + (v.totale || 0), 0)),
+    pezzi: righeGlobali.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
+    vendite: righeGlobali.filter((v) => v.tipo_movimento === "vendita").length,
   };
 
   const perOperatore = {};
-  righePos.forEach((v) => {
+  righeGlobali.forEach((v) => {
     if (!v.operatore_id) return;
     const chiave = `${v.operatore_tipo}:${v.operatore_id}`;
     if (!perOperatore[chiave]) perOperatore[chiave] = { tipo: v.operatore_tipo, id: v.operatore_id, nome: v.operatore_nome, incasso: 0, pezzi: 0 };
@@ -24662,7 +24665,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
   const righeOperatori = Object.values(perOperatore).map((o) => ({ ...o, incasso: round2(o.incasso) })).sort((a, b) => b.incasso - a.incasso);
 
   const perProdotto = {};
-  righePos.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
+  righeGlobali.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
     const chiave = (p.nome || "").trim();
     if (!chiave) return;
     if (!perProdotto[chiave]) perProdotto[chiave] = { nome: chiave, pezzi: 0, ricavo: 0 };
@@ -24691,7 +24694,12 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Vendite Prodotti</div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Solo vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
+          <Button variant="ghost" onClick={onApriVenditeShop}>Vendite Shop Online</Button>
+          <Button variant="ghost" onClick={onApriVenditeAlBanco}>Vendite al banco</Button>
+        </div>
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
           {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
@@ -24749,7 +24757,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
                   </tr>
                 ))}
                 {righeOperatori.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco nel periodo selezionato.</td></tr>
+                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita con operatore assegnato nel periodo selezionato (le vendite shop online non hanno un operatore).</td></tr>
                 )}
               </tbody>
             </table>
@@ -24776,7 +24784,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
                   </tr>
                 ))}
                 {righeProdotti.length === 0 && (
-                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita al banco nel periodo selezionato.</td></tr>
+                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita nel periodo selezionato.</td></tr>
                 )}
               </tbody>
             </table>
@@ -34128,6 +34136,7 @@ export default function App() {
   });
   const isMobile = useIsMobile();
   const [view, setView] = useState("home");
+  const [provenienzaVenditeShop, setProvenienzaVenditeShop] = useState("magazzinoshop");
   // prodotto da aprire subito in "Gestione shop": valorizzato solo dal
   // click sul nome in "Gestione magazzino" (RigaProdottoMagazzino), che
   // vuole l'editor completo (immagini, descrizioni, categorie multiple)
@@ -34967,8 +34976,14 @@ export default function App() {
   function apriMagazzinoShop() { apriViewProtetta("magazzinoshop"); }
   function apriInserimentoCostiRicavi() { apriViewProtetta("inserimentocostiricavi"); }
   function apriDashboardAnalisi() { apriViewProtetta("dashboardanalisi"); }
-  function apriVenditeShop() { apriViewProtetta("venditeshop"); }
-  function apriVenditeAlBanco() { apriViewProtetta("venditealbanco"); }
+  // "Vendite Shop Online"/"Vendite al banco" sono raggiungibili sia da
+  // Magazzino/Shop sia da Statistiche Vendite Prodotti: il tasto Indietro
+  // deve tornare da dove si è venuti, non sempre allo stesso posto (lo
+  // stato vive più sopra, insieme a "view", prima del gate di login: un
+  // useState dichiarato dopo un return condizionale rompe l'ordine degli
+  // hook non appena si passa da "non loggato" a "loggato")
+  function apriVenditeShop(provenienza = "magazzinoshop") { setProvenienzaVenditeShop(provenienza); apriViewProtetta("venditeshop"); }
+  function apriVenditeAlBanco(provenienza = "magazzinoshop") { setProvenienzaVenditeShop(provenienza); apriViewProtetta("venditealbanco"); }
   function apriProdottiUsatiKit() { apriViewProtetta("prodottiusatikit"); }
   function apriOmaggi() { apriViewProtetta("omaggi"); }
   function apriClassificazioneVoci() { apriViewProtetta("classificazionevocishop"); }
@@ -35456,8 +35471,8 @@ export default function App() {
           onApriImpostazioni={apriImpostazioni}
           onApriMagazzino={apriMagazzino}
           onApriGestioneShop={apriGestioneShop}
-          onApriVenditeShop={apriVenditeShop}
-          onApriVenditeAlBanco={apriVenditeAlBanco}
+          onApriVenditeShop={() => apriVenditeShop("magazzinoshop")}
+          onApriVenditeAlBanco={() => apriVenditeAlBanco("magazzinoshop")}
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
           onApriOmaggi={apriOmaggi}
           onApriClassificazioneVoci={apriClassificazioneVoci}
@@ -35491,6 +35506,8 @@ export default function App() {
         <PaginaStatisticheVenditeProdotti
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
           targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
+          onApriVenditeShop={() => apriVenditeShop("statistichevenditeprodotti")}
+          onApriVenditeAlBanco={() => apriVenditeAlBanco("statistichevenditeprodotti")}
         />
       )}
 
@@ -35521,11 +35538,11 @@ export default function App() {
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} origine="woocommerce" ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+        <PaginaVenditeShop venditeShop={venditeShop} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} />
       )}
 
       {view === "venditealbanco" && (
-        <PaginaVenditeShop venditeShop={venditeShop} origine="pos" ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+        <PaginaVenditeShop venditeShop={venditeShop} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} />
       )}
 
       {view === "omaggi" && (
