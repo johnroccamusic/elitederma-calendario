@@ -5051,7 +5051,7 @@ function SezioneDateCorsi({
         </>
       )}
       <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
-      <div ref={rigaFiltriRef} style={{ display: "flex", gap: isMobile ? 5 : 6, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { fontSize: fontFiltri } : {}) }}>
+      <div ref={rigaFiltriRef} style={{ display: "flex", gap: isMobile ? 5 : 6, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri, overflowX: "auto" } : {}) }}>
         <FiltroPill compatto={isMobile}
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
           valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
