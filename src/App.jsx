@@ -20353,7 +20353,6 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
 function PaginaDashboardAnalisi({
   corsi, location, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali,
   eventi, fornitori, speseAttribuzioni, costiBudget, costiSoglieAllerta,
-  categorieProdotti, prodottiShop, prodottiCategorie, venditeShop,
   onApriModificaSpesa, ricarica, onBack,
 }) {
   const isMobile = useIsMobile();
@@ -20378,12 +20377,6 @@ function PaginaDashboardAnalisi({
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} eventi={eventi} fornitori={fornitori}
           spese={spese} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
           ricarica={ricarica} onApriModificaSpesa={onApriModificaSpesa}
-        />
-
-        <div style={{ borderTop: `1px solid ${CREAM_BORDER}`, margin: "40px 0 30px" }} />
-
-        <SezioneAnalisiMagazzino
-          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
         />
       </div>
     </div>
@@ -22902,12 +22895,13 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
 // cima a tutte e tre, con quella della pagina in cui ci si trova più
 // scura — stesso componente/stile già usato per le schede di
 // Amministrazione (Prima nota cassa/Quadro impegni/...)
-function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onApriBanco }) {
+function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
       <SchedaTabAmministrazione attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={attivo === "shop"} onClick={onApriShop} Icona={IconaTileVenditeShop} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Statistiche Vendite Shop Online</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={attivo === "banco"} onClick={onApriBanco} Icona={IconaTilePos} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Statistiche Vendite al Banco</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={attivo === "analisi"} onClick={onApriAnalisi} Icona={IconaTileDashboardAnalisi} sfondo="#E7EEF5" bordo="#C7D9E8" coloreIcona="#3B6FA0">Analisi Vendita Prodotti</SchedaTabAmministrazione>
     </div>
   );
 }
@@ -22931,7 +22925,7 @@ function TogglePerOperatoreProdotto({ vista, onOperatore, onProdotto }) {
 // pagina madre (Prodotto/Pezzi netti/Ricavo netto): niente elenco ordini,
 // niente incasso/IVA, niente "Recupera ordini mancanti" — quel dettaglio
 // vive già, per intero, nella sezione Magazzino/Shop
-function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTotale, onApriShop, onApriBanco }) {
+function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -22940,6 +22934,12 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
     const d = v.data_ordine ? v.data_ordine.slice(0, 10) : null;
     return d && d >= range.inizio && d <= range.fine;
   });
+
+  const kpi = {
+    incasso: round2(righeCanale.reduce((s, v) => s + (v.totale || 0), 0)),
+    pezzi: righeCanale.reduce((s, v) => s + (Array.isArray(v.prodotti) ? v.prodotti.reduce((ss, p) => ss + (p.quantita || 0), 0) : 0), 0),
+    vendite: righeCanale.filter((v) => v.tipo_movimento === "vendita").length,
+  };
 
   const perProdotto = {};
   righeCanale.forEach((v) => (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
@@ -22983,12 +22983,27 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Solo i prodotti venduti al banco con il POS interno." : "Solo i prodotti venduti sullo shop online WooCommerce."}</div>
 
-        <TabsStatisticheVenditeProdotti attivo={origine === "pos" ? "banco" : "shop"} onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} />
+        <TabsStatisticheVenditeProdotti attivo={origine === "pos" ? "banco" : "shop"} onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
           {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
             <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 13, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? "#fff" : "transparent", color: NAVY, cursor: "pointer" }}>{p.l}</button>
           ))}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 28 }}>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
+          </div>
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
+          </div>
         </div>
 
         <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} />
@@ -25128,7 +25143,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
 // periodo/operatore/prodotto, con l'avanzamento dei target in corso — mai
 // una cifra di "Vendite Corsi" qui dentro (tutt'altra pagina, con le sue
 // statistiche separate)
-function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco }) {
+function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -25199,7 +25214,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Totali Vendite Prodotti</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
 
-        <TabsStatisticheVenditeProdotti attivo="totale" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} />
+        <TabsStatisticheVenditeProdotti attivo="totale" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
           {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
@@ -25299,6 +25314,27 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+// 4ª scheda della famiglia "Statistiche Vendite Prodotti": era in fondo a
+// "Performance Aziendale" (SezioneAnalisiMagazzino, invariata) — spostata
+// qui perché è un'analisi di vendita prodotti come le altre tre, non un
+// dato economico/di conto come andamento e costi, che restano in
+// Performance Aziendale
+function PaginaStatisticheAnalisiVenditaProdotti({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1300, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        </div>
+        <TabsStatisticheVenditeProdotti attivo="analisi" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
+        <SezioneAnalisiMagazzino categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop} />
       </div>
     </div>
   );
@@ -35122,8 +35158,9 @@ export default function App() {
     statistichevenditeprodotti: ["vendite_shop", "prodotti_shop", "master", "venditori", "target_vendite_prodotti"],
     statvenditeshop: ["vendite_shop"],
     statvenditealbanco: ["vendite_shop"],
+    statanalisivendita: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
     inserimentocostiricavi: ["spese", "costi_categorie", "costi_sottocategorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_categorie_gruppi", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic"],
-    dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta", "categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop"],
+    dashboardanalisi: ["corsi", "location", "corsi_date", "iscritti", "spese", "costi_categorie", "costi_sottocategorie", "entrate_manuali", "eventi", "fornitori", "spese_attribuzioni", "costi_budget", "costi_soglie_allerta"],
     venditeshop: ["vendite_shop"],
     venditealbanco: ["vendite_shop"],
     omaggi: ["vendite_shop"],
@@ -35523,6 +35560,7 @@ export default function App() {
   function apriStatVenditeShop() { setView("statvenditeshop"); }
   function apriStatVenditeAlBanco() { setView("statvenditealbanco"); }
   function apriStatVenditeTotale() { setView("statistichevenditeprodotti"); }
+  function apriStatAnalisiVenditaProdotti() { setView("statanalisivendita"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
   function apriGestioneVenditori() { setView("gestionevenditori"); }
@@ -36041,21 +36079,29 @@ export default function App() {
         <PaginaStatisticheVenditeProdotti
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
           targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
-          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
         />
       )}
 
       {view === "statvenditeshop" && (
         <PaginaStatisticheVenditeCanale
           venditeShop={venditeShop} origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")}
-          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
         />
       )}
 
       {view === "statvenditealbanco" && (
         <PaginaStatisticheVenditeCanale
           venditeShop={venditeShop} origine="pos" onBack={() => setView("statistichevenditeprodotti")}
-          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
+        />
+      )}
+
+      {view === "statanalisivendita" && (
+        <PaginaStatisticheAnalisiVenditaProdotti
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
+          onBack={() => setView("statistichevenditeprodotti")}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
         />
       )}
 
@@ -36080,7 +36126,6 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
           eventi={eventi} fornitori={fornitori} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
-          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop}
           onApriModificaSpesa={apriModificaSpesa} ricarica={fetchDati} onBack={() => setView("statistiche")}
         />
       )}
