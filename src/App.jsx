@@ -1359,7 +1359,10 @@ function TileHome({
       onDragOver={onDragOverTasto}
       onDrop={onDropTasto}
       style={{
-        ...fontBody, textAlign: ricca ? "center" : "left", width: "100%", boxSizing: "border-box",
+        // 90% invece di 100%: il quadrato resta più piccolo della sua
+        // cella della griglia, lasciando vedere lo sfondo dell'app anche
+        // fra un tasto e l'altro, non solo nel gap
+        ...fontBody, textAlign: ricca ? "center" : "left", width: "90%", margin: "0 auto", boxSizing: "border-box",
         aspectRatio: "1 / 1", position: "relative",
         display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "center" : "flex-end", minWidth: 0,
         background: attivo ? "#FFFFFF" : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 18,
@@ -3455,7 +3458,7 @@ function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriP
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
         </div>
@@ -18725,7 +18728,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCa
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Amministrazione</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi, categorie di spesa e organizzazione operativa dei corsi.</div>
         <GrigliaTasti
@@ -19445,7 +19448,7 @@ function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onAp
         </div>
       </div>
 
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestione magazzino e shop</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         <GrigliaTasti
@@ -36547,7 +36550,7 @@ export default function App() {
         </div>
       )}
       {view === "home" && (
-        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "12px 16px 16px" : "28px 28px 60px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "12px 20px 16px" : "28px 32px 60px" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingBottom: isMobile ? 8 : 18, borderBottom: `1px solid ${CREAM_BORDER}`, marginBottom: isMobile ? 12 : 28 }}>
             <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 1.2 }}>ELITEDERMA</div>
             <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
