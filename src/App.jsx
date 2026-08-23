@@ -2271,9 +2271,9 @@ function Gate({ onOk }) {
   return (
     <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 64, width: "auto", marginBottom: 22 }} />
+        <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 64, width: "auto", marginBottom: 44 }} />
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 0.5, marginBottom: 3 }}>GENYON</div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 30 }}>developed by GianLuca Rocca</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 60 }}>developed by GianLuca Rocca</div>
         <input
           type="password"
           placeholder="Codice d'accesso"
