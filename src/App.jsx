@@ -1361,7 +1361,7 @@ function TileHome({
       style={{
         ...fontBody, textAlign: ricca ? "center" : "left", width: "100%", boxSizing: "border-box",
         aspectRatio: "1 / 1", position: "relative",
-        display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "flex-start" : "flex-end", minWidth: 0,
+        display: "flex", flexDirection: "column", alignItems: ricca ? "center" : "stretch", justifyContent: ricca ? "center" : "flex-end", minWidth: 0,
         background: attivo ? "#FFFFFF" : "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 18,
         padding: ricca ? (isMobile ? "16px 10px 12px" : "28px 22px 22px") : (isMobile ? "8px 10px" : 22),
         cursor: attivo ? "pointer" : "default", overflow: "hidden",
@@ -1375,49 +1375,17 @@ function TileHome({
       )}
       {ricca ? (
         <>
-          <div style={{ color: coloreTesto, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : 38} color={coloreTesto} /></div>
+          <div style={{ color: coloreTesto, marginBottom: isMobile ? 6 : 12 }}><Icona size={isMobile ? 26 : 80} color={coloreTesto} /></div>
           <div style={{ ...fontDisplay, fontSize: isMobile ? 12.5 : 17, fontWeight: 700, color: coloreTesto, marginBottom: isMobile ? 4 : 7, lineHeight: 1.2 }}>{title}</div>
           {descrizione && (
             <div style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: isMobile ? 2 : 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{descrizione}</div>
           )}
-          <div style={{ fontSize: isMobile ? 13 : 16, color: coloreTesto, marginTop: "auto", paddingTop: isMobile ? 6 : 12 }}>&rarr;</div>
+          <div style={{ fontSize: isMobile ? 13 : 16, color: coloreTesto, paddingTop: isMobile ? 6 : 12 }}>&rarr;</div>
         </>
       ) : (
         <span style={{ ...fontDisplay, fontSize: isMobile ? 13 : 22, fontWeight: 700, lineHeight: 1.15, color: coloreTesto }}>{title}</span>
       )}
     </button>
-  );
-}
-// card speciale "Progetti in corso": stesso stile delle altre ma più
-// larga (due colonne), sempre spenta, con badge in alto a destra e un
-// tasto (non cliccabile) invece della freccia
-function TileProgettiInCorso() {
-  const isMobile = useIsMobile();
-  return (
-    <div style={{
-      gridColumn: "span 2", background: "#F1EAE0", border: `1px solid ${CREAM_BORDER}`, borderRadius: isMobile ? 12 : 18,
-      padding: isMobile ? "18px 16px" : "30px 32px", display: "flex", flexDirection: "column", justifyContent: "space-between",
-    }}>
-      <div>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: isMobile ? 10 : 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12 }}>
-            <IconaTileLampadina size={isMobile ? 22 : 28} />
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 21, fontWeight: 700, color: NAVY }}>Progetti in corso</div>
-          </div>
-          <span style={{ ...fontBody, fontSize: isMobile ? 9 : 10.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "2px 8px" : "3px 10px", flexShrink: 0, whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ color: GOLD, fontSize: 8 }}>◆</span>Non attivo
-          </span>
-        </div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, lineHeight: 1.5 }}>
-          Questa sezione sarà presto disponibile. Stiamo preparando qualcosa di importante per te.
-        </div>
-      </div>
-      <div style={{ marginTop: isMobile ? 14 : 20 }}>
-        <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13.5, fontWeight: 700, color: "#fff", background: GOLD, borderRadius: 20, padding: isMobile ? "8px 16px" : "11px 22px", display: "inline-block" }}>
-          Scopri di più
-        </span>
-      </div>
-    </div>
   );
 }
 // stessa casetta usata nel bottone "Home" della barra in alto, riusata
@@ -1427,6 +1395,18 @@ function IconaCasa({ size = 16, color = "currentColor" }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
       <polyline points="9 22 9 12 15 12 15 22" />
+    </svg>
+  );
+}
+// n barre verticali, per il tasto "N tasti per riga" (solo programmatore)
+function IconaColonne({ n, size = 16, color = "currentColor" }) {
+  const gap = 2.5;
+  const w = (24 - gap * (n - 1)) / n;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {Array.from({ length: n }, (_, i) => (
+        <rect key={i} x={i * (w + gap)} y="5" width={w} height="14" rx="2" fill={color} />
+      ))}
     </svg>
   );
 }
@@ -1453,9 +1433,13 @@ function IconaCasa({ size = 16, color = "currentColor" }) {
 //   dell'app). Un tasto dentro una cartella aperta, trascinato
 //   sull'icona Home del breadcrumb, torna in cima — nessuna cartella
 //   dentro un'altra cartella, per restare semplice.
-function GrigliaTasti({ pagina, definizioni, ordine, ruoloUtente, onSalvaOrdine, consentiCartelle = false, colonneDesktop = 3, extra = null }) {
+function GrigliaTasti({ pagina, definizioni, ordine, colonne, ruoloUtente, onSalvaOrdine, onSalvaColonne, consentiCartelle = false, colonneDesktop = 3 }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
+  // scelta del programmatore per QUESTA pagina, salvata — se non ha mai
+  // scelto nulla resta il default della pagina (colonneDesktop). Il
+  // mobile è sempre a 3 per riga, questa scelta riguarda solo il desktop
+  const colonneEffettive = colonne || colonneDesktop;
   const [cartellaApertaId, setCartellaApertaId] = useState(null);
   const dragRef = React.useRef(null); // { tipo: "grip" | "tasto", chiave }
   const [trascinata, setTrascinata] = useState(null);
@@ -1563,22 +1547,38 @@ function GrigliaTasti({ pagina, definizioni, ordine, ruoloUtente, onSalvaOrdine,
 
   return (
     <div>
-      {consentiCartelle && cartellaAperta && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isMobile ? 12 : 18 }}>
-          <button
-            onClick={() => setCartellaApertaId(null)}
-            onDragOver={(e) => { if (programmatore && dragRef.current?.tipo === "tasto") e.preventDefault(); }}
-            onDrop={rilasciaSuHome}
-            title="Torna alla Home — trascina qui un tasto per tirarlo fuori dalla cartella"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, border: "none", background: NAVY, cursor: "pointer", flexShrink: 0 }}
-          >
-            <IconaCasa size={15} color="#fff" />
-          </button>
-          <span style={{ color: MUTED }}>/</span>
-          <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{cartellaAperta.nome}</span>
-        </div>
-      )}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : `repeat(${colonneDesktop}, 1fr)`, gap: isMobile ? 10 : 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: isMobile ? 12 : 18, flexWrap: "wrap" }}>
+        {consentiCartelle && cartellaAperta ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button
+              onClick={() => setCartellaApertaId(null)}
+              onDragOver={(e) => { if (programmatore && dragRef.current?.tipo === "tasto") e.preventDefault(); }}
+              onDrop={rilasciaSuHome}
+              title="Torna alla Home — trascina qui un tasto per tirarlo fuori dalla cartella"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, border: "none", background: NAVY, cursor: "pointer", flexShrink: 0 }}
+            >
+              <IconaCasa size={15} color="#fff" />
+            </button>
+            <span style={{ color: MUTED }}>/</span>
+            <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{cartellaAperta.nome}</span>
+          </div>
+        ) : <div />}
+        {programmatore && !isMobile && onSalvaColonne && (
+          <div style={{ display: "flex", gap: 6 }}>
+            {[4, 3].map((n) => (
+              <button
+                key={n}
+                onClick={() => onSalvaColonne(n)}
+                title={`${n} tasti per riga`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: colonneEffettive === n ? NAVY : "#fff", cursor: "pointer" }}
+              >
+                <IconaColonne n={n} size={16} color={colonneEffettive === n ? "#fff" : NAVY} />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 10 : 16 }}>
         {listaVisibile.map((nodo) => {
           const isCartella = typeof nodo === "object" && nodo?.tipo === "cartella";
           const chiave = isCartella ? nodo.id : nodo;
@@ -1604,7 +1604,6 @@ function GrigliaTasti({ pagina, definizioni, ordine, ruoloUtente, onSalvaOrdine,
             />
           );
         })}
-        {!cartellaApertaId && extra}
       </div>
     </div>
   );
@@ -3437,7 +3436,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 // aree che prima stavano nell'hub ERP (Performance Aziendale, ex
 // "Dashboard analisi", e Statistiche Vendite Prodotti), essendo entrambe
 // analisi/numeri più che gestione operativa
-function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, ruoloUtente, ordineTasti, onSalvaOrdineTasti }) {
+function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -3460,7 +3459,7 @@ function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriStatis
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Statistiche</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Analisi, report e KPI della tua Academy.</div>
         <GrigliaTasti
-          pagina="statistiche" ordine={ordineTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} colonneDesktop={3}
+          pagina="statistiche" ordine={ordineTasti} colonne={colonneTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "venditori", title: "Statistiche venditori", descrizione: "Iscrizioni fatte da ciascun venditore, per corso.", Icona: IconaTileVenditori, attivo: true, onClick: onApriVenditori },
             { chiave: "master", title: "Statistiche Master", descrizione: "Vendite prodotti conseguite da ogni master, per mese, trimestre e oltre.", Icona: IconaTileMaster, attivo: true, onClick: onApriStatisticheMaster },
@@ -18260,7 +18259,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, ruoloUtente, ordineTasti, onSalvaOrdineTasti }) {
+function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -18283,7 +18282,7 @@ function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCa
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Amministrazione</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi, categorie di spesa e organizzazione operativa dei corsi.</div>
         <GrigliaTasti
-          pagina="amministrazione" ordine={ordineTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} colonneDesktop={3}
+          pagina="amministrazione" ordine={ordineTasti} colonne={colonneTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "contabilita", title: "Contabilità", descrizione: "Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriAmministrazione },
             { chiave: "categoriespesa", title: "Categorie di spesa", descrizione: "Organizza e gestisci le categorie usate in Prima nota cassa.", Icona: IconaTileCatalogo, attivo: true, onClick: onApriCatalogoCategorieCosti },
@@ -18983,7 +18982,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, ruoloUtente, ordineTasti, onSalvaOrdineTasti }) {
+function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
@@ -19006,7 +19005,7 @@ function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onAp
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestione magazzino e shop</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         <GrigliaTasti
-          pagina="magazzinoshop" ordine={ordineTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} colonneDesktop={3}
+          pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileGestioneMagazzino, attivo: true, onClick: onApriMagazzino },
             { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileLogistica, attivo: true, onClick: onApriMagazziniEsterni },
@@ -35318,13 +35317,16 @@ export default function App() {
     await Promise.all(nomi.map((nome) => (CARICATORI_TABELLA[nome] ? CARICATORI_TABELLA[nome]() : Promise.resolve())));
   }
 
-  // ordine/cartelle dei tasti (GrigliaTasti): aggiornamento ottimista subito
-  // in locale, poi upsert su Supabase — una riga per pagina, stesso schema
-  // già in uso per impostazioni_layout_iscrizioni
-  async function salvaOrdineTasti(pagina, nuovoOrdine) {
-    setLayoutTasti((prev) => ({ ...prev, [pagina]: { pagina, ordine: nuovoOrdine } }));
-    const { error } = await supabase.from("impostazioni_layout_tasti").upsert({ pagina, ordine: nuovoOrdine }, { onConflict: "pagina" });
-    if (error) { window.alert("Errore nel salvare il nuovo ordine: " + error.message); fetchDati(["impostazioni_layout_tasti"]); }
+  // ordine/cartelle/colonne dei tasti (GrigliaTasti): aggiornamento
+  // ottimista subito in locale, poi upsert su Supabase — una riga per
+  // pagina, stesso schema già in uso per impostazioni_layout_iscrizioni.
+  // "patch" è { ordine } o { colonne }: si fonde con la riga già in
+  // memoria così l'uno non cancella mai l'altro
+  async function salvaLayoutTasti(pagina, patch) {
+    const nuovaRiga = { ...(layoutTasti[pagina] || {}), ...patch, pagina };
+    setLayoutTasti((prev) => ({ ...prev, [pagina]: nuovaRiga }));
+    const { error } = await supabase.from("impostazioni_layout_tasti").upsert(nuovaRiga, { onConflict: "pagina" });
+    if (error) { window.alert("Errore nel salvare il layout: " + error.message); fetchDati(["impostazioni_layout_tasti"]); }
   }
 
   async function eliminaDataArchiviata(id) {
@@ -36120,11 +36122,12 @@ export default function App() {
           <GrigliaTasti
             pagina="home"
             ordine={layoutTasti.home?.ordine}
+            colonne={layoutTasti.home?.colonne}
             ruoloUtente={ruoloUtente}
-            onSalvaOrdine={(nuovoOrdine) => salvaOrdineTasti("home", nuovoOrdine)}
+            onSalvaOrdine={(nuovoOrdine) => salvaLayoutTasti("home", { ordine: nuovoOrdine })}
+            onSalvaColonne={(n) => salvaLayoutTasti("home", { colonne: n })}
             consentiCartelle
             colonneDesktop={4}
-            extra={<TileProgettiInCorso />}
             definizioni={[
               { chiave: "gestionedate", title: "Gestione corsi", descrizione: "Crea, modifica e organizza tutti i corsi e le sedi", Icona: IconaTileCorsi, attivo: tastoAbilitato("gestionedate"), onClick: apriGestioneDate },
               { chiave: "dashboardvenditori", title: "Dashboard venditori", descrizione: "Monitora vendite, performance e obiettivi del team", Icona: IconaTileVenditori, attivo: tastoAbilitato("dashboardvenditori"), onClick: apriLoginVenditore },
@@ -36139,6 +36142,7 @@ export default function App() {
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaGruppoTeam, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
               { chiave: "impostazioni", title: "Impostazioni", descrizione: "Configura preferenze, utenti e permessi", Icona: IconaTileImpostazioni, attivo: tastoAbilitato("impostazioni"), onClick: apriImpostazioni },
+              { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Questa sezione sarà presto disponibile.", Icona: IconaTileLampadina, attivo: false, onClick: () => {} },
             ]}
           />
         </div>
@@ -36218,7 +36222,8 @@ export default function App() {
           onApriCatalogoCategorieCosti={apriCatalogoCategorieCosti}
           onApriAssegnazioneMaster={() => setView("assegnazionemaster")}
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
-          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.amministrazione?.ordine} onSalvaOrdineTasti={(o) => salvaOrdineTasti("amministrazione", o)}
+          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.amministrazione?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("amministrazione", { ordine: o })}
+          colonneTasti={layoutTasti.amministrazione?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("amministrazione", { colonne: n })}
         />
       )}
 
@@ -36287,7 +36292,8 @@ export default function App() {
           onApriCrmShop={apriCrmShop}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
-          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.magazzinoshop?.ordine} onSalvaOrdineTasti={(o) => salvaOrdineTasti("magazzinoshop", o)}
+          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.magazzinoshop?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("magazzinoshop", { ordine: o })}
+          colonneTasti={layoutTasti.magazzinoshop?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("magazzinoshop", { colonne: n })}
         />
       )}
 
@@ -36582,7 +36588,8 @@ export default function App() {
           onApriStatisticheMaster={apriStatisticheMaster}
           onApriPerformanceAziendale={apriDashboardAnalisi}
           onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
-          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.statistiche?.ordine} onSalvaOrdineTasti={(o) => salvaOrdineTasti("statistiche", o)}
+          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.statistiche?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("statistiche", { ordine: o })}
+          colonneTasti={layoutTasti.statistiche?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("statistiche", { colonne: n })}
         />
       )}
 
