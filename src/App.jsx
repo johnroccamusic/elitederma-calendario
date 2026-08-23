@@ -7923,58 +7923,81 @@ function AlertScadenzeModelle({ numeroSlot, numeroCorsi, giorni }) {
   );
 }
 
-// riga cliccabile della lista "Priorità": mostra il badge "TRA N GIORNI"
-// (colore in base all'urgenza), città+data, corso, master, tipologie
-// richieste e i tre numeri richieste/assegnate/da trovare
+// riga cliccabile della lista "Priorità": badge "TRA N GIORNI" (colore in
+// base all'urgenza) su una riga propria, poi città+data / corso+master /
+// i tre numeri richieste-assegnate-da trovare, e sotto un'anteprima di chi
+// cercare — stessa lista/stile del Riepilogo di Assegna Modelle (nome +
+// pallini colorati per trattamento), così si vede già chi manca senza
+// dover aprire il corso
 function RigaPrioritaModelle({ edizione, onApri }) {
   const isMobile = useIsMobile();
   const g = edizione.giorniAOggi;
   const urgenza = g <= 3 ? { bg: "#FDECEC", fg: "#C0392B" } : g <= 7 ? { bg: "#FFF3E0", fg: "#B9770E" } : { bg: "#F1ECDF", fg: NAVY };
   const testoGiorni = g < 0 ? "IN CORSO" : g === 0 ? "OGGI" : g === 1 ? "DOMANI" : `TRA ${g} GIORNI`;
   const badgeGiorni = <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", whiteSpace: "nowrap" }}>{testoGiorni}</span>;
-  const badgesTipologie = Object.entries(edizione.tipologie).map(([t, n]) => <BadgeTipologia key={t} testo={t} conteggio={n} />);
   const numero = (v, c, lab) => <div><div style={{ ...fontDisplay, fontSize: isMobile ? 18 : 20, fontWeight: 700, color: c }}>{v}</div><div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{lab}</div></div>;
 
+  const nomiAllievi = [];
+  const trattamentiPerAllievo = new Map();
+  edizione.slot.forEach((s) => {
+    if (s.ruolo !== "allievo") return;
+    if (!trattamentiPerAllievo.has(s.allievoNome)) { trattamentiPerAllievo.set(s.allievoNome, []); nomiAllievi.push(s.allievoNome); }
+    const tipi = trattamentiPerAllievo.get(s.allievoNome);
+    if (!tipi.includes(s.tipo)) tipi.push(s.tipo);
+  });
+  const anteprimaAllievi = nomiAllievi.length > 0 && (
+    <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${CREAM_BORDER}` }}>
+      {nomiAllievi.map((nome) => (
+        <div key={nome} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "3px 0" }}>
+          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{nome.toUpperCase()}</span>
+          {trattamentiPerAllievo.get(nome).map((t) => <PallinoTipoModella key={t} tipo={t} />)}
+        </div>
+      ))}
+    </div>
+  );
+
   // su mobile la riga (troppo larga per stare in orizzontale) si impagina in
-  // verticale, così niente resta tagliato e i badge vanno a capo da soli
+  // verticale, così niente resta tagliato
   if (isMobile) {
     return (
       <div onClick={onApri} style={{ padding: "14px 2px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-          {badgeGiorni}
-          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</span>
+        <div style={{ marginBottom: 8 }}>{badgeGiorni}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+          <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</span>
           <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</span>
         </div>
-        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
+        <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
         {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>{badgesTipologie}</div>
         <div style={{ display: "flex", gap: 24, marginTop: 12, textAlign: "center" }}>
           {numero(edizione.richieste, NAVY, "richieste")}
           {numero(edizione.assegnate, "#2E7D32", "assegnate")}
           {numero(edizione.daTrovare, "#C0392B", "da trovare")}
         </div>
+        {anteprimaAllievi}
       </div>
     );
   }
 
   return (
-    <div onClick={onApri} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
-      <div style={{ width: 100, flexShrink: 0 }}>
-        <span style={{ marginBottom: 6, display: "inline-block" }}>{badgeGiorni}</span>
-        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</div>
-        <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</div>
+    <div onClick={onApri} style={{ padding: "14px 4px", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+      <div style={{ marginBottom: 8 }}>{badgeGiorni}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 120, flexShrink: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{edizione.cittaNome.toUpperCase()}</div>
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{fmtDataCompatta(edizione.dataInizio, edizione.dataFine).toUpperCase()}</div>
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
+          {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
+        </div>
+        <div style={{ display: "flex", gap: 18, flexShrink: 0, textAlign: "center" }}>
+          {numero(edizione.richieste, NAVY, "richieste")}
+          {numero(edizione.assegnate, "#2E7D32", "assegnate")}
+          {numero(edizione.daTrovare, "#C0392B", "da trovare")}
+        </div>
+        <IconaFrecciaSinistra size={16} color={MUTED} />
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{toTitleCase(edizione.corsoNome)}</div>
-        {edizione.masterTrainerNome && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6 }}>Master: {toTitleCase(edizione.masterTrainerNome)}</div>}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{badgesTipologie}</div>
-      </div>
-      <div style={{ display: "flex", gap: 18, flexShrink: 0, textAlign: "center" }}>
-        {numero(edizione.richieste, NAVY, "richieste")}
-        {numero(edizione.assegnate, "#2E7D32", "assegnate")}
-        {numero(edizione.daTrovare, "#C0392B", "da trovare")}
-      </div>
-      <IconaFrecciaSinistra size={16} color={MUTED} />
+      {anteprimaAllievi}
     </div>
   );
 }
