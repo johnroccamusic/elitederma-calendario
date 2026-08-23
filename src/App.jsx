@@ -17114,7 +17114,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                           {opzioniTipoModellaCorso.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
                         </select>
                         {giorniAllieviCorso.length > 1 && (
-                          <select style={{ ...inputStyle, flex: 1, background: "#EFEFEF", color: MUTED }} value={m.giorno || ""} disabled>
+                          // proposto in automatico dal trattamento scelto sopra, ma
+                          // modificabile a mano: se "Definisci corsi" non ha (ancora)
+                          // quel trattamento associato a un giorno preciso, l'automatismo
+                          // non ha nulla da proporre e senza poter scegliere qui a mano
+                          // la modella restava bloccata senza giorno
+                          <select style={{ ...inputStyle, flex: 1 }} value={m.giorno || ""} onChange={(e) => { const g = e.target.value ? parseInt(e.target.value, 10) : null; setTipiModelle((prev) => prev.map((x, i) => (i === idx ? { ...x, giorno: g } : x))); }}>
                             <option value="">— giorno —</option>
                             {giorniAllieviCorso.map((g) => (
                               <option key={g.numero_giorno} value={g.numero_giorno}>Giorno {g.numero_giorno}{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}</option>
