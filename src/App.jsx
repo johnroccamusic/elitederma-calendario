@@ -15358,8 +15358,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     // sganciava le modelle raggruppate su più trattamenti
     setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
-    setCorsoParziale(Array.isArray(i.giorni_presenza) && i.giorni_presenza.length > 0);
-    setGiorniPresenza(Array.isArray(i.giorni_presenza) ? i.giorni_presenza : []);
+    // filtra eventuali voci non numeriche: prima versione di questo campo
+    // (mattina/pomeriggio per oggetto) ha lasciato dati nel vecchio formato
+    // su qualche iscritto già in produzione — senza questo filtro
+    // "corso parziale" risulterebbe attivo per errore, con giorni presenti
+    // solo quelli rimasti per sbaglio nel vecchio formato
+    const giorniPresenzaValidi = Array.isArray(i.giorni_presenza) ? i.giorni_presenza.filter((n) => typeof n === "number") : [];
+    setCorsoParziale(giorniPresenzaValidi.length > 0);
+    setGiorniPresenza(giorniPresenzaValidi);
     setTipoOfferta(i.tipo_offerta || "");
     setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
