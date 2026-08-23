@@ -1410,6 +1410,29 @@ function IconaColonne({ n, size = 16, color = "currentColor" }) {
     </svg>
   );
 }
+// tasto "indietro" delle pagine di contenuto (non le 4 pagine a tasti,
+// quelle hanno già la loro barra di navigazione): un piccolo tassello
+// quadrato con l'icona cartellina e, piccolo, il nome della pagina a cui
+// si torna — stesso comportamento di click di sempre (va dove andava
+// già l'onBack di quella pagina), solo l'aspetto cambia. Nessun
+// trascinamento qui: queste pagine non contengono tasti/cartelle da
+// spostare, a differenza della Home
+function TastoLivelloPrecedente({ titolo, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      title={titolo}
+      style={{
+        display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
+        background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10,
+        padding: "6px 10px", cursor: "pointer", maxWidth: 130,
+      }}
+    >
+      <IconaCartellaShop size={14} color={NAVY} />
+      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titolo}</span>
+    </button>
+  );
+}
 // griglia di tasti riordinabile e, solo in Home, raggruppabile in
 // cartelle stile Windows — un solo componente riusato da Home,
 // Amministrazione, Gestione magazzino e shop, Statistiche:
@@ -4096,10 +4119,8 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
 
   return (
     <div style={{ maxWidth: 1320, margin: "0 auto", padding: "40px 20px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-          <IconaFrecciaSinistra size={20} />
-        </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+        <TastoLivelloPrecedente titolo="Gestione corsi" onClick={onBack} />
         <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textTransform: "uppercase" }}>Verifica Pagamenti</div>
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
@@ -5387,13 +5408,12 @@ function PaginaDashboardVenditori({
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
-        </div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>
-            {venditoreSel ? `Dashboard ${toTitleCase(venditoreSel.nome)}` : "Dashboard venditori"}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>
+              {venditoreSel ? `Dashboard ${toTitleCase(venditoreSel.nome)}` : "Dashboard venditori"}
+            </div>
           </div>
           {venditoreBloccato ? null : (
             <select style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={venditoreSelId} onChange={(e) => setVenditoreSelId(e.target.value)}>
@@ -5885,11 +5905,10 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Dashboard venditori" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Riepilogo Vendita prodotti</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Riepilogo Vendita prodotti</div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>{nomeSoggetto ? toTitleCase(nomeSoggetto) : "—"} · Solo vendite al POS</div>
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
@@ -6043,8 +6062,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     return (
       <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <button onClick={() => setMostraDettaglioPunti(false)} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraDettaglioPunti(false)} />
             <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Raccolta punti — dettaglio</div>
           </div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Per codice referral usato dai tuoi clienti (online e al banco); i resi e gli annullamenti riducono i punti.</div>
@@ -6068,8 +6087,8 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     return (
       <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <button onClick={() => setMostraListaInventario(false)} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraListaInventario(false)} />
             <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Inventario corso corrente</div>
           </div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Scegli il corso da rendicontare — in cima anche quelli finiti da circa una settimana.</div>
@@ -6091,10 +6110,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
-          </div>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
           {masterSel && (
             <button
               onClick={() => corsiEleggibiliInventario.length > 0 && setMostraListaInventario(true)}
@@ -6588,7 +6604,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     return (
       <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Dashboard master" onClick={onBack} /></div>
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun corso attivo al momento.</div>
         </div>
       </div>
@@ -6600,8 +6616,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Dashboard master" onClick={onBack} />
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>
             Inventario {corso?.nome || "—"} {toTitleCase(loc?.nome || "—")} ({fmtDataCompatta(corsoData.data_inizio, corsoData.data_fine)})
           </div>
@@ -7455,11 +7471,11 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: agendaAperta ? 1320 : 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente
+              titolo={agendaAperta && agendeVisibili.length > 1 ? "Agenda" : "Home"}
               onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
-              title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}
-            ><IconaFrecciaSinistra size={20} /></button>
+            />
             <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : "Agenda"}</div>
           </div>
           {agendaAperta && (
@@ -8475,10 +8491,7 @@ function PaginaGestioneModelle({
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Team</div>
-        </div>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div>
             <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione modelle</div>
@@ -9053,8 +9066,8 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Password menù</div>
         </div>
 
@@ -18705,13 +18718,10 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-            <IconaFrecciaSinistra size={20} />
-          </button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Anagrafiche</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Anagrafiche</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.</div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
@@ -19083,11 +19093,10 @@ function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, r
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>Classificazione voci di vendita</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Classificazione voci di vendita</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Distingue corsi, prodotti ed esclusioni fra le righe vendute nello shop — usata per calcolare statistiche prodotto corrette.</div>
 
         {nonClassificate.length > 0 && (
@@ -19285,9 +19294,8 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        <div style={{ marginBottom: 6 }}>
+          <TastoLivelloPrecedente titolo={clienteAperto ? "CRM Shop Online" : "Gestione magazzino e shop"} onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} />
         </div>
 
         {clienteAperto ? (
@@ -19955,11 +19963,10 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>Genera Coupon</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Genera Coupon</div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
         <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
@@ -20572,11 +20579,10 @@ function PaginaDashboardAnalisi({
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Performance Aziendale</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 24 }}>Performance Aziendale</div>
 
         <SezioneAnalisiAndamento
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} spese={spese}
@@ -21519,13 +21525,10 @@ function PaginaRiconciliazione({
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-            <IconaFrecciaSinistra size={20} />
-          </button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione · Contabilità</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Riconciliazione</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Riconciliazione</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Le fatture arrivate da Fatture in Cloud, abbinate agli impegni già presi.</div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
@@ -22097,11 +22100,10 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Contabilità</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Contabilità</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
 
         <TabsAmministrazione
@@ -22671,12 +22673,7 @@ function PaginaInserimentoCostiRicavi({
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-              <IconaFrecciaSinistra size={20} />
-            </button>
-            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
-          </div>
+          <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <button onClick={() => setImportCsvAperto(true)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Importa CSV</button>
             <button onClick={() => esportaCsvSpese(speseRealiFiltrate.map((s) => ({ spesa: s, importo: s.totale })), costiCategorieById, costiSottocategorieById)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 14px", borderRadius: 16, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer" }}>Esporta CSV</button>
@@ -22958,10 +22955,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
-        </div>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Vendite al banco" : "Vendite Shop Online"}</div>
           {origine === "woocommerce" && (
@@ -23189,11 +23183,10 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Statistiche Totali Vendite Prodotti" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Solo i prodotti venduti al banco con il POS interno." : "Solo i prodotti venduti sullo shop online WooCommerce."}</div>
 
         <TabsStatisticheVenditeProdotti attivo={origine === "pos" ? "banco" : "shop"} onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
@@ -23319,11 +23312,10 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Omaggi</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Omaggi</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti usciti dal POS senza essere venduti — regalati, con nota obbligatoria sul motivo.</div>
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
@@ -23439,11 +23431,10 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Prodotti usati per i kit</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prodotti usati per i kit</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
@@ -24408,10 +24399,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={tornaIndietro} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino / Shop</div>
-        </div>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={tornaIndietro} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione magazzino</div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
@@ -24853,8 +24841,8 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Magazzini esterni</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
@@ -25220,8 +25208,8 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={rigaSelezionata ? tornaAllaRicerca : onChiudi} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo={rigaSelezionata ? "Ricerca" : "POS Vendita diretta"} onClick={rigaSelezionata ? tornaAllaRicerca : onChiudi} />
           <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 24, fontWeight: 700, color: NAVY }}>Resi / Annullamenti / Cambio</div>
         </div>
 
@@ -25420,11 +25408,10 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Statistiche Totali Vendite Prodotti</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Totali Vendite Prodotti</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
 
         <TabsStatisticheVenditeProdotti attivo="totale" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
@@ -25542,10 +25529,7 @@ function PaginaStatisticheAnalisiVenditaProdotti({ categorieProdotti, prodottiSh
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
-        </div>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} /></div>
         <TabsStatisticheVenditeProdotti attivo="analisi" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
         <SezioneAnalisiMagazzino categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} venditeShop={venditeShop} />
       </div>
@@ -25601,11 +25585,10 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Statistiche Master</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Master</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Vendite al POS di ogni master, fino a oggi.</div>
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content", flexWrap: "wrap" }}>
@@ -26105,9 +26088,10 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
-
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Master</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Gestione Master</div>
+        </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Associa i master ai corsi e definisci i compensi in base al numero di allievi.</div>
 
         <SelettoreCategoriaGruppo campo="master_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
@@ -26644,9 +26628,10 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
-
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Venditori</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Gestione Venditori</div>
+        </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Contatti, dati fiscali e classificazione gestionale di ogni venditore.</div>
 
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", marginBottom: 16 }}>
@@ -27084,9 +27069,10 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
-
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{titolo}</div>
+        </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>{sottotitolo}</div>
 
         {isAssistente && (
@@ -27380,9 +27366,10 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 8 }}><IconaFrecciaSinistra size={20} /></button>
-
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione Hotel</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Gestione Hotel</div>
+        </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 20 }}>Anagrafica degli hotel usati come alloggio per le edizioni dei corsi.</div>
 
         <SelettoreCategoriaGruppo campo="hotel_categoria_spesa_id" categorieGruppi={categorieGruppi} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} ricarica={ricarica} />
@@ -27664,7 +27651,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} /></div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 22 }}>
           <div style={{ width: 56, height: 56, borderRadius: 14, background: "#F1ECDF", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -28375,7 +28362,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1280, margin: "0 auto" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, marginBottom: 12 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
@@ -28874,8 +28861,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     return (
       <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-            <button onClick={() => setMostraStorico(false)} title="Torna al POS" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+            <TastoLivelloPrecedente titolo="POS Vendita diretta" onClick={() => setMostraStorico(false)} />
             <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Storico vendite POS</div>
           </div>
           <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 14 }}>
@@ -29185,7 +29172,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: `24px 16px ${carrello.length > 0 ? 100 : 60}px` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4, flexShrink: 0 }}><IconaFrecciaSinistra size={20} /></button>
+            <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div style={{ minWidth: 0 }}>
               <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : "POS Vendita diretta"}</div>
               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
@@ -29289,7 +29276,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
               <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : "POS Vendita diretta"}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
@@ -30744,10 +30731,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1500, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Magazzino</div>
-        </div>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
             <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{vista === "backoffice" ? "Back Office prodotti" : "Shop Online"}</div>
@@ -31605,7 +31589,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+            <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
               <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>Logistica prodotti</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra.</div>
@@ -31732,8 +31716,8 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Spedizioni da evadere</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Vendite POS di prodotti non disponibili fisicamente al corso, da spedire a casa dell'allievo.</div>
@@ -31819,8 +31803,8 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Magazzini locali</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Attrezzatura e consumabili già presenti in ogni città — usa questa vista per decidere cosa serve davvero spedire.</div>
@@ -32339,8 +32323,8 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
           <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Tipologie di kit</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
@@ -33484,11 +33468,10 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestisci categorie di spesa</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Gestisci categorie di spesa</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Aggiungi, rinomina, riordina o disattiva le categorie e le sotto-voci di "Analisi costi di gestione".</div>
 
         <div style={{ ...cardStyle, display: "flex", gap: 10 }}>
@@ -33686,7 +33669,7 @@ function renderaFatturaElettronicaHtml(xmlTesto) {
 // brief (identificativi, stato, ambito con ripartizione multi-ambito,
 // classificazione gestionale, ricorrenza, budget/soglia per-spesa,
 // allegato). Pagina intera (non modale) vista la quantità di campi
-function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, spese, speseAttribuzioni, ricarica, onBack }) {
+function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi, fornitori, costiCategorie, costiSottocategorie, spese, speseAttribuzioni, ricarica, onBack, titoloPrecedente }) {
   const spesaEsistente = spesaId ? spese.find((s) => s.id === spesaId) : null;
   const attribuzioniEsistenti = spesaId ? speseAttribuzioni.filter((a) => a.spesa_id === spesaId) : [];
   // aperta da una casella del Riepilogo amministrativo di una classe:
@@ -33892,11 +33875,10 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo={titoloPrecedente || "Prima nota cassa"} onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>{spesaId ? "Modifica spesa" : "Nuova spesa"}</div>
 
         {ambitoBloccato && (
           <div style={{ ...cardStyle, background: BG_CHIARO, border: `1px solid ${GOLD}`, ...fontBody, fontSize: 13, color: NAVY }}>
@@ -34308,11 +34290,10 @@ function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, even
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{abbonamentoId ? "Modifica abbonamento" : "Nuovo abbonamento o contratto"}</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>{abbonamentoId ? "Modifica abbonamento" : "Nuovo abbonamento o contratto"}</div>
 
         <div style={{ ...cardStyle }}>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 12 }}>Fornitore</div>
@@ -34524,11 +34505,10 @@ function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricar
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-          <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Amministrazione</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+          <TastoLivelloPrecedente titolo="Prima nota cassa" onClick={onBack} />
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Budget</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 20 }}>Budget</div>
 
         <div style={{ ...cardStyle }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -34828,10 +34808,8 @@ function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreA
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "24px 0 60px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18, padding: "0 20px" }}>
-        <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}>
-          <IconaFrecciaSinistra size={20} />
-        </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, padding: "0 20px", flexWrap: "wrap" }}>
+        <TastoLivelloPrecedente titolo="Verifica Pagamenti" onClick={onBack} />
         <div style={{ ...fontDisplay, fontSize: 22, color: NAVY }}>Schede associate</div>
       </div>
       <div style={{ overflowX: "auto", padding: "0 20px 20px" }}>
@@ -36449,6 +36427,7 @@ export default function App() {
           spese={spese} speseAttribuzioni={speseAttribuzioni}
           ricarica={fetchDati}
           onBack={() => { if (spesaPrefill?.classeId) { setSpesaPrefill(null); setView("scheda"); } else { setSpesaPrefill(null); setView(spesaRitornoView); } }}
+          titoloPrecedente={spesaPrefill?.classeId ? "Scheda" : (spesaRitornoView === "amministrazione" ? "Contabilità" : spesaRitornoView === "assegnazionemaster" ? "Operativo corsi" : "Prima nota cassa")}
         />
       )}
 
