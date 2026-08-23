@@ -2272,7 +2272,7 @@ function Gate({ onOk }) {
     <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: -60 }}>
         <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 64, width: "auto", marginBottom: 44 }} />
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 0.5, marginBottom: 3 }}>GENYON</div>
+        <div style={{ ...fontDisplay, fontFamily: '"Zen Dots", cursive', fontSize: 26, fontWeight: 400, color: NAVY, letterSpacing: 0.5, marginBottom: 3 }}>GENYON</div>
         <div style={{ ...fontBody, fontSize: 11, color: MUTED, letterSpacing: 0.4, marginBottom: 24 }}>General Yield Organization Network</div>
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 60 }}>developed by GianLuca Rocca</div>
         <input
@@ -36395,7 +36395,7 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 1 : 2 }}>GENYON</div>
+          <div style={{ ...fontDisplay, fontFamily: '"Zen Dots", cursive', fontSize: isMobile ? 21 : 34, fontWeight: 400, color: NAVY, marginBottom: isMobile ? 1 : 2 }}>GENYON</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>developed by GianLuca Rocca</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
