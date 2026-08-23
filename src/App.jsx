@@ -17256,9 +17256,17 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <>
                 {nostreConModelle.map((i) => {
                   const tipiDistinti = [...new Set(i.tipi_modelle.map((m) => m.tipo || "(trattamento non scelto)"))];
+                  // solo programmatore/amministratore possono aprire la scheda di
+                  // iscrizione da qui — un click "innocente" da master/venditore
+                  // non deve finire dentro dati contabili che non gli competono
+                  const puoAprireScheda = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
                   return (
                     <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0" }}>
-                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                      {puoAprireScheda ? (
+                        <span onClick={() => apriModificaCompleta(i)} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                      ) : (
+                        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                      )}
                       {tipiDistinti.map((t) => <PallinoTipoModella key={t} tipo={t} />)}
                     </div>
                   );
