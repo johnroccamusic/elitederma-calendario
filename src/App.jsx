@@ -4991,6 +4991,13 @@ function SezioneDateCorsi({
     if (stickyControlli && controlliStickyRef.current) setAltezzaControlliSticky(controlliStickyRef.current.offsetHeight);
   }, [stickyControlli, vistaDateModo]);
   const oggiStr = dataOggiStr();
+  // solo "Gestione corsi" (stickyControlli) e solo da mobile: la freccetta
+  // ripiega tutto il blocco fisso in cima (titolo, tasti, tab, ricerca,
+  // filtri), lasciando solo il conteggio — l'elenco sotto non si muove,
+  // resta sempre visibile. Da desktop, o nelle altre pagine che riusano
+  // questo componente, il blocco resta sempre aperto, nessuna freccetta
+  const collassabileSuMobile = isMobile && stickyControlli;
+  const [controlliCollassati, setControlliCollassati] = useState(false);
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -5018,6 +5025,8 @@ function SezioneDateCorsi({
   return (
     <div>
       <div ref={controlliStickyRef} style={stickyControlli ? { position: "sticky", top: 0, zIndex: 15, background: BG, paddingTop: isMobile ? 68 : 70, marginTop: isMobile ? -70 : 0, marginBottom: -4 } : undefined}>
+      {!(collassabileSuMobile && controlliCollassati) && (
+      <>
       {intestazioneSticky}
       {!nascondiControlli && (
         <>
@@ -5080,7 +5089,22 @@ function SezioneDateCorsi({
           Reset filtri
         </button>
       </div>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>{corsiDateFiltrate.length} cors{corsiDateFiltrate.length === 1 ? "o trovato" : "i trovati"}</div>
+      </>
+      )}
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: collassabileSuMobile ? 4 : 10 }}>{corsiDateFiltrate.length} cors{corsiDateFiltrate.length === 1 ? "o trovato" : "i trovati"}</div>
+      {collassabileSuMobile && (
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
+          <button
+            onClick={() => setControlliCollassati((v) => !v)}
+            title={controlliCollassati ? "Espandi i controlli" : "Comprimi i controlli"}
+            style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex" }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points={controlliCollassati ? "6 9 12 15 18 9" : "18 15 12 9 6 15"} />
+            </svg>
+          </button>
+        </div>
+      )}
       </div>
 
       {vistaDateModo === "elenco" ? (
