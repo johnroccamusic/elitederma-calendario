@@ -11948,6 +11948,20 @@ function gruppoModellaAggiornaCampo(elenco, idx, campo, valore) {
   return nuovo;
 }
 
+// "corso parziale": vero se un'iscritta è fisicamente presente in un dato
+// giorno del corso. Sempre vero se non ha attivato il corso parziale
+// (iscritti.giorni_presenza vuoto/assente = presente tutti i giorni, il
+// comportamento di sempre, nessuna rottura per chi non lo usa) — unica
+// fonte di verità condivisa da scheda iscritto, Assegna modelle e dal link
+// pubblico di ricerca modelle, così un trattamento nel giorno sbagliato
+// per lei non la fa comparire come se avesse bisogno di una modella lì
+function presenteIlGiorno(giorniPresenza, numeroGiorno) {
+  if (!Array.isArray(giorniPresenza) || giorniPresenza.length === 0) return true;
+  if (numeroGiorno == null) return true;
+  const g = giorniPresenza.find((x) => x.numero_giorno === numeroGiorno);
+  return !!g && (g.mattina || g.pomeriggio);
+}
+
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
 // nella pagina pubblica di ricerca modelle), e nome/telefono della modella
 // una volta trovata. Nome/telefono usano stato locale e si salvano solo al
@@ -14484,7 +14498,7 @@ const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzati
 // .ordine_righe, forma { anagrafica: [...], contabili: [...], organizzativi: [...] })
 const ORDINE_RIGHE_ISCRITTO_DEFAULT = {
   anagrafica: ["modulo", "nomeCognome", "tutorTelefono", "fatturazione"],
-  contabili: ["totalePattuito", "pacchettoKit", "quotaAcconto", "quotaPrecorso", "daAvereAlCorso", "pagheraInTotale"],
+  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "quotaAcconto", "quotaPrecorso", "daAvereAlCorso", "pagheraInTotale"],
   organizzativi: ["accordiCommerciali", "richiedeModelle", "tagliaDivisa", "screenAcconto", "screenRecap", "note"],
 };
 // una chiave/default/limite "spazioDopoRiga<Sezione><Riga>" per ciascuna
@@ -14590,6 +14604,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // da "Assegna modelle" in Contabilità classe e qui restano invariati
   const [tipiModelle, setTipiModelle] = useState([]);
   const [pacchettoKit, setPacchettoKit] = useState("");
+  // "Corso parziale": l'iscritta non c'è tutti i giorni del corso — quando
+  // spuntato, un elemento per ogni giorno del corso { numero_giorno,
+  // mattina, pomeriggio }. Di default (non spuntato) l'iscritta è
+  // considerata presente tutti i giorni, comportamento invariato per tutti
+  // gli iscritti già esistenti — vedi presenteIlGiorno()
+  const [corsoParziale, setCorsoParziale] = useState(false);
+  const [giorniPresenza, setGiorniPresenza] = useState([]);
   const [tipoOfferta, setTipoOfferta] = useState("");
   const [tagliaDivisa, setTagliaDivisa] = useState("");
   // residenza letta dal modulo di iscrizione (pagina 6): serve al CRM per
@@ -15247,7 +15268,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setPagPrecorso(QUOTA_VUOTA); setPagPrecorsoPagato(false); setPrecorsoExtra([]);
     setPagSaldo(QUOTA_VUOTA);
     setAccordiCommerciali(""); setRichiedeModelle(""); setNumeroModelle(""); setPrezzoSpecialeModelle(""); setTipiModelle([]); setTotalePattuito(""); setQuotaSpeciale("");
-    setPacchettoKit(""); setTipoOfferta(""); setTagliaDivisa("");
+    setPacchettoKit(""); setCorsoParziale(false); setGiorniPresenza([]); setTipoOfferta(""); setTagliaDivisa("");
     setCittaResidenza(""); setIndirizzoResidenza(""); setCapResidenza(""); setEmailIscritto("");
     setRichiedeFattura(false); svuotaCampiFattura();
     setFileIscrizione(null); setFileScreenAcconto(null); setFileScreenRecap(null);
@@ -15338,6 +15359,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     // sganciava le modelle raggruppate su più trattamenti
     setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
+    setCorsoParziale(Array.isArray(i.giorni_presenza) && i.giorni_presenza.length > 0);
+    setGiorniPresenza(Array.isArray(i.giorni_presenza) ? i.giorni_presenza : []);
     setTipoOfferta(i.tipo_offerta || "");
     setTagliaDivisa(i.taglia_divisa || "");
     setTotalePattuito(i.totale_pattuito != null ? String(i.totale_pattuito) : "");
@@ -15572,6 +15595,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
         tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : [],
+        giorni_presenza: corsoParziale ? giorniPresenza : null,
         pacchetto_kit: pacchettoKit.trim() || null,
         tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
@@ -16812,6 +16836,63 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
             {spaziatoreRiga("contabili", "pacchettoKit")}
           </div>
+          <div {...propsRiga("contabili", "corsoParziale")}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+              {manigliaRiga("contabili", "corsoParziale")}
+              <div style={{ flex: 1, minWidth: 0 }}>
+          {giorniCorsoDiQuesto.length > 0 && (
+            <>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY, marginBottom: corsoParziale ? 10 : 0 }}>
+                <input
+                  type="checkbox"
+                  checked={corsoParziale}
+                  onChange={(e) => {
+                    const attivo = e.target.checked;
+                    setCorsoParziale(attivo);
+                    // primo utilizzo per questa iscritta: parte con tutti i
+                    // giorni spuntati (nessuna assenza), poi il venditore
+                    // toglie le spunte dei giorni/turni in cui non c'è
+                    if (attivo && giorniPresenza.length === 0) {
+                      setGiorniPresenza(giorniCorsoDiQuesto.map((g) => ({ numero_giorno: g.numero_giorno, mattina: true, pomeriggio: true })));
+                    }
+                  }}
+                />
+                Corso parziale
+              </label>
+              {corsoParziale && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {giorniCorsoDiQuesto.map((g) => {
+                    const presenza = giorniPresenza.find((x) => x.numero_giorno === g.numero_giorno) || { numero_giorno: g.numero_giorno, mattina: false, pomeriggio: false };
+                    function aggiornaPresenza(campo, valore) {
+                      setGiorniPresenza((prev) => {
+                        const esiste = prev.some((x) => x.numero_giorno === g.numero_giorno);
+                        return esiste
+                          ? prev.map((x) => (x.numero_giorno === g.numero_giorno ? { ...x, [campo]: valore } : x))
+                          : [...prev, { numero_giorno: g.numero_giorno, mattina: false, pomeriggio: false, [campo]: valore }];
+                      });
+                    }
+                    return (
+                      <div key={g.numero_giorno} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: BG, borderRadius: 8 }}>
+                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>Giorno {g.numero_giorno}</span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY }}>
+                            <input type="checkbox" checked={!!presenza.mattina} onChange={(e) => aggiornaPresenza("mattina", e.target.checked)} /> Mattina
+                          </label>
+                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY }}>
+                            <input type="checkbox" checked={!!presenza.pomeriggio} onChange={(e) => aggiornaPresenza("pomeriggio", e.target.checked)} /> Pomeriggio
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+              </div>
+            </div>
+            {spaziatoreRiga("contabili", "corsoParziale")}
+          </div>
           <div {...propsRiga("contabili", "quotaAcconto")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "quotaAcconto")}
@@ -17247,7 +17328,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         // tipo di modella sull'intero corso. I conteggi sono trattamenti
         // da coprire, non persone: una sola modella su più trattamenti
         // (vedi il gruppo in RigaModella) conta comunque una volta a testa
-        const nostreConModelle = listaIscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+        // "corso parziale": un trattamento nel giorno in cui l'iscritta non
+        // è presente non conta come da trovare per lei — vedi presenteIlGiorno()
+        const nostreConModelle = listaIscritti
+          .filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0)
+          .map((i) => ({ ...i, tipi_modelle: i.tipi_modelle.filter((m) => presenteIlGiorno(i.giorni_presenza, m.giorno ?? giornoDiRipiegoAllievi)) }))
+          .filter((i) => i.tipi_modelle.length > 0);
         const conteggioPerTipo = {};
         nostreConModelle.forEach((i) => {
           i.tipi_modelle.forEach((m) => {
@@ -17369,6 +17455,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             {giorniRilevantiModelle.map((g) => {
               const modellaMaster = modelleMaster.find((m) => m.numero_giorno === g.numero_giorno)
                 || { mattina: g.mattina_master, pomeriggio: g.pomeriggio_master, nome_modella: "", telefono_modella: "" };
+              // "corso parziale": chi non è presente in questo giorno non va
+              // elencata qui come se avesse bisogno di una modella oggi
+              const iscrittiDelGiorno = listaIscrittiVisibile.filter((i) => presenteIlGiorno(i.giorni_presenza, g.numero_giorno));
 
               return (
                 <div key={g.id} style={{ ...cardStyle, padding: 18 }}>
@@ -17407,13 +17496,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
                         Allievi{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}
                       </div>
-                      {listaIscrittiVisibile.length === 0 && (
-                        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto in questa classe.</div>
+                      {iscrittiDelGiorno.length === 0 && (
+                        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto presente in questa classe in questo giorno.</div>
                       )}
                       {/* prima chi dobbiamo trovare noi (NOSTRA), poi chi
                           porta già la propria modella: così si vede a
                           colpo d'occhio chi manca ancora */}
-                      {listaIscrittiVisibile.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i, idx, elencoOrdinato) => {
+                      {iscrittiDelGiorno.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i, idx, elencoOrdinato) => {
                         const nostra = !!i.richiede_modelle;
                         const ultimo = idx === elencoOrdinato.length - 1;
                         const elenco = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
@@ -18037,7 +18126,12 @@ function VistaRicercaModelle({ param }) {
   // sempre la classe completa (NOSTRA + HA LA SUA MODELLA): questo link è
   // "Genera Link per gestione modelle", non solo ricerca, quindi non deve
   // dipendere da quale filtro era attivo in app quando è stato generato
-  const iscrittiConModelle = iscritti.filter((i) => Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+  // "corso parziale": un trattamento nel giorno in cui l'iscritta non è
+  // presente non va proposto qui — vedi presenteIlGiorno(). L'array
+  // tipi_modelle NON va reindicizzato: aggiornaModellaSlot/Gruppo scrivono
+  // per indice sull'originale, quindi si nasconde la riga a render (sotto),
+  // non si filtra qui l'array
+  const iscrittiConModelle = iscritti.filter((i) => Array.isArray(i.tipi_modelle) && i.tipi_modelle.some((m) => presenteIlGiorno(i.giorni_presenza, m.giorno)));
 
   async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
     const iscritto = iscritti.find((x) => x.id === iscrittoId);
@@ -18094,15 +18188,17 @@ function VistaRicercaModelle({ param }) {
               </div>
               <div>
                 {i.tipi_modelle.map((m, mi) => (
-                  <RigaModella
-                    key={mi}
-                    modella={m}
-                    primaRiga={mi === 0}
-                    tuttiGliSlot={i.tipi_modelle}
-                    mioIndice={mi}
-                    onSalva={(campo, valore) => aggiornaModellaSlot(i.id, mi, campo, valore)}
-                    onCambiaGruppo={(altroIdx, spuntato) => aggiornaModellaGruppo(i.id, mi, altroIdx, spuntato)}
-                  />
+                  presenteIlGiorno(i.giorni_presenza, m.giorno) && (
+                    <RigaModella
+                      key={mi}
+                      modella={m}
+                      primaRiga={mi === 0}
+                      tuttiGliSlot={i.tipi_modelle}
+                      mioIndice={mi}
+                      onSalva={(campo, valore) => aggiornaModellaSlot(i.id, mi, campo, valore)}
+                      onCambiaGruppo={(altroIdx, spuntato) => aggiornaModellaGruppo(i.id, mi, altroIdx, spuntato)}
+                    />
+                  )
                 ))}
               </div>
             </div>
