@@ -11958,8 +11958,7 @@ function gruppoModellaAggiornaCampo(elenco, idx, campo, valore) {
 function presenteIlGiorno(giorniPresenza, numeroGiorno) {
   if (!Array.isArray(giorniPresenza) || giorniPresenza.length === 0) return true;
   if (numeroGiorno == null) return true;
-  const g = giorniPresenza.find((x) => x.numero_giorno === numeroGiorno);
-  return !!g && (g.mattina || g.pomeriggio);
+  return giorniPresenza.includes(numeroGiorno);
 }
 
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
@@ -16846,43 +16845,23 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 <input
                   type="checkbox"
                   checked={corsoParziale}
-                  onChange={(e) => {
-                    const attivo = e.target.checked;
-                    setCorsoParziale(attivo);
-                    // primo utilizzo per questa iscritta: parte con tutti i
-                    // giorni spuntati (nessuna assenza), poi il venditore
-                    // toglie le spunte dei giorni/turni in cui non c'è
-                    if (attivo && giorniPresenza.length === 0) {
-                      setGiorniPresenza(giorniCorsoDiQuesto.map((g) => ({ numero_giorno: g.numero_giorno, mattina: true, pomeriggio: true })));
-                    }
-                  }}
+                  onChange={(e) => setCorsoParziale(e.target.checked)}
                 />
                 Corso parziale
               </label>
               {corsoParziale && (
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
                   {giorniCorsoDiQuesto.map((g) => {
-                    const presenza = giorniPresenza.find((x) => x.numero_giorno === g.numero_giorno) || { numero_giorno: g.numero_giorno, mattina: false, pomeriggio: false };
-                    function aggiornaPresenza(campo, valore) {
-                      setGiorniPresenza((prev) => {
-                        const esiste = prev.some((x) => x.numero_giorno === g.numero_giorno);
-                        return esiste
-                          ? prev.map((x) => (x.numero_giorno === g.numero_giorno ? { ...x, [campo]: valore } : x))
-                          : [...prev, { numero_giorno: g.numero_giorno, mattina: false, pomeriggio: false, [campo]: valore }];
-                      });
-                    }
+                    const presente = giorniPresenza.includes(g.numero_giorno);
                     return (
-                      <div key={g.numero_giorno} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", background: BG, borderRadius: 8 }}>
-                        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, whiteSpace: "nowrap" }}>Giorno {g.numero_giorno}</span>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY }}>
-                            <input type="checkbox" checked={!!presenza.mattina} onChange={(e) => aggiornaPresenza("mattina", e.target.checked)} /> Mattina
-                          </label>
-                          <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY }}>
-                            <input type="checkbox" checked={!!presenza.pomeriggio} onChange={(e) => aggiornaPresenza("pomeriggio", e.target.checked)} /> Pomeriggio
-                          </label>
-                        </div>
-                      </div>
+                      <label key={g.numero_giorno} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={presente}
+                          onChange={(e) => setGiorniPresenza((prev) => (e.target.checked ? [...prev, g.numero_giorno] : prev.filter((n) => n !== g.numero_giorno)))}
+                        />
+                        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 600, color: NAVY }}>Giorno {g.numero_giorno}</span>
+                      </label>
                     );
                   })}
                 </div>
