@@ -18,6 +18,20 @@
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Sofia+Sans+Condensed:wght@400;500;600;700;800&family=Prompt:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&family=Inter:ital,wght@0,400;0,700;0,800;1,400&family=Zen+Dots&display=swap" rel="stylesheet" />
     <style>
       html, body { touch-action: pan-x pan-y; }
+      /* sfondo decorativo di tutta l'app: solo dietro le pagine, le card
+         restano sempre bianche/piene sopra (cardStyle, invariato) — due
+         immagini, verticale su mobile e orizzontale da 701px in su, stesso
+         breakpoint di useIsMobile() in App.jsx */
+      body {
+        background-color: #F7F5EF;
+        background-image: url("/sfondo-app-mobile.jpg");
+        background-size: cover;
+        background-position: top center;
+        background-repeat: no-repeat;
+      }
+      @media (min-width: 701px) {
+        body { background-image: url("/sfondo-app-desktop.jpg"); }
+      }
       /* campi disabilitati (scheda iscritto in sola lettura): restano
          bloccati ma il testo deve leggersi bene, non solo grigio chiaro.
          -webkit-text-fill-color serve perche' Safari/iOS ignora "color"

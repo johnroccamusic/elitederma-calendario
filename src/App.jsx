@@ -3269,7 +3269,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
@@ -3454,7 +3454,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
@@ -5411,7 +5411,7 @@ function PaginaDashboardVenditori({
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -5908,7 +5908,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
   const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } };
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Dashboard venditori" onClick={onBack} />
@@ -6065,7 +6065,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
   if (mostraDettaglioPunti && masterSel) {
     return (
-      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 720, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraDettaglioPunti(false)} />
@@ -6090,7 +6090,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
 
   if (mostraListaInventario) {
     return (
-      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraListaInventario(false)} />
@@ -6112,7 +6112,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
@@ -6607,7 +6607,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
 
   if (!corsoData) {
     return (
-      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Dashboard master" onClick={onBack} /></div>
           <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun corso attivo al momento.</div>
@@ -6619,7 +6619,7 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   const labelStyleInv = { ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 };
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Dashboard master" onClick={onBack} />
@@ -7473,7 +7473,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
     : [];
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: agendaAperta ? 1320 : 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -8517,7 +8517,7 @@ function PaginaGestioneModelle({
   const isMobile = useIsMobile();
   const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
@@ -9092,7 +9092,7 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
     ricarica(["password_menu"]);
   }
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
@@ -18709,7 +18709,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 function PaginaErp({ onBack, onApriImpostazioni, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
       <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
@@ -19150,7 +19150,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
   const codaCompletata = codaFile.length > 0 && indiceFile >= codaFile.length;
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
@@ -19429,7 +19429,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 function PaginaMagazzinoShop({ onBack, onApriImpostazioni, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh" }}>
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
       <div style={{ background: NAVY, padding: isMobile ? "14px 16px" : "14px 28px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <button onClick={onBack} title="Torna alla home" style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center" }}>
@@ -19525,7 +19525,7 @@ function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, r
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
@@ -19726,7 +19726,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
   const tdStyleCrm = { padding: "10px 12px", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}` };
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}>
           <TastoLivelloPrecedente titolo={clienteAperto ? "CRM Shop Online" : "Gestione magazzino e shop"} onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} />
@@ -20395,7 +20395,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
   const couponOrdinati = useMemo(() => [...(coupon || [])].filter((c) => !c.master_id).sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "")), [coupon]);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
@@ -21011,7 +21011,7 @@ function PaginaDashboardAnalisi({
 }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
@@ -21976,7 +21976,7 @@ function PaginaRiconciliazione({
   const bottoneAbilitato = allocato > 0 && allocato <= totaleDocumento + 0.01 && !salvando;
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
@@ -22551,7 +22551,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
@@ -23123,7 +23123,7 @@ function PaginaInserimentoCostiRicavi({
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
@@ -23406,7 +23406,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
   })();
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
@@ -23729,7 +23729,7 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
   const [vista, setVista] = useState("prodotto");
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche Totali Vendite Prodotti" onClick={onBack} />
@@ -23815,7 +23815,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
   const righeProdotti = Object.entries(perProdotto).map(([nome, quantita]) => ({ nome, quantita })).sort((a, b) => b.quantita - a.quantita);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
@@ -23934,7 +23934,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
   const pezziTotali = righe.reduce((s, r) => s + r.quantita, 0);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
@@ -24902,7 +24902,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
   const prodottiPaginaMagazzino = prodottiOrdinati.slice(paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO, paginaMagazzinoClamp * PER_PAGINA_MAGAZZINO + PER_PAGINA_MAGAZZINO);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={tornaIndietro} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
@@ -25344,7 +25344,7 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
@@ -25711,7 +25711,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
   const differenzaCambio = round2(totaleUscenti - totaleRientranti);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo={rigaSelezionata ? "Ricerca" : "POS Vendita diretta"} onClick={rigaSelezionata ? tornaAllaRicerca : onChiudi} />
@@ -25911,7 +25911,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
     }));
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
@@ -25989,7 +25989,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
 function PaginaStatisticheAnalisiVenditaProdotti({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
   const isMobile = useIsMobile();
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} /></div>
         <TabsStatisticheVenditeProdotti attivo="analisi" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} onApriAnalisi={onApriAnalisi} />
@@ -26045,7 +26045,7 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
     .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop), nome: (master || []).find((m) => m.id === t.soggetto_id)?.nome }));
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
@@ -26548,7 +26548,7 @@ function PaginaGestioneMaster({ master, venditori, corsi, corsiDate, masterCorsi
   const pillAttivo = { ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 20, padding: "3px 10px", whiteSpace: "nowrap" };
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
@@ -27088,7 +27088,7 @@ function PaginaGestioneVenditori({ venditori, master, ricarica, onBack }) {
   });
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
@@ -27529,7 +27529,7 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
   });
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
@@ -27826,7 +27826,7 @@ function PaginaGestioneHotel({ hotel, costiCategorie, costiSottocategorie, categ
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
@@ -28111,7 +28111,7 @@ function PaginaGestioneLocation({ location, citta, costiCategorie, costiSottocat
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} /></div>
 
@@ -28822,7 +28822,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   );
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
 
@@ -29321,7 +29321,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   if (mostraStorico) {
     return (
-      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="POS Vendita diretta" onClick={() => setMostraStorico(false)} />
@@ -29631,7 +29631,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   if (isMobile) {
     return (
-      <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: `24px 16px ${carrello.length > 0 ? 100 : 60}px` }}>
+      <div style={{ background: "transparent", minHeight: "100vh", padding: `24px 16px ${carrello.length > 0 ? 100 : 60}px` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
@@ -29734,7 +29734,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "32px 28px 60px" }}>
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -31191,7 +31191,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1500, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
@@ -32047,7 +32047,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   }, [prodottiApertiMagazzino, prodottiShop]);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -32176,7 +32176,7 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
@@ -32263,7 +32263,7 @@ function PaginaMagazziniLocali({ location, inventarioSede, magazzinoLocaleConsum
   }, [magazzinoLocaleConsumabili, locSel]);
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
@@ -32783,7 +32783,7 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
   function onCopia(kitId, prodotti) { setKitCopiato({ id: kitId, prodotti }); }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Impostazioni" onClick={onBack} />
@@ -33928,7 +33928,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
   async function eliminaSoglia(id) { await supabase.from("costi_soglie_allerta").delete().eq("id", id); ricarica(["costi_soglie_allerta"]); }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
@@ -34335,7 +34335,7 @@ function PaginaSpesaForm({ spesaId, prefill, corsi, location, corsiDate, eventi,
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo={titoloPrecedente || "Prima nota cassa"} onClick={onBack} />
@@ -34750,7 +34750,7 @@ function PaginaAbbonamentoForm({ abbonamentoId, corsi, location, corsiDate, even
   }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Contabilità" onClick={onBack} />
@@ -34965,7 +34965,7 @@ function PaginaBudgetCosti({ costiCategorie, location, corsi, costiBudget, ricar
   async function eliminaBudget(id) { await supabase.from("costi_budget").delete().eq("id", id); ricarica(["costi_budget"]); }
 
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "40px 20px 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "40px 20px 60px" }}>
       <div style={{ maxWidth: 760, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Prima nota cassa" onClick={onBack} />
@@ -35269,7 +35269,7 @@ function PannelloColoreRuolo({ ruolo, valoreIniziale, coloriRecenti, puoAnnullar
 function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
-    <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: "24px 0 60px" }}>
+    <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, padding: "0 20px", flexWrap: "wrap" }}>
         <TastoLivelloPrecedente titolo="Verifica Pagamenti" onClick={onBack} />
         <div style={{ ...fontDisplay, fontSize: 22, color: NAVY }}>Schede associate</div>
@@ -36034,7 +36034,7 @@ export default function App() {
   }, []);
 
 
-  if (!ok) return <div style={{ ...fontBody, background: BG, minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => {
+  if (!ok) return <div style={{ ...fontBody, background: "transparent", minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => {
     setRuoloUtente(ruolo);
     setUtenteLoggato(utente);
     setOk(true);
@@ -36388,7 +36388,7 @@ export default function App() {
   })();
 
   return (
-    <div key={temaVersione} style={{ ...fontBody, background: BG, minHeight: "100vh" }}>
+    <div key={temaVersione} style={{ ...fontBody, background: "transparent", minHeight: "100vh" }}>
       <div
         style={{
           position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)", maxWidth: 640,
