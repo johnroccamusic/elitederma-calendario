@@ -2268,12 +2268,11 @@ function Gate({ onOk }) {
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
   const [verificando, setVerificando] = useState(false);
-  const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(VITE_SUPABASE_URL non impostata)";
   return (
-    <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", textAlign: "center" }}>
-      <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 44, width: "auto" }} />
+    <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 0.5, marginBottom: 3 }}>GENYON</div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 0.5, marginBottom: 8 }}>GENYON App</div>
+        <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 64, width: "auto", marginBottom: 10 }} />
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 30 }}>developed by GianLuca Rocca</div>
         <input
           type="password"
@@ -2285,11 +2284,6 @@ function Gate({ onOk }) {
         />
         <Button onClick={check} disabled={verificando} style={{ width: "100%" }}>{verificando ? "Verifico…" : "Entra"}</Button>
         {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
-      </div>
-      <div>
-        <div style={{ fontSize: 10, color: MUTED, wordBreak: "break-all" }}>
-          Database collegato: {urlDebug}
-        </div>
       </div>
     </div>
   );
@@ -36400,7 +36394,7 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 1 : 2 }}>GENYON</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 1 : 2 }}>GENYON App</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>developed by GianLuca Rocca</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
