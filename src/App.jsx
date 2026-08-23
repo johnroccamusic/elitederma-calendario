@@ -22911,6 +22911,18 @@ function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onAp
     </div>
   );
 }
+// dentro ciascuna delle 3 pagine sopra: "Per operatore" e "Per prodotto"
+// non stanno più una sopra l'altra, si guarda una vista alla volta —
+// stesso stile/componente della barra di sopra, colore neutro perché qui
+// non sono pagine diverse, solo due modi di guardare la stessa pagina
+function TogglePerOperatoreProdotto({ vista, onOperatore, onProdotto }) {
+  return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+      <SchedaTabAmministrazione attivo={vista === "operatore"} onClick={onOperatore} Icona={IconaPersonaSemplice} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per operatore</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={vista === "prodotto"} onClick={onProdotto} Icona={IconaScatolaErp} sfondo="#EFEDE7" bordo="#DEDACE" coloreIcona={MUTED}>Per prodotto</SchedaTabAmministrazione>
+    </div>
+  );
+}
 // "Statistiche Vendite Shop Online"/"Statistiche Vendite al Banco": i due
 // tasti dentro "Statistiche Vendite Prodotti" — a differenza di
 // PaginaVenditeShop (l'elenco ordine-per-ordine completo, raggiunto da
@@ -22944,6 +22956,23 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
     ? righeProdotti.filter((p) => p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase()))
     : righeProdotti.slice(0, 30);
 
+  // "per operatore": nel canale shop online un operatore compare solo
+  // quando l'ordine usa il referral code di una master (stesso campo
+  // operatore_tipo/id della vendita al banco) — un ordine anonimo, senza
+  // codice, resta fuori da questa tabella così come dallo shop online in
+  // generale, non è un errore
+  const perOperatore = {};
+  righeCanale.forEach((v) => {
+    if (!v.operatore_id) return;
+    const chiave = `${v.operatore_tipo}:${v.operatore_id}`;
+    if (!perOperatore[chiave]) perOperatore[chiave] = { tipo: v.operatore_tipo, id: v.operatore_id, nome: v.operatore_nome, incasso: 0, pezzi: 0 };
+    perOperatore[chiave].incasso += (v.totale || 0);
+    perOperatore[chiave].pezzi += (Array.isArray(v.prodotti) ? v.prodotti.reduce((s, p) => s + (p.quantita || 0), 0) : 0);
+  });
+  const righeOperatori = Object.values(perOperatore).map((o) => ({ ...o, incasso: round2(o.incasso) })).sort((a, b) => b.incasso - a.incasso);
+
+  const [vista, setVista] = useState("prodotto");
+
   return (
     <div style={{ background: "#F7F5EF", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -22962,40 +22991,74 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
           ))}
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Per prodotto</div>
-          <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
-        </div>
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
-              <thead>
-                <tr>
-                  {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {righeProdottiVisibili.map((p) => (
-                  <tr key={p.nome}>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
+        <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} />
+
+        {vista === "operatore" && (
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+                <thead>
+                  <tr>
+                    {["Nome", "Ruolo", "Incasso netto", "Pezzi netti"].map((th) => (
+                      <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                    ))}
                   </tr>
-                ))}
-                {righeProdottiVisibili.length === 0 && (
-                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessuna vendita nel periodo selezionato."}</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {!ricercaProdotto.trim() && righeProdotti.length > 30 && (
-            <div style={{ padding: "10px 14px", ...fontBody, fontSize: 12, color: MUTED, borderTop: `1px solid ${CREAM_BORDER}` }}>
-              Mostrati i primi 30 di {righeProdotti.length} prodotti diversi — cercali per nome se non sono in questa lista.
+                </thead>
+                <tbody>
+                  {righeOperatori.map((o) => (
+                    <tr key={`${o.tipo}:${o.id}`}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{o.nome ? toTitleCase(o.nome) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{o.tipo === "master" ? "Master" : o.tipo === "venditore" ? "Venditore" : "Utente"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: o.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(o.incasso)}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{o.pezzi}</td>
+                    </tr>
+                  ))}
+                  {righeOperatori.length === 0 && (
+                    <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{origine === "pos" ? "Nessuna vendita con operatore assegnato nel periodo selezionato." : "Nessuna vendita con operatore assegnato nel periodo selezionato (solo gli ordini col referral code di una master ne hanno uno)."}</td></tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {vista === "prodotto" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
+            </div>
+            <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+                  <thead>
+                    <tr>
+                      {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
+                        <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {righeProdottiVisibili.map((p) => (
+                      <tr key={p.nome}>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
+                      </tr>
+                    ))}
+                    {righeProdottiVisibili.length === 0 && (
+                      <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessuna vendita nel periodo selezionato."}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {!ricercaProdotto.trim() && righeProdotti.length > 30 && (
+                <div style={{ padding: "10px 14px", ...fontBody, fontSize: 12, color: MUTED, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  Mostrati i primi 30 di {righeProdotti.length} prodotti diversi — cercali per nome se non sono in questa lista.
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -25112,6 +25175,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
   const righeProdottiVisibili = ricercaProdotto.trim()
     ? righeProdotti.filter((p) => p.nome.toLowerCase().includes(ricercaProdotto.trim().toLowerCase()))
     : righeProdotti.slice(0, 30);
+  const [vista, setVista] = useState("prodotto");
 
   const oggiStr = dataOggiStr();
   // solo target vendita prodotti: quelli sui corsi venduti sono un silo
@@ -25172,63 +25236,69 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           </div>
         )}
 
-        <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Per operatore</div>
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginBottom: 28 }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
-              <thead>
-                <tr>
-                  {["Nome", "Ruolo", "Incasso netto", "Pezzi netti"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {righeOperatori.map((o) => (
-                  <tr key={`${o.tipo}:${o.id}`}>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{o.nome ? toTitleCase(o.nome) : "—"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{o.tipo === "master" ? "Master" : o.tipo === "venditore" ? "Venditore" : "Utente"}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: o.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(o.incasso)}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{o.pezzi}</td>
-                  </tr>
-                ))}
-                {righeOperatori.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita con operatore assegnato nel periodo selezionato (le vendite shop online non hanno un operatore).</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} />
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-          <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Per prodotto</div>
-          <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
-        </div>
-        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
-              <thead>
-                <tr>
-                  {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {righeProdottiVisibili.map((p) => (
-                  <tr key={p.nome}>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
-                    <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
+        {vista === "operatore" && (
+          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+                <thead>
+                  <tr>
+                    {["Nome", "Ruolo", "Incasso netto", "Pezzi netti"].map((th) => (
+                      <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                    ))}
                   </tr>
-                ))}
-                {righeProdottiVisibili.length === 0 && (
-                  <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessuna vendita nel periodo selezionato."}</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {righeOperatori.map((o) => (
+                    <tr key={`${o.tipo}:${o.id}`}>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{o.nome ? toTitleCase(o.nome) : "—"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{o.tipo === "master" ? "Master" : o.tipo === "venditore" ? "Venditore" : "Utente"}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: o.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(o.incasso)}</td>
+                      <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{o.pezzi}</td>
+                    </tr>
+                  ))}
+                  {righeOperatori.length === 0 && (
+                    <tr><td colSpan={4} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessuna vendita con operatore assegnato nel periodo selezionato (le vendite shop online non hanno un operatore, salvo quelle col referral code di una master).</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        )}
+
+        {vista === "prodotto" && (
+          <>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <input style={{ ...inputStyle, width: "auto", minWidth: 220 }} value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" />
+            </div>
+            <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
+                  <thead>
+                    <tr>
+                      {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
+                        <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {righeProdottiVisibili.map((p) => (
+                      <tr key={p.nome}>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: p.ricavo < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(p.ricavo)}</td>
+                      </tr>
+                    ))}
+                    {righeProdottiVisibili.length === 0 && (
+                      <tr><td colSpan={3} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{ricercaProdotto.trim() ? "Nessun prodotto trovato." : "Nessuna vendita nel periodo selezionato."}</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
