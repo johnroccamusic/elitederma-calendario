@@ -2271,10 +2271,10 @@ function Gate({ onOk }) {
   const urlDebug = import.meta.env.VITE_SUPABASE_URL || "(VITE_SUPABASE_URL non impostata)";
   return (
     <div style={{ ...fontBody, boxSizing: "border-box", maxWidth: 340, margin: "0 auto", minHeight: "100vh", padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", textAlign: "center" }}>
-      <div />
+      <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 44, width: "auto" }} />
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-        <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 90, width: "auto", marginBottom: 30 }} />
-        <div style={{ ...fontDisplay, fontSize: 22, color: NAVY, letterSpacing: 0.5, marginBottom: 30 }}>Gestionale Academy</div>
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 0.5, marginBottom: 3 }}>GENYON</div>
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 30 }}>developed by GianLuca Rocca</div>
         <input
           type="password"
           placeholder="Codice d'accesso"
@@ -2287,10 +2287,7 @@ function Gate({ onOk }) {
         {err && <div style={{ color: "#C0392B", fontSize: 13, marginTop: 10 }}>Codice non corretto</div>}
       </div>
       <div>
-        <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.6 }}>
-          programmato da<br />GianLuca Rocca
-        </div>
-        <div style={{ fontSize: 10, color: MUTED, marginTop: 14, wordBreak: "break-all" }}>
+        <div style={{ fontSize: 10, color: MUTED, wordBreak: "break-all" }}>
           Database collegato: {urlDebug}
         </div>
       </div>
@@ -36403,7 +36400,8 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestionale Academy</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 34, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 1 : 2 }}>GENYON</div>
+          <div style={{ ...fontBody, fontSize: isMobile ? 10.5 : 12, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>developed by GianLuca Rocca</div>
           <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Scegli l'area da gestire.</div>
 
           <GrigliaTasti
