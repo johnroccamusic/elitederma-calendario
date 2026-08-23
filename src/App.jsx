@@ -2273,6 +2273,7 @@ function Gate({ onOk }) {
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: -60 }}>
         <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 64, width: "auto", marginBottom: 44 }} />
         <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY, letterSpacing: 0.5, marginBottom: 3 }}>GENYON</div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, letterSpacing: 0.4, marginBottom: 24 }}>General Yield Organization Network</div>
         <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 60 }}>developed by GianLuca Rocca</div>
         <input
           type="password"
