@@ -3258,7 +3258,7 @@ function Statistiche({ onBack, onApriImpostazioni, onApriVenditori, onApriStatis
           <TileHome title="Statistiche venditori" descrizione="Iscrizioni fatte da ciascun venditore, per corso." Icona={IconaTileVenditori} onClick={onApriVenditori} />
           <TileHome title="Statistiche Master" descrizione="Vendite prodotti conseguite da ogni master, per mese, trimestre e oltre." Icona={IconaTileMaster} onClick={onApriStatisticheMaster} />
           <TileHome title="Performance Aziendale" descrizione="Analizza performance, trend e KPI dell'Academy." Icona={IconaTileDashboardAnalisi} onClick={onApriPerformanceAziendale} />
-          <TileHome title="Statistiche Vendite Prodotti" descrizione="Vendite al POS per master/venditore, separate dalle vendite corsi." Icona={IconaGruppoVenditeProdotti} onClick={onApriStatisticheVenditeProdotti} />
+          <TileHome title="Statistiche Totali Vendite Prodotti" descrizione="Shop online e vendite al banco, per operatore e per prodotto — separate dalle vendite corsi." Icona={IconaGruppoVenditeProdotti} onClick={onApriStatisticheVenditeProdotti} />
         </div>
       </div>
     </div>
@@ -22897,6 +22897,20 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
   );
 }
 
+// le 3 statistiche vendite prodotti (Totale/Shop Online/Al Banco) sono 3
+// pagine sorelle, sempre navigabili fra loro: stessa barra di schede in
+// cima a tutte e tre, con quella della pagina in cui ci si trova più
+// scura — stesso componente/stile già usato per le schede di
+// Amministrazione (Prima nota cassa/Quadro impegni/...)
+function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onApriBanco }) {
+  return (
+    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+      <SchedaTabAmministrazione attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={attivo === "shop"} onClick={onApriShop} Icona={IconaTileVenditeShop} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Statistiche Vendite Shop Online</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={attivo === "banco"} onClick={onApriBanco} Icona={IconaTilePos} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Statistiche Vendite al Banco</SchedaTabAmministrazione>
+    </div>
+  );
+}
 // "Statistiche Vendite Shop Online"/"Statistiche Vendite al Banco": i due
 // tasti dentro "Statistiche Vendite Prodotti" — a differenza di
 // PaginaVenditeShop (l'elenco ordine-per-ordine completo, raggiunto da
@@ -22905,7 +22919,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
 // pagina madre (Prodotto/Pezzi netti/Ricavo netto): niente elenco ordini,
 // niente incasso/IVA, niente "Recupera ordini mancanti" — quel dettaglio
 // vive già, per intero, nella sezione Magazzino/Shop
-function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack }) {
+function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTotale, onApriShop, onApriBanco }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -22939,6 +22953,8 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack }) {
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{origine === "pos" ? "Statistiche Vendite al Banco" : "Statistiche Vendite Shop Online"}</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>{origine === "pos" ? "Solo i prodotti venduti al banco con il POS interno." : "Solo i prodotti venduti sullo shop online WooCommerce."}</div>
+
+        <TabsStatisticheVenditeProdotti attivo={origine === "pos" ? "banco" : "shop"} onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} />
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
           {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
@@ -25044,13 +25060,12 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
   );
 }
 
-// ---------- Statistiche Vendite Prodotti (ERP) ----------
-// aggregato ammnistrativo delle vendite al POS, per periodo/operatore/
-// prodotto, con l'avanzamento dei target in corso — deliberatamente
-// filtrato a origine="pos": mai un ordine WooCommerce qui dentro, mai
-// una cifra di "Vendite Corsi" (tutt'altra pagina) — §7 della specifica
-// vuole i due mondi inequivocabili anche nei nomi delle sezioni
-function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriVenditeShop, onApriVenditeAlBanco }) {
+// ---------- Statistiche Totali Vendite Prodotti (ERP) ----------
+// aggregato di TUTTE le vendite prodotti (shop online + banco POS), per
+// periodo/operatore/prodotto, con l'avanzamento dei target in corso — mai
+// una cifra di "Vendite Corsi" qui dentro (tutt'altra pagina, con le sue
+// statistiche separate)
+function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -25117,13 +25132,10 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           <button onClick={onBack} title="Indietro" style={{ background: "transparent", border: "none", cursor: "pointer", color: NAVY, display: "flex", padding: 4, marginLeft: -4 }}><IconaFrecciaSinistra size={20} /></button>
           <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2 }}>Statistiche</div>
         </div>
-        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Vendite Prodotti</div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Statistiche Totali Vendite Prodotti</div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 20 }}>
-          <Button variant="ghost" onClick={onApriVenditeShop}>Statistiche Vendite Shop Online</Button>
-          <Button variant="ghost" onClick={onApriVenditeAlBanco}>Statistiche Vendite al Banco</Button>
-        </div>
+        <TabsStatisticheVenditeProdotti attivo="totale" onApriTotale={onApriTotale} onApriShop={onApriShop} onApriBanco={onApriBanco} />
 
         <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, marginBottom: 20, width: "fit-content" }}>
           {[{ v: "30giorni", l: "30 giorni" }, { v: "trimestre", l: "Trimestre" }, { v: "anno", l: "Anno" }, { v: "tutto", l: "Tutto" }].map((p) => (
@@ -35440,6 +35452,7 @@ export default function App() {
   // Home a sé
   function apriStatVenditeShop() { setView("statvenditeshop"); }
   function apriStatVenditeAlBanco() { setView("statvenditealbanco"); }
+  function apriStatVenditeTotale() { setView("statistichevenditeprodotti"); }
   function apriStatisticheMaster() { apriViewProtetta("statisticamaster"); }
   function apriGestioneMaster() { setView("gestionemaster"); }
   function apriGestioneVenditori() { setView("gestionevenditori"); }
@@ -35958,17 +35971,22 @@ export default function App() {
         <PaginaStatisticheVenditeProdotti
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
           targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
-          onApriVenditeShop={apriStatVenditeShop}
-          onApriVenditeAlBanco={apriStatVenditeAlBanco}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco}
         />
       )}
 
       {view === "statvenditeshop" && (
-        <PaginaStatisticheVenditeCanale venditeShop={venditeShop} origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")} />
+        <PaginaStatisticheVenditeCanale
+          venditeShop={venditeShop} origine="woocommerce" onBack={() => setView("statistichevenditeprodotti")}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco}
+        />
       )}
 
       {view === "statvenditealbanco" && (
-        <PaginaStatisticheVenditeCanale venditeShop={venditeShop} origine="pos" onBack={() => setView("statistichevenditeprodotti")} />
+        <PaginaStatisticheVenditeCanale
+          venditeShop={venditeShop} origine="pos" onBack={() => setView("statistichevenditeprodotti")}
+          onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco}
+        />
       )}
 
       {view === "inserimentocostiricavi" && (
