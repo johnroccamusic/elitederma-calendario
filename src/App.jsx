@@ -15332,7 +15332,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     setRichiedeModelle(i.richiede_modelle === true ? "si" : i.richiede_modelle === false ? "no" : "");
     setNumeroModelle(i.numero_modelle != null ? String(i.numero_modelle) : "");
     setPrezzoSpecialeModelle(i.prezzo_speciale_modelle != null ? String(i.prezzo_speciale_modelle) : "");
-    setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "" })) : []);
+    // "giorno" e "gruppo_id" vanno riportati anche qui: senza, ogni
+    // apertura della scheda perdeva il giorno già associato al trattamento
+    // (tornava vuoto finché non si cambiava e rimetteva il tipo) e
+    // sganciava le modelle raggruppate su più trattamenti
+    setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
     setTipoOfferta(i.tipo_offerta || "");
     setTagliaDivisa(i.taglia_divisa || "");
@@ -15567,7 +15571,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         richiede_modelle: richiedeModelle === "" ? null : richiedeModelle === "si",
         numero_modelle: richiedeModelle === "si" && numeroModelle !== "" ? parseInt(numeroModelle, 10) : null,
         prezzo_speciale_modelle: richiedeModelle === "si" && prezzoSpecialeModelle !== "" ? parseNum(prezzoSpecialeModelle) : null,
-        tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "" })) : [],
+        tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : [],
         pacchetto_kit: pacchettoKit.trim() || null,
         tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
