@@ -21314,7 +21314,26 @@ async function caricaRicevutaSpesa(file) {
 // (un colore per famiglia di dato) + etichetta, piena in navy quando
 // attiva — stesso principio delle TileHome ma più compatta, per stare
 // in una riga di 6
-function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children }) {
+function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children, compatto = false }) {
+  if (compatto) {
+    // variante quadrata per quando serve stare in N per riga anche su
+    // mobile (vedi TabsStatisticheVenditeProdotti): icona sopra, testo
+    // piccolo sotto che va a capo invece di allungare il tasto in
+    // orizzontale — stesso significato/colori, solo impacchettato diverso
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+          padding: "8px 4px", borderRadius: 12, aspectRatio: "1 / 1", width: "100%", boxSizing: "border-box",
+          border: `1px solid ${attivo ? NAVY : bordo}`, background: attivo ? NAVY : sfondo, cursor: "pointer", textAlign: "center",
+        }}
+      >
+        <Icona size={16} color={attivo ? "#fff" : coloreIcona} />
+        <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, lineHeight: 1.15, color: attivo ? "#fff" : NAVY }}>{children}</span>
+      </button>
+    );
+  }
   return (
     <button
       onClick={onClick}
@@ -23368,12 +23387,13 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
 // scura — stesso componente/stile già usato per le schede di
 // Amministrazione (Prima nota cassa/Quadro impegni/...)
 function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-      <SchedaTabAmministrazione attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={attivo === "shop"} onClick={onApriShop} Icona={IconaTileVenditeShop} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Statistiche Vendite Shop Online</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={attivo === "banco"} onClick={onApriBanco} Icona={IconaTilePos} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Statistiche Vendite al Banco</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={attivo === "analisi"} onClick={onApriAnalisi} Icona={IconaTileDashboardAnalisi} sfondo="#E7EEF5" bordo="#C7D9E8" coloreIcona="#3B6FA0">Analisi Vendita Prodotti</SchedaTabAmministrazione>
+    <div style={isMobile ? { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 20 } : { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "shop"} onClick={onApriShop} Icona={IconaTileVenditeShop} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Statistiche Vendite Shop Online</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "banco"} onClick={onApriBanco} Icona={IconaTilePos} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Statistiche Vendite al Banco</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "analisi"} onClick={onApriAnalisi} Icona={IconaTileDashboardAnalisi} sfondo="#E7EEF5" bordo="#C7D9E8" coloreIcona="#3B6FA0">Analisi Vendita Prodotti</SchedaTabAmministrazione>
     </div>
   );
 }
@@ -23462,18 +23482,18 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 28 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
           </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
           </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
           </div>
         </div>
 
@@ -25687,18 +25707,18 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 28 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
           </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
           </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
+            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
           </div>
         </div>
 
