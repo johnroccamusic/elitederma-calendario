@@ -11960,6 +11960,42 @@ function presenteIlGiorno(giorniPresenza, numeroGiorno) {
   if (numeroGiorno == null) return true;
   return giorniPresenza.includes(numeroGiorno);
 }
+// automatismo "corso parziale" dal testo del Pacchetto/Kit — SOLO sul
+// corso "PMU BASE" (6 giorni fissi con questo esatto significato: 1-3
+// sopracciglia, 4-5 labbra, 6 eyeliner — un corso diverso, anche simile
+// come "PMU BASE INDIV", ha una struttura diversa e non va toccato).
+// "completo" (corso intero) => nessun corso parziale, presente tutti i
+// giorni. Un kit che nomina un sottoinsieme dei 3 trattamenti => corso
+// parziale sui giorni di quei trattamenti. "no X"/"senza X" (es. "NO
+// EYELINER") => il trattamento nominato si esclude, gli altri due restano
+// inclusi (kit "tutto tranne X": es. "NO EYELINER" = sopracciglia+labbra,
+// giorni 1-5). Kit non riconosciuto (nessuna parola chiave, senza
+// "completo") o che le nomina tutte e 3 senza esclusioni => non tocca
+// nulla, resta manuale (es. "SENZA KIT": nessun segnale, decide l'operatore)
+function corsoParzialeDaKitPmuBase(testoKit) {
+  const t = (testoKit || "").toLowerCase();
+  if (t.includes("completo")) return { corsoParziale: false, giorniPresenza: [] };
+  const escludeSopracciglia = /\b(no|senza)\s+sopracciglia/.test(t);
+  const escludeLabbra = /\b(no|senza)\s+labbra/.test(t);
+  const escludeEyeliner = /\b(no|senza)\s+eyeliner/.test(t);
+  let haSopracciglia, haLabbra, haEyeliner;
+  if (escludeSopracciglia || escludeLabbra || escludeEyeliner) {
+    haSopracciglia = !escludeSopracciglia;
+    haLabbra = !escludeLabbra;
+    haEyeliner = !escludeEyeliner;
+  } else {
+    haSopracciglia = t.includes("sopracciglia");
+    haLabbra = t.includes("labbra");
+    haEyeliner = t.includes("eyeliner");
+  }
+  const nTrattamenti = [haSopracciglia, haLabbra, haEyeliner].filter(Boolean).length;
+  if (nTrattamenti === 0 || nTrattamenti === 3) return null;
+  const giorni = new Set();
+  if (haSopracciglia) [1, 2, 3].forEach((g) => giorni.add(g));
+  if (haLabbra) [4, 5].forEach((g) => giorni.add(g));
+  if (haEyeliner) giorni.add(6);
+  return { corsoParziale: true, giorniPresenza: [...giorni].sort((a, b) => a - b) };
+}
 
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
 // nella pagina pubblica di ricerca modelle), e nome/telefono della modella
@@ -16827,7 +16863,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <Field label="Pacchetto/Kit">
                 <CampoPacchettoKit
                   key={modificandoId || "nuovo"}
-                  value={pacchettoKit} onChange={setPacchettoKit}
+                  value={pacchettoKit}
+                  onChange={(v) => {
+                    setPacchettoKit(v);
+                    if ((corso?.nome || "").trim().toUpperCase() === "PMU BASE") {
+                      const esito = corsoParzialeDaKitPmuBase(v);
+                      if (esito) { setCorsoParziale(esito.corsoParziale); setGiorniPresenza(esito.giorniPresenza); }
+                    }
+                  }}
                   opzioni={kitDefinizioni.filter((k) => k.corso_id === corso?.id)}
                 />
               </Field>
