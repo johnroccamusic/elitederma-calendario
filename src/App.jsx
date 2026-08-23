@@ -11855,17 +11855,114 @@ function CheckboxOttimistica({ valore, onCambia, children }) {
   );
 }
 
+// colore stabile per un tipo di modella (nessun colore salvato da nessuna
+// parte: lo stesso testo dà sempre lo stesso colore, in tutta la pagina —
+// stessa tavolozza pastello già usata per i badge di ruolo in Anagrafiche)
+const PALETTE_TIPO_MODELLA = [
+  { colore: "#2E5AAC", sfondo: "#E7EEFB" },
+  { colore: "#7A4FB5", sfondo: "#F1E9FA" },
+  { colore: "#2E7D5C", sfondo: "#E3F3EA" },
+  { colore: "#B5622C", sfondo: "#FBEADD" },
+  { colore: "#8A6D1D", sfondo: "#FBF1DD" },
+  { colore: "#C0392B", sfondo: "#FBE4E1" },
+  { colore: "#3B6FA0", sfondo: "#E7EEF5" },
+  { colore: "#A03B6F", sfondo: "#FAE7F1" },
+];
+function coloreTipoModella(tipo) {
+  const s = String(tipo || "");
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  return PALETTE_TIPO_MODELLA[hash % PALETTE_TIPO_MODELLA.length];
+}
+function PallinoTipoModella({ tipo }) {
+  const { colore, sfondo } = coloreTipoModella(tipo);
+  return (
+    <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: colore, background: sfondo, borderRadius: 20, padding: "3px 10px", whiteSpace: "nowrap" }}>
+      {tipo || "(trattamento non scelto)"}
+    </span>
+  );
+}
+
+// "stessa modella per più trattamenti": i posti di iscritti.tipi_modelle
+// dello STESSO allievo coperti dalla stessa persona condividono un
+// gruppo_id — un gruppo simmetrico, nessuna riga è "l'originale". Queste
+// tre funzioni sono pure (nessuna scrittura su Supabase): prendono
+// l'array tipi_modelle di UN allievo e restituiscono il nuovo array, così
+// SchedaData e VistaRicercaModelle possono riusarle identiche prima del
+// proprio update({ tipi_modelle: ... })
+function nuovoGruppoIdModella() {
+  return `g-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+// spunta ON: idxOrigine è la riga da cui si trascina il nome/telefono,
+// idxDestinazione il posto che deve entrare nel gruppo. null = annullato
+// dall'utente (posto di destinazione già occupato, non sovrascritto)
+function gruppoModellaSpunta(elenco, idxOrigine, idxDestinazione) {
+  const origine = elenco[idxOrigine];
+  const destinazione = elenco[idxDestinazione];
+  if (!origine || !destinazione) return null;
+  if ((destinazione.nome_modella || "").trim()) {
+    if (!window.confirm("Impossibile copiare, modella già assegnata. Vuoi sovrascrivere?")) return null;
+  }
+  const idGruppo = origine.gruppo_id || destinazione.gruppo_id || nuovoGruppoIdModella();
+  return elenco.map((m, i) => {
+    if (i === idxOrigine) return { ...m, gruppo_id: idGruppo };
+    if (i === idxDestinazione) return { ...m, gruppo_id: idGruppo, nome_modella: origine.nome_modella || "", telefono_modella: origine.telefono_modella || "" };
+    return m;
+  });
+}
+// spunta OFF: idx esce dal gruppo e si svuota; se nel gruppo resta un
+// solo posto anche quello si scioglie (ma tiene i suoi dati, non si azzera)
+function gruppoModellaTogli(elenco, idx) {
+  const riga = elenco[idx];
+  if (!riga?.gruppo_id) return elenco;
+  const idGruppo = riga.gruppo_id;
+  let nuovo = elenco.map((m, i) => (i === idx ? { ...m, gruppo_id: null, nome_modella: "", telefono_modella: "" } : m));
+  const rimasti = nuovo.reduce((acc, m, i) => (m.gruppo_id === idGruppo ? [...acc, i] : acc), []);
+  if (rimasti.length === 1) nuovo = nuovo.map((m, i) => (i === rimasti[0] ? { ...m, gruppo_id: null } : m));
+  return nuovo;
+}
+// modifica di nome/telefono su una riga già in un gruppo di 2+ persone:
+// chiede se propagare a tutto il gruppo o solo a questa riga (senza
+// questa scelta la propagazione automatica renderebbe impossibile
+// correggere un solo trattamento) — fuori da un gruppo, o per gli altri
+// campi (tipo/mattina/pomeriggio), si comporta come un aggiornamento normale
+function gruppoModellaAggiornaCampo(elenco, idx, campo, valore) {
+  const riga = elenco[idx];
+  if (!riga) return elenco;
+  const idGruppo = riga.gruppo_id;
+  const membri = idGruppo ? elenco.reduce((acc, m, i) => (m.gruppo_id === idGruppo ? [...acc, i] : acc), []) : [];
+  if (!idGruppo || membri.length < 2 || (campo !== "nome_modella" && campo !== "telefono_modella")) {
+    return elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+  }
+  const altriTrattamenti = membri.filter((i) => i !== idx).map((i) => elenco[i].tipo || "(trattamento non scelto)").join(", ");
+  const tutti = window.confirm(`Questa modella copre anche ${altriTrattamenti}. Vuoi cambiare solo ${riga.tipo || "questo trattamento"} o tutti? (OK = tutti, Annulla = solo questo trattamento)`);
+  if (tutti) return elenco.map((m, i) => (m.gruppo_id === idGruppo ? { ...m, [campo]: valore } : m));
+  let nuovo = elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore, gruppo_id: null } : m));
+  const rimasti = nuovo.reduce((acc, m, i) => (m.gruppo_id === idGruppo ? [...acc, i] : acc), []);
+  if (rimasti.length === 1) nuovo = nuovo.map((m, i) => (i === rimasti[0] ? { ...m, gruppo_id: null } : m));
+  return nuovo;
+}
+
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
 // nella pagina pubblica di ricerca modelle), e nome/telefono della modella
 // una volta trovata. Nome/telefono usano stato locale e si salvano solo al
 // blur, non ad ogni tasto: altrimenti ogni carattere digitato scatenerebbe
 // un salvataggio e un ricaricamento dell'intera pagina, facendo perdere il
 // focus mentre si scrive
-function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo }) {
+function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioniTipo, tuttiGliSlot, mioIndice, onCambiaGruppo }) {
   const [nome, setNome] = useState(modella.nome_modella || "");
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
   useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
   useEffect(() => { setTelefono(modella.telefono_modella || ""); }, [modella.telefono_modella]);
+
+  // altri posti modella dello STESSO allievo (mai di un altro): compaiono
+  // solo se ce n'è più di uno in totale, e solo se il chiamante sa dirci
+  // dov'è questa riga nell'array vero (mioIndice) — una riga non ancora
+  // salvata da nessuna parte (nessun indice reale) non può far parte di
+  // un gruppo finché non esiste
+  const altriSlot = Array.isArray(tuttiGliSlot) && tuttiGliSlot.length > 1 && mioIndice != null && mioIndice >= 0
+    ? tuttiGliSlot.map((s, i) => ({ s, i })).filter(({ i }) => i !== mioIndice)
+    : [];
 
   return (
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
@@ -11880,6 +11977,21 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
         </select>
       ) : (
         <div style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, marginBottom: 8 }}>{modella.tipo || "(trattamento non scelto)"}</div>
+      )}
+      {altriSlot.length > 0 && onCambiaGruppo && (
+        <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
+          <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>Stessa modella anche per:</span>
+          {altriSlot.map(({ s, i }) => (
+            <label key={i} style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer", ...fontBody, fontSize: 12, color: NAVY }}>
+              <input
+                type="checkbox"
+                checked={!!(modella.gruppo_id && s.gruppo_id === modella.gruppo_id)}
+                onChange={(e) => onCambiaGruppo(i, e.target.checked)}
+              />
+              {s.tipo || "(trattamento non scelto)"}
+            </label>
+          ))}
+        </div>
       )}
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         {mostraOrario && (
@@ -12615,9 +12727,34 @@ function RigaEliminabile({ label, dettaglio, onModifica, onDelete, pulsanteExtra
 // indicatore "iscritti/posti" nella colonna Capienza: due numeri
 // affiancati da una lineetta verticale, barra di riempimento sotto, e
 // quanti liberi restano — o "Completo" in oro quando non ce ne sono più
-function IndicatorePosti({ occupati, max, liberi }) {
+function IndicatorePosti({ occupati, max, liberi, compatto = false }) {
   const completo = liberi === 0;
   const pct = max > 0 ? Math.min(100, Math.round((occupati / max) * 100)) : 0;
+  if (compatto) {
+    // versione ridotta per la riga corso su mobile (tutto su una riga
+    // sola): stessi tre elementi (numeri/barra/liberi), solo più piccoli
+    return (
+      <div style={{ width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", gap: 8, marginBottom: 3 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{occupati}</div>
+            <div style={{ ...fontBody, fontSize: 8, color: MUTED }}>iscritti</div>
+          </div>
+          <div style={{ width: 1, background: CREAM_BORDER }} />
+          <div style={{ textAlign: "center" }}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, lineHeight: 1.1 }}>{max}</div>
+            <div style={{ ...fontBody, fontSize: 8, color: MUTED }}>posti</div>
+          </div>
+        </div>
+        <div style={{ height: 3, borderRadius: 2, background: "#EFE9DC", overflow: "hidden", marginBottom: 3 }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: NAVY, borderRadius: 2 }} />
+        </div>
+        <div style={{ textAlign: "center", ...fontBody, fontSize: 9, fontWeight: completo ? 700 : 400, color: completo ? GOLD : MUTED, whiteSpace: "nowrap" }}>
+          {completo ? "Completo" : `${liberi} liber${liberi === 1 ? "o" : "i"}`}
+        </div>
+      </div>
+    );
+  }
   return (
     <div style={{ width: "100%" }}>
       <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", gap: 16, marginBottom: 7 }}>
@@ -12847,28 +12984,26 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       </>
     );
     if (isMobile) {
-      // niente colonne a larghezza fissa: la riga si impila in verticale
-      // (titolo+azioni, poi data+capienza affiancate) e si adatta da sola
-      // a qualunque larghezza di schermo, senza scroll orizzontale
+      // tutto su una sola riga (titolo, data, capienza, azioni allineati
+      // in orizzontale): niente più impilamento verticale — il nome del
+      // corso si tronca con l'ellissi se necessario, data/capienza/azioni
+      // hanno una larghezza fissa così non si schiacciano
       return (
         <div key={cd.id}>
-          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "14px 4px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                <span style={{ width: 4, height: 34, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
-                  {rigaCittaMaster}
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>{azioni}</div>
+          <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "10px 4px", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 3, height: 22, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
+            <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "1 1 auto", minWidth: 0 }}>
+              {toTitleCase(corso?.nome || "?")}
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 10 }}>
-              <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>
-                {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
-              </div>
-              {iscritti && <IndicatorePosti occupati={occupati} max={max} liberi={liberi} />}
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
+              {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
             </div>
+            {iscritti && (
+              <div style={{ flexShrink: 0, width: 72 }}>
+                <IndicatorePosti occupati={occupati} max={max} liberi={liberi} compatto />
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>{azioni}</div>
           </div>
           {idInModifica === cd.id && renderModifica && <div style={{ padding: "0 0 12px" }}>{renderModifica(cd)}</div>}
         </div>
@@ -14398,6 +14533,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   const [vista, setVista] = useState(sottoVistaIniziale?.vista ?? "lista"); // 'lista' | 'form'
   const [modificandoId, setModificandoId] = useState(sottoVistaIniziale?.modificandoId ?? null); // id dell'iscritto in modifica, null se è una nuova iscrizione
   const isMobile = useIsMobile();
+  // "Assegna modelle": da Gestione Corsi si parte vedendo tutta la classe,
+  // da Gestione Modelle si parte vedendo solo chi ha ancora bisogno di una
+  // modella da trovare — poi si può sempre alternare con il tasto apposito
+  const [soloDaTrovare, setSoloDaTrovare] = useState(!!origineGestioneModelle);
 
   const [nome, setNome] = useState("");
   const [cognome, setCognome] = useState("");
@@ -15621,11 +15760,30 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   }
 
   // flagga/sflagga mattina o pomeriggio per una singola modella di un
-  // iscritto: si salva subito, niente tasto "Salva" separato
+  // iscritto: si salva subito, niente tasto "Salva" separato — nome/
+  // telefono passano dal gruppo (vedi gruppoModellaAggiornaCampo) perché
+  // possono essere condivisi con altri posti dello stesso allievo
   async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
     const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
     if (!iscritto) return;
-    const nuovoElenco = (iscritto.tipi_modelle || []).map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
+    const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
+      ? gruppoModellaAggiornaCampo(elenco, idx, campo, valore)
+      : elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    ricarica(["iscritti"]);
+  }
+  // spunta/togli "stessa modella anche per": condivide (o scioglie) il
+  // gruppo fra due posti dello stesso allievo — usata sia dal ramo senza
+  // giorni template sia da quello con giorni template, il gruppo vive
+  // sull'intero iscritti.tipi_modelle dell'allievo, non per singolo giorno
+  async function aggiornaModellaGruppo(iscrittoId, idx, altroIdx, spuntato) {
+    const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
+    if (!iscritto) return;
+    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
+    const nuovoElenco = spuntato ? gruppoModellaSpunta(elenco, idx, altroIdx) : gruppoModellaTogli(elenco, altroIdx);
+    if (!nuovoElenco) return; // annullato dall'utente (sovrascrittura rifiutata)
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
@@ -15655,9 +15813,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (!iscritto) return;
     const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
     const idx = elenco.findIndex((m) => (m.giorno ?? giornoDiRipiegoAllievi) === numeroGiorno);
-    const nuovoElenco = idx >= 0
-      ? elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m))
-      : [...elenco, { tipo: tipoDefault || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: numeroGiorno, [campo]: valore }];
+    let nuovoElenco;
+    if (idx >= 0 && (campo === "nome_modella" || campo === "telefono_modella")) {
+      nuovoElenco = gruppoModellaAggiornaCampo(elenco, idx, campo, valore);
+    } else if (idx >= 0) {
+      nuovoElenco = elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    } else {
+      nuovoElenco = [...elenco, { tipo: tipoDefault || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: numeroGiorno, gruppo_id: null, [campo]: valore }];
+    }
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
@@ -17050,12 +17213,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       )}
 
       {vista === "modelle" && (() => {
-        const iscrittiConModelle = listaIscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
         const linkCard = (
           <div style={cardStyle}>
             <div style={hStyle}>Link per ricerca modelle</div>
             <div style={subStyle}>Genera un link senza dati personali o di pagamento, con solo i trattamenti richiesti, dove chi cerca le modelle può scrivere nome e telefono appena ne trova una.</div>
-            <Button variant="ghost" onClick={generaLinkModelle} style={{ width: "100%" }}>Genera link per ricerca modelle</Button>
+            <Button variant="ghost" onClick={generaLinkModelle} style={{ width: "100%" }}>Genera Link per gestione modelle</Button>
             {linkModelle && (
               <div style={{ marginTop: 12 }}>
                 <input readOnly value={linkModelle} onFocus={(e) => e.target.select()} style={{ ...inputStyle, marginBottom: 8 }} />
@@ -17065,39 +17227,105 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           </div>
         );
 
+        // "Riepilogo": chi cerchiamo (solo NOSTRA, sempre — indipendente
+        // dal tasto "Vedi solo da trovare"/"Vedi tutta la classe" qui
+        // sotto, che riguarda solo l'elenco dettagliato) e il totale per
+        // tipo di modella sull'intero corso. I conteggi sono trattamenti
+        // da coprire, non persone: una sola modella su più trattamenti
+        // (vedi il gruppo in RigaModella) conta comunque una volta a testa
+        const nostreConModelle = listaIscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+        const conteggioPerTipo = {};
+        nostreConModelle.forEach((i) => {
+          i.tipi_modelle.forEach((m) => {
+            const chiave = m.tipo || "(trattamento non scelto)";
+            conteggioPerTipo[chiave] = (conteggioPerTipo[chiave] || 0) + 1;
+          });
+        });
+        const righeConteggio = Object.entries(conteggioPerTipo).sort((a, b) => b[1] - a[1]);
+        const riepilogo = (
+          <div style={cardStyle}>
+            <div style={{ ...hStyle, marginBottom: 12 }}>Riepilogo</div>
+            {nostreConModelle.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo di questa classe ha una modella da trovare.</div>
+            ) : (
+              <>
+                {nostreConModelle.map((i) => {
+                  const tipiDistinti = [...new Set(i.tipi_modelle.map((m) => m.tipo || "(trattamento non scelto)"))];
+                  return (
+                    <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0" }}>
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                      {tipiDistinti.map((t) => <PallinoTipoModella key={t} tipo={t} />)}
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>Riepilogo corso</div>
+                  {righeConteggio.map(([tipo, n]) => (
+                    <div key={tipo} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 22 }}>{n}</span>
+                      <PallinoTipoModella tipo={tipo} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+        const testataAssegnaModelle = (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
+            <div style={{ ...hStyle, margin: 0 }}>Assegna modelle</div>
+            <Button variant="ghost" onClick={() => setSoloDaTrovare((v) => !v)}>{soloDaTrovare ? "Vedi tutta la classe" : "Vedi solo da trovare"}</Button>
+          </div>
+        );
+
         // corso senza template giorni impostato: comportamento identico a
         // prima di questa funzionalità, nessuna rottura per i corsi già
-        // esistenti che non l'hanno ancora configurata
+        // esistenti che non l'hanno ancora configurata — solo ora mostra
+        // anche chi ha già la propria modella (prima erano esclusi del
+        // tutto), filtrabile con lo stesso tasto "Vedi solo da trovare"
         if (giorniRilevantiModelle.length === 0) {
+          const tuttiConModelle = listaIscritti.filter((i) => Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+          const iscrittiVisibili = (soloDaTrovare ? tuttiConModelle.filter((i) => i.richiede_modelle) : tuttiConModelle)
+            .slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0));
           return (
             <div>
-              <div style={{ ...hStyle, marginBottom: 4 }}>Assegna modelle</div>
+              {riepilogo}
+              {testataAssegnaModelle}
               <div style={subStyle}>
                 Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
               </div>
 
-              {iscrittiConModelle.length === 0 && (
+              {iscrittiVisibili.length === 0 && (
                 <div style={{ ...cardStyle, ...fontBody, color: MUTED, fontSize: 14 }}>Nessun iscritto di questa classe ha richiesto modelle.</div>
               )}
 
-              {iscrittiConModelle.map((i) => (
-                <div key={i.id} style={{ ...cardStyle, padding: 18 }}>
-                  <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 10 }}>
-                    {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+              {iscrittiVisibili.map((i) => {
+                const nostra = !!i.richiede_modelle;
+                return (
+                  <div key={i.id} style={{ ...cardStyle, padding: 18 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY }}>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                      <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
+                        {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
+                      </span>
+                    </div>
+                    <div>
+                      {i.tipi_modelle.map((m, idx) => (
+                        <RigaModella
+                          key={idx}
+                          modella={m}
+                          primaRiga={idx === 0}
+                          opzioniTipo={opzioniTipoModellaCorso}
+                          tuttiGliSlot={i.tipi_modelle}
+                          mioIndice={idx}
+                          onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
+                          onCambiaGruppo={(altroIdx, spuntato) => aggiornaModellaGruppo(i.id, idx, altroIdx, spuntato)}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div>
-                    {i.tipi_modelle.map((m, idx) => (
-                      <RigaModella
-                        key={idx}
-                        modella={m}
-                        primaRiga={idx === 0}
-                        opzioniTipo={opzioniTipoModellaCorso}
-                        onSalva={(campo, valore) => aggiornaModellaSlot(i.id, idx, campo, valore)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
 
               {linkCard}
               {msg && !msgErrore && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 10 }}>{msg}</div>}
@@ -17106,10 +17334,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         }
 
         const modelleMaster = Array.isArray(corsoData.modelle_master) ? corsoData.modelle_master : [];
+        const listaIscrittiVisibile = soloDaTrovare ? listaIscritti.filter((i) => i.richiede_modelle) : listaIscritti;
 
         return (
           <div>
-            <div style={{ ...hStyle, marginBottom: 4 }}>Assegna modelle</div>
+            {riepilogo}
+            {testataAssegnaModelle}
             <div style={subStyle}>
               Per ogni modella richiesta, spunta MAT/POM e, appena trovata, inserisci nome e telefono: si salva da solo, non serve premere Salva.
             </div>
@@ -17155,13 +17385,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6 }}>
                         Allievi{g.tipo_modella_allievi ? ` — ${g.tipo_modella_allievi}` : ""}
                       </div>
-                      {listaIscritti.length === 0 && (
+                      {listaIscrittiVisibile.length === 0 && (
                         <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto in questa classe.</div>
                       )}
                       {/* prima chi dobbiamo trovare noi (NOSTRA), poi chi
                           porta già la propria modella: così si vede a
                           colpo d'occhio chi manca ancora */}
-                      {listaIscritti.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i, idx, elencoOrdinato) => {
+                      {listaIscrittiVisibile.slice().sort((a, b) => (b.richiede_modelle ? 1 : 0) - (a.richiede_modelle ? 1 : 0)).map((i, idx, elencoOrdinato) => {
                         const nostra = !!i.richiede_modelle;
                         const ultimo = idx === elencoOrdinato.length - 1;
                         const elenco = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
@@ -17170,8 +17400,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                         // esiste ancora nulla salvato per questo allievo in
                         // questo giorno (creata al primo carattere digitato)
                         // — vale sia per NOSTRA che per SUA: sapere chi porta
-                        // quale modella è utile in entrambi i casi
+                        // quale modella è utile in entrambi i casi. Le
+                        // caselle di gruppo compaiono solo se il posto esiste
+                        // già davvero (mioIndice reale): una riga non ancora
+                        // creata non può far parte di un gruppo
                         const modellaVista = slotEsistente || { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" };
+                        const indiceReale = slotEsistente ? elenco.indexOf(slotEsistente) : null;
                         return (
                           <div
                             key={i.id}
@@ -17194,7 +17428,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                               modella={modellaVista}
                               primaRiga
                               opzioniTipo={opzioniTipoModellaCorso}
+                              tuttiGliSlot={elenco}
+                              mioIndice={indiceReale}
                               onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, g.tipo_modella_allievi)}
+                              onCambiaGruppo={indiceReale != null ? (altroIdx, spuntato) => aggiornaModellaGruppo(i.id, indiceReale, altroIdx, spuntato) : undefined}
                             />
                           </div>
                         );
@@ -17775,12 +18012,31 @@ function VistaRicercaModelle({ param }) {
   }
 
   const { cd, corso, loc, masterNome, iscritti } = dati;
-  const iscrittiConModelle = iscritti.filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
+  // sempre la classe completa (NOSTRA + HA LA SUA MODELLA): questo link è
+  // "Genera Link per gestione modelle", non solo ricerca, quindi non deve
+  // dipendere da quale filtro era attivo in app quando è stato generato
+  const iscrittiConModelle = iscritti.filter((i) => Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0);
 
   async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
     const iscritto = iscritti.find((x) => x.id === iscrittoId);
     if (!iscritto) return;
-    const nuovoElenco = (iscritto.tipi_modelle || []).map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
+    const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
+      ? gruppoModellaAggiornaCampo(elenco, idx, campo, valore)
+      : elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
+    if (error) return;
+    setDati((prev) => ({
+      ...prev,
+      iscritti: prev.iscritti.map((x) => (x.id === iscrittoId ? { ...x, tipi_modelle: nuovoElenco } : x)),
+    }));
+  }
+  async function aggiornaModellaGruppo(iscrittoId, idx, altroIdx, spuntato) {
+    const iscritto = iscritti.find((x) => x.id === iscrittoId);
+    if (!iscritto) return;
+    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
+    const nuovoElenco = spuntato ? gruppoModellaSpunta(elenco, idx, altroIdx) : gruppoModellaTogli(elenco, altroIdx);
+    if (!nuovoElenco) return;
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) return;
     setDati((prev) => ({
@@ -17803,24 +18059,33 @@ function VistaRicercaModelle({ param }) {
 
         {iscrittiConModelle.length === 0 && <div style={{ color: MUTED }}>Nessuna modella richiesta per questa classe.</div>}
 
-        {iscrittiConModelle.map((i, idx) => (
-          <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 8, display: "flex", alignItems: "baseline", gap: 6 }}>
-              <span style={{ color: MUTED, fontWeight: 400, fontSize: 13 }}>{idx + 1}.</span>
-              {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+        {iscrittiConModelle.map((i, idx) => {
+          const nostra = !!i.richiede_modelle;
+          return (
+            <div key={i.id} style={{ ...cardStyle, padding: 16, marginBottom: 10 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ color: MUTED, fontWeight: 400, fontSize: 13 }}>{idx + 1}.</span>
+                <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: nostra ? "#F7EDDB" : "#FDECEC", color: nostra ? "#8A6D1D" : "#C0392B" }}>
+                  {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
+                </span>
+              </div>
+              <div>
+                {i.tipi_modelle.map((m, mi) => (
+                  <RigaModella
+                    key={mi}
+                    modella={m}
+                    primaRiga={mi === 0}
+                    tuttiGliSlot={i.tipi_modelle}
+                    mioIndice={mi}
+                    onSalva={(campo, valore) => aggiornaModellaSlot(i.id, mi, campo, valore)}
+                    onCambiaGruppo={(altroIdx, spuntato) => aggiornaModellaGruppo(i.id, mi, altroIdx, spuntato)}
+                  />
+                ))}
+              </div>
             </div>
-            <div>
-              {i.tipi_modelle.map((m, mi) => (
-                <RigaModella
-                  key={mi}
-                  modella={m}
-                  primaRiga={mi === 0}
-                  onSalva={(campo, valore) => aggiornaModellaSlot(i.id, mi, campo, valore)}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div style={{ fontSize: 11, color: MUTED, marginTop: 20, textAlign: "center" }}>
           Elitederma Academy
