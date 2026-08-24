@@ -14401,7 +14401,14 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
     const assegnazione = (masterCorsi || []).find((mc) => mc.master_id === r.masterId && mc.corso_id === corsoData.corso_id);
     const persona = (master || []).find((m) => m.id === r.masterId);
     const totale = round2(compensoFasciaPer(listaIscritti.length, assegnazione?.fasce_compenso) * durataGiorniCorso);
-    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: `Costo Master — ${persona?.nome || "—"}`, totale, bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0, fornitore: persona?.nome ? `Master ${persona.nome}` : "—", iban: persona?.iban || null };
+    // finché nessuno ha scelto B/C/1-2 per questa riga (quota_bonifico e
+    // quota_cash entrambi null, mai toccati) lo split di default è metà e
+    // metà — non zero/zero: altrimenti il costo master non comparirebbe
+    // in nessuna delle due colonne finché l'amministratore non lo tocca
+    const maiToccato = dati.quota_bonifico == null && dati.quota_cash == null;
+    const bonifico = maiToccato ? round2(totale / 2) : (dati.quota_bonifico ?? 0);
+    const cash = maiToccato ? round2(totale - bonifico) : (dati.quota_cash ?? 0);
+    return { rigaId: r.rigaId, tabella: r.tabella, tipo: "master", nome: `Costo Master — ${persona?.nome || "—"}`, totale, bonifico, cash, fornitore: persona?.nome ? `Master ${persona.nome}` : "—", iban: persona?.iban || null };
   });
 
   // riga "Costo location": costo giornaliero pattuito sulla sede
@@ -14950,6 +14957,26 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     const { error } = await supabase.from(tabella).update(campi).eq("id", rigaId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica([tabella]);
+  }
+
+  // i 3 flag B/Cash/1-2 vicino a ogni riga "Costo Master": si escludono a
+  // vicenda perché derivano dallo stesso split bonifico/cash della riga,
+  // non da uno stato a parte — B = tutto a bonifico, C = tutto cash, 1/2
+  // (il default finché nessuno sceglie) = metà e metà. Un pareggio dei
+  // due importi diverso da questi 3 casi (es. modificato a mano nei campi
+  // Bonifico/Cash della riga) non fa risultare nessun flag spuntato.
+  function modalitaSplitMaster(r) {
+    if (!r.totale) return "1/2";
+    const frazioneBonifico = r.bonifico / r.totale;
+    if (Math.abs(frazioneBonifico - 1) < 0.005) return "B";
+    if (Math.abs(frazioneBonifico) < 0.005) return "C";
+    if (Math.abs(frazioneBonifico - 0.5) < 0.01) return "1/2";
+    return null;
+  }
+  function impostaSplitMaster(r, modalita) {
+    const bonifico = modalita === "B" ? r.totale : modalita === "C" ? 0 : round2(r.totale / 2);
+    const cash = round2(r.totale - bonifico);
+    salvaSplitRiga(r.tabella, r.rigaId, { quota_bonifico: bonifico, quota_cash: cash });
   }
 
   // righe "Costi della classe" (Compenso Master, Costo Location, Costo
@@ -16558,7 +16585,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     const campoBonifico = r.tipo === "venditore" ? "quota_venditore_bonifico" : r.tipo === "modelle" ? "commissione_modelle_bonifico" : "quota_bonifico";
                     const campoCash = r.tipo === "venditore" ? "quota_venditore_cash" : r.tipo === "modelle" ? "commissione_modelle_cash" : "quota_cash";
                     return (
-                      <div key={r.tipo + "_" + r.rigaId} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
+                      <div key={r.tipo + "_" + r.rigaId + "_" + r.bonifico + "_" + r.cash} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 3, flexWrap: "wrap" }}>
                         <div style={{ flex: "2 1 170px", minWidth: 0, display: "flex", alignItems: "center", gap: 6 }}>
                           <div style={{ ...campoCompattoStyle, fontSize: 11, background: "#EFEFEF", color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }} title={r.nome}>{r.nome}</div>
                           {r.tipo === "alloggio" && r.pagato && (
@@ -16590,6 +16617,24 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                               <button type="button" onClick={() => salvaGiorniPresenza(r.rigaId, r.giorni + 1)} title="Un giorno in più" style={{ width: 18, height: 18, borderRadius: 5, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", ...fontBody, fontSize: 12, fontWeight: 700, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 }}>+</button>
                             </div>
                           )}
+                          {r.tipo === "master" && (() => {
+                            const modalita = modalitaSplitMaster(r);
+                            return (
+                              <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+                                {["B", "C", "1/2"].map((chiave) => (
+                                  <label key={chiave} title={chiave === "B" ? "Tutto a bonifico" : chiave === "C" ? "Tutto cash" : "Metà e metà"} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, cursor: "pointer" }}>
+                                    <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: modalita === chiave ? NAVY : MUTED }}>{chiave}</span>
+                                    <input
+                                      type="checkbox"
+                                      checked={modalita === chiave}
+                                      onChange={() => impostaSplitMaster(r, chiave)}
+                                      style={{ width: 13, height: 13, cursor: "pointer", margin: 0 }}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
