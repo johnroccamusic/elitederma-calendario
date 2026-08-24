@@ -13926,6 +13926,35 @@ const TASTI_HOME = [
   { chiave: "storicoallievi", etichetta: "Storico Allievi" },
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
+// viste interne che non sono un tasto della home (sotto-sezioni raggiunte
+// da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
+// e a quale/i tasto/i della home appartengono davvero, dedotto da dove
+// riporta il loro "Indietro": chi ha già il permesso di quell'area madre
+// entra senza dover sbloccare una seconda volta la stessa area con una
+// password — vedi apriViewProtetta
+const AREA_MADRE_VISTA = {
+  amministrazione: ["erp"],
+  catalogocategoriecosti: ["erp"],
+  riconciliazione: ["erp"],
+  anagrafiche: ["erp"],
+  inserimentocostiricavi: ["erp"],
+  budgetcosti: ["erp"],
+  abbonamentoform: ["erp"],
+  spesaform: ["erp", "gestionedate"],
+  dashboardanalisi: ["statistiche"],
+  statistichevenditeprodotti: ["statistiche"],
+  statisticamaster: ["statistiche"],
+  classificazionevocishop: ["magazzinoshop"],
+  crmshop: ["magazzinoshop"],
+  generacoupon: ["magazzinoshop"],
+  venditeshop: ["magazzinoshop"],
+  venditealbanco: ["magazzinoshop"],
+  omaggi: ["magazzinoshop"],
+  prodottiusatikit: ["magazzinoshop"],
+  magazzino: ["magazzinoshop"],
+  magazzinoesterni: ["magazzinoshop"],
+  gestioneshop: ["magazzinoshop"],
+};
 // Logistica prodotti: le 4 fasi di spedizione di un'edizione (in
 // ordine) e i 3 elementi della checklist di preparazione kit. Ogni
 // fase ha un'etichetta diversa a seconda che sia ancora da raggiungere
@@ -36519,13 +36548,22 @@ export default function App() {
   // di chi ha fatto login (in teoria il tasto è già disabilitato in home
   // se non permesso, qui si ricontrolla solo per sicurezza). Le viste più
   // interne che non sono tasti della home (es. sotto-sezioni di ERP o
-  // Impostazioni) restano protette come prima: bypass automatico per
-  // Programmatore e Amministratore, altrimenti il classico prompt
-  // password (per-voce, o il codice Amministratore attuale come fallback)
+  // Impostazioni) ereditano il permesso della loro area madre (vedi
+  // AREA_MADRE_VISTA): chi ha già sbloccato quell'area non deve
+  // sbloccarla una seconda volta per entrare in una sua sotto-sezione.
+  // Solo le viste senza un'area madre nota restano protette come prima:
+  // bypass automatico per Programmatore e Amministratore, altrimenti il
+  // classico prompt password (per-voce, o il codice Amministratore
+  // attuale come fallback)
   function apriViewProtetta(nomeView) {
     if (ruoloUtente === "programmatore") { setView(nomeView); return; }
     if (TASTI_HOME.some((t) => t.chiave === nomeView)) {
       if (utenteLoggato && (utenteLoggato.permessi || []).includes(nomeView)) setView(nomeView);
+      return;
+    }
+    const areeMadri = AREA_MADRE_VISTA[nomeView];
+    if (areeMadri && utenteLoggato && areeMadri.some((area) => (utenteLoggato.permessi || []).includes(area))) {
+      setView(nomeView);
       return;
     }
     if (ruoloUtente === "amministratore") { setView(nomeView); return; }
