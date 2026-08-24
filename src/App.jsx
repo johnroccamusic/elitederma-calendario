@@ -15984,23 +15984,27 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   }
 
   // stesso principio, ma per la modella di un allievo in un giorno preciso
-  // di "Assegna modelle": scrive/crea la voce in iscritti.tipi_modelle
-  // indipendentemente da SUA/NOSTRA — il nome/telefono va sempre potuto
-  // annotare, anche se l'allievo porta una modella propria (SUA), quella
-  // dell'allievo serve solo a sapere chi porta cosa, non blocca la scrittura
-  async function aggiornaModellaAllievoGiorno(iscrittoId, numeroGiorno, campo, valore, tipoDefault) {
+  // di "Assegna modelle": SOLO nome/telefono/orario di una richiesta già
+  // fatta in iscrizione (idx>=0) — non crea mai una voce nuova. La riga
+  // segnaposto per un giorno mai richiesto esiste solo per poter compilare
+  // rapidamente le richieste vere già presenti: un click sul suo checkbox
+  // creava in silenzio, senza conferma, una richiesta che l'allievo non
+  // aveva mai fatto (successo davvero: Rebecca Cappelli, 25/08/2026 —
+  // numero_modelle restava 2 ma tipi_modelle saliva a 3). Chi vuole
+  // aggiungere davvero un trattamento non richiesto lo fa dalla scheda di
+  // iscrizione, dove numero_modelle e tipi_modelle restano coerenti insieme.
+  async function aggiornaModellaAllievoGiorno(iscrittoId, numeroGiorno, campo, valore) {
     const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
     if (!iscritto) return;
     const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
     const idx = elenco.findIndex((m) => (m.giorno ?? giornoDiRipiegoAllievi) === numeroGiorno);
-    let nuovoElenco;
-    if (idx >= 0 && (campo === "nome_modella" || campo === "telefono_modella")) {
-      nuovoElenco = gruppoModellaAggiornaCampo(elenco, idx, campo, valore);
-    } else if (idx >= 0) {
-      nuovoElenco = elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
-    } else {
-      nuovoElenco = [...elenco, { tipo: tipoDefault || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", giorno: numeroGiorno, gruppo_id: null, [campo]: valore }];
+    if (idx < 0) {
+      setMsg(`${iscritto.nome} ${iscritto.cognome} non ha richiesto questo trattamento: aggiungilo dalla scheda di iscrizione, non da qui.`);
+      return;
     }
+    const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
+      ? gruppoModellaAggiornaCampo(elenco, idx, campo, valore)
+      : elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
@@ -17700,7 +17704,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                               opzioniTipo={opzioniTipoModellaCorso}
                               tuttiGliSlot={elenco}
                               mioIndice={indiceReale}
-                              onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, g.tipo_modella_allievi)}
+                              onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore)}
                               onCambiaGruppo={indiceReale != null ? (altroIdx, spuntato) => aggiornaModellaGruppo(i.id, indiceReale, altroIdx, spuntato) : undefined}
                             />
                           </div>
