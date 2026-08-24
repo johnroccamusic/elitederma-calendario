@@ -32276,7 +32276,7 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA
     <button
       onClick={cliccabile ? onClick : undefined}
       title={cliccabile ? undefined : "Rispetta l'ordine delle fasi"}
-      style={{ ...fontBody, fontSize: 11, fontWeight: 700, borderRadius: 10, padding: "9px 6px", cursor: cliccabile ? "pointer" : "default", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.25, ...stile }}
+      style={{ ...fontBody, fontSize: 11, fontWeight: 700, borderRadius: 10, padding: "9px 6px", cursor: cliccabile ? "pointer" : "default", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.25, overflowWrap: "break-word", wordBreak: "break-word", ...stile }}
     >
       <div style={{ fontSize: 13, marginBottom: 3 }}>{stato === "fatto" ? "✓" : stato === "corrente" ? "!" : "○"}</div>
       {etichetta}
@@ -32786,6 +32786,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   }, [corsiDate, oggiStr, vistaStorico, ricercaStorico, corsoById, locById]);
   const [edizioneSelId, setEdizioneSelId] = useState(null);
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
+  // su desktop la preparazione materiali resta sempre affiancata a destra
+  // (due colonne); su mobile non c'è spazio per stare affiancati, quindi
+  // si passa da una vista all'altra: si apre toccando il corso (non le
+  // pillole di fase, che restano azionabili dalla lista), "Indietro"
+  // riporta alla lista senza perdere il corso scelto
+  const [vistaMobile, setVistaMobile] = useState("lista"); // "lista" | "dettaglio"
   async function cambiaTagliaIscritto(iscrittoId, taglia) {
     const { error } = await supabase.from("iscritti").update({ taglia_divisa: taglia }).eq("id", iscrittoId);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -33051,7 +33057,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               </button>
             )}
             <button
-              onClick={() => { setVistaStorico((v) => !v); setEdizioneSelId(null); setRicercaStorico(""); }}
+              onClick={() => { setVistaStorico((v) => !v); setEdizioneSelId(null); setRicercaStorico(""); setVistaMobile("lista"); }}
               style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: vistaStorico ? "#fff" : NAVY, background: vistaStorico ? NAVY : "#fff", border: vistaStorico ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer" }}
             >
               {vistaStorico ? "← Corsi in arrivo" : "Storico spedizioni"}
@@ -33059,7 +33065,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           </div>
         </div>
 
+        {isMobile && vistaMobile === "dettaglio" && (
+          <button onClick={() => setVistaMobile("lista")} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: 12, display: "flex", alignItems: "center", gap: 4 }}>
+            <IconaFrecciaSinistra size={14} /> {vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}
+          </button>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
+          {(!isMobile || vistaMobile === "lista") && (
           <div style={{ ...cardStyle, marginBottom: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
             {vistaStorico && (
@@ -33076,7 +33088,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === cd.id)}
                 faseCorrente={statoDi(cd.id).fase}
                 selezionato={edizioneSel?.id === cd.id}
-                onSeleziona={() => setEdizioneSelId(cd.id)}
+                onSeleziona={() => { setEdizioneSelId(cd.id); if (isMobile) setVistaMobile("dettaglio"); }}
                 onCambiaFase={(fase) => { setEdizioneSelId(cd.id); cambiaFaseLogistica(cd, fase); }}
                 onTornaIndietroFase={(fase) => { setEdizioneSelId(cd.id); tornaIndietroFaseLogistica(cd, fase); }}
                 gestioneRientroAttiva={statoDi(cd.id).gestione_rientro_attiva}
@@ -33093,7 +33105,9 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               />
             ))}
           </div>
+          )}
 
+          {(!isMobile || vistaMobile === "dettaglio") && (
           <div style={{ ...cardStyle, marginBottom: 0, ...(edizioneSel ? { border: `2px solid ${corsoById[edizioneSel.corso_id]?.colore || NAVY}`, borderRadius: 16 } : {}) }}>
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
@@ -33115,6 +33129,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
               />
             )}
           </div>
+          )}
         </div>
 
         {pileAperti.length > 0 && (
