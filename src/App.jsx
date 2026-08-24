@@ -32483,7 +32483,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
             ))}
           </div>
 
-          <div style={{ ...cardStyle, marginBottom: 0, position: isMobile ? "static" : "sticky", top: 20, ...(edizioneSel ? { border: `2px solid ${corsoById[edizioneSel.corso_id]?.colore || NAVY}`, borderRadius: 16 } : {}) }}>
+          <div style={{ ...cardStyle, marginBottom: 0, ...(edizioneSel ? { border: `2px solid ${corsoById[edizioneSel.corso_id]?.colore || NAVY}`, borderRadius: 16 } : {}) }}>
             {!edizioneSel ? (
               <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Scegli un corso a sinistra.</div>
             ) : (
