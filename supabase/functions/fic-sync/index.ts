@@ -171,6 +171,68 @@ async function salva(tabella: string, righe: any[], chiave: string) {
 }
 
 // ---------------------------------------------------------------------------
+// Ponte verso documento_fornitore (riconciliazione, spec-riconciliazione.md
+// §9 "Nota di credito"): aggancia le note di credito appena sincronizzate
+// sopra a un fornitore ESISTENTE via P.IVA/CF, mai creandone uno nuovo. Se
+// non trovato, resta visibile solo nella lista di sola lettura di
+// Contabilità finché lo staff non assegna il fornitore a mano (vedi
+// "Assegna fornitore" in App.jsx) — da quel momento in poi entra qui.
+// documento_fornitore.tipo/fic_id/note esistono già dalla riconciliazione
+// fatture: nessuna colonna nuova.
+// ---------------------------------------------------------------------------
+async function collegaNoteCreditoADocumentoFornitore(cid: number) {
+  const { data: note, error: erroreNote } = await sb
+    .from("fic_documenti")
+    .select("fic_id, numero, data, piva, cf, imponibile, iva, totale")
+    .eq("company_id", cid).eq("direzione", "ricevuto").eq("tipo", "passive_credit_note");
+  if (erroreNote) throw new Error(`Lettura note di credito fallita: ${erroreNote.message}`);
+  if (!note?.length) return { collegate: 0 };
+
+  const { data: giaPresenti } = await sb.from("documento_fornitore").select("fic_id").not("fic_id", "is", null);
+  const idGiaPresenti = new Set((giaPresenti ?? []).map((d) => d.fic_id));
+  // solo quelle mai arrivate finora in documento_fornitore: se già lì (da
+  // un giro precedente, con qualunque stato) lo stato resta quello che ha
+  const daCollegare = note.filter((n) => !idGiaPresenti.has(n.fic_id) && (n.piva || n.cf));
+  if (!daCollegare.length) return { collegate: 0 };
+
+  const pive = [...new Set(daCollegare.map((n) => n.piva).filter(Boolean))];
+  const cfs = [...new Set(daCollegare.map((n) => n.cf).filter(Boolean))];
+  const filtri = [
+    pive.length ? `partita_iva.in.(${pive.map((p) => `"${p}"`).join(",")})` : null,
+    cfs.length ? `codice_fiscale.in.(${cfs.map((c) => `"${c}"`).join(",")})` : null,
+  ].filter(Boolean).join(",");
+  const { data: fornitoriTrovati } = await sb
+    .from("fornitori").select("id, partita_iva, codice_fiscale").or(filtri);
+  const idByPiva = new Map((fornitoriTrovati ?? []).filter((f) => f.partita_iva).map((f) => [f.partita_iva, f.id]));
+  const idByCf = new Map((fornitoriTrovati ?? []).filter((f) => f.codice_fiscale).map((f) => [f.codice_fiscale, f.id]));
+
+  const righe = daCollegare
+    .map((n) => ({ n, fornitoreId: (n.piva && idByPiva.get(n.piva)) || (n.cf && idByCf.get(n.cf)) || null }))
+    .filter(({ fornitoreId }) => fornitoreId)
+    .map(({ n, fornitoreId }) => ({
+      fornitore_id: fornitoreId,
+      fic_id: n.fic_id,
+      tipo: "nota_credito",
+      numero: n.numero,
+      data_documento: n.data,
+      imponibile: n.imponibile,
+      iva: n.iva,
+      totale: n.totale,
+      // stato NON incluso: prende il default 'importato' sull'insert,
+      // promosso subito sotto
+    }));
+  if (!righe.length) return { collegate: 0 };
+
+  const { error: erroreInsert } = await sb.from("documento_fornitore").upsert(righe, { onConflict: "fic_id" });
+  if (erroreInsert) throw new Error(`Ponte note di credito -> documento_fornitore fallito: ${erroreInsert.message}`);
+
+  await sb.from("documento_fornitore").update({ stato: "da_riconciliare" })
+    .eq("stato", "importato").in("fic_id", righe.map((r) => r.fic_id));
+
+  return { collegate: righe.length };
+}
+
+// ---------------------------------------------------------------------------
 // Sincronizzazione di una azienda
 // ---------------------------------------------------------------------------
 // I tipi di documento RICEVUTO validi per l'API (verificato sul vivo, non
@@ -212,6 +274,13 @@ async function sincronizza(conn: Connessione, modo: string) {
     await sleep(350);
   }
 
+  let noteCreditoCollegate = 0;
+  try {
+    ({ collegate: noteCreditoCollegate } = await collegaNoteCreditoADocumentoFornitore(cid));
+  } catch (e) {
+    avvisi.push(`ponte note di credito: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   // "Da registrare" — sempre lista intera, sono pochi.
   //    Le API NON permettono di registrarli: qui li fotografiamo soltanto.
   {
@@ -234,7 +303,7 @@ async function sincronizza(conn: Connessione, modo: string) {
     if (error) throw new Error(`Chiusura pending fallita: ${error.message}`);
   }
 
-  return { ricevuti, pending, avviso: avvisi.length ? avvisi.join(" | ") : null };
+  return { ricevuti, pending, noteCreditoCollegate, avviso: avvisi.length ? avvisi.join(" | ") : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -264,12 +333,12 @@ Deno.serve(async (req) => {
       .insert({ company_id: conn.company_id, modo }).select("id").single();
 
     try {
-      const { avviso, ...conteggi } = await sincronizza(conn, modo);
+      const { avviso, noteCreditoCollegate, ...conteggi } = await sincronizza(conn, modo);
       const esito = avviso ? "parziale" : "ok";
       await sb.from("fic_sync_log").update({
         finita_il: new Date().toISOString(), esito, messaggio: avviso, ...conteggi,
       }).eq("id", log!.id);
-      esiti.push({ azienda: conn.nome ?? conn.company_id, esito, avviso, ...conteggi });
+      esiti.push({ azienda: conn.nome ?? conn.company_id, esito, avviso, noteCreditoCollegate, ...conteggi });
     } catch (e) {
       const messaggio = e instanceof Error ? e.message : String(e);
       await sb.from("fic_sync_log").update({

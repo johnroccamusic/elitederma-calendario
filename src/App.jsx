@@ -21430,6 +21430,31 @@ function calcolaCandidatiMatch(documento, impegniAperti, { fornitori, preferenze
     .sort((a, b) => b.punteggio - a.punteggio);
 }
 
+// candidati documento-documento per una nota di credito (spec-riconciliazione.md
+// §9 "Nota di credito"): il fornitore è filtro rigido (garantito dal ponte
+// fic-sync via P.IVA/CF, vedi supabase/functions/fic-sync/index.ts), non un
+// segnale a punti — con la coppia già vincolata da lì, un punteggio fornitore
+// non discriminerebbe nulla. Importo e Periodo sono le stesse funzioni pure
+// del motore documento-impegno sopra, qui applicate a totale-nota-di-credito
+// vs totale-fattura invece che a totale-documento vs importo-impegno.
+// Origine/Categoria non hanno senso documento-documento, si saltano. Niente
+// soglia di esclusione: il filtro fornitore ha già ridotto il pool, si
+// mostrano tutte le fatture riconciliate di quel fornitore ordinate per punteggio.
+function calcolaCandidatiFatturaPerNotaCredito(notaCredito, documenti) {
+  const fatture = (documenti || []).filter((d) =>
+    d.tipo === "fattura" && d.stato === "riconciliato" && d.fornitore_id === notaCredito.fornitore_id
+  );
+  return fatture
+    .map((f) => {
+      const sImporto = segnaleImporto(notaCredito.totale, f.totale);
+      const sPeriodo = segnalePeriodo(notaCredito.data_documento, f.data_documento);
+      const punteggio = sImporto.punti + sPeriodo.punti; // max 40 (25+15)
+      const motivazioni = [{ testo: "Stesso fornitore", positiva: true }, ...sImporto.motivazioni, ...sPeriodo.motivazioni];
+      return { fattura: f, punteggio, motivazioni, preselezionato: punteggio >= 36 }; // 90% di 40, stessa soglia riscalata
+    })
+    .sort((a, b) => b.punteggio - a.punteggio);
+}
+
 // §6.4 "Auto-abbinamento dei contratti ricorrenti": se il fornitore del
 // documento ha un contratto ricorrente attivo alla data del documento e
 // il totale rientra nella tolleranza (default ±5%), il documento si
@@ -21851,6 +21876,7 @@ function RigaQuadroImpegni({ nome, corsoLabel, fornitore, totale, categoriaNome,
 function PaginaRiconciliazione({
   documentoFornitoreIdIniziale,
   documentoFornitoreTabella, impegnoTabella, riconciliazioneTabella, scadenzaPassivaTabella, preferenzeMatchTabella,
+  rettificheScadenzaNCTabella,
   fornitori, costiSottocategorie, abbonamentiContratti, abbonamentiImporti,
   ricarica, onBack,
 }) {
@@ -21865,6 +21891,14 @@ function PaginaRiconciliazione({
   const [nuovoImpDescrizione, setNuovoImpDescrizione] = useState("");
   const [nuovoImpImporto, setNuovoImpImporto] = useState("");
   const [nuovoImpCategoria, setNuovoImpCategoria] = useState("");
+  // nota di credito (spec §9): scelta della fattura da rettificare, poi
+  // quali dei SUOI impegni stornare — stati separati da "selezione" sopra,
+  // che resta quella del motore fattura↔impegno esistente
+  const [fatturaSelezionataId, setFatturaSelezionataId] = useState(null);
+  const [selezioneImpegniNC, setSelezioneImpegniNC] = useState({});
+  const [ricercaFattureNC, setRicercaFattureNC] = useState("");
+  const [salvandoNC, setSalvandoNC] = useState(false);
+  const [msgNC, setMsgNC] = useState("");
 
   const documenti = documentoFornitoreTabella || [];
   const fornitoriById = Object.fromEntries((fornitori || []).map((f) => [f.id, f]));
@@ -21884,12 +21918,32 @@ function PaginaRiconciliazione({
     const successivo = codaDaRiconciliare[i + offset];
     setApertoId(successivo ? successivo.id : null);
     setSelezione({});
+    setFatturaSelezionataId(null);
+    setSelezioneImpegniNC({});
     setMsg("");
+    setMsgNC("");
   }
 
   const impegniAperti = (impegnoTabella || []).filter((i) => i.stato === "aperto" || i.stato === "parzialmente_coperto");
-  const candidati = documento ? calcolaCandidatiMatch(documento, impegniAperti, { fornitori, preferenze: preferenzeMatchTabella }) : [];
-  const autoAbbinamento = documento ? valutaAutoAbbinamentoContratto(documento, { abbonamentiContratti, abbonamentiImporti }) : { abbinabile: false };
+  const candidati = documento && documento.tipo !== "nota_credito"
+    ? calcolaCandidatiMatch(documento, impegniAperti, { fornitori, preferenze: preferenzeMatchTabella }) : [];
+  const autoAbbinamento = documento && documento.tipo !== "nota_credito"
+    ? valutaAutoAbbinamentoContratto(documento, { abbonamentiContratti, abbonamentiImporti }) : { abbinabile: false };
+
+  // candidati per una nota di credito: fatture dello stesso fornitore, poi
+  // gli impegni che quella specifica fattura ha già coperto
+  const candidatiFattureNC = documento && documento.tipo === "nota_credito"
+    ? calcolaCandidatiFatturaPerNotaCredito(documento, documenti) : [];
+  const fatturaSelezionataNC = fatturaSelezionataId ? documenti.find((d) => d.id === fatturaSelezionataId) : null;
+  const impegniDellaFatturaNC = fatturaSelezionataId
+    ? [...new Map(
+        (riconciliazioneTabella || [])
+          .filter((r) => r.documento_id === fatturaSelezionataId && r.importo_allocato > 0)
+          .map((r) => impegnoTabella.find((i) => i.id === r.impegno_id))
+          .filter(Boolean).map((i) => [i.id, i])
+      ).values()]
+    : [];
+  const allocatoNC = round2(Object.values(selezioneImpegniNC).reduce((s, v) => s + (Number(v) || 0), 0));
 
   const allocato = round2(Object.values(selezione).reduce((s, v) => s + (Number(v) || 0), 0));
   const totaleDocumento = documento?.totale || 0;
@@ -21905,6 +21959,22 @@ function PaginaRiconciliazione({
       const giaAllocato = Object.values(copia).reduce((sum, v) => sum + (Number(v) || 0), 0);
       const residuoDoc = round2(totaleDocumento - giaAllocato);
       copia[imp.id] = round2(Math.max(0, Math.min(residuoImpegno(imp), residuoDoc)));
+      return copia;
+    });
+  }
+  // nota di credito: il tetto è importo_coperto (l'aggregato reale di
+  // tutte le riconciliazioni sull'impegno, comprese eventuali note di
+  // credito già passate), non importo_previsto — l'unico modo di garantire
+  // che non si vada mai sotto zero indipendentemente da quale fattura ha
+  // coperto l'impegno
+  function toggleImpegnoNC(imp) {
+    setSelezioneImpegniNC((s) => {
+      const copia = { ...s };
+      if (copia[imp.id] != null) { delete copia[imp.id]; return copia; }
+      const giaAllocato = Object.values(copia).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      const residuoDoc = round2((documento?.totale || 0) - giaAllocato);
+      const capImpegno = round2(imp.importo_coperto || 0);
+      copia[imp.id] = round2(Math.max(0, Math.min(capImpegno, residuoDoc)));
       return copia;
     });
   }
@@ -21973,6 +22043,108 @@ function PaginaRiconciliazione({
     vaiA(0); // dopo il ricarico il documento appena chiuso è uscito dalla coda: si riallinea sul successivo
   }
 
+  // Nota di credito (§9): riconciliazione con importo_allocato NEGATIVO
+  // sulla stessa coppia impegno già coperta dalla fattura scelta — mai una
+  // cancellazione. Richiede l'allocazione dell'INTERO importo della nota
+  // prima di abilitare il pulsante: a differenza di una fattura, una nota
+  // di credito rettifica qualcosa che esiste già, non prevede una spesa
+  // nuova, quindi non ha senso lasciarne una parte scoperta.
+  async function confermaRiconciliazioneNotaCredito() {
+    if (!documento || !fatturaSelezionataId) return;
+    const voci = Object.entries(selezioneImpegniNC).filter(([, v]) => Number(v) > 0);
+    if (Math.abs(allocatoNC - documento.totale) > 0.01) { setMsgNC("Alloca l'intero importo della nota di credito prima di confermare."); return; }
+    setSalvandoNC(true);
+    setMsgNC("");
+
+    // 1) riconciliazione negativa, stessa coppia impegno della fattura scelta
+    for (const [impegnoId, importo] of voci) {
+      const { error } = await supabase.from("riconciliazione").insert({
+        documento_id: documento.id, impegno_id: impegnoId,
+        importo_allocato: -Number(importo), creata_da: "staff",
+        note: `Rettifica da nota di credito su fattura ${fatturaSelezionataNC?.numero || fatturaSelezionataNC?.id}`,
+      });
+      if (error) { setMsgNC("Errore: " + error.message); setSalvandoNC(false); return; }
+    }
+
+    // 2) impegni: floor a 0, senza toccare stati decisi a mano (coperto/chiuso/annullato)
+    for (const [impegnoId, importo] of voci) {
+      const imp = impegnoTabella.find((i) => i.id === impegnoId);
+      if (!imp) continue;
+      const nuovoCoperto = Math.max(0, round2((imp.importo_coperto || 0) - Number(importo)));
+      const nuovoEffettivo = Math.max(0, round2((imp.importo_effettivo || 0) - Number(importo)));
+      const nuovoStato = (imp.stato === "aperto" || imp.stato === "parzialmente_coperto")
+        ? (nuovoCoperto > 0 ? "parzialmente_coperto" : "aperto") : imp.stato;
+      await supabase.from("impegno").update({ importo_coperto: nuovoCoperto, importo_effettivo: nuovoEffettivo, stato: nuovoStato }).eq("id", impegnoId);
+    }
+
+    // 3) riduce le scadenze non pagate della fattura, più vecchia prima; l'avanzo va in nota
+    let daConsumare = allocatoNC;
+    const scadenzeFattura = (scadenzaPassivaTabella || [])
+      .filter((s) => s.documento_id === fatturaSelezionataId && s.stato === "da_pagare")
+      .sort((a, b) => (a.data_scadenza || "").localeCompare(b.data_scadenza || ""));
+    for (const sc of scadenzeFattura) {
+      if (daConsumare <= 0.01) break;
+      const riduzione = Math.min(sc.importo, daConsumare);
+      const nuovoImporto = round2(sc.importo - riduzione);
+      await supabase.from("rettifica_scadenza_nota_credito").insert({
+        nota_credito_id: documento.id, scadenza_id: sc.id, importo_ridotto: riduzione, stato_precedente: sc.stato,
+      });
+      await supabase.from("scadenza_passiva").update({
+        importo: nuovoImporto, stato: nuovoImporto <= 0.01 ? "annullata" : "da_pagare",
+      }).eq("id", sc.id);
+      daConsumare = round2(daConsumare - riduzione);
+    }
+    const notaLeftover = daConsumare > 0.01
+      ? `Credito residuo di ${fmtEuroErp(daConsumare)} non applicato: nessuna scadenza aperta sulla fattura collegata.`
+      : null;
+
+    // 4) la nota di credito stessa, per ultima (così un fallimento a metà la lascia riprovabile)
+    await supabase.from("documento_fornitore").update({
+      stato: "riconciliato", importo_allocato: -allocatoNC, note: notaLeftover,
+    }).eq("id", documento.id);
+
+    setSalvandoNC(false);
+    setSelezioneImpegniNC({});
+    setFatturaSelezionataId(null);
+    await ricarica(["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "rettifica_scadenza_nota_credito"]);
+    vaiA(0);
+  }
+
+  // Annullamento nota di credito: ripristina esattamente importo e stato
+  // delle scadenze toccate (da rettifica_scadenza_nota_credito, l'unico
+  // modo di sapere quanto avevano prima — §8 dell'annullamento normale sa
+  // solo cancellare, mai ripristinare un importo ridotto), blocca se una di
+  // quelle scadenze è stata pagata nel frattempo (il passato non si riscrive)
+  async function annullaRiconciliazioneNotaCredito(doc) {
+    if (!window.confirm("Annullare questa nota di credito? Le scadenze ridotte tornano all'importo originale e gli impegni tornano coperti come prima.")) return;
+    const rettifiche = (rettificheScadenzaNCTabella || []).filter((r) => r.nota_credito_id === doc.id);
+    const scadenzeAttuali = Object.fromEntries((scadenzaPassivaTabella || []).map((s) => [s.id, s]));
+    if (rettifiche.some((r) => scadenzeAttuali[r.scadenza_id]?.stato === "pagata")) {
+      window.alert("Una delle scadenze toccate da questa nota di credito è stata pagata nel frattempo: l'annullamento non è permesso, il passato contabile non si riscrive.");
+      return;
+    }
+    for (const r of rettifiche) {
+      const sc = scadenzeAttuali[r.scadenza_id];
+      if (!sc) continue;
+      await supabase.from("scadenza_passiva").update({ importo: round2(sc.importo + r.importo_ridotto), stato: r.stato_precedente }).eq("id", sc.id);
+    }
+    await supabase.from("rettifica_scadenza_nota_credito").delete().eq("nota_credito_id", doc.id);
+
+    const righe = (riconciliazioneTabella || []).filter((r) => r.documento_id === doc.id);
+    for (const r of righe) {
+      const imp = impegnoTabella.find((i) => i.id === r.impegno_id);
+      if (!imp) continue;
+      const nuovoCoperto = round2((imp.importo_coperto || 0) - r.importo_allocato); // negativo: sottrarlo lo ripristina
+      const nuovoEffettivo = round2((imp.importo_effettivo || 0) - r.importo_allocato);
+      const nuovoStato = (imp.stato === "aperto" || imp.stato === "parzialmente_coperto")
+        ? (nuovoCoperto > 0 ? "parzialmente_coperto" : "aperto") : imp.stato;
+      await supabase.from("impegno").update({ importo_coperto: nuovoCoperto, importo_effettivo: nuovoEffettivo, stato: nuovoStato }).eq("id", imp.id);
+    }
+    await supabase.from("riconciliazione").delete().eq("documento_id", doc.id);
+    await supabase.from("documento_fornitore").update({ stato: "da_riconciliare", importo_allocato: 0, note: null }).eq("id", doc.id);
+    await ricarica(["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "rettifica_scadenza_nota_credito"]);
+  }
+
   async function accettaSenzaImpegno() {
     if (!documento) return;
     if (!window.confirm("Accettare questo documento come spesa non prevista, senza collegarlo a nessun impegno?")) return;
@@ -22026,6 +22198,16 @@ function PaginaRiconciliazione({
   }
 
   async function annullaRiconciliazione(doc) {
+    // se una nota di credito già riconciliata ha ridotto uno degli stessi
+    // impegni di questa fattura, annullare la fattura senza prima
+    // annullare la nota lascerebbe importo_coperto/scadenza incoerenti
+    const impegniCoinvolti = new Set((riconciliazioneTabella || []).filter((r) => r.documento_id === doc.id).map((r) => r.impegno_id));
+    const noteCreditoCollegate = (documentoFornitoreTabella || []).filter((d) => d.tipo === "nota_credito" && d.stato === "riconciliato" &&
+      (riconciliazioneTabella || []).some((r) => r.documento_id === d.id && impegniCoinvolti.has(r.impegno_id)));
+    if (noteCreditoCollegate.length > 0) {
+      window.alert(`Prima annulla ${noteCreditoCollegate.length === 1 ? "la nota di credito" : "le note di credito"} collegata/e a questa fattura.`);
+      return;
+    }
     if (!window.confirm("Annullare questa riconciliazione? Gli impegni collegati tornano aperti e le scadenze non pagate vengono eliminate.")) return;
     const ok = await sganciaScadenzeNonPagate(doc);
     if (!ok) return;
@@ -22100,7 +22282,7 @@ function PaginaRiconciliazione({
 
               <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 20, marginBottom: 20 }}>
                 <div style={{ ...cardStyle }}>
-                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Documento ricevuto</div>
+                  <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>{documento.tipo === "nota_credito" ? "Nota di credito ricevuta" : "Documento ricevuto"}</div>
                   <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{fornitoriById[documento.fornitore_id]?.nome || "Fornitore sconosciuto"}</div>
                   <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>
                     {[documento.numero ? `Fattura n. ${documento.numero}` : null, fornitoriById[documento.fornitore_id]?.partita_iva ? `P.IVA ${fornitoriById[documento.fornitore_id].partita_iva}` : null].filter(Boolean).join(" · ")}
@@ -22132,6 +22314,72 @@ function PaginaRiconciliazione({
                   </div>
                 </div>
 
+                {documento.tipo === "nota_credito" ? (
+                  <div style={{ ...cardStyle }}>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Fatture di questo fornitore</div>
+                    {!fatturaSelezionataId ? (
+                      <>
+                        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Scegli a quale fattura già riconciliata si riferisce questa nota di credito.</div>
+                        <div style={{ marginBottom: 12 }}>
+                          <CampoRicerca value={ricercaFattureNC} onChange={(e) => setRicercaFattureNC(e.target.value)} placeholder="Cerca per numero fattura…" />
+                        </div>
+                        {candidatiFattureNC.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura riconciliata trovata per questo fornitore.</div>}
+                        {candidatiFattureNC
+                          .filter((c) => !ricercaFattureNC.trim() || (c.fattura.numero || "").toLowerCase().includes(ricercaFattureNC.trim().toLowerCase()))
+                          .map((c) => (
+                            <div key={c.fattura.id} onClick={() => setFatturaSelezionataId(c.fattura.id)} style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10, cursor: "pointer" }}>
+                              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+                                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: c.preselezionato ? "#2E7D32" : "#8A6D1D", background: c.preselezionato ? "#E3F3E5" : "#FBF1DD", borderRadius: 10, padding: "3px 8px" }}>MATCH {Math.round((c.punteggio / 40) * 100)}%</span>
+                              </div>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                <span style={{ ...fontBody, fontWeight: 700, color: NAVY, fontSize: 14 }}>{c.fattura.numero ? `Fattura n. ${c.fattura.numero}` : "Fattura"}</span>
+                                <span style={{ ...fontBody, fontWeight: 700, color: NAVY, fontSize: 14, whiteSpace: "nowrap" }}>{fmtEuroErp(c.fattura.totale)}</span>
+                              </div>
+                              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{fmtData(c.fattura.data_documento)}</div>
+                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                                {c.motivazioni.map((m, idx) => (
+                                  <span key={idx} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: m.positiva ? "#2E7D32" : "#C0392B", background: m.positiva ? "#E3F3E5" : "#FBE4E1", borderRadius: 10, padding: "3px 8px" }}>{m.testo}</span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => { setFatturaSelezionataId(null); setSelezioneImpegniNC({}); }} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", marginBottom: 10, padding: 0 }}>← Cambia fattura</button>
+                        <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{fatturaSelezionataNC?.numero ? `Fattura n. ${fatturaSelezionataNC.numero}` : "Fattura"} — impegni collegati</div>
+                        {impegniDellaFatturaNC.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Questa fattura non ha impegni collegati con copertura residua.</div>}
+                        {impegniDellaFatturaNC.map((imp) => {
+                          const selezionato = selezioneImpegniNC[imp.id] != null;
+                          return (
+                            <div key={imp.id} style={{ border: `1px solid ${selezionato ? NAVY : CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", marginBottom: 10, cursor: "pointer" }} onClick={() => toggleImpegnoNC(imp)}>
+                              <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                                <input type="checkbox" checked={selezionato} readOnly style={{ marginTop: 3 }} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                                    <span style={{ ...fontBody, fontWeight: 700, color: NAVY, fontSize: 14 }}>{imp.descrizione}</span>
+                                    <span style={{ ...fontBody, fontWeight: 700, color: NAVY, fontSize: 14, whiteSpace: "nowrap" }}>{fmtEuroErp(imp.importo_coperto)}</span>
+                                  </div>
+                                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>Coperto {fmtEuroErp(imp.importo_coperto)}</div>
+                                  {selezionato && (
+                                    <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                                      <label style={{ ...fontBody, fontSize: 11, color: MUTED }}>Importo da stornare</label>
+                                      <input
+                                        type="number" step="0.01" value={selezioneImpegniNC[imp.id]}
+                                        onChange={(e) => setSelezioneImpegniNC((s) => ({ ...s, [imp.id]: e.target.value === "" ? "" : round2(Number(e.target.value)) }))}
+                                        style={{ ...inputStyle, marginTop: 4 }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                ) : (
                 <div style={{ ...cardStyle }}>
                   <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Impegni compatibili</div>
                   <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Seleziona uno o più impegni da coprire con questa fattura.</div>
@@ -22197,8 +22445,24 @@ function PaginaRiconciliazione({
                     </div>
                   )}
                 </div>
+                )}
               </div>
 
+              {documento.tipo === "nota_credito" ? (
+                <div style={{ ...cardStyle, position: "sticky", bottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+                  <div>
+                    <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Allocato {fmtEuroErp(allocatoNC)} di {fmtEuroErp(documento.totale)}</div>
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{!fatturaSelezionataId ? "Scegli prima la fattura da rettificare" : Math.abs(allocatoNC - documento.totale) > 0.01 ? "Alloca l'intero importo della nota di credito" : "Pronta per la conferma"}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <button onClick={scartaDocumento} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Scarta</button>
+                    <button onClick={() => vaiA(1)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "10px 16px", cursor: "pointer" }}>Rimanda</button>
+                    <button onClick={confermaRiconciliazioneNotaCredito} disabled={!fatturaSelezionataId || Math.abs(allocatoNC - documento.totale) > 0.01 || salvandoNC} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "10px 18px", cursor: "pointer", opacity: (!fatturaSelezionataId || Math.abs(allocatoNC - documento.totale) > 0.01 || salvandoNC) ? 0.5 : 1 }}>
+                      {salvandoNC ? "Salvo…" : "Riconcilia nota di credito"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <div style={{ ...cardStyle, position: "sticky", bottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
                 <div>
                   <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Allocato {fmtEuroErp(allocato)} di {fmtEuroErp(totaleDocumento)} — Residuo {fmtEuroErp(residuo)}</div>
@@ -22216,7 +22480,9 @@ function PaginaRiconciliazione({
                   </button>
                 </div>
               </div>
+              )}
               {msg && <div style={{ ...fontBody, fontSize: 13, color: msg.startsWith("Errore") ? "#C0392B" : NAVY, marginTop: 12 }}>{msg}</div>}
+              {msgNC && <div style={{ ...fontBody, fontSize: 13, color: msgNC.startsWith("Errore") ? "#C0392B" : NAVY, marginTop: 12 }}>{msgNC}</div>}
             </div>
           ) : (
             <div style={{ ...cardStyle }}>
@@ -22229,8 +22495,12 @@ function PaginaRiconciliazione({
           <div style={{ ...cardStyle }}>
             {elencoRiconciliate.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna fattura riconciliata ancora.</div>}
             {elencoConIntestazioniMese(elencoRiconciliate, (d) => d.data_documento || null, (d) => (
-              <RigaAmministrazione key={d.id} data={d.data_documento} titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"} sottotitolo={d.numero ? `Fattura n. ${d.numero}` : null} importo={fmtEuroErp(d.totale)}>
-                <button onClick={() => annullaRiconciliazione(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Annulla riconciliazione</button>
+              <RigaAmministrazione key={d.id} data={d.data_documento}
+                titolo={fornitoriById[d.fornitore_id]?.nome || "Fornitore"}
+                sottotitolo={[d.tipo === "nota_credito" ? "Nota di credito" : null, d.numero ? `Doc. n. ${d.numero}` : null].filter(Boolean).join(" · ") || null}
+                importo={fmtEuroErp(d.tipo === "nota_credito" ? -Math.abs(d.totale) : d.totale)}>
+                {d.tipo === "nota_credito" && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8E44AD", background: "#F3EAF6", border: "1px solid #DCC7E3", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Nota di credito</span>}
+                <button onClick={() => d.tipo === "nota_credito" ? annullaRiconciliazioneNotaCredito(d) : annullaRiconciliazione(d)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#fff", border: `1px solid #F0C6C0`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Annulla riconciliazione</button>
               </RigaAmministrazione>
             ))}
           </div>
@@ -22378,6 +22648,24 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     if (esito?.esito === "errore") { setMsgNoteCredito("Errore: " + esito.messaggio); return; }
     setMsgNoteCredito(`Sincronizzati ${esito?.ricevuti ?? 0} documenti ricevuti.`);
     ricarica(["note_credito_fic"]);
+  }
+  // Note di credito la cui P.IVA non ha trovato un fornitore in anagrafica
+  // (il ponte in fic-sync/index.ts non ne crea mai uno da solo): restano
+  // qui, "parcheggiate", finché lo staff non assegna il fornitore a mano —
+  // da quel momento in poi entrano nella coda di riconciliazione normale
+  const [assegnazioneApertaFicId, setAssegnazioneApertaFicId] = useState(null);
+  const [fornitoreScelto, setFornitoreScelto] = useState("");
+  async function assegnaFornitoreNotaCredito(fic) {
+    if (!fornitoreScelto) return;
+    const { error } = await supabase.from("documento_fornitore").insert({
+      fornitore_id: fornitoreScelto, fic_id: fic.fic_id, tipo: "nota_credito",
+      numero: fic.numero, data_documento: fic.data, imponibile: fic.imponibile, iva: fic.iva, totale: fic.totale,
+      stato: "da_riconciliare",
+    });
+    if (error) { setMsgNoteCredito("Errore: " + error.message); return; }
+    setAssegnazioneApertaFicId(null);
+    setFornitoreScelto("");
+    await ricarica(["documento_fornitore"]);
   }
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
@@ -22881,7 +23169,38 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                   sottotitolo={[f.categoria, f.numero ? `Doc. ${f.numero}` : null].filter(Boolean).join(" · ") || null}
                   chips={[]}
                   importo={fmtEuroErp(f.totale)}
-                />
+                >
+                  {(() => {
+                    const df = documentoFornitorePerFicId[f.fic_id];
+                    if (df && df.stato === "riconciliato") {
+                      return (
+                        <>
+                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#2E7D32", background: "#E3F3E5", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Riconciliata</span>
+                          <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Vedi riconciliazione</button>
+                        </>
+                      );
+                    }
+                    if (df && df.stato === "scartato") {
+                      return <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#F1EEE4", borderRadius: 12, padding: "4px 10px", whiteSpace: "nowrap" }}>Scartata</span>;
+                    }
+                    if (df) {
+                      return <button onClick={() => onApriRiconciliazione(df.id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Riconcilia</button>;
+                    }
+                    if (assegnazioneApertaFicId === f.fic_id) {
+                      return (
+                        <>
+                          <select style={{ ...inputStyle, width: 200 }} value={fornitoreScelto} onChange={(e) => setFornitoreScelto(e.target.value)}>
+                            <option value="">Scegli fornitore…</option>
+                            {fornitori.map((fo) => <option key={fo.id} value={fo.id}>{fo.nome}</option>)}
+                          </select>
+                          <button onClick={() => assegnaFornitoreNotaCredito(f)} disabled={!fornitoreScelto} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "8px 14px", cursor: "pointer", opacity: fornitoreScelto ? 1 : 0.5 }}>Conferma</button>
+                          <button onClick={() => { setAssegnazioneApertaFicId(null); setFornitoreScelto(""); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+                        </>
+                      );
+                    }
+                    return <button onClick={() => setAssegnazioneApertaFicId(f.fic_id)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}>Assegna fornitore</button>;
+                  })()}
+                </RigaAmministrazione>
               ), dataDiNoteCredito)}
             </div>
           </div>
@@ -36142,6 +36461,7 @@ export default function App() {
   const [riconciliazioneTabella, setRiconciliazioneTabella] = useState([]);
   const [scadenzaPassivaTabella, setScadenzaPassivaTabella] = useState([]);
   const [preferenzeMatchTabella, setPreferenzeMatchTabella] = useState([]);
+  const [rettificheScadenzaNCTabella, setRettificheScadenzaNCTabella] = useState([]);
   const [documentoFornitoreApertoId, setDocumentoFornitoreApertoId] = useState(null);
   const [costiBudget, setCostiBudget] = useState([]);
   const [costiSoglieAllerta, setCostiSoglieAllerta] = useState([]);
@@ -36299,6 +36619,7 @@ export default function App() {
     riconciliazione: async () => setRiconciliazioneTabella((await supabase.from("riconciliazione").select("*")).data || []),
     scadenza_passiva: async () => setScadenzaPassivaTabella((await supabase.from("scadenza_passiva").select("*")).data || []),
     preferenze_match_fornitore: async () => setPreferenzeMatchTabella((await supabase.from("preferenze_match_fornitore").select("*")).data || []),
+    rettifica_scadenza_nota_credito: async () => setRettificheScadenzaNCTabella((await supabase.from("rettifica_scadenza_nota_credito").select("*")).data || []),
     costi_budget: async () => setCostiBudget((await supabase.from("costi_budget").select("*")).data || []),
     costi_soglie_allerta: async () => setCostiSoglieAllerta((await supabase.from("costi_soglie_allerta").select("*")).data || []),
     entrate_manuali: async () => setEntrateManuali((await supabase.from("entrate_manuali").select("*").order("data", { ascending: false })).data || []),
@@ -36460,7 +36781,7 @@ export default function App() {
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic"],
-    riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
+    riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
     crmshop: ["vendite_shop", "voci_shop_classificazione", "vendite_shop_crm"],
@@ -37352,6 +37673,7 @@ export default function App() {
           riconciliazioneTabella={riconciliazioneTabella}
           scadenzaPassivaTabella={scadenzaPassivaTabella}
           preferenzeMatchTabella={preferenzeMatchTabella}
+          rettificheScadenzaNCTabella={rettificheScadenzaNCTabella}
           fornitori={fornitori}
           costiSottocategorie={costiSottocategorie}
           abbonamentiContratti={abbonamentiContratti}
