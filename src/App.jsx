@@ -395,6 +395,21 @@ function IconaPin({ size = 15, color = GOLD }) {
     </svg>
   );
 }
+function IconaFiltroImbuto({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5Z" />
+    </svg>
+  );
+}
+function IconaResetCircolare({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7" />
+      <path d="M3 4v4.5h4.5" />
+    </svg>
+  );
+}
 function IconaEdificioErp({ size = 20, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -5035,7 +5050,7 @@ function SezioneDateCorsi({
             <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" />
           </div>
         )}
-        <FiltroPill compatto={isMobile}
+        <FiltroPill compatto={isMobile} Icona={IconaFiltroImbuto}
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
           valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
           aperto={apriFiltroCorsoHome} selectRef={selectFiltroCorsoHomeRef}
@@ -5043,7 +5058,7 @@ function SezioneDateCorsi({
           onChange={(e) => { setFiltroCorsoHome(e.target.value); setApriFiltroCorsoHome(false); }}
           onBlur={() => setApriFiltroCorsoHome(false)}
         />
-        <FiltroPill compatto={isMobile}
+        <FiltroPill compatto={isMobile} Icona={IconaPin}
           etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
           valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
           aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
@@ -5051,7 +5066,7 @@ function SezioneDateCorsi({
           onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
           onBlur={() => setApriFiltroCittaHome(false)}
         />
-        <FiltroPill compatto={isMobile}
+        <FiltroPill compatto={isMobile} Icona={IconaLaureaErp}
           etichetta="Filtra master" opzioneVuota="Tutte le master" opzioni={master}
           valore={filtroMasterHome} etichettaAttiva={master.find((m) => m.id === filtroMasterHome)?.nome.toUpperCase()}
           aperto={apriFiltroMasterHome} selectRef={selectFiltroMasterHomeRef}
@@ -5061,14 +5076,16 @@ function SezioneDateCorsi({
         />
         <button
           onClick={() => setCronologicoHome((v) => !v)}
-          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 14px", borderRadius: 20, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 16px", borderRadius: 10, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}
         >
+          {!isMobile && <IconaCalendarioCard size={16} color="currentColor" />}
           Cronologico
         </button>
         <button
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 14px", borderRadius: 20, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}
+          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 16px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}
         >
+          {!isMobile && <IconaResetCircolare size={16} color="currentColor" />}
           Reset filtri
         </button>
       </div>
@@ -12725,18 +12742,19 @@ function CampoFileTrascinabile({ style, onChange, ...resto }) {
 // altrimenti contornato; al click apre sotto di sé un <select> nativo
 // con l'elenco delle opzioni. Usato per i filtri corso/città/master
 // sia in Home che in Gestione date
-function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota, compatto }) {
+function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota, compatto, Icona }) {
   return (
     <div style={{ position: "relative", flex: "0 0 auto", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
         style={{
-          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : 13, padding: compatto ? "7px 10px" : "10px 14px", borderRadius: 20,
+          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : 13, padding: compatto ? "7px 10px" : "10px 16px", borderRadius: 10,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          overflow: "hidden", width: "auto", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", width: "auto", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}
       >
+        {Icona && !compatto && <Icona size={16} color="currentColor" />}
         <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compatto ? 130 : 170 }}>{valore ? etichettaAttiva : etichetta}</span>
       </button>
       {aperto && (
