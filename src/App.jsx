@@ -16694,21 +16694,21 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               ))}
 
               <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center", marginBottom: 14 }}>Riepilogo Cash</div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
-                  <div>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash incassato al corso</div>
+                <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
+                <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: 14 }}>
+                  <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash incassato al corso</div>
                     <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {contantiClasse}</div>
                   </div>
-                  <div>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Totale Cash da pagare</div>
+                  <div style={{ padding: "14px 20px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Totale Cash da pagare</div>
                     <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {totaleCashDaPagareClasse}</div>
                   </div>
-                  <div style={{ padding: "8px 16px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}` }}>
-                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>Cash pulito in busta</div>
+                  <div style={{ padding: "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                    <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash pulito in busta</div>
                     <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
                   </div>
-                  <Button onClick={salvaCostiClasse} disabled={salvandoCosti}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
+                  <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={{ alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
                 </div>
               </div>
             </div>
