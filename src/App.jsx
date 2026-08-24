@@ -7942,20 +7942,51 @@ function AlertScadenzeModelle({ numeroSlot, numeroCorsi, giorni }) {
   );
 }
 
+// ordine fisso dei trattamenti nelle colonne di "Modelle necessarie":
+// sopracciglia sempre per prima, poi labbra, poi eyeliner — qualunque altro
+// trattamento (needling, laminazione, microblading...) segue in ordine
+// alfabetico. Basato su parola chiave, non sul testo esatto, perché il nome
+// reale porta sempre una variante ("SOPRACCIGLIA OMBRETTO", "EYELINER
+// BASE"...)
+function prioritaTipoModella(tipo) {
+  const t = String(tipo || "").toUpperCase();
+  if (t.includes("SOPRACCIGLIA")) return 0;
+  if (t.includes("LABBRA")) return 1;
+  if (t.includes("EYELINER")) return 2;
+  return 3;
+}
+
 // riga cliccabile della lista "Priorità": stessa card di CardDataMaster
 // (bordo + spigoli arrotondati, riquadro data colorato, sezioni separate da
 // una riga sottile) invece della semplice riga di lista di prima — stessa
 // distribuzione di informazioni: data colorata → corso e sede → riepilogo
-// richieste/assegnate/da trovare, sotto la lista di chi manca. Le icone dei
-// trattamenti sono allineate in colonne fisse (una colonna per tipo,
-// ordinate alfabeticamente): così "sopracciglia" di un'allieva è sempre
+// richieste/assegnate/da trovare, sotto la lista di chi manca. Bordo e
+// riquadro data nel colore proprio del corso (come CardDataMaster), non
+// nel colore di urgenza — quello resta solo sul badge "TRA N GIORNI". Le
+// icone dei trattamenti sono allineate in colonne fisse (sopracciglia,
+// labbra, eyeliner, poi altri): così "sopracciglia" di un'allieva è sempre
 // nella stessa colonna di "sopracciglia" delle altre, invece di scorrere
 // dopo il nome (che ha lunghezze diverse) come accadeva prima.
 function RigaPrioritaModelle({ edizione, onApri }) {
   const g = edizione.giorniAOggi;
-  const urgenza = g <= 3 ? { bg: "#FDECEC", fg: "#C0392B" } : g <= 7 ? { bg: "#FFF3E0", fg: "#B9770E" } : { bg: "#F1ECDF", fg: NAVY };
+  const coloreCorso = edizione.colore || NAVY;
+  // sotto i 20 giorni (compreso oggi/in corso) il badge cresce e lampeggia
+  // rosso: è la soglia oltre la quale bisogna davvero muoversi
+  const urgente = g <= 20;
   const testoGiorni = g < 0 ? "IN CORSO" : g === 0 ? "OGGI" : g === 1 ? "DOMANI" : `TRA ${g} GIORNI`;
-  const badgeGiorni = <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: urgenza.fg, background: urgenza.bg, borderRadius: 20, padding: "4px 9px", display: "inline-block", whiteSpace: "nowrap" }}>{testoGiorni}</span>;
+  const badgeGiorni = (
+    <>
+      {urgente && <style>{`@keyframes lampeggiaPrioritaModelle { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }`}</style>}
+      <span style={{
+        ...fontBody, fontWeight: 700, display: "inline-block", whiteSpace: "nowrap", borderRadius: 20,
+        ...(urgente
+          ? { fontSize: 13, color: "#fff", background: "#C0392B", padding: "6px 13px", animation: "lampeggiaPrioritaModelle 1.1s ease-in-out infinite" }
+          : { fontSize: 11, color: NAVY, background: "#F1ECDF", padding: "4px 9px" }),
+      }}>
+        {testoGiorni}
+      </span>
+    </>
+  );
   const { numero: numeroData, sotto: sottoData } = etichettaIntervalloGiorni(edizione.dataInizio, edizione.dataFine);
   const numero = (v, c, lab) => (
     <div style={{ textAlign: "center" }}>
@@ -7972,8 +8003,10 @@ function RigaPrioritaModelle({ edizione, onApri }) {
     const tipi = trattamentiPerAllievo.get(s.allievoNome);
     if (!tipi.includes(s.tipo)) tipi.push(s.tipo);
   });
-  // colonne fisse per tipo di trattamento, ordine alfabetico stabile
-  const tipiPresenti = Array.from(new Set(edizione.slot.filter((s) => s.ruolo === "allievo").map((s) => s.tipo))).sort((a, b) => String(a).localeCompare(String(b)));
+  // colonne fisse per tipo di trattamento: sopracciglia, labbra, eyeliner,
+  // poi il resto in ordine alfabetico
+  const tipiPresenti = Array.from(new Set(edizione.slot.filter((s) => s.ruolo === "allievo").map((s) => s.tipo)))
+    .sort((a, b) => prioritaTipoModella(a) - prioritaTipoModella(b) || String(a).localeCompare(String(b)));
   const anteprimaAllievi = nomiAllievi.length > 0 && (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Modelle necessarie</div>
@@ -7991,10 +8024,10 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   );
 
   return (
-    <div onClick={onApri} style={{ border: `2px solid ${urgenza.fg}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: "pointer" }}>
+    <div onClick={onApri} style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: "pointer" }}>
       <div style={{ marginBottom: 10 }}>{badgeGiorni}</div>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-        <div style={{ background: urgenza.fg, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+        <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
           <div style={{ ...fontDisplay, fontSize: numeroData.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numeroData}</div>
           {sottoData && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sottoData}</div>}
         </div>
@@ -8266,7 +8299,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
   const edizioni = useMemo(() => {
     const m = new Map();
     slotAttivi.forEach((s) => {
-      if (!m.has(s.corsoDataId)) m.set(s.corsoDataId, { corsoDataId: s.corsoDataId, corsoId: s.corsoId, corsoNome: s.corsoNome, cittaNome: s.cittaNome, dataInizio: s.dataInizio, dataFine: s.dataFine, masterTrainerNome: s.masterTrainerNome, slot: [] });
+      if (!m.has(s.corsoDataId)) m.set(s.corsoDataId, { corsoDataId: s.corsoDataId, corsoId: s.corsoId, corsoNome: s.corsoNome, cittaNome: s.cittaNome, dataInizio: s.dataInizio, dataFine: s.dataFine, masterTrainerNome: s.masterTrainerNome, colore: (corsi || []).find((c) => c.id === s.corsoId)?.colore || null, slot: [] });
       m.get(s.corsoDataId).slot.push(s);
     });
     return Array.from(m.values()).map((e) => {
@@ -8397,36 +8430,19 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         </select>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
-        <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-            <div>
-              <div style={{ ...hStyle, marginBottom: 0 }}>Priorità · prossimi {scadenzaGiorni} giorni</div>
-              <div style={subStyle}>In ordine di urgenza</div>
-            </div>
-            {edizioniPrioritarie.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie[0])}>Gestisci assegnazioni</Button>}
+      <div style={cardStyle}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+          <div>
+            <div style={{ ...hStyle, marginBottom: 0 }}>Priorità prossimi 60 giorni</div>
+            <div style={subStyle}>In ordine di urgenza</div>
           </div>
-          {edizioniPrioritarie.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi {scadenzaGiorni} giorni.</div>
-          ) : (
-            edizioniPrioritarie.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
-          )}
+          {edizioniPrioritarie60.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie60[0])}>Gestisci assegnazioni</Button>}
         </div>
-
-        <div style={cardStyle}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-            <div>
-              <div style={{ ...hStyle, marginBottom: 0 }}>Priorità prossimi 60 giorni</div>
-              <div style={subStyle}>In ordine di urgenza</div>
-            </div>
-            {edizioniPrioritarie60.length > 0 && <Button onClick={() => apriEdizione(edizioniPrioritarie60[0])}>Gestisci assegnazioni</Button>}
-          </div>
-          {edizioniPrioritarie60.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi 60 giorni.</div>
-          ) : (
-            edizioniPrioritarie60.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
-          )}
-        </div>
+        {edizioniPrioritarie60.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi 60 giorni.</div>
+        ) : (
+          edizioniPrioritarie60.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "2fr 1fr", gap: 18, alignItems: "start", marginTop: 18 }}>
