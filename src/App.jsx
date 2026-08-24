@@ -8007,25 +8007,26 @@ function RigaPrioritaModelle({ edizione, onApri }) {
   // poi il resto in ordine alfabetico
   const tipiPresenti = Array.from(new Set(edizione.slot.filter((s) => s.ruolo === "allievo").map((s) => s.tipo)))
     .sort((a, b) => prioritaTipoModella(a) - prioritaTipoModella(b) || String(a).localeCompare(String(b)));
-  // le colonne non possono avere larghezza "a contenuto" (auto): con le
-  // schede ristrette a 1/3 dello schermo, 3 trattamenti lunghi (es.
-  // "SOPRACCIGLIA OMBRETTO") sforerebbero il bordo verso destra. Sono
-  // invece frazioni della larghezza disponibile (1fr ciascuna, sempre
-  // dentro il contenitore), col testo troncato se non ci sta — nome e
-  // trattamenti restano così tutti sulla stessa riga, mai tagliati fuori
+  // le colonne dei trattamenti non possono avere larghezza "a contenuto"
+  // (auto): con le schede ristrette, 3 trattamenti lunghi (es.
+  // "SOPRACCIGLIA OMBRETTO") sforerebbero il bordo verso destra — restano
+  // frazioni della larghezza disponibile, col testo troncato solo se
+  // davvero non ci sta. Il nome invece non si tronca mai: se non basta lo
+  // spazio va a capo su due righe, piuttosto che tagliare il nome
+  // dell'allieva
   const anteprimaAllievi = nomiAllievi.length > 0 && (
     <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Modelle necessarie</div>
       <div style={{
         display: "grid",
-        gridTemplateColumns: `minmax(0, 1fr) repeat(${tipiPresenti.length}, minmax(0, 1fr))`,
-        columnGap: 5, rowGap: 8, alignItems: "center",
+        gridTemplateColumns: `minmax(70px, 1.4fr) repeat(${tipiPresenti.length}, minmax(0, 1fr))`,
+        columnGap: 6, rowGap: 8, alignItems: "center",
       }}>
         {nomiAllievi.map((nome) => (
           <React.Fragment key={nome}>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{nome.toUpperCase()}</span>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{nome.toUpperCase()}</span>
             {tipiPresenti.map((t) => (
-              <div key={t} style={{ minWidth: 0 }}>
+              <div key={t} style={{ minWidth: 0, textAlign: "center" }}>
                 {trattamentiPerAllievo.get(nome).includes(t) && <PallinoTipoModellaCompatto tipo={t} />}
               </div>
             ))}
@@ -8453,7 +8454,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
         {edizioniPrioritarie60.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 14, color: MUTED, padding: "20px 0" }}>Nessuna urgenza nei prossimi 60 giorni.</div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: 14, marginTop: 10 }}>
             {edizioniPrioritarie60.map((e) => <RigaPrioritaModelle key={e.corsoDataId} edizione={e} onApri={() => apriEdizione(e)} />)}
           </div>
         )}
@@ -11938,10 +11939,18 @@ const PALETTE_TIPO_MODELLA = [
   { colore: "#3B6FA0", sfondo: "#E7EEF5" },
   { colore: "#A03B6F", sfondo: "#FAE7F1" },
 ];
+// i tre trattamenti più comuni hanno un colore fisso, non quello (a caso)
+// dell'hash: due testi diversi possono cadere nello stesso bucket della
+// tavolozza e diventare visivamente indistinguibili (successo davvero fra
+// "LABBRA" e "EYELINER BASE") — qui non può succedere. Tutto il resto
+// (needling, microblading, laminazione...) resta sul colore stabile da hash.
 function coloreTipoModella(tipo) {
-  const s = String(tipo || "");
+  const t = String(tipo || "").toUpperCase();
+  if (t.includes("SOPRACCIGLIA")) return { colore: "#C0392B", sfondo: "#FBE4E1" };
+  if (t.includes("LABBRA")) return { colore: "#2E5AAC", sfondo: "#E7EEFB" };
+  if (t.includes("EYELINER")) return { colore: "#8A6D1D", sfondo: "#FBF1DD" };
   let hash = 0;
-  for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < t.length; i++) hash = (hash * 31 + t.charCodeAt(i)) >>> 0;
   return PALETTE_TIPO_MODELLA[hash % PALETTE_TIPO_MODELLA.length];
 }
 function PallinoTipoModella({ tipo }) {
@@ -11952,14 +11961,16 @@ function PallinoTipoModella({ tipo }) {
     </span>
   );
 }
-// stessa cosa, ma per colonne strette (mobile, "Modelle necessarie" di
-// RigaPrioritaModelle): larghezza sempre quella della colonna che lo ospita
-// (mai a contenuto), testo troncato con "…" se non ci sta — evita che tre
-// trattamenti lunghi affiancati sfondino lo schermo verso destra
+// stessa cosa, ma per colonne strette (mobile e le card a 1/3 di
+// RigaPrioritaModelle): larghezza sempre a misura del proprio testo (una
+// parola corta come "LABBRA" resta piccola, non stirata a riempire la
+// colonna), MAI oltre quella della colonna che la ospita — se il testo non
+// ci sta si tronca con "…", evita che trattamenti lunghi affiancati
+// sfondino lo schermo verso destra
 function PallinoTipoModellaCompatto({ tipo }) {
   const { colore, sfondo } = coloreTipoModella(tipo);
   return (
-    <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: colore, background: sfondo, borderRadius: 8, padding: "3px 5px", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center" }}>
+    <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: colore, background: sfondo, borderRadius: 8, padding: "3px 5px", display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
       {tipo || "—"}
     </span>
   );
