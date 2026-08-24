@@ -5026,8 +5026,15 @@ function SezioneDateCorsi({
           </div>
         </>
       )}
-      <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
-      <div ref={rigaFiltriRef} style={{ display: "flex", gap: isMobile ? 5 : 6, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri, overflowX: "auto" } : {}) }}>
+      {isMobile && (
+        <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" style={{ marginBottom: 12 }} />
+      )}
+      <div ref={rigaFiltriRef} style={{ display: "flex", alignItems: "center", gap: isMobile ? 5 : 8, marginBottom: 16, flexWrap: isMobile ? "nowrap" : "wrap", minWidth: 0, ...(isMobile ? { fontSize: fontFiltri, overflowX: "auto" } : {}) }}>
+        {!isMobile && (
+          <div style={{ flex: "1 1 200px", minWidth: 160 }}>
+            <CampoRicerca value={ricercaDate} onChange={(e) => setRicercaDate(e.target.value)} placeholder="Cerca allievo, corso, sede o master…" />
+          </div>
+        )}
         <FiltroPill compatto={isMobile}
           etichetta="Filtra corso" opzioneVuota="Tutti i corsi" opzioni={corsi}
           valore={filtroCorsoHome} etichettaAttiva={corsi.find((c) => c.id === filtroCorsoHome)?.nome.toUpperCase()}
@@ -12720,19 +12727,17 @@ function CampoFileTrascinabile({ style, onChange, ...resto }) {
 // sia in Home che in Gestione date
 function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, selectRef, onChange, onBlur, opzioni, opzioneVuota, compatto }) {
   return (
-    <div style={{ position: "relative", flex: compatto ? "0 0 auto" : "1 1 0", minWidth: 0, display: "flex" }}>
+    <div style={{ position: "relative", flex: "0 0 auto", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
         style={{
-          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : undefined, padding: compatto ? "7px 10px" : "10px 10px", borderRadius: 20,
+          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : 13, padding: compatto ? "7px 10px" : "10px 14px", borderRadius: 20,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
-          overflow: "hidden", width: compatto ? "auto" : "100%", display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden", width: "auto", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center",
         }}
       >
-        {compatto
-          ? <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{valore ? etichettaAttiva : etichetta}</span>
-          : <EtichettaAdattiva testo={valore ? etichettaAttiva : etichetta} />}
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compatto ? 130 : 170 }}>{valore ? etichettaAttiva : etichetta}</span>
       </button>
       {aperto && (
         <select
