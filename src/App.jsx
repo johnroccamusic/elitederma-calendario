@@ -28761,7 +28761,7 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
 // costruisciAllieviCrm) — nessuna query server-side, nessuna
 // paginazione: stesso stile del resto dell'app, tutto già in memoria e
 // filtrato/ordinato nel browser
-function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack }) {
+function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi }) {
   const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -28943,6 +28943,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>Tutti gli allievi che hanno acquistato almeno un corso.</div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
+            {onApriStoricoAllievi && <Button variant="ghost" onClick={onApriStoricoAllievi}>Storico Allievi</Button>}
             <Button onClick={() => setMostraNuovoAllievo(true)}>+ Nuovo allievo</Button>
             <Button variant="ghost" onClick={() => esportaCsvCrmAllievi(risultati)}>⭱ Esporta</Button>
           </div>
@@ -32275,18 +32276,32 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, spedizioniPos, onApriMagazziniLocali, onApriSpedizioniPos, onBack, ricarica }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, onApriMagazziniLocali, onBack, ricarica }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
-  const edizioniInArrivo = useMemo(
-    () => corsiDate.filter((cd) => cd.data_fine >= oggiStr).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio)),
-    [corsiDate, oggiStr]
-  );
+  // "Storico spedizioni": le schede non spariscono più quando la data del
+  // corso passa, restano consultabili qui (stesso layout, solo filtro e
+  // ordinamento invertiti — le più recenti prima)
+  const [vistaStorico, setVistaStorico] = useState(false);
+  const [ricercaStorico, setRicercaStorico] = useState("");
+  const edizioniInArrivo = useMemo(() => {
+    if (!vistaStorico) {
+      return corsiDate.filter((cd) => cd.data_fine >= oggiStr).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+    }
+    const q = ricercaStorico.trim().toLowerCase();
+    return corsiDate
+      .filter((cd) => cd.data_fine < oggiStr)
+      .filter((cd) => {
+        if (!q) return true;
+        const testo = `${corsoById[cd.corso_id]?.nome || ""} ${locById[cd.location_id]?.nome || ""}`.toLowerCase();
+        return testo.includes(q);
+      })
+      .sort((a, b) => b.data_inizio.localeCompare(a.data_inizio));
+  }, [corsiDate, oggiStr, vistaStorico, ricercaStorico, corsoById, locById]);
   const [edizioneSelId, setEdizioneSelId] = useState(null);
   const edizioneSel = edizioniInArrivo.find((cd) => cd.id === edizioneSelId) || edizioniInArrivo[0] || null;
-  const numeroSpedizioniDaEvadere = (spedizioniPos || []).filter((s) => s.stato === "da_spedire").length;
   async function cambiaTagliaIscritto(iscrittoId, taglia) {
     const { error } = await supabase.from("iscritti").update({ taglia_divisa: taglia }).eq("id", iscrittoId);
     if (error) { window.alert("Errore: " + error.message); return; }
@@ -32539,33 +32554,35 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
-              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>Logistica prodotti</div>
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra.</div>
+              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{vistaStorico ? "Storico spedizioni" : "Logistica prodotti"}</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>
+                {vistaStorico ? "Corsi già conclusi: le schede restano consultabili qui, non spariscono più." : "Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra."}
+              </div>
             </div>
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <button onClick={onApriMagazziniLocali} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer" }}>
-              Magazzini locali
-            </button>
+            {!vistaStorico && (
+              <button onClick={onApriMagazziniLocali} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer" }}>
+                Magazzini locali
+              </button>
+            )}
             <button
-              onClick={onApriSpedizioniPos}
-              style={{
-                ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 10, padding: "9px 14px", cursor: "pointer", border: "none",
-                color: numeroSpedizioniDaEvadere > 0 ? "#fff" : NAVY,
-                background: numeroSpedizioniDaEvadere > 0 ? "#C0392B" : "#fff",
-                boxShadow: numeroSpedizioniDaEvadere > 0 ? "none" : `0 0 0 1px ${CREAM_BORDER} inset`,
-              }}
+              onClick={() => { setVistaStorico((v) => !v); setEdizioneSelId(null); setRicercaStorico(""); }}
+              style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: vistaStorico ? "#fff" : NAVY, background: vistaStorico ? NAVY : "#fff", border: vistaStorico ? "none" : `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "9px 14px", cursor: "pointer" }}
             >
-              {numeroSpedizioniDaEvadere > 0 ? `Spedizioni da evadere (${numeroSpedizioniDaEvadere})` : "Nessuna spedizione da evadere"}
+              {vistaStorico ? "← Corsi in arrivo" : "Storico spedizioni"}
             </button>
           </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.15fr 1fr", gap: 16, alignItems: "flex-start" }}>
           <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Corsi in arrivo</div>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{vistaStorico ? "Storico spedizioni" : "Corsi in arrivo"}</div>
+            {vistaStorico && (
+              <CampoRicerca value={ricercaStorico} onChange={(e) => setRicercaStorico(e.target.value)} placeholder="Cerca corso o città…" style={{ marginBottom: 10 }} />
+            )}
             {edizioniInArrivo.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "20px 0" }}>Nessun corso in programma.</div>
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "20px 0" }}>{vistaStorico ? "Nessun corso concluso trovato." : "Nessun corso in programma."}</div>
             ) : edizioniInArrivo.map((cd) => (
               <RigaCorsoLogistica
                 key={cd.id}
@@ -37502,8 +37519,8 @@ export default function App() {
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} inventarioSede={inventarioSede}
-          prodottiApertiMagazzino={prodottiApertiMagazzino} spedizioniPos={spedizioniPos}
-          onApriMagazziniLocali={apriMagazziniLocali} onApriSpedizioniPos={apriSpedizioniPos}
+          prodottiApertiMagazzino={prodottiApertiMagazzino}
+          onApriMagazziniLocali={apriMagazziniLocali}
           ricarica={fetchDati} onBack={() => setView("home")}
         />
       )}
@@ -37595,6 +37612,7 @@ export default function App() {
         <PaginaCrmAllievi
           iscritti={iscritti} allieviCrm={allieviCrm} corsi={corsi} corsiDate={corsiDate} location={location}
           ricarica={fetchDati} onBack={() => setView("home")}
+          onApriStoricoAllievi={apriStoricoAllievi}
         />
       )}
 
