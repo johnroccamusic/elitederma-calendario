@@ -13923,6 +13923,7 @@ const TASTI_HOME = [
   { chiave: "gestionemodelle", etichetta: "Gestione modelle" },
   { chiave: "statistiche", etichetta: "Statistiche" },
   { chiave: "crmallievi", etichetta: "CRM Allievi" },
+  { chiave: "storicoallievi", etichetta: "Storico Allievi" },
   { chiave: "impostazioni", etichetta: "Setting" },
 ];
 // Logistica prodotti: le 4 fasi di spedizione di un'edizione (in
@@ -28989,6 +28990,381 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   );
 }
 
+// ---------- Storico Allievi ----------
+// corsi svolti prima del gestionale (importati una tantum dagli archivi
+// Excel, tabella storico_allievi) uniti — solo in lettura, MAI scritti su
+// storico_allievi — ai corsi già conclusi nel gestionale attuale
+// (corsi_date.data_fine passata): così la pagina si aggiorna da sola man
+// mano che i corsi finiscono, senza duplicare dati tra due tabelle.
+function fmtDataStoricoAllievo(data, precisione) {
+  if (!data) return "—";
+  const [y, m] = data.split("-");
+  if ((precisione || "").startsWith("anno")) return y;
+  if ((precisione || "").startsWith("mese")) return `${m}/${y}`;
+  return fmtData(data.slice(0, 10));
+}
+
+function costruisciStoricoUnificato(storicoAllievi, iscritti, corsiDate, location) {
+  const cdById = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd]));
+  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  const oggi = dataOggiStr();
+
+  const daStorico = (storicoAllievi || []).map((r) => ({ ...r, origine: "storico" }));
+
+  const daGestionale = (iscritti || [])
+    .map((i) => {
+      const cd = cdById[i.corso_data_id];
+      if (!cd || !cd.data_fine || cd.data_fine >= oggi) return null; // solo corsi già conclusi
+      return {
+        id: `iscritto-${i.id}`,
+        nome: i.nome || "",
+        cognome: i.cognome || "",
+        citta: locById[cd.location_id]?.nome || "",
+        corso_id: cd.corso_id || null,
+        data: cd.data_fine,
+        precisione_data: "giorno",
+        telefono: i.telefono || "",
+        email: i.email || "",
+        dubbio_nome: false,
+        motivo_dubbio: "",
+        citta_disaccordo: false,
+        file_origine: null,
+        origine: "gestionale",
+        iscrittoId: i.id,
+      };
+    })
+    .filter(Boolean);
+
+  return [...daStorico, ...daGestionale];
+}
+
+function esportaCsvStoricoAllievi(righe, corsoById) {
+  const intestazione = ["Nome", "Cognome", "Città", "Corso", "Data", "Telefono", "Email", "Origine"];
+  const righeCsv = righe.map((r) => [
+    toTitleCase(r.nome), toTitleCase(r.cognome), toTitleCase(r.citta),
+    corsoById[r.corso_id]?.nome ? toTitleCase(corsoById[r.corso_id].nome) : "",
+    fmtDataStoricoAllievo(r.data, r.precisione_data),
+    r.telefono || "", r.email || "",
+    r.origine === "storico" ? "Storico" : "Gestionale",
+  ]);
+  const csv = [intestazione, ...righeCsv].map((r) => r.map((v) => `"${String(v || "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `storico-allievi-${dataOggiStr()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function intestazioneOrdinabile(etichetta, campo, ordinamento, setOrdinamento, width) {
+  const attivo = ordinamento.campo === campo;
+  return (
+    <th
+      onClick={() => setOrdinamento((o) => (o.campo === campo ? { campo, direzione: o.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: "asc" }))}
+      style={{ width, padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: attivo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}
+    >
+      {etichetta}{attivo ? (ordinamento.direzione === "asc" ? " ▲" : " ▼") : ""}
+    </th>
+  );
+}
+
+// scheda di dettaglio: telefono/email sono editabili solo per le righe
+// "storico" (tabella storico_allievi, non ancora arricchita). Le righe
+// "gestionale" vengono dall'iscrizione live e si modificano da lì (CRM
+// Allievi/modulo di iscrizione), non duplicano un secondo punto di scrittura
+function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
+  const [telefono, setTelefono] = useState(riga.telefono || "");
+  const [email, setEmail] = useState(riga.email || "");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  const modificabile = riga.origine === "storico";
+
+  async function salva() {
+    setSalvando(true); setMsg("");
+    const { error } = await supabase.from("storico_allievi").update({
+      telefono: telefono.trim() || null,
+      email: email.trim() || null,
+    }).eq("id", riga.id);
+    setSalvando(false);
+    if (error) { setMsg("Errore: " + error.message); return; }
+    setMsg("Salvato.");
+    ricarica(["storico_allievi"]);
+  }
+
+  return (
+    <Modal title={`${toTitleCase(riga.nome)} ${toTitleCase(riga.cognome)}`} onClose={onClose} maxWidth={480}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 16 }}>
+        {toTitleCase(riga.citta)}{corso ? ` · ${toTitleCase(corso.nome)}` : ""} · {fmtDataStoricoAllievo(riga.data, riga.precisione_data)}
+        {" · "}{riga.origine === "storico" ? "Storico (pre-gestionale)" : "Corso concluso nel gestionale"}
+      </div>
+
+      {modificabile ? (
+        <>
+          <Field label="Telefono">
+            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="non ancora importato" style={inputStyle} />
+          </Field>
+          <Field label="Email">
+            <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="non ancora importata" style={inputStyle} />
+          </Field>
+        </>
+      ) : (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+          Telefono ed email di questa allieva vengono dal modulo di iscrizione: si modificano da lì o da CRM Allievi, non da qui.
+        </div>
+      )}
+
+      {(riga.dubbio_nome || riga.citta_disaccordo) && (
+        <div style={{ background: "#FBE4E1", borderRadius: 8, padding: "8px 12px", ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 14 }}>
+          {riga.motivo_dubbio || "Città non concorde tra cartella e file originale: verificare a mano."}
+        </div>
+      )}
+      {riga.file_origine && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 14, wordBreak: "break-word" }}>
+          Origine: {riga.file_origine}
+        </div>
+      )}
+
+      {modificabile && (
+        <>
+          {msg && <div style={{ ...fontBody, fontSize: 12.5, color: msg.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginBottom: 10 }}>{msg}</div>}
+          <Button onClick={salva} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, location, ricarica, onBack }) {
+  const isMobile = useIsMobile();
+  const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
+  const tutte = useMemo(() => costruisciStoricoUnificato(storicoAllievi, iscritti, corsiDate, location), [storicoAllievi, iscritti, corsiDate, location]);
+
+  const [ricerca, setRicerca] = useState("");
+  const [filtroCitta, setFiltroCitta] = useState("");
+  const [filtroCorso, setFiltroCorso] = useState("");
+  const [filtroAnno, setFiltroAnno] = useState("");
+  const [soloDaVerificare, setSoloDaVerificare] = useState(false);
+  const [ordinamento, setOrdinamento] = useState({ campo: "data", direzione: "desc" });
+  const [pagina, setPagina] = useState(0);
+  const [selezionati, setSelezionati] = useState(new Set());
+  const [dettaglioId, setDettaglioId] = useState(null);
+  const PER_PAGINA = 50;
+
+  const opzioniCitta = useMemo(() => Array.from(new Set(tutte.map((r) => r.citta).filter(Boolean))).sort(), [tutte]);
+  const opzioniAnno = useMemo(() => Array.from(new Set(tutte.map((r) => (r.data || "").slice(0, 4)).filter(Boolean))).sort().reverse(), [tutte]);
+  const opzioniCorso = useMemo(() => {
+    const ids = new Set(tutte.map((r) => r.corso_id).filter(Boolean));
+    return corsi.filter((c) => ids.has(c.id)).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [tutte, corsi]);
+
+  function svuotaSelezionePerFiltro() {
+    setSelezionati((prev) => (prev.size === 0 ? prev : new Set()));
+    setPagina(0);
+  }
+  function cambiaRicerca(v) { setRicerca(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroCitta(v) { setFiltroCitta(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroCorso(v) { setFiltroCorso(v); svuotaSelezionePerFiltro(); }
+  function cambiaFiltroAnno(v) { setFiltroAnno(v); svuotaSelezionePerFiltro(); }
+  function toggleSoloDaVerificare() { setSoloDaVerificare((v) => !v); svuotaSelezionePerFiltro(); }
+  function resetFiltri() {
+    setRicerca(""); setFiltroCitta(""); setFiltroCorso(""); setFiltroAnno(""); setSoloDaVerificare(false);
+    svuotaSelezionePerFiltro();
+  }
+
+  const daVerificareCount = useMemo(() => tutte.filter((r) => r.dubbio_nome || r.citta_disaccordo).length, [tutte]);
+
+  const risultati = useMemo(() => {
+    const q = ricerca.trim().toLowerCase();
+    let l = tutte.filter((r) => {
+      if (q) {
+        const testo = `${r.nome} ${r.cognome} ${r.citta} ${r.telefono || ""} ${r.email || ""}`.toLowerCase();
+        if (!testo.includes(q)) return false;
+      }
+      if (filtroCitta && r.citta !== filtroCitta) return false;
+      if (filtroCorso && r.corso_id !== filtroCorso) return false;
+      if (filtroAnno && (r.data || "").slice(0, 4) !== filtroAnno) return false;
+      if (soloDaVerificare && !(r.dubbio_nome || r.citta_disaccordo)) return false;
+      return true;
+    });
+    const { campo, direzione } = ordinamento;
+    const segno = direzione === "asc" ? 1 : -1;
+    l = l.slice().sort((a, b) => {
+      let va, vb;
+      if (campo === "nome") { va = `${a.nome} ${a.cognome}`; vb = `${b.nome} ${b.cognome}`; }
+      else if (campo === "corso") { va = corsoById[a.corso_id]?.nome || ""; vb = corsoById[b.corso_id]?.nome || ""; }
+      else { va = a[campo] || ""; vb = b[campo] || ""; }
+      return String(va).localeCompare(String(vb), "it") * segno;
+    });
+    return l;
+  }, [tutte, ricerca, filtroCitta, filtroCorso, filtroAnno, soloDaVerificare, ordinamento, corsoById]);
+
+  const totalePagine = Math.max(1, Math.ceil(risultati.length / PER_PAGINA));
+  const paginaClamp = Math.min(pagina, totalePagine - 1);
+  const risultatiPagina = risultati.slice(paginaClamp * PER_PAGINA, paginaClamp * PER_PAGINA + PER_PAGINA);
+
+  const tuttiVisibiliSelezionati = risultatiPagina.length > 0 && risultatiPagina.every((r) => selezionati.has(r.id));
+  function toggleTutti() {
+    setSelezionati((prev) => {
+      const next = new Set(prev);
+      if (tuttiVisibiliSelezionati) risultatiPagina.forEach((r) => next.delete(r.id));
+      else risultatiPagina.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+  function toggleRiga(id) {
+    setSelezionati((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function selezionaTuttiFiltrati() { setSelezionati(new Set(risultati.map((r) => r.id))); }
+
+  const dettaglio = dettaglioId ? tutte.find((r) => r.id === dettaglioId) : null;
+  const righeSelezionate = tutte.filter((r) => selezionati.has(r.id));
+
+  const th = (etichetta, campo, width) => intestazioneOrdinabile(etichetta, campo, ordinamento, setOrdinamento, width);
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
+      <div style={{ maxWidth: 1280, margin: "0 auto" }}>
+        <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
+          <div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Storico Allievi</div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>
+              Corsi pre-gestionale recuperati dagli archivi, più i corsi già conclusi nel gestionale ({tutte.length.toLocaleString("it-IT")} allieve).
+            </div>
+          </div>
+          <Button variant="ghost" onClick={() => esportaCsvStoricoAllievi(risultati, corsoById)}>⭱ Esporta</Button>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => cambiaRicerca(e.target.value)} placeholder="Cerca per nome, città, telefono, email…" />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
+          <div style={{ flex: "1 1 130px", minWidth: 110 }}>
+            <Field label="Anno">
+              <select style={inputStyle} value={filtroAnno} onChange={(e) => cambiaFiltroAnno(e.target.value)}>
+                <option value="">Tutti</option>
+                {opzioniAnno.map((a) => <option key={a} value={a}>{a}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Field label="Città">
+              <select style={inputStyle} value={filtroCitta} onChange={(e) => cambiaFiltroCitta(e.target.value)}>
+                <option value="">Tutte</option>
+                {opzioniCitta.map((c) => <option key={c} value={c}>{toTitleCase(c)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+            <Field label="Corso">
+              <select style={inputStyle} value={filtroCorso} onChange={(e) => cambiaFiltroCorso(e.target.value)}>
+                <option value="">Tutti</option>
+                {opzioniCorso.map((c) => <option key={c.id} value={c.id}>{toTitleCase(c.nome)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Button variant="ghost" onClick={resetFiltri}>Reset filtri</Button>
+          {daVerificareCount > 0 && (
+            <button
+              onClick={toggleSoloDaVerificare}
+              style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: soloDaVerificare ? "#F5C6C0" : "#FBE4E1", border: "1px solid #C0392B", borderRadius: 20, padding: "9px 14px", cursor: "pointer" }}
+            >
+              ⚠️ Da verificare ({daVerificareCount})
+            </button>
+          )}
+        </div>
+
+        <div style={{ background: "#FBF1D9", border: `1px solid ${CREAM_BORDER}`, borderRadius: "14px 14px 0 0", padding: "12px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={tuttiVisibiliSelezionati} onChange={toggleTutti} style={{ width: 16, height: 16 }} />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{selezionati.size} selezionati</span>
+          </label>
+          {risultati.length > 0 && (
+            <button onClick={selezionaTuttiFiltrati} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px dashed ${GOLD}`, borderRadius: 20, padding: "6px 12px", cursor: "pointer" }}>
+              Seleziona tutti i risultati ({risultati.length})
+            </button>
+          )}
+          <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Risultati filtrati: {risultati.length.toLocaleString("it-IT")}</span>
+          <div style={{ flex: 1 }} />
+          <Button variant="ghost" disabled={selezionati.size === 0} onClick={() => esportaCsvStoricoAllievi(righeSelezionate, corsoById)}>⭱ Esporta selezionati (per campagne)</Button>
+        </div>
+
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "0 0 14px 14px", marginBottom: 14 }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
+            <thead>
+              <tr>
+                <th style={{ width: "3%", padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, background: BG }} />
+                {th("Allievo", "nome", "16%")}
+                {th("Città", "citta", "10%")}
+                {th("Corso", "corso", "13%")}
+                {th("Data", "data", "9%")}
+                {th("Telefono", "telefono", "10%")}
+                {th("Email", "email", "15%")}
+                <th style={{ width: "8%", padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG }}>Attenzione</th>
+                <th style={{ width: "6%", padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, background: BG }} />
+              </tr>
+            </thead>
+            <tbody>
+              {risultatiPagina.length === 0 && (
+                <tr><td colSpan={9} style={{ padding: "24px 14px", textAlign: "center", ...fontBody, fontSize: 13, color: MUTED }}>Nessuna allieva trovata con questi filtri.</td></tr>
+              )}
+              {risultatiPagina.map((r) => {
+                const corso = corsoById[r.corso_id];
+                const attenzione = r.dubbio_nome || r.citta_disaccordo;
+                return (
+                  <tr key={r.id} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                    <td style={{ padding: "5px 6px" }}>
+                      <input type="checkbox" checked={selezionati.has(r.id)} onChange={() => toggleRiga(r.id)} style={{ width: 14, height: 14 }} />
+                    </td>
+                    <td style={{ padding: "5px 6px", ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", wordBreak: "break-word" }} onClick={() => setDettaglioId(r.id)}>
+                      {toTitleCase(r.nome)} {toTitleCase(r.cognome)}
+                      {r.origine === "gestionale" && <span style={{ marginLeft: 6, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED }}>●</span>}
+                    </td>
+                    <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, wordBreak: "break-word" }}>{toTitleCase(r.citta)}</td>
+                    <td style={{ padding: "5px 6px" }}>
+                      {corso && <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: NAVY, background: coloreTenue(corso.colore || NAVY, 0.32), borderRadius: 20, padding: "2px 7px", whiteSpace: "nowrap" }}>{toTitleCase(corso.nome)}</span>}
+                    </td>
+                    <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataStoricoAllievo(r.data, r.precisione_data)}</td>
+                    <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: r.telefono ? NAVY : MUTED, wordBreak: "break-word" }}>{r.telefono || "—"}</td>
+                    <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: r.email ? NAVY : MUTED, wordBreak: "break-word" }}>{r.email || "—"}</td>
+                    <td style={{ padding: "5px 6px" }}>
+                      {attenzione && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 8px" }} title={r.motivo_dubbio || "Città non concorde tra cartella e file"}>⚠️</span>}
+                    </td>
+                    <td style={{ padding: "5px 6px" }}>
+                      <button onClick={() => setDettaglioId(r.id)} title="Apri dettaglio" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 3, display: "flex" }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" /></svg>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 20 }}>● accanto al nome = corso concluso nel gestionale attuale (non dall'archivio storico).</div>
+
+        {totalePagine > 1 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 14, marginBottom: 30 }}>
+            <button onClick={() => setPagina((p) => Math.max(0, p - 1))} disabled={paginaClamp === 0} style={{ background: "none", border: "none", cursor: paginaClamp === 0 ? "default" : "pointer", opacity: paginaClamp === 0 ? 0.35 : 1, display: "flex", color: NAVY, transform: "rotate(180deg)" }}><IconaChevronDestra size={14} color="currentColor" /></button>
+            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Pagina {paginaClamp + 1} di {totalePagine}</span>
+            <button onClick={() => setPagina((p) => Math.min(totalePagine - 1, p + 1))} disabled={paginaClamp === totalePagine - 1} style={{ background: "none", border: "none", cursor: paginaClamp === totalePagine - 1 ? "default" : "pointer", opacity: paginaClamp === totalePagine - 1 ? 0.35 : 1, display: "flex", color: NAVY }}><IconaChevronDestra size={14} /></button>
+          </div>
+        )}
+      </div>
+
+      {dettaglio && (
+        <DettaglioStoricoAllievo riga={dettaglio} corso={corsoById[dettaglio.corso_id]} onClose={() => setDettaglioId(null)} ricarica={ricarica} />
+      )}
+    </div>
+  );
+}
+
 // ---------- POS Vendita diretta ----------
 // vendita al banco: scarica lo stock da giacenza_magazzino (fisico, come
 // la Logistica prodotti — non tocca mai WooCommerce) e registra la
@@ -35565,6 +35941,7 @@ export default function App() {
   const [puntiMasterPeriodiSpeciali, setPuntiMasterPeriodiSpeciali] = useState([]);
   const [puntiMasterImpostazioni, setPuntiMasterImpostazioni] = useState(null);
   const [allieviCrm, setAllieviCrm] = useState([]);
+  const [storicoAllievi, setStoricoAllievi] = useState([]);
   const [logisticaKitEdizioni, setLogisticaKitEdizioni] = useState([]);
   const [spesaInModifica, setSpesaInModifica] = useState(null);
   // quando "Nuova spesa" si apre da una casella del Riepilogo
@@ -35700,6 +36077,21 @@ export default function App() {
     spedizioni_pos: async () => setSpedizioniPos((await supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false })).data || []),
     master_corsi: async () => setMasterCorsi((await supabase.from("master_corsi").select("*")).data || []),
     allievi_crm: async () => setAllieviCrm((await supabase.from("allievi_crm").select("*")).data || []),
+    // oltre 2800 righe: il limite di default di 1000 righe per richiesta
+    // (Supabase/PostgREST) troncherebbe la tabella a meta' senza avviso,
+    // quindi si pagina con .range() finche' una pagina non torna vuota
+    storico_allievi: async () => {
+      let tutti = [];
+      let da = 0;
+      const PAGINA = 1000;
+      for (;;) {
+        const { data, error } = await supabase.from("storico_allievi").select("*").range(da, da + PAGINA - 1);
+        if (error || !data || data.length === 0) break;
+        tutti = tutti.concat(data);
+        da += data.length;
+      }
+      setStoricoAllievi(tutti);
+    },
     assistente_corsi: async () => setAssistenteCorsi((await supabase.from("assistente_corsi").select("*")).data || []),
     corsi_date_docenti: async () => setCorsiDateDocenti((await supabase.from("corsi_date_docenti").select("*")).data || []),
     voci_shop_classificazione: async () => setVociShopClassificazione((await supabase.from("voci_shop_classificazione").select("*")).data || []),
@@ -35835,6 +36227,7 @@ export default function App() {
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie"],
     crmallievi: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
+    storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
     assegnazionemaster: ["corsi", "location", "corsi_date", "corsi_date_docenti", "master", "hotel", "assistente", "leva", "spese", "impostazioni_layout_assegnazione_master"],
@@ -36210,6 +36603,7 @@ export default function App() {
   function apriGestioneHotel() { setView("gestionehotel"); }
   function apriGestioneLocation() { setView("gestionelocation"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
+  function apriStoricoAllievi() { apriViewProtetta("storicoallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
   function apriGestioneShop() { setProdottoDaAprireInShop(null); apriViewProtetta("gestioneshop"); }
@@ -36553,6 +36947,7 @@ export default function App() {
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaGruppoTeam, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
+              { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
               { chiave: "impostazioni", title: "Impostazioni", descrizione: "Configura preferenze, utenti e permessi", Icona: IconaTileImpostazioni, attivo: tastoAbilitato("impostazioni"), onClick: apriImpostazioni },
               { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Questa sezione sarà presto disponibile.", Icona: IconaTileLampadina, attivo: false, onClick: () => {} },
             ]}
@@ -37053,6 +37448,10 @@ export default function App() {
           iscritti={iscritti} allieviCrm={allieviCrm} corsi={corsi} corsiDate={corsiDate} location={location}
           ricarica={fetchDati} onBack={() => setView("home")}
         />
+      )}
+
+      {view === "storicoallievi" && (
+        <PaginaStoricoAllievi storicoAllievi={storicoAllievi} corsi={corsi} iscritti={iscritti} corsiDate={corsiDate} location={location} ricarica={fetchDati} onBack={() => setView("home")} />
       )}
 
       {view === "statisticavenditori" && (
