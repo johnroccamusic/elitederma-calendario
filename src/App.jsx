@@ -14516,7 +14516,15 @@ function calcolaRigheSpeseCorso(corsoData, { iscritti, corsiDateDocenti, master,
       const compensoGiorno = assegnazione?.compenso_giornaliero || 0;
       const persona = (assistente || []).find((a) => a.id === d.persona_id);
       const dati = conSplit(d.id, { quota_bonifico: d.quota_bonifico, quota_cash: d.quota_cash });
-      return { rigaId: d.id, tabella: "corsi_date_docenti", tipo: "assistente", nome: `Costo Assistente — ${persona?.nome || "—"}`, giorni, compensoGiorno, totale: round2(giorni * compensoGiorno), bonifico: dati.quota_bonifico ?? 0, cash: dati.quota_cash ?? 0 };
+      const totale = round2(giorni * compensoGiorno);
+      // finche' nessuno ha corretto lo split di questa riga (mai toccato),
+      // segue la modalita' di pagamento scelta nella scheda dell'assistente
+      // (Corsi associati -> Bonifico/Cash/1-2) invece di 0/0
+      const maiToccato = dati.quota_bonifico == null && dati.quota_cash == null;
+      const modalita = persona?.modalita_pagamento || "cash";
+      const bonifico = maiToccato ? (modalita === "cash" ? 0 : modalita === "bonifico" ? totale : round2(totale / 2)) : (dati.quota_bonifico ?? 0);
+      const cash = maiToccato ? round2(totale - bonifico) : (dati.quota_cash ?? 0);
+      return { rigaId: d.id, tabella: "corsi_date_docenti", tipo: "assistente", nome: `Costo Assistente — ${persona?.nome || "—"}`, giorni, compensoGiorno, totale, bonifico, cash };
     });
 
   // riga "Commissione ricerca modelle": quando la classe incassa quote
@@ -27474,6 +27482,15 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica([tabella]);
   }
+  // modalita' di pagamento dell'assistente (bonifico/cash/meta e meta'):
+  // guida il default dello split Bonifico/Cash del "Costo Assistente" nel
+  // Riepilogo Amministrativo di ogni corso, finche' nessuno lo corregge a
+  // mano per quella riga — vedi calcolaRigheSpeseCorso
+  async function salvaModalitaPagamento(valore) {
+    const { error } = await supabase.from("assistente").update({ modalita_pagamento: valore }).eq("id", selezionatoId);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["assistente"]);
+  }
   function aggiornaClassMod(campo, valore) {
     setClassMod((prev) => {
       const nuovo = { ...prev, [campo]: valore };
@@ -27758,6 +27775,24 @@ function PaginaGestioneTeam({ tabella, elementi, corsi, corsiDate, corsiDateDoce
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
                       </span>
                       <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>Il compenso giornaliero è fisso: non cambia in base al numero di allievi al corso.</div>
+                    </div>
+
+                    <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Modalità di pagamento</div>
+                      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>Come va saldato il compenso di questa assistente nei corsi a cui partecipa, finché non lo si corregge caso per caso nel Riepilogo Amministrativo.</div>
+                      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+                        {[["bonifico", "Bonifico"], ["cash", "Cash"], ["meta", "1/2 (metà bonifico, metà cash)"]].map(([valore, etichetta]) => (
+                          <label key={valore} style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={(selezionato?.modalita_pagamento || "cash") === valore}
+                              onChange={() => salvaModalitaPagamento(valore)}
+                              style={{ width: 15, height: 15, cursor: "pointer" }}
+                            />
+                            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{etichetta}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
