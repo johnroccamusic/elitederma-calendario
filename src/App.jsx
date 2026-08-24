@@ -21602,12 +21602,13 @@ function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, color
     </button>
   );
 }
-function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, passivoCount, attivoCount, abbonamentiCount }) {
+function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount }) {
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
       <SchedaTabAmministrazione attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Prima nota cassa</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Registro documenti fornitore ({documentiCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD">Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
@@ -22261,7 +22262,7 @@ function PaginaRiconciliazione({
   );
 }
 
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -22354,6 +22355,29 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     if (data?.errore) { setMsgFic("Errore: " + data.errore); return; }
     setMsgFic(`Sincronizzate ${data?.importati ?? 0} fatture.`);
     ricarica(["fatture_ricevute_fic"]);
+  }
+  // Note di credito ricevute: stessa navigazione anno/mese/ricerca del
+  // Registro documenti fornitore, ma sulla pipeline nuova fic-sync
+  // (tabella fic_documenti) invece di fic-sync-documenti
+  const [annoNoteCredito, setAnnoNoteCredito] = useState(Number(oggiStr.slice(0, 4)));
+  const [meseNoteCredito, setMeseNoteCredito] = useState(Number(oggiStr.slice(5, 7)));
+  const [ricercaNoteCredito, setRicercaNoteCredito] = useState("");
+  const [sincronizzandoNoteCredito, setSincronizzandoNoteCredito] = useState(false);
+  const [msgNoteCredito, setMsgNoteCredito] = useState("");
+  async function sincronizzaNoteCredito() {
+    setSincronizzandoNoteCredito(true);
+    setMsgNoteCredito("");
+    const { data: sessione } = await supabase.auth.getSession();
+    const { data, error } = await supabase.functions.invoke("fic-sync", {
+      body: { modo: "incrementale" },
+      headers: sessione?.session ? { Authorization: `Bearer ${sessione.session.access_token}` } : undefined,
+    });
+    setSincronizzandoNoteCredito(false);
+    if (error) { setMsgNoteCredito("Errore: " + error.message); return; }
+    const esito = data?.esiti?.[0];
+    if (esito?.esito === "errore") { setMsgNoteCredito("Errore: " + esito.messaggio); return; }
+    setMsgNoteCredito(`Sincronizzati ${esito?.ricevuti ?? 0} documenti ricevuti.`);
+    ricarica(["note_credito_fic"]);
   }
   const corsiById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locationById = Object.fromEntries((location || []).map((l) => [l.id, l]));
@@ -22526,6 +22550,22 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
     : elencoMeseFic;
   const riepilogoMeseFiltratoFic = riepilogoMensileScadenze(elencoFiltratoFic, dataDiFic, importoDiFic);
 
+  // Note di credito ricevute: stessa logica anno/mese/ricerca, qui sulla
+  // colonna "data"/"totale" di fic_documenti
+  const dataDiNoteCredito = (f) => f.data || null;
+  const importoDiNoteCredito = (f) => f.totale || 0;
+  const noteCreditoOrdinate = [...(noteCreditoFic || [])].sort((a, b) => (b.data || "").localeCompare(a.data || ""));
+  const riepilogoMeseNoteCredito = riepilogoMensileScadenze(noteCreditoOrdinate, dataDiNoteCredito, importoDiNoteCredito);
+  const elencoAnnoNoteCredito = noteCreditoOrdinate.filter((f) => f.data && f.data.slice(0, 4) === String(annoNoteCredito));
+  const elencoMeseNoteCredito = meseNoteCredito ? elencoAnnoNoteCredito.filter((f) => Number(f.data.slice(5, 7)) === meseNoteCredito) : elencoAnnoNoteCredito;
+  const elencoFiltratoNoteCredito = ricercaNoteCredito.trim()
+    ? elencoMeseNoteCredito.filter((f) => {
+        const q = ricercaNoteCredito.trim().toLowerCase();
+        return (f.controparte || "").toLowerCase().includes(q) || (f.categoria || "").toLowerCase().includes(q) || (f.numero || "").toLowerCase().includes(q);
+      })
+    : elencoMeseNoteCredito;
+  const riepilogoMeseFiltratoNoteCredito = riepilogoMensileScadenze(elencoFiltratoNoteCredito, dataDiNoteCredito, importoDiNoteCredito);
+
   // registra una fattura per uno o più impegni insieme ("Cumula altri
   // impegni" in RigaQuadroImpegni): stesso fornitore/tipo, stesso numero
   // fattura/data/scadenza/allegato, ma una riga di spesa per ciascuno —
@@ -22649,6 +22689,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           onApriScheda={setTab}
           impegniCount={impegni.length}
           documentiCount={(fattureRicevuteFic || []).length}
+          noteCreditoCount={(noteCreditoFic || []).length}
           passivoCount={daPagare.length}
           attivoCount={scadenziarioAttivo.length}
           abbonamentiCount={(abbonamentiContratti || []).length}
@@ -22790,6 +22831,58 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
                   })()}
                 </RigaAmministrazione>
               ), dataDiFic)}
+            </div>
+          </div>
+        )}
+
+        {tab === "notecredito" && (
+          <div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={sincronizzaNoteCredito} disabled={sincronizzandoNoteCredito} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "9px 16px", cursor: "pointer", marginLeft: "auto", opacity: sincronizzandoNoteCredito ? 0.6 : 1 }}>
+                {sincronizzandoNoteCredito ? "Sincronizzo…" : "Sincronizza da Fatture in Cloud"}
+              </button>
+            </div>
+            {msgNoteCredito && <div style={{ ...fontBody, fontSize: 13, color: msgNoteCredito.startsWith("Errore") ? "#C0392B" : NAVY, marginBottom: 12 }}>{msgNoteCredito}</div>}
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => setAnnoNoteCredito((a) => a - 1)} title="Anno precedente" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY }}><IconaFrecciaSinistra size={14} /></button>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, minWidth: 44, textAlign: "center" }}>{annoNoteCredito}</div>
+                <button onClick={() => setAnnoNoteCredito((a) => a + 1)} title="Anno successivo" style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: NAVY, transform: "rotate(180deg)" }}><IconaFrecciaSinistra size={14} /></button>
+              </div>
+              <button onClick={() => setMeseNoteCredito(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: meseNoteCredito === null ? "#fff" : NAVY, background: meseNoteCredito === null ? NAVY : "#fff", border: `1px solid ${meseNoteCredito === null ? NAVY : CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: "pointer" }}>Tutto l'anno</button>
+              <div style={{ flex: "1 1 200px", maxWidth: 320, marginLeft: "auto" }}>
+                <CampoRicerca value={ricercaNoteCredito} onChange={(e) => setRicercaNoteCredito(e.target.value)} placeholder="Cerca fornitore, categoria…" />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto", paddingBottom: 4 }}>
+              {MESI_ABBR.map((abbr, idx) => {
+                const m = idx + 1;
+                const chiave = `${annoNoteCredito}-${String(m).padStart(2, "0")}`;
+                const info = riepilogoMeseNoteCredito[chiave];
+                const attivoMese = meseNoteCredito === m;
+                return (
+                  <button key={m} onClick={() => setMeseNoteCredito(m)} style={{ position: "relative", flex: "0 0 auto", minWidth: 56, ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivoMese ? "#fff" : NAVY, background: attivoMese ? NAVY : "#fff", border: `1px solid ${attivoMese ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "8px 4px", cursor: "pointer", textAlign: "center" }}>
+                    <div>{abbr}</div>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: attivoMese ? "#fff" : MUTED, marginTop: 2 }}>{info ? info.count : "—"}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ ...cardStyle }}>
+              {elencoFiltratoNoteCredito.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>Nessuna nota di credito per il periodo selezionato.</div>}
+              {elencoScadenzeConIntestazioni(elencoFiltratoNoteCredito, riepilogoMeseFiltratoNoteCredito, (f) => (
+                <RigaAmministrazione
+                  key={f.fic_id}
+                  data={f.data}
+                  titolo={f.controparte || "Nota di credito"}
+                  sottotitolo={[f.categoria, f.numero ? `Doc. ${f.numero}` : null].filter(Boolean).join(" · ") || null}
+                  chips={[]}
+                  importo={fmtEuroErp(f.totale)}
+                />
+              ), dataDiNoteCredito)}
             </div>
           </div>
         )}
@@ -29253,11 +29346,6 @@ function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
         </div>
       )}
 
-      {(riga.dubbio_nome || riga.citta_disaccordo) && (
-        <div style={{ background: "#FBE4E1", borderRadius: 8, padding: "8px 12px", ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 14 }}>
-          {riga.motivo_dubbio || "Città non concorde tra cartella e file originale: verificare a mano."}
-        </div>
-      )}
       {riga.file_origine && (
         <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 14, wordBreak: "break-word" }}>
           Origine: {riga.file_origine}
@@ -29283,7 +29371,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
   const [filtroCitta, setFiltroCitta] = useState("");
   const [filtroCorso, setFiltroCorso] = useState("");
   const [filtroAnno, setFiltroAnno] = useState("");
-  const [soloDaVerificare, setSoloDaVerificare] = useState(false);
+  const [soloDuplicati, setSoloDuplicati] = useState(false);
   const [ordinamento, setOrdinamento] = useState({ campo: "data", direzione: "desc" });
   const [pagina, setPagina] = useState(0);
   const [selezionati, setSelezionati] = useState(new Set());
@@ -29305,13 +29393,33 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
   function cambiaFiltroCitta(v) { setFiltroCitta(v); svuotaSelezionePerFiltro(); }
   function cambiaFiltroCorso(v) { setFiltroCorso(v); svuotaSelezionePerFiltro(); }
   function cambiaFiltroAnno(v) { setFiltroAnno(v); svuotaSelezionePerFiltro(); }
-  function toggleSoloDaVerificare() { setSoloDaVerificare((v) => !v); svuotaSelezionePerFiltro(); }
+  function toggleSoloDuplicati() { setSoloDuplicati((v) => !v); svuotaSelezionePerFiltro(); }
   function resetFiltri() {
-    setRicerca(""); setFiltroCitta(""); setFiltroCorso(""); setFiltroAnno(""); setSoloDaVerificare(false);
+    setRicerca(""); setFiltroCitta(""); setFiltroCorso(""); setFiltroAnno(""); setSoloDuplicati(false);
     svuotaSelezionePerFiltro();
   }
 
-  const daVerificareCount = useMemo(() => tutte.filter((r) => r.dubbio_nome || r.citta_disaccordo).length, [tutte]);
+  // "possibili doppioni": stesso nome+cognome che compare in più di una
+  // città — quasi impossibile da notare scorrendo 2800+ righe a mano, ma
+  // scorrendo lo stesso nome ripetuto solo nella stessa città è la norma
+  // (un'allieva che torna per un altro corso), quindi si segnala solo
+  // quando la città cambia
+  const idsDuplicati = useMemo(() => {
+    const mappa = {};
+    tutte.forEach((r) => {
+      const nome = (r.nome || "").trim().toUpperCase();
+      const cognome = (r.cognome || "").trim().toUpperCase();
+      if (!nome && !cognome) return;
+      const chiave = `${nome}|${cognome}`;
+      (mappa[chiave] ||= []).push(r);
+    });
+    const ids = new Set();
+    Object.values(mappa).forEach((gruppo) => {
+      if (new Set(gruppo.map((r) => r.citta)).size > 1) gruppo.forEach((r) => ids.add(r.id));
+    });
+    return ids;
+  }, [tutte]);
+  const duplicatiCount = idsDuplicati.size;
 
   const risultati = useMemo(() => {
     const q = ricerca.trim().toLowerCase();
@@ -29323,9 +29431,18 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
       if (filtroCitta && r.citta !== filtroCitta) return false;
       if (filtroCorso && r.corso_id !== filtroCorso) return false;
       if (filtroAnno && (r.data || "").slice(0, 4) !== filtroAnno) return false;
-      if (soloDaVerificare && !(r.dubbio_nome || r.citta_disaccordo)) return false;
+      if (soloDuplicati && !idsDuplicati.has(r.id)) return false;
       return true;
     });
+    if (soloDuplicati) {
+      // raggruppati per nome+cognome (poi città) invece che per l'ordinamento
+      // scelto: così le righe della stessa persona restano una sotto l'altra,
+      // facili da confrontare a colpo d'occhio
+      l = l.slice().sort((a, b) =>
+        `${a.nome} ${a.cognome}`.localeCompare(`${b.nome} ${b.cognome}`, "it") || (a.citta || "").localeCompare(b.citta || "", "it")
+      );
+      return l;
+    }
     const { campo, direzione } = ordinamento;
     const segno = direzione === "asc" ? 1 : -1;
     l = l.slice().sort((a, b) => {
@@ -29336,7 +29453,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
       return String(va).localeCompare(String(vb), "it") * segno;
     });
     return l;
-  }, [tutte, ricerca, filtroCitta, filtroCorso, filtroAnno, soloDaVerificare, ordinamento, corsoById]);
+  }, [tutte, ricerca, filtroCitta, filtroCorso, filtroAnno, soloDuplicati, idsDuplicati, ordinamento, corsoById]);
 
   const totalePagine = Math.max(1, Math.ceil(risultati.length / PER_PAGINA));
   const paginaClamp = Math.min(pagina, totalePagine - 1);
@@ -29410,12 +29527,13 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
             </Field>
           </div>
           <Button variant="ghost" onClick={resetFiltri}>Reset filtri</Button>
-          {daVerificareCount > 0 && (
+          {duplicatiCount > 0 && (
             <button
-              onClick={toggleSoloDaVerificare}
-              style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: soloDaVerificare ? "#F5C6C0" : "#FBE4E1", border: "1px solid #C0392B", borderRadius: 20, padding: "9px 14px", cursor: "pointer" }}
+              onClick={toggleSoloDuplicati}
+              title="Stesso nome e cognome che compare in più di una città"
+              style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: soloDuplicati ? "#F5C6C0" : "#FBE4E1", border: "1px solid #C0392B", borderRadius: 20, padding: "9px 14px", cursor: "pointer" }}
             >
-              ⚠️ Da verificare ({daVerificareCount})
+              👥 Possibili doppioni ({duplicatiCount})
             </button>
           )}
         </div>
@@ -29446,17 +29564,16 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
                 {th("Data", "data", "9%")}
                 {th("Telefono", "telefono", "10%")}
                 {th("Email", "email", "15%")}
-                <th style={{ width: "8%", padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG }}>Attenzione</th>
                 <th style={{ width: "6%", padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, background: BG }} />
               </tr>
             </thead>
             <tbody>
               {risultatiPagina.length === 0 && (
-                <tr><td colSpan={9} style={{ padding: "24px 14px", textAlign: "center", ...fontBody, fontSize: 13, color: MUTED }}>Nessuna allieva trovata con questi filtri.</td></tr>
+                <tr><td colSpan={8} style={{ padding: "24px 14px", textAlign: "center", ...fontBody, fontSize: 13, color: MUTED }}>Nessuna allieva trovata con questi filtri.</td></tr>
               )}
               {risultatiPagina.map((r) => {
                 const corso = corsoById[r.corso_id];
-                const attenzione = r.dubbio_nome || r.citta_disaccordo;
+                const duplicato = idsDuplicati.has(r.id);
                 return (
                   <tr key={r.id} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
                     <td style={{ padding: "5px 6px" }}>
@@ -29465,6 +29582,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
                     <td style={{ padding: "5px 6px", ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", wordBreak: "break-word" }} onClick={() => setDettaglioId(r.id)}>
                       {toTitleCase(r.nome)} {toTitleCase(r.cognome)}
                       {r.origine === "gestionale" && <span style={{ marginLeft: 6, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED }}>●</span>}
+                      {duplicato && <span title="Stesso nome in più di una città" style={{ marginLeft: 6 }}>👥</span>}
                     </td>
                     <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, wordBreak: "break-word" }}>{toTitleCase(r.citta)}</td>
                     <td style={{ padding: "5px 6px" }}>
@@ -29473,9 +29591,6 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
                     <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataStoricoAllievo(r.data, r.precisione_data)}</td>
                     <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: r.telefono ? NAVY : MUTED, wordBreak: "break-word" }}>{r.telefono || "—"}</td>
                     <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: r.email ? NAVY : MUTED, wordBreak: "break-word" }}>{r.email || "—"}</td>
-                    <td style={{ padding: "5px 6px" }}>
-                      {attenzione && <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 8px" }} title={r.motivo_dubbio || "Città non concorde tra cartella e file"}>⚠️</span>}
-                    </td>
                     <td style={{ padding: "5px 6px" }}>
                       <button onClick={() => setDettaglioId(r.id)} title="Apri dettaglio" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 3, display: "flex" }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" /></svg>
@@ -36014,6 +36129,11 @@ export default function App() {
   // (Registro documenti fornitore → "Da Fatture in Cloud"); i token
   // OAuth veri vivono solo lato server, mai qui
   const [fattureRicevuteFic, setFattureRicevuteFic] = useState([]);
+  // note di credito ricevute, sincronizzate dalla nuova pipeline fic-sync
+  // (tabella fic_documenti, tipo "passive_credit_note") — pipeline distinta
+  // da fatture_ricevute_fic/fic-sync-documenti qui sopra, che copre solo le
+  // spese (type=expense)
+  const [noteCreditoFic, setNoteCreditoFic] = useState([]);
   // riconciliazione fatture (spec-riconciliazione.md §4): le 4 tabelle
   // del modello dati, lette qui per la prima volta — finora create ma
   // mai caricate in nessuna schermata
@@ -36173,6 +36293,7 @@ export default function App() {
     abbonamenti_importi: async () => setAbbonamentiImporti((await supabase.from("abbonamenti_importi").select("*").order("valido_da")).data || []),
     abbonamenti_attribuzioni: async () => setAbbonamentiAttribuzioni((await supabase.from("abbonamenti_attribuzioni").select("*")).data || []),
     fatture_ricevute_fic: async () => setFattureRicevuteFic((await supabase.from("fatture_ricevute_fic").select("*").order("data_documento", { ascending: false })).data || []),
+    note_credito_fic: async () => setNoteCreditoFic((await supabase.from("fic_documenti").select("*").eq("direzione", "ricevuto").eq("tipo", "passive_credit_note").order("data", { ascending: false })).data || []),
     documento_fornitore: async () => setDocumentoFornitoreTabella((await supabase.from("documento_fornitore").select("*").order("data_documento", { ascending: false })).data || []),
     impegno: async () => setImpegnoTabella((await supabase.from("impegno").select("*")).data || []),
     riconciliazione: async () => setRiconciliazioneTabella((await supabase.from("riconciliazione").select("*")).data || []),
@@ -36338,7 +36459,7 @@ export default function App() {
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
-    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore"],
+    amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     classificazionevocishop: ["voci_shop_classificazione", "vendite_shop"],
@@ -37206,6 +37327,7 @@ export default function App() {
           spese={spese} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} fornitori={fornitori}
           abbonamentiContratti={abbonamentiContratti} abbonamentiImporti={abbonamentiImporti}
           fattureRicevuteFic={fattureRicevuteFic}
+          noteCreditoFic={noteCreditoFic}
           documentoFornitoreTabella={documentoFornitoreTabella}
           ricarica={fetchDati}
           onBack={() => setView("erp")}

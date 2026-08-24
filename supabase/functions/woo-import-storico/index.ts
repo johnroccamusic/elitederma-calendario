@@ -6,6 +6,13 @@
 // (supabase.functions.invoke, stessa autenticazione anon-key delle altre
 // funzioni Woo — nessun secret separato da gestire lato client).
 //
+// Parte SEMPRE da poco prima dell'ultimo ordine già importato (query
+// "after" verso WooCommerce), non dal primo ordine in assoluto: con lo
+// storico ormai a migliaia di ordini, riscandire tutto a ogni giro (com'era
+// prima) supera il tempo/CPU massimo della funzione ed esce con 504/546
+// senza importare nulla, nemmeno gli ordini nuovi. Il margine di
+// sovrapposizione è innocuo perché l'upsert è idempotente.
+//
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   WC_SITE_URL        — es. https://shop.elitederma.it (senza slash finale)
 //   WC_CONSUMER_KEY    — Consumer key generata in WooCommerce → Impostazioni → Avanzate → REST API
@@ -21,6 +28,7 @@ const supabase = createClient(
 
 const PER_PAGE = 100;
 const MASSIMO_PAGINE = 200; // tetto di sicurezza: 200 x 100 = 20.000 ordini
+const GIORNI_SOVRAPPOSIZIONE = 3; // margine prima dell'ultimo ordine noto, per sicurezza
 
 // senza queste intestazioni il browser blocca la risposta (CORS) e il
 // client Supabase fallisce con "Failed to send a request to the Edge
@@ -43,12 +51,34 @@ Deno.serve(async (req) => {
   }
   const auth = "Basic " + btoa(`${consumerKey}:${consumerSecret}`);
 
+  // Cursore incrementale: dall'ultimo ordine già importato in poi
+  const { data: ultimo } = await supabase
+    .from("vendite_shop")
+    .select("data_ordine")
+    .order("data_ordine", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  let after: string | null = null;
+  if (ultimo?.data_ordine) {
+    const soglia = new Date(ultimo.data_ordine as string);
+    soglia.setUTCDate(soglia.getUTCDate() - GIORNI_SOVRAPPOSIZIONE);
+    after = soglia.toISOString().slice(0, 19); // WooCommerce vuole ISO8601 senza offset, in GMT
+  }
+
   let pagina = 1;
   let ordiniImportati = 0;
   let completato = false;
 
   while (pagina <= MASSIMO_PAGINE) {
-    const url = `${siteUrl}/wp-json/wc/v3/orders?per_page=${PER_PAGE}&page=${pagina}&orderby=id&order=asc`;
+    const parametri = new URLSearchParams({
+      per_page: String(PER_PAGE),
+      page: String(pagina),
+      orderby: "id",
+      order: "asc",
+    });
+    if (after) parametri.set("after", after);
+    const url = `${siteUrl}/wp-json/wc/v3/orders?${parametri.toString()}`;
     const risposta = await fetch(url, { headers: { Authorization: auth } });
 
     if (!risposta.ok) {
@@ -88,7 +118,7 @@ Deno.serve(async (req) => {
   }
 
   return new Response(
-    JSON.stringify({ ordiniImportati, pagineProcessate: pagina, completato }),
+    JSON.stringify({ ordiniImportati, pagineProcessate: pagina, completato, dopoData: after }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
