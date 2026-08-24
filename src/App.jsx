@@ -5078,14 +5078,14 @@ function SezioneDateCorsi({
           onClick={() => setCronologicoHome((v) => !v)}
           style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 16px", borderRadius: 10, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}
         >
-          {!isMobile && <IconaCalendarioCard size={16} color="currentColor" />}
+          <IconaCalendarioCard size={isMobile ? 14 : 16} color="currentColor" />
           Cronologico
         </button>
         <button
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
           style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 16px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}
         >
-          {!isMobile && <IconaResetCircolare size={16} color="currentColor" />}
+          <IconaResetCircolare size={isMobile ? 14 : 16} color="currentColor" />
           Reset filtri
         </button>
       </div>
@@ -12754,7 +12754,7 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
           overflow: "hidden", width: "auto", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}
       >
-        {Icona && !compatto && <Icona size={16} color="currentColor" />}
+        {Icona && <Icona size={compatto ? 14 : 16} color="currentColor" />}
         <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compatto ? 130 : 170 }}>{valore ? etichettaAttiva : etichetta}</span>
       </button>
       {aperto && (
