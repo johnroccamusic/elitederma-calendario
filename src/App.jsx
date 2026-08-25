@@ -1344,8 +1344,12 @@ function BadgeFileCaricato() {
 // (gli hub interni tipo ERP che riusano lo stesso componente) resta la
 // versione minimale di sempre, solo titolo, per non alterarne l'aspetto.
 // "attivo=false" la mostra spenta con badge "Non attivo", per aree non
-// ancora costruite. Su mobile tile più compatte, sempre leggibili senza
-// scroll orizzontale
+// ancora costruite. Su mobile, invece della card col testo dentro, un
+// tasto "squircle" stile app iOS: solo l'icona al centro, etichetta sotto
+// — niente più descrizione né freccia, che dentro una tile così piccola
+// non si leggevano comunque. Vale per tutte le pagine che riusano questo
+// componente (Home, Statistiche, Amministrazione, Gestione magazzino e
+// shop), non solo la Home.
 function TileHome({
   title, descrizione, Icona, attivo = true, onClick,
   // riordino/cartelle (solo programmatore, vedi GrigliaTasti) — tutti
@@ -1356,6 +1360,41 @@ function TileHome({
   const isMobile = useIsMobile();
   const ricca = !!Icona;
   const coloreTesto = attivo ? NAVY : MUTED;
+  if (isMobile && ricca) {
+    return (
+      <button
+        onClick={attivo ? onClick : undefined}
+        disabled={!attivo}
+        draggable={draggableTasto}
+        onDragStart={draggableTasto ? onDragStartTasto : undefined}
+        onDragEnd={draggableTasto ? onDragEndTasto : undefined}
+        onDragOver={onDragOverTasto}
+        onDrop={onDropTasto}
+        style={{
+          ...fontBody, width: "90%", margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
+          opacity: attenuato ? 0.5 : 1,
+        }}
+      >
+        <div style={{
+          width: "100%", aspectRatio: "1 / 1", position: "relative", boxSizing: "border-box",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: attivo ? "#FFFFFF" : "#F1EAE0", borderRadius: "22%",
+          boxShadow: "0 1px 4px rgba(14,27,51,0.16)",
+          outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
+        }}>
+          {maniglia}
+          <Icona size={30} color={coloreTesto} />
+          {!attivo && (
+            <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
+          )}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "100%", whiteSpace: "normal", wordBreak: "break-word" }}>
+          {title}
+        </div>
+      </button>
+    );
+  }
   return (
     <button
       onClick={attivo ? onClick : undefined}
@@ -1471,7 +1510,8 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, ruoloUtente, onSal
   const programmatore = ruoloUtente === "programmatore";
   // scelta del programmatore per QUESTA pagina, salvata — se non ha mai
   // scelto nulla resta il default della pagina (colonneDesktop). Il
-  // mobile è sempre a 3 per riga, questa scelta riguarda solo il desktop
+  // mobile è sempre a 4 per riga (stile griglia icone iOS), questa scelta
+  // riguarda solo il desktop
   const colonneEffettive = colonne || colonneDesktop;
   const [cartellaApertaId, setCartellaApertaId] = useState(null);
   const dragRef = React.useRef(null); // { tipo: "grip" | "tasto", chiave }
@@ -1611,7 +1651,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, ruoloUtente, onSal
           </div>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 10 : 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 14 : 16, rowGap: isMobile ? 18 : 16 }}>
         {listaVisibile.map((nodo) => {
           const isCartella = typeof nodo === "object" && nodo?.tipo === "cartella";
           const chiave = isCartella ? nodo.id : nodo;
