@@ -17,7 +17,7 @@
 // da Supabase a ogni Edge Function, non vanno impostati a mano.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mappaOrdine, attribuisciMasterReferral } from "../_shared/woo.ts";
+import { mappaOrdine, attribuisciMasterReferral, STATI_VIVI, applicaMovimentoBundle, sincronizzaDisponibilitaBundle } from "../_shared/woo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -99,10 +99,49 @@ Deno.serve(async (req) => {
   // (condivisa con woo-import-storico, stessa identica regola)
   await attribuisciMasterReferral(supabase, ordine, riga);
 
+  // letto PRIMA dell'upsert: serve a sapere se questo webhook è la prima
+  // volta che l'ordine diventa "vivo" (da scaricare) o che smette di
+  // esserlo (da ripristinare) — un ordine già vivo che resta vivo (es.
+  // "processing" -> "completed", o lo stesso identico webhook consegnato
+  // due volte) non deve muovere il magazzino una seconda volta
+  const { data: esistente } = await supabase
+    .from("vendite_shop")
+    .select("stato, prodotti")
+    .eq("woo_order_id", riga.woo_order_id as number)
+    .maybeSingle();
+
   const { error } = await supabase.from("vendite_shop").upsert(riga, { onConflict: "woo_order_id" });
   if (error) {
     console.error("Errore upsert vendite_shop:", error.message);
     return new Response("Errore salvataggio: " + error.message, { status: 500 });
+  }
+
+  // bundle "kit": non hanno una giacenza propria, chi li vende online
+  // scarica/ripristina i loro componenti — mai il bundle stesso (vedi
+  // applicaMovimentoBundle). Un eventuale errore qui non deve far fallire
+  // la risposta al webhook: la vendita è già salvata, un problema di
+  // magazzino va segnalato nei log della function, non bloccare WooCommerce
+  try {
+    const eraVivo = STATI_VIVI.includes(String(esistente?.stato || ""));
+    const oraVivo = STATI_VIVI.includes(String(riga.stato || ""));
+    let bundleToccati = new Set<string>();
+    if (!eraVivo && oraVivo) {
+      bundleToccati = await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1);
+    } else if (eraVivo && !oraVivo) {
+      bundleToccati = await applicaMovimentoBundle(supabase, (esistente?.prodotti as any[]) || [], 1);
+    }
+    if (bundleToccati.size) {
+      const siteUrl = Deno.env.get("WC_SITE_URL");
+      const consumerKey = Deno.env.get("WC_CONSUMER_KEY_WRITE");
+      const consumerSecret = Deno.env.get("WC_CONSUMER_SECRET_WRITE");
+      if (siteUrl && consumerKey && consumerSecret) {
+        await sincronizzaDisponibilitaBundle(supabase, bundleToccati, siteUrl, consumerKey, consumerSecret);
+      } else {
+        console.error("Componenti bundle aggiornati, ma WC_CONSUMER_KEY_WRITE/SECRET mancanti: disponibilità non sincronizzata su WooCommerce");
+      }
+    }
+  } catch (erroreBundle) {
+    console.error("Errore nello scarico/ripristino componenti bundle:", erroreBundle);
   }
 
   return new Response("ok", { status: 200 });

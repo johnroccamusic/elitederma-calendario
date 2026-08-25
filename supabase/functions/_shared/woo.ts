@@ -103,3 +103,73 @@ export async function attribuisciMasterReferral(supabase: any, ordine: any, riga
   riga.operatore_id = scelto.master_id;
   riga.operatore_nome = masterRiga?.nome || null;
 }
+
+// stati WooCommerce che "impegnano" davvero lo stock (stessi due in cui
+// WooCommerce stesso, di default, decrementa il proprio stock_quantity):
+// solo la transizione DENTRO/FUORI da questo insieme scarica o ripristina
+// i componenti di un bundle — mai due volte per lo stesso ordine, vedi
+// woo-webhook (confronta lo stato PRIMA dell'upsert con quello nuovo)
+export const STATI_VIVI = ["processing", "completed"];
+
+// per ogni riga dell'ordine che corrisponde a un prodotto "bundle" (per
+// nome, stesso confronto usato ovunque nell'app), scarica o ripristina
+// (direzione -1 / +1) i suoi componenti nella distinta base, proporzionati
+// alla quantità venduta — un bundle non ha mai una giacenza propria.
+// Ritorna gli id dei bundle toccati, per poi rispingere su WooCommerce la
+// loro disponibilità ricalcolata (vedi sincronizzaDisponibilitaBundle)
+export async function applicaMovimentoBundle(supabase: any, prodotti: any[], direzione: 1 | -1): Promise<Set<string>> {
+  const bundleToccati = new Set<string>();
+  for (const riga of prodotti || []) {
+    const nome = String(riga?.nome || "").trim();
+    const quantita = Number(riga?.quantita) || 0;
+    if (!nome || !quantita) continue;
+    const { data: prodotto } = await supabase.from("prodotti_shop").select("id, tipo_prodotto").ilike("nome", nome).maybeSingle();
+    if (!prodotto || prodotto.tipo_prodotto !== "bundle") continue;
+    const { data: componenti } = await supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", prodotto.id);
+    for (const c of componenti || []) {
+      const { data: comp } = await supabase.from("prodotti_shop").select("giacenza_magazzino").eq("id", c.componente_id).maybeSingle();
+      if (!comp) continue;
+      const nuovoMagazzino = (comp.giacenza_magazzino || 0) + direzione * quantita * c.quantita_per_bundle;
+      if (nuovoMagazzino < 0) console.error(`Bundle "${nome}": componente ${c.componente_id} andrebbe sotto zero (${nuovoMagazzino}), portato a 0`);
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: Math.max(0, nuovoMagazzino) }).eq("id", c.componente_id);
+      if (error) console.error(`Bundle "${nome}": errore aggiornando il componente ${c.componente_id}:`, error.message);
+    }
+    bundleToccati.add(prodotto.id);
+  }
+  return bundleToccati;
+}
+
+// ricalcola quanti bundle si possono comporre con le giacenze attuali dei
+// componenti e lo spinge su WooCommerce (stock_quantity) per i bundle che
+// hanno un woo_product_id — senza questo passaggio WooCommerce potrebbe
+// continuare a vendere online un kit che i componenti non permettono più
+// di comporre (overselling)
+export async function sincronizzaDisponibilitaBundle(
+  supabase: any,
+  bundleIds: Set<string>,
+  siteUrl: string,
+  consumerKey: string,
+  consumerSecret: string
+): Promise<void> {
+  const auth = "Basic " + btoa(`${consumerKey}:${consumerSecret}`);
+  for (const bundleId of bundleIds) {
+    const { data: bundle } = await supabase.from("prodotti_shop").select("id, nome, woo_product_id").eq("id", bundleId).maybeSingle();
+    if (!bundle?.woo_product_id) continue;
+    const { data: componenti } = await supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", bundleId);
+    if (!componenti?.length) continue;
+    let disponibilita = Infinity;
+    for (const c of componenti) {
+      const { data: comp } = await supabase.from("prodotti_shop").select("giacenza_magazzino, giacenza").eq("id", c.componente_id).maybeSingle();
+      const giac = (comp?.giacenza_magazzino || 0) + (comp?.giacenza || 0);
+      const possibili = c.quantita_per_bundle > 0 ? Math.floor(giac / c.quantita_per_bundle) : 0;
+      disponibilita = Math.min(disponibilita, possibili);
+    }
+    if (!Number.isFinite(disponibilita)) continue;
+    const risposta = await fetch(`${siteUrl}/wp-json/wc/v3/products/${bundle.woo_product_id}`, {
+      method: "PUT",
+      headers: { Authorization: auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ manage_stock: true, stock_quantity: disponibilita }),
+    });
+    if (!risposta.ok) console.error(`Bundle "${bundle.nome}": disponibilità non sincronizzata su WooCommerce (${risposta.status})`);
+  }
+}
