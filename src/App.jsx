@@ -5140,17 +5140,33 @@ function SezioneDateCorsi({
         />
         <button
           onClick={() => setCronologicoHome((v) => !v)}
-          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 16px", borderRadius: 10, border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}
+          style={isMobile ? {
+            ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
+            border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
+            cursor: "pointer", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, width: 62,
+          } : {
+            ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
+            border: cronologicoHome ? "none" : `1px solid ${CREAM_BORDER}`, background: cronologicoHome ? NAVY : "#fff", color: cronologicoHome ? "#fff" : NAVY,
+            cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          }}
         >
-          <IconaCalendarioCard size={isMobile ? 14 : 16} color="currentColor" />
-          Cronologico
+          <IconaCalendarioCard size={isMobile ? 17 : 16} color="currentColor" />
+          <span style={isMobile ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" } : undefined}>Cronologico</span>
         </button>
         <button
           onClick={() => { setFiltroCorsoHome(""); setFiltroCittaHome(""); setFiltroMasterHome(""); setRicercaDate(""); setApriFiltroCorsoHome(false); setApriFiltroCittaHome(false); setApriFiltroMasterHome(false); }}
-          style={{ ...fontBody, fontSize: isMobile ? "inherit" : 13, fontWeight: 600, padding: isMobile ? "7px 10px" : "10px 16px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8 }}
+          style={isMobile ? {
+            ...fontBody, fontSize: 10.5, fontWeight: 600, padding: "6px 8px 7px", borderRadius: 10,
+            border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
+            cursor: "pointer", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4, width: 62,
+          } : {
+            ...fontBody, fontSize: 13, fontWeight: 600, padding: "10px 16px", borderRadius: 10,
+            border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: NAVY,
+            cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, display: "flex", alignItems: "center", gap: 8,
+          }}
         >
-          <IconaResetCircolare size={isMobile ? 14 : 16} color="currentColor" />
-          Reset filtri
+          <IconaResetCircolare size={isMobile ? 17 : 16} color="currentColor" />
+          <span style={isMobile ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center" } : undefined}>Reset filtri</span>
         </button>
       </div>
       </>
@@ -10402,7 +10418,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   );
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 20px 40px" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 24px 40px" : "0 20px 40px" }}>
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
         ricarica={ricarica} onApriData={onApriData}
@@ -13282,15 +13298,23 @@ function FiltroPill({ etichetta, etichettaAttiva, valore, aperto, onToggle, sele
     <div style={{ position: "relative", flex: "0 0 auto", minWidth: 0, display: "flex" }}>
       <button
         onClick={onToggle}
-        style={{
-          ...fontBody, fontWeight: 600, fontSize: compatto ? "inherit" : 13, padding: compatto ? "7px 10px" : "10px 16px", borderRadius: 10,
+        style={compatto ? {
+          ...fontBody, fontWeight: 600, fontSize: 10.5, padding: "6px 8px 7px", borderRadius: 10,
+          border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
+          background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
+          width: 62, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+        } : {
+          ...fontBody, fontWeight: 600, fontSize: 13, padding: "10px 16px", borderRadius: 10,
           border: valore ? "none" : `1px solid ${CREAM_BORDER}`,
           background: valore ? NAVY : "#fff", color: valore ? "#fff" : NAVY, cursor: "pointer",
           overflow: "hidden", width: "auto", whiteSpace: "nowrap", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         }}
       >
-        {Icona && <Icona size={compatto ? 14 : 16} color="currentColor" />}
-        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: compatto ? 130 : 170 }}>{valore ? etichettaAttiva : etichetta}</span>
+        {Icona && <Icona size={compatto ? 17 : 16} color="currentColor" />}
+        <span style={compatto
+          ? { whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }
+          : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 170 }
+        }>{valore ? etichettaAttiva : etichetta}</span>
       </button>
       {aperto && (
         <select
@@ -30206,7 +30230,20 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   const dettaglio = dettaglioChiave ? allievi.find((a) => a.chiave === dettaglioChiave) : null;
   const allieviSelezionati = allievi.filter((a) => selezionati.has(a.chiave));
 
-  const cardStat = (icona, etichetta, valore, sub) => (
+  // su mobile le 4 card diventano tasti verticali (icona/testo/cifra),
+  // sempre 4 per riga come le altre griglie dell'app: l'etichetta ha
+  // un'altezza fissa (2 righe, troncata oltre) così cifra e sottotesto
+  // restano allineati fra le 4 card anche se il testo sopra è più lungo
+  const cardStat = (icona, etichetta, valore, sub) => isMobile ? (
+    <div style={{ ...cardStyle, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 5, padding: "14px 4px", marginBottom: 0, minWidth: 0 }}>
+      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#FBF1D9", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {icona}
+      </div>
+      <div style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.2, height: 22, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{etichetta}</div>
+      <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{valore}</div>
+      <div style={{ height: 15, display: "flex", alignItems: "center" }}>{sub}</div>
+    </div>
+  ) : (
     <div style={{ ...cardStyle, flex: "1 1 200px", display: "flex", alignItems: "center", gap: 14, padding: 18, marginBottom: 0 }}>
       <div style={{ width: 46, height: 46, borderRadius: "50%", background: "#FBF1D9", color: GOLD, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {icona}
@@ -30241,11 +30278,11 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
           </div>
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 20 }}>
-          {cardStat(<IconaGruppoTeam size={22} />, "Totale allievi", allievi.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneAllievi)}</>)}
-          {cardStat(<IconaTileVenditori size={22} color={GOLD} />, "Corsi acquistati", iscritti.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneCorsi)}</>)}
-          {cardStat(<IconaPin size={22} />, "Città di residenza", opzioniCittaProv.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
-          {cardStat(<IconaPin size={22} />, "Città corso frequentato", opzioniCittaCorso.length, <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>città diverse</span>)}
+        <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : undefined, flexWrap: isMobile ? undefined : "wrap", gap: isMobile ? 8 : 14, marginBottom: 20 }}>
+          {cardStat(<IconaGruppoTeam size={isMobile ? 18 : 22} />, "Totale allievi", allievi.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneAllievi)}</>)}
+          {cardStat(<IconaTileVenditori size={isMobile ? 18 : 22} color={GOLD} />, "Corsi acquistati", iscritti.length.toLocaleString("it-IT"), <>{badgeVariazione(variazioneCorsi)}</>)}
+          {cardStat(<IconaPin size={isMobile ? 18 : 22} />, "Città di residenza", opzioniCittaProv.length, <span style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED }}>città diverse</span>)}
+          {cardStat(<IconaPin size={isMobile ? 18 : 22} />, "Città corso frequentato", opzioniCittaCorso.length, <span style={{ ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED }}>città diverse</span>)}
         </div>
 
         <div style={{ marginBottom: 14 }}>
