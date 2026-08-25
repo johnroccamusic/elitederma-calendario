@@ -38057,7 +38057,7 @@ export default function App() {
       {isMobile && (
         <div
           style={{
-            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)", left: 14, right: 14,
+            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) - 2px)", left: 14, right: 14,
             zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
             background: "rgba(14,27,51,0.55)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
             border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
@@ -38069,8 +38069,8 @@ export default function App() {
             aria-label="Password menù"
             title="Password menù"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
-              width: 66, height: 66, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
+              width: 50, height: 50, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -38084,8 +38084,8 @@ export default function App() {
             aria-label="Indietro"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
-              width: 66, height: 66, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
+              width: 50, height: 50, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -38099,8 +38099,8 @@ export default function App() {
             aria-label="Avanti"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
-              width: 66, height: 66, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
+              width: 50, height: 50, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -38113,8 +38113,8 @@ export default function App() {
             aria-label="Home"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
-              width: 66, height: 66, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
+              width: 50, height: 50, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
