@@ -5764,7 +5764,7 @@ function etichettaIntervalloGiorni(dataInizio, dataFine) {
 // Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
 // in lettura, il caricamento resta un compito di chi gestisce
 // l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, codiceReferral }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, codiceReferral }) {
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   const coloreCorso = corso?.colore || NAVY;
@@ -5775,19 +5775,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
-  // click sul corpo della card: apre la "classe" (elenco allievi con kit e
-  // taglia + gestione modelle) nella stessa vista del link modelle, con
-  // &classe=1 così mostra anche gli allievi. Il link pubblico "Genera link
-  // modelle" resta senza quel flag e quindi invariato per i coordinatori.
-  function apriClasse() {
-    const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
-    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), `${gg}-${mm}-${aaaa}`].filter(Boolean).join("/");
-    window.open(`${window.location.origin}${window.location.pathname}?modelle=${leggibile}&classe=1`, "_blank");
-  }
+  // click sul corpo della card: apre la "classe" DENTRO l'app (elenco allievi
+  // con kit e taglia + gestione modelle), così ha l'header con Indietro/Home.
   return (
     <div
-      onClick={apriClasse}
-      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: "pointer" }}
+      onClick={onApriClasse ? () => onApriClasse(corsoData.id) : undefined}
+      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: onApriClasse ? "pointer" : "default" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -6015,7 +6008,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriClasse, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -6233,7 +6226,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
-                apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
+                apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede} onApriClasse={onApriClasse}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
               />
             ))}
@@ -36627,6 +36620,7 @@ export default function App() {
   // dichiarazione sovrascrive la precedente (upsert)
   const [inventarioSede, setInventarioSede] = useState([]);
   const [inventarioSedeCorsoDataId, setInventarioSedeCorsoDataId] = useState(null);
+  const [classeMasterCorsoDataId, setClasseMasterCorsoDataId] = useState(null);
   // "mucchio" di prodotti aperti (non ripristinabili in magazzino):
   // una riga per prodotto+edizione, sommate per prodotto in Logistica
   // prodotti — alimentato dal tasto "Prodotti rientrati"
@@ -37334,6 +37328,7 @@ export default function App() {
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
+  function apriClasseMaster(corsoDataId) { window.scrollTo(0, 0); setClasseMasterCorsoDataId(corsoDataId); setView("classemaster"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
   // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
@@ -38028,9 +38023,30 @@ export default function App() {
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterRegolaBase={puntiMasterRegolaBase} puntiMasterPeriodiSpeciali={puntiMasterPeriodiSpeciali} puntiMasterImpostazioni={puntiMasterImpostazioni}
           onApriInventarioSede={apriInventarioSede}
+          onApriClasse={apriClasseMaster}
           onBack={() => setView("home")}
         />
       )}
+
+      {view === "classemaster" && (() => {
+        const cd = corsiDate.find((c) => c.id === classeMasterCorsoDataId);
+        const corso = cd ? corsi.find((c) => c.id === cd.corso_id) : null;
+        const loc = cd ? location.find((l) => l.id === cd.location_id) : null;
+        if (!cd || !corso || !loc) return <div style={{ maxWidth: 640, margin: "0 auto", padding: "20px", ...fontBody, color: MUTED }}>Classe non trovata.</div>;
+        const [aaaa, mm, gg] = cd.data_inizio.split("-");
+        const paramClasse = [slugify(corso.nome), slugify(loc.nome), `${gg}-${mm}-${aaaa}`].join("/");
+        return (
+          <div>
+            <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
+              <button onClick={() => setView("dashboardmaster")} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
+                <IconaFrecciaSinistra size={20} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
+              </button>
+            </div>
+            <VistaRicercaModelle param={paramClasse} mostraClasse />
+          </div>
+        );
+      })()}
 
       {view === "inventariosede" && (
         <PaginaInventarioSede
