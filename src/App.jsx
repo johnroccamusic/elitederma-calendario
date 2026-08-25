@@ -38069,7 +38069,7 @@ export default function App() {
             aria-label="Password menù"
             title="Password menù"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
               width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -38084,7 +38084,7 @@ export default function App() {
             aria-label="Indietro"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
               width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
@@ -38099,7 +38099,7 @@ export default function App() {
             aria-label="Avanti"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
               width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
@@ -38113,7 +38113,7 @@ export default function App() {
             aria-label="Home"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
               width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
