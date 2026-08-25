@@ -6155,26 +6155,36 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Raccolta punti premi</div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite effettuate</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditeTotale}</div>
+            {(() => {
+              // su mobile le 4 card stanno tutte su UNA riga (font e padding
+              // ridotti); su desktop restano larghe e possono andare a capo
+              const cardPunti = { ...cardStyle, flex: isMobile ? "1 1 0" : "1 1 200px", minWidth: 0, padding: isMobile ? "10px 7px" : 16, marginBottom: 0 };
+              const lblPunti = { ...fontBody, fontSize: isMobile ? 8.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, marginBottom: isMobile ? 4 : 6, lineHeight: 1.2 };
+              const numPunti = { ...fontDisplay, fontSize: isMobile ? 18 : 24, fontWeight: 700, color: NAVY };
+              const ptPunti = { ...fontBody, fontSize: isMobile ? 10 : 12, color: MUTED, marginTop: 2 };
+              return (
+            <div style={{ display: "flex", gap: isMobile ? 6 : 12, marginBottom: 12, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Vendite effettuate</div>
+                <div style={numPunti}>{raccoltaPuntiMaster.venditeTotale}</div>
               </div>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral dei corsi</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditeCorsi}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{raccoltaPuntiMaster.puntiCorsi} pt</div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Vendite con referral dei corsi</div>
+                <div style={numPunti}>{raccoltaPuntiMaster.venditeCorsi}</div>
+                <div style={ptPunti}>{raccoltaPuntiMaster.puntiCorsi} pt</div>
               </div>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral personale</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditePersonale}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{raccoltaPuntiMaster.puntiPersonale} pt</div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Vendite con referral personale</div>
+                <div style={numPunti}>{raccoltaPuntiMaster.venditePersonale}</div>
+                <div style={ptPunti}>{raccoltaPuntiMaster.puntiPersonale} pt</div>
               </div>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Punti accumulati</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: GOLD }}>{raccoltaPuntiMaster.puntiTotale} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pt</span></div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Punti accumulati</div>
+                <div style={{ ...numPunti, color: GOLD }}>{raccoltaPuntiMaster.puntiTotale} <span style={{ ...fontBody, fontSize: isMobile ? 10 : 13, fontWeight: 400, color: MUTED }}>pt</span></div>
               </div>
             </div>
+              );
+            })()}
             <Button variant="ghost" onClick={() => setMostraDettaglioPunti(true)}>Dettaglio per codice</Button>
           </div>
         )}
