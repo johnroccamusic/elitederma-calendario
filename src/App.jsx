@@ -1383,7 +1383,7 @@ function TileHome({
         onDragOver={onDragOverTasto}
         onDrop={onDropTasto}
         style={{
-          ...fontBody, width: "82%", margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          ...fontBody, width: "82%", minWidth: 0, margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
         }}
