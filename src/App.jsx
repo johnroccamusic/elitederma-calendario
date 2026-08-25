@@ -8726,7 +8726,7 @@ function nomeFileUnico(baseSicura, estensione, nomiEsistenti) {
 // "Aggiungi", sempre in coda alla griglia); tutti possono scaricare una
 // locandina — su mobile, se il telefono lo supporta, tramite la
 // condivisione nativa così finisce direttamente nella galleria foto
-function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
+function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordineLocandine, onSalvaOrdineLocandine }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const [locandine, setLocandine] = useState([]);
@@ -8737,7 +8737,42 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
   const [messaggioCopia, setMessaggioCopia] = useState("");
   const [caricandoUpload, setCaricandoUpload] = useState(null); // { fatti, totale }
   const [trascinaSopra, setTrascinaSopra] = useState(false);
+  const [eliminandoNome, setEliminandoNome] = useState(null);
+  const [sostituendoNome, setSostituendoNome] = useState(null);
   const inputFileRef = React.useRef(null);
+  const inputSostituzioneRef = React.useRef(null);
+  const nomeSostituzioneRef = React.useRef(null);
+
+  // riordino (solo programmatore, stessa maniglia "⠿" già usata per i
+  // tasti di Home/hub — vedi GrigliaTasti): l'ordine salvato è un elenco
+  // di nomi file, quelli mai visti (appena caricati) vanno in coda così
+  // non spariscono mai dalla vista
+  const dragRef = React.useRef(null);
+  const [trascinataNome, setTrascinataNome] = useState(null);
+  const [suCursoreNome, setSuCursoreNome] = useState(null);
+  const locandineOrdinate = useMemo(() => {
+    if (!Array.isArray(ordineLocandine) || ordineLocandine.length === 0) return locandine;
+    const perNome = Object.fromEntries(locandine.map((l) => [l.nome, l]));
+    const viste = new Set();
+    const ordinate = ordineLocandine.filter((n) => perNome[n]).map((n) => { viste.add(n); return perNome[n]; });
+    const mancanti = locandine.filter((l) => !viste.has(l.nome));
+    return [...ordinate, ...mancanti];
+  }, [locandine, ordineLocandine]);
+  function iniziaTrascinamento(nome) { dragRef.current = nome; setTrascinataNome(nome); }
+  function fineTrascinamento() { dragRef.current = null; setTrascinataNome(null); setSuCursoreNome(null); }
+  async function rilasciaSu(nomeDestinazione) {
+    const origine = dragRef.current;
+    fineTrascinamento();
+    if (!origine || origine === nomeDestinazione || !onSalvaOrdineLocandine) return;
+    const attuale = locandineOrdinate.map((l) => l.nome);
+    const idxO = attuale.indexOf(origine);
+    const idxD = attuale.indexOf(nomeDestinazione);
+    if (idxO < 0 || idxD < 0) return;
+    const nuovoOrdine = [...attuale];
+    const [spostato] = nuovoOrdine.splice(idxO, 1);
+    nuovoOrdine.splice(idxD, 0, spostato);
+    await onSalvaOrdineLocandine(nuovoOrdine);
+  }
 
   async function ricaricaLocandine() {
     const { data, error } = await supabase.storage.from("locandine-corsi").list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
@@ -8770,6 +8805,26 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
       setCaricandoUpload((prev) => (prev ? { ...prev, fatti: prev.fatti + 1 } : null));
     }
     setCaricandoUpload(null);
+    await ricaricaLocandine();
+  }
+
+  async function eliminaLocandina(locandina) {
+    if (!window.confirm(`Eliminare "${locandina.titolo}"? L'immagine non sarà più recuperabile.`)) return;
+    setEliminandoNome(locandina.nome);
+    const { error } = await supabase.storage.from("locandine-corsi").remove([locandina.nome]);
+    setEliminandoNome(null);
+    if (error) { window.alert("Errore nell'eliminare la locandina: " + error.message); return; }
+    await ricaricaLocandine();
+  }
+
+  // sostituisce l'immagine mantenendo lo stesso nome file (quindi stessa
+  // posizione nell'ordine e stesso titolo, a meno di rinominarla dopo)
+  async function sostituisciLocandina(nome, file) {
+    if (!file || !file.type.startsWith("image/")) return;
+    setSostituendoNome(nome);
+    const { error } = await supabase.storage.from("locandine-corsi").upload(nome, file, { upsert: true, contentType: file.type });
+    setSostituendoNome(null);
+    if (error) { window.alert("Errore nel sostituire la locandina: " + error.message); return; }
     await ricaricaLocandine();
   }
 
@@ -8865,14 +8920,68 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
           <div style={{ ...fontBody, color: MUTED, textAlign: "center", padding: "40px 0" }}>Nessuna locandina caricata.</div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 14 : 20 }}>
-            {locandine.map((l) => (
+            {locandineOrdinate.map((l) => (
               <div key={l.nome} style={{ display: "flex", flexDirection: "column" }}>
                 <div
+                  onDragOver={(e) => { if (programmatore && dragRef.current) { e.preventDefault(); setSuCursoreNome(l.nome); } }}
+                  onDrop={() => programmatore && rilasciaSu(l.nome)}
                   style={{
                     position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden",
                     background: "#fff", border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 1px 4px rgba(14,27,51,0.16)",
+                    opacity: trascinataNome === l.nome ? 0.5 : 1,
+                    outline: dragRef.current && dragRef.current !== l.nome && suCursoreNome === l.nome ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
                   }}
                 >
+                  {programmatore && (
+                    <span
+                      draggable
+                      onDragStart={(e) => { e.stopPropagation(); iniziaTrascinamento(l.nome); }}
+                      onDragEnd={fineTrascinamento}
+                      title="Trascina per riordinare"
+                      style={{
+                        position: "absolute", top: 6, left: 6, zIndex: 2, cursor: "grab", color: MUTED, fontSize: 15, lineHeight: 1,
+                        padding: "3px 5px", userSelect: "none", background: "rgba(255,255,255,0.85)", borderRadius: 6,
+                      }}
+                    >
+                      ⠿
+                    </span>
+                  )}
+                  {programmatore && (
+                    <div style={{ position: "absolute", top: 6, right: 6, zIndex: 2, display: "flex", gap: 6 }}>
+                      <button
+                        onClick={() => eliminaLocandina(l)}
+                        title="Elimina questa locandina"
+                        style={{
+                          width: 24, height: 24, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer",
+                          background: "rgba(192,57,43,0.85)", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        {eliminandoNome === l.nome ? (
+                          <span style={{ fontSize: 9, color: "#fff" }}>...</span>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6" />
+                          </svg>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => { nomeSostituzioneRef.current = l.nome; inputSostituzioneRef.current?.click(); }}
+                        title="Sostituisci l'immagine"
+                        style={{
+                          width: 24, height: 24, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer",
+                          background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+                        }}
+                      >
+                        {sostituendoNome === l.nome ? (
+                          <span style={{ fontSize: 9, color: "#fff" }}>...</span>
+                        ) : (
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 5v14M5 12h14" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  )}
                   <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                   <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
                     <button
@@ -8957,6 +9066,15 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
             multiple
             style={{ display: "none" }}
             onChange={(e) => { caricaFile(e.target.files); e.target.value = ""; }}
+          />
+        )}
+        {programmatore && (
+          <input
+            ref={inputSostituzioneRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => { sostituisciLocandina(nomeSostituzioneRef.current, e.target.files?.[0]); e.target.value = ""; }}
           />
         )}
       </div>
@@ -38488,6 +38606,8 @@ export default function App() {
           ruoloUtente={ruoloUtente}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "prezzicorsi", "Prezzi corsi")}
+          ordineLocandine={layoutTasti.prezzicorsi?.ordine}
+          onSalvaOrdineLocandine={(o) => salvaLayoutTasti("prezzicorsi", { ordine: o })}
         />
       )}
 
