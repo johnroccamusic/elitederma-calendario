@@ -727,6 +727,14 @@ function IconaTileCostiRicavi({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+function IconaTilePrezzi({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12.6 2.5h6.9a1 1 0 0 1 1 1v6.9a1 1 0 0 1-.3.7l-9 9a1 1 0 0 1-1.4 0l-7.2-7.2a1 1 0 0 1 0-1.4l9-9a1 1 0 0 1 .7-.3Z" />
+      <circle cx="16.8" cy="7.2" r="1.4" fill={GOLD} stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileCatalogo({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -1397,7 +1405,7 @@ function TileHome({
           onClick={onRinominaEtichetta ? (e) => { e.stopPropagation(); onRinominaEtichetta(); } : undefined}
           title={onRinominaEtichetta ? "Tocca per rinominare questo tasto" : undefined}
           style={{
-            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "100%", whiteSpace: "normal", wordBreak: "break-word",
+            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "max-content", maxWidth: "none", whiteSpace: "nowrap",
             ...(onRinominaEtichetta ? { cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 } : {}),
           }}
         >
@@ -8671,6 +8679,110 @@ function PaginaGestioneModelle({
             tabForzata={tabGM === "archivio" ? "archivio" : "programmazione"}
             modoForzato="elenco"
           />
+        )}
+      </div>
+    </div>
+  );
+}
+
+const ESTENSIONI_LOCANDINE = /\.(jpe?g|png|webp|gif)$/i;
+
+// il titolo sotto ogni locandina viene dal nome del file (nessuna tabella
+// di appoggio): tolta l'estensione, trattini/underscore diventano spazi,
+// iniziali maiuscole
+function titoloDaNomeFile(nomeFile) {
+  const senzaEstensione = nomeFile.replace(/\.[^.]+$/, "");
+  return senzaEstensione
+    .replace(/[-_]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
+// griglia delle locandine con i prezzi dei corsi: legge direttamente i
+// file caricati nel bucket "locandine-corsi", senza bisogno di gestirli
+// da nessun'altra parte dell'app. Il download dell'originale è riservato
+// al programmatore, gli altri ruoli vedono solo l'anteprima
+function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
+  const isMobile = useIsMobile();
+  const programmatore = ruoloUtente === "programmatore";
+  const [locandine, setLocandine] = useState([]);
+  const [caricando, setCaricando] = useState(true);
+  const [scaricandoNome, setScaricandoNome] = useState(null);
+
+  useEffect(() => {
+    let attivo = true;
+    (async () => {
+      const { data, error } = await supabase.storage.from("locandine-corsi").list("", { limit: 200, sortBy: { column: "name", order: "asc" } });
+      if (!attivo) return;
+      if (error) { window.alert("Errore nel caricare le locandine: " + error.message); setCaricando(false); return; }
+      const file = (data || []).filter((f) => ESTENSIONI_LOCANDINE.test(f.name));
+      setLocandine(file.map((f) => ({
+        nome: f.name,
+        titolo: titoloDaNomeFile(f.name),
+        url: supabase.storage.from("locandine-corsi").getPublicUrl(f.name).data.publicUrl,
+      })));
+      setCaricando(false);
+    })();
+    return () => { attivo = false; };
+  }, []);
+
+  async function scarica(locandina) {
+    if (!programmatore) return;
+    setScaricandoNome(locandina.nome);
+    const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
+    setScaricandoNome(null);
+    if (error) { window.alert("Errore nello scaricare la locandina: " + error.message); return; }
+    scaricaBlob(data, locandina.nome);
+  }
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 16 : 26 }}>
+          {programmatore ? "Anteprima e download delle locandine con i prezzi dei corsi." : "Anteprima delle locandine con i prezzi dei corsi."}
+        </div>
+
+        {caricando ? (
+          <div style={{ ...fontBody, color: MUTED, textAlign: "center", padding: "40px 0" }}>Caricamento...</div>
+        ) : locandine.length === 0 ? (
+          <div style={{ ...fontBody, color: MUTED, textAlign: "center", padding: "40px 0" }}>Nessuna locandina caricata.</div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 14 : 20 }}>
+            {locandine.map((l) => (
+              <div key={l.nome} style={{ display: "flex", flexDirection: "column" }}>
+                <div
+                  onClick={programmatore ? () => scarica(l) : undefined}
+                  title={programmatore ? "Tocca per scaricare" : undefined}
+                  style={{
+                    position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden",
+                    background: "#fff", border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 1px 4px rgba(14,27,51,0.16)",
+                    cursor: programmatore ? "pointer" : "default",
+                  }}
+                >
+                  <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                  {programmatore && (
+                    <div style={{
+                      position: "absolute", bottom: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
+                      background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {scaricandoNome === l.nome ? (
+                        <span style={{ fontSize: 10, color: "#fff" }}>...</span>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 600, color: NAVY, marginTop: 8, textAlign: "center" }}>{l.titolo}</div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
@@ -37396,6 +37508,7 @@ export default function App() {
   function apriGestioneShop() { setProdottoDaAprireInShop(null); apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
+  function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
   function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriMagazziniLocali() { setView("magazzinilocali"); }
@@ -37735,6 +37848,7 @@ export default function App() {
               { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti },
               { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaLoghiCard, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
+              { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaGruppoTeam, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
               { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
@@ -38180,6 +38294,14 @@ export default function App() {
           apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
           titolo={etichettaTasto("home", "gestionemodelle", "Gestione modelle")}
+        />
+      )}
+
+      {view === "prezzicorsi" && (
+        <PaginaPrezziCorsi
+          ruoloUtente={ruoloUtente}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "prezzicorsi", "Prezzi corsi")}
         />
       )}
 
