@@ -8734,6 +8734,7 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
   const [scaricandoNome, setScaricandoNome] = useState(null);
   const [copiandoNome, setCopiandoNome] = useState(null);
   const [copiatoNome, setCopiatoNome] = useState(null);
+  const [messaggioCopia, setMessaggioCopia] = useState("");
   const [caricandoUpload, setCaricandoUpload] = useState(null); // { fatti, totale }
   const [trascinaSopra, setTrascinaSopra] = useState(false);
   const inputFileRef = React.useRef(null);
@@ -8816,6 +8817,8 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
       await navigator.clipboard.write([item]);
       setCopiatoNome(locandina.nome);
       setTimeout(() => setCopiatoNome((corrente) => (corrente === locandina.nome ? null : corrente)), 1500);
+      setMessaggioCopia("Immagine copiata.");
+      setTimeout(() => setMessaggioCopia((corrente) => (corrente === "Immagine copiata." ? "" : corrente)), 2200);
     } catch (e) {
       window.alert("Non riesco a copiare l'immagine: " + (e?.message || e));
     } finally {
@@ -8957,6 +8960,16 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
           />
         )}
       </div>
+
+      {messaggioCopia && (
+        <div style={{
+          position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 2000,
+          background: NAVY, color: "#fff", borderRadius: 30, padding: "10px 20px",
+          ...fontBody, fontSize: 13, fontWeight: 600, boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+        }}>
+          {messaggioCopia}
+        </div>
+      )}
     </div>
   );
 }
