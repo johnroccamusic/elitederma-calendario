@@ -37992,14 +37992,7 @@ export default function App() {
   })();
 
   return (
-    <div
-      ref={scrollAppRef}
-      style={{
-        ...fontBody, background: "transparent", boxSizing: "border-box",
-        height: "calc(100dvh - env(safe-area-inset-top, 0px))", overflowY: "auto", WebkitOverflowScrolling: "touch",
-        overscrollBehaviorY: "contain", paddingBottom: isMobile ? 130 : 0,
-      }}
-    >
+    <>
       {!isMobile && (
         <div
           style={{
@@ -38065,14 +38058,14 @@ export default function App() {
           </div>
         </div>
       )}
-      {!isMobile && (
-        // riserva lo spazio occupato dalla barra fissa qui sopra, altrimenti
-        // (essendo "position:fixed") coprirebbe l'inizio del contenuto di
-        // ogni schermata invece di limitarsi ad affiancarlo
-        <div style={{ height: 76 }} />
-      )}
 
       {isMobile && (
+        // fuori dal contenitore che scorre (vedi sotto): un "position:fixed"
+        // DENTRO un elemento con overflow-y:auto (anche se in teoria dovrebbe
+        // restare ancorato al viewport) su Safari/iOS viene composito insieme
+        // al livello che scorre e si trascina con le dita — bug storico e
+        // molto documentato del rendering WebKit. Da fratello, del tutto
+        // esterno allo scroll, non ha mai questo problema
         <div
           style={{
             position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) - 2px)", left: 14, right: 14,
@@ -38141,6 +38134,21 @@ export default function App() {
             </svg>
           </button>
         </div>
+      )}
+
+      <div
+        ref={scrollAppRef}
+        style={{
+          ...fontBody, background: "transparent", boxSizing: "border-box",
+          height: "calc(100dvh - env(safe-area-inset-top, 0px))", overflowY: "auto", WebkitOverflowScrolling: "touch",
+          overscrollBehaviorY: "contain", paddingBottom: isMobile ? 130 : 0,
+        }}
+      >
+      {!isMobile && (
+        // riserva lo spazio occupato dalla barra fissa qui sopra, altrimenti
+        // (essendo "position:fixed") coprirebbe l'inizio del contenuto di
+        // ogni schermata invece di limitarsi ad affiancarlo
+        <div style={{ height: 76 }} />
       )}
       {view === "home" && (
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "12px 20px 16px" : "28px 32px 60px" }}>
@@ -38814,6 +38822,7 @@ export default function App() {
           onTornaGestioneModelle={() => setView("gestionemodelle")}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
