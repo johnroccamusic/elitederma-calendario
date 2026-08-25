@@ -30289,8 +30289,11 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
           <CampoRicerca value={ricerca} onChange={(e) => cambiaRicerca(e.target.value)} placeholder="Cerca per nome, email, telefono…" />
         </div>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 16 }}>
-          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+        <div style={{
+          display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
+          gap: 10, flexWrap: isMobile ? undefined : "wrap", alignItems: "flex-end", marginBottom: 16,
+        }}>
+          <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
             <Field label="Città provenienza">
               <select style={inputStyle} value={filtroCittaProv} onChange={(e) => cambiaFiltroCittaProv(e.target.value)}>
                 <option value="">Tutte</option>
@@ -30298,7 +30301,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               </select>
             </Field>
           </div>
-          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+          <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
             <Field label="Regione provenienza">
               <select style={inputStyle} value={filtroRegioneProv} onChange={(e) => cambiaFiltroRegioneProv(e.target.value)}>
                 <option value="">Tutte</option>
@@ -30306,7 +30309,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               </select>
             </Field>
           </div>
-          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+          <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
             <Field label="Città corso frequentato">
               <select style={inputStyle} value={filtroCittaCorso} onChange={(e) => cambiaFiltroCittaCorso(e.target.value)}>
                 <option value="">Tutte</option>
@@ -30314,7 +30317,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               </select>
             </Field>
           </div>
-          <div style={{ flex: "1 1 160px", minWidth: 140 }}>
+          <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
             <Field label="Corso acquistato">
               <select style={inputStyle} value={filtroCorso} onChange={(e) => cambiaFiltroCorso(e.target.value)}>
                 <option value="">Tutti</option>
@@ -30322,19 +30325,21 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               </select>
             </Field>
           </div>
-          <div style={{ display: "flex", gap: 6 }}>
-            <div style={{ width: 130 }}>
+          <div style={{ gridColumn: isMobile ? "1 / -1" : undefined, display: "flex", gap: 6 }}>
+            <div style={{ flex: isMobile ? 1 : "0 0 130px" }}>
               <Field label="Data acquisto da">
                 <input type="date" style={inputStyle} value={dataDa} onChange={(e) => cambiaDataDa(e.target.value)} />
               </Field>
             </div>
-            <div style={{ width: 130 }}>
+            <div style={{ flex: isMobile ? 1 : "0 0 130px" }}>
               <Field label="a">
                 <input type="date" style={inputStyle} value={dataA} min={dataDa || undefined} onChange={(e) => cambiaDataA(e.target.value)} />
               </Field>
             </div>
           </div>
-          <Button variant="ghost" onClick={resetFiltri}>Reset filtri</Button>
+          <div style={{ gridColumn: isMobile ? "1 / -1" : undefined, marginTop: isMobile ? 4 : 0 }}>
+            <Button variant="ghost" onClick={resetFiltri} style={isMobile ? { width: "100%" } : undefined}>Reset filtri</Button>
+          </div>
         </div>
 
         <div style={{ background: "#FBF1D9", border: `1px solid ${CREAM_BORDER}`, borderRadius: "14px 14px 0 0", padding: "12px 16px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
