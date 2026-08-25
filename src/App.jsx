@@ -5804,7 +5804,7 @@ function etichettaIntervalloGiorni(dataInizio, dataFine) {
 // Master", stesso file, stesso bucket "allegati-iscritti" — qui è solo
 // in lettura, il caricamento resta un compito di chi gestisce
 // l'assegnazione)
-function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, codiceReferral }) {
+function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizione, apribile, onApriInventario, onApriClasse, codiceReferral }) {
   const biglietti = corsoData.viaggio_file || [];
   const statoViaggio = VIAGGIO_STATI[corsoData.viaggio_stato || "no"];
   const coloreCorso = corso?.colore || NAVY;
@@ -5815,10 +5815,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
+  // click sul corpo della card: apre la "classe" DENTRO l'app (elenco allievi
+  // con kit e taglia + gestione modelle), così ha l'header con Indietro/Home.
   return (
     <div
-      onClick={apribile ? () => onApriInventario(corsoData.id) : undefined}
-      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: apribile ? "pointer" : "default" }}
+      onClick={onApriClasse ? () => onApriClasse(corsoData.id) : undefined}
+      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: onApriClasse ? "pointer" : "default" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -5877,7 +5879,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti scaricabili</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {biglietti.map((percorso, i) => (
-                  <AllegatoLink key={i} percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
+                  <span key={i} onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex" }}>
+                    <AllegatoLink percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
+                  </span>
                 ))}
               </div>
             </div>
@@ -5915,7 +5919,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       {(apribile || codiceReferral) && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           {apribile ? (
-            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            <div onClick={(e) => { e.stopPropagation(); onApriInventario(corsoData.id); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
               Inventario fine corso →
             </div>
           ) : <span />}
@@ -6044,7 +6048,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriClasse, onBack }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -6195,26 +6199,38 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           <div style={{ marginBottom: 20 }}>
             <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Raccolta punti premi</div>
             <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Dal {fmtData(puntiMasterImpostazioni.data_inizio)} al {fmtData(puntiMasterImpostazioni.data_fine)}.</div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite effettuate</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditeTotale}</div>
+            {(() => {
+              // su mobile le 4 card stanno tutte su UNA riga (font e padding
+              // ridotti); su desktop restano larghe e possono andare a capo
+              const cardPunti = { ...cardStyle, flex: isMobile ? "1 1 0" : "1 1 200px", minWidth: 0, padding: isMobile ? "12px 6px" : 16, marginBottom: 0, ...(isMobile ? { display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" } : {}) };
+              // su mobile l'etichetta occupa un'altezza fissa (fino a 3 righe),
+              // così i numeri delle 4 card partono tutti dalla stessa riga
+              const lblPunti = { ...fontBody, fontSize: isMobile ? 10.5 : 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, marginBottom: isMobile ? 8 : 6, lineHeight: 1.2, ...(isMobile ? { textAlign: "center", minHeight: 40, display: "flex", alignItems: "center", justifyContent: "center" } : {}) };
+              const numPunti = { ...fontDisplay, fontSize: isMobile ? 24 : 24, fontWeight: 700, color: NAVY, ...(isMobile ? { textAlign: "center" } : {}) };
+              const ptPunti = { ...fontBody, fontSize: isMobile ? 11.5 : 12, color: MUTED, marginTop: 2, ...(isMobile ? { textAlign: "center" } : {}) };
+              return (
+            <div style={{ display: "flex", gap: isMobile ? 6 : 12, marginBottom: 12, flexWrap: isMobile ? "nowrap" : "wrap" }}>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Vendite effettuate</div>
+                <div style={numPunti}>{raccoltaPuntiMaster.venditeTotale}</div>
               </div>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral dei corsi</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditeCorsi}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{raccoltaPuntiMaster.puntiCorsi} pt</div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Vendite con referral dei corsi</div>
+                <div style={numPunti}>{raccoltaPuntiMaster.venditeCorsi}</div>
+                <div style={ptPunti}>{raccoltaPuntiMaster.puntiCorsi} pt</div>
               </div>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Vendite con referral personale</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{raccoltaPuntiMaster.venditePersonale}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{raccoltaPuntiMaster.puntiPersonale} pt</div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Vendite con referral personale</div>
+                <div style={numPunti}>{raccoltaPuntiMaster.venditePersonale}</div>
+                <div style={ptPunti}>{raccoltaPuntiMaster.puntiPersonale} pt</div>
               </div>
-              <div style={{ ...cardStyle, flex: "1 1 200px", padding: 16, marginBottom: 0 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Punti accumulati</div>
-                <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: GOLD }}>{raccoltaPuntiMaster.puntiTotale} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pt</span></div>
+              <div style={cardPunti}>
+                <div style={lblPunti}>Punti accumulati</div>
+                <div style={{ ...numPunti, color: GOLD }}>{raccoltaPuntiMaster.puntiTotale} <span style={{ ...fontBody, fontSize: isMobile ? 10 : 13, fontWeight: 400, color: MUTED }}>pt</span></div>
               </div>
             </div>
+              );
+            })()}
             <Button variant="ghost" onClick={() => setMostraDettaglioPunti(true)}>Dettaglio per codice</Button>
           </div>
         )}
@@ -6250,7 +6266,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
-                apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede}
+                apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede} onApriClasse={onApriClasse}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
               />
             ))}
@@ -18319,7 +18335,7 @@ function VistaMaster({ param }) {
 // pagina pubblica di sola lettura per chi cerca modelle per una classe:
 // solo i trattamenti richiesti, senza nessun dato personale o di pagamento
 // (stessa logica di slug di VistaMaster, ma parametro "?modelle=")
-function VistaRicercaModelle({ param }) {
+function VistaRicercaModelle({ param, mostraClasse }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
 
@@ -18421,6 +18437,29 @@ function VistaRicercaModelle({ param }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
           Appena trovi una modella per un trattamento, spunta se viene la mattina o il pomeriggio e scrivi il suo nome e il suo numero: si salva da solo.
         </div>
+
+        {mostraClasse && (
+          <div style={{ marginBottom: 26 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Allievi ({iscritti.length})</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Kit acquistato e taglia della divisa</div>
+            {iscritti.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo iscritto.</div>
+            ) : iscritti.map((i, idx) => (
+              <div key={i.id} style={{ ...cardStyle, padding: 14, marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                    <span style={{ color: MUTED, fontWeight: 400, fontSize: 13, marginRight: 6 }}>{idx + 1}.</span>
+                    {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia: {i.taglia_divisa || "—"}</div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Kit: {i.pacchetto_kit || "—"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mostraClasse && <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Gestione modelle</div>}
 
         {iscrittiConModelle.length === 0 && <div style={{ color: MUTED }}>Nessuna modella richiesta per questa classe.</div>}
 
@@ -36367,7 +36406,8 @@ export default function App() {
   // richiesti per questa classe (nessun dato personale/di pagamento)
   const paramModelle = new URLSearchParams(window.location.search).get("modelle");
   if (paramModelle) {
-    return <VistaRicercaModelle param={paramModelle} />;
+    const mostraClasse = new URLSearchParams(window.location.search).get("classe") === "1";
+    return <VistaRicercaModelle param={paramModelle} mostraClasse={mostraClasse} />;
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
@@ -36620,6 +36660,7 @@ export default function App() {
   // dichiarazione sovrascrive la precedente (upsert)
   const [inventarioSede, setInventarioSede] = useState([]);
   const [inventarioSedeCorsoDataId, setInventarioSedeCorsoDataId] = useState(null);
+  const [classeMasterCorsoDataId, setClasseMasterCorsoDataId] = useState(null);
   // "mucchio" di prodotti aperti (non ripristinabili in magazzino):
   // una riga per prodotto+edizione, sommate per prodotto in Logistica
   // prodotti — alimentato dal tasto "Prodotti rientrati"
@@ -37327,6 +37368,7 @@ export default function App() {
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
+  function apriClasseMaster(corsoDataId) { window.scrollTo(0, 0); setClasseMasterCorsoDataId(corsoDataId); setView("classemaster"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
   // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
@@ -38021,9 +38063,30 @@ export default function App() {
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterRegolaBase={puntiMasterRegolaBase} puntiMasterPeriodiSpeciali={puntiMasterPeriodiSpeciali} puntiMasterImpostazioni={puntiMasterImpostazioni}
           onApriInventarioSede={apriInventarioSede}
+          onApriClasse={apriClasseMaster}
           onBack={() => setView("home")}
         />
       )}
+
+      {view === "classemaster" && (() => {
+        const cd = corsiDate.find((c) => c.id === classeMasterCorsoDataId);
+        const corso = cd ? corsi.find((c) => c.id === cd.corso_id) : null;
+        const loc = cd ? location.find((l) => l.id === cd.location_id) : null;
+        if (!cd || !corso || !loc) return <div style={{ maxWidth: 640, margin: "0 auto", padding: "20px", ...fontBody, color: MUTED }}>Classe non trovata.</div>;
+        const [aaaa, mm, gg] = cd.data_inizio.split("-");
+        const paramClasse = [slugify(corso.nome), slugify(loc.nome), `${gg}-${mm}-${aaaa}`].join("/");
+        return (
+          <div>
+            <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
+              <button onClick={() => setView("dashboardmaster")} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
+                <IconaFrecciaSinistra size={20} />
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
+              </button>
+            </div>
+            <VistaRicercaModelle param={paramClasse} mostraClasse />
+          </div>
+        );
+      })()}
 
       {view === "inventariosede" && (
         <PaginaInventarioSede
