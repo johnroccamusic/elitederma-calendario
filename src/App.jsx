@@ -5775,10 +5775,19 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
   const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
+  // click sul corpo della card: apre la "classe" (elenco allievi con kit e
+  // taglia + gestione modelle) nella stessa vista del link modelle, con
+  // &classe=1 così mostra anche gli allievi. Il link pubblico "Genera link
+  // modelle" resta senza quel flag e quindi invariato per i coordinatori.
+  function apriClasse() {
+    const [aaaa, mm, gg] = corsoData.data_inizio.split("-");
+    const leggibile = [slugify(corso?.nome), slugify(loc?.nome), `${gg}-${mm}-${aaaa}`].filter(Boolean).join("/");
+    window.open(`${window.location.origin}${window.location.pathname}?modelle=${leggibile}&classe=1`, "_blank");
+  }
   return (
     <div
-      onClick={apribile ? () => onApriInventario(corsoData.id) : undefined}
-      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: apribile ? "pointer" : "default" }}
+      onClick={apriClasse}
+      style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, marginBottom: 14, background: "#fff", cursor: "pointer" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -5837,7 +5846,9 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Biglietti scaricabili</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {biglietti.map((percorso, i) => (
-                  <AllegatoLink key={i} percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
+                  <span key={i} onClick={(e) => e.stopPropagation()} style={{ display: "inline-flex" }}>
+                    <AllegatoLink percorso={percorso} etichetta={`Biglietto ${i + 1}`} />
+                  </span>
                 ))}
               </div>
             </div>
@@ -5875,7 +5886,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
       {(apribile || codiceReferral) && (
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           {apribile ? (
-            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            <div onClick={(e) => { e.stopPropagation(); onApriInventario(corsoData.id); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
               Inventario fine corso →
             </div>
           ) : <span />}
@@ -18291,7 +18302,7 @@ function VistaMaster({ param }) {
 // pagina pubblica di sola lettura per chi cerca modelle per una classe:
 // solo i trattamenti richiesti, senza nessun dato personale o di pagamento
 // (stessa logica di slug di VistaMaster, ma parametro "?modelle=")
-function VistaRicercaModelle({ param }) {
+function VistaRicercaModelle({ param, mostraClasse }) {
   const [dati, setDati] = useState(null);
   const [errore, setErrore] = useState(false);
 
@@ -18393,6 +18404,29 @@ function VistaRicercaModelle({ param }) {
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
           Appena trovi una modella per un trattamento, spunta se viene la mattina o il pomeriggio e scrivi il suo nome e il suo numero: si salva da solo.
         </div>
+
+        {mostraClasse && (
+          <div style={{ marginBottom: 26 }}>
+            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 2 }}>Allievi ({iscritti.length})</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Kit acquistato e taglia della divisa</div>
+            {iscritti.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo iscritto.</div>
+            ) : iscritti.map((i, idx) => (
+              <div key={i.id} style={{ ...cardStyle, padding: 14, marginBottom: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                    <span style={{ color: MUTED, fontWeight: 400, fontSize: 13, marginRight: 6 }}>{idx + 1}.</span>
+                    {i.nome.toUpperCase()} {i.cognome.toUpperCase()}
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia: {i.taglia_divisa || "—"}</div>
+                </div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Kit: {i.pacchetto_kit || "—"}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mostraClasse && <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Gestione modelle</div>}
 
         {iscrittiConModelle.length === 0 && <div style={{ color: MUTED }}>Nessuna modella richiesta per questa classe.</div>}
 
@@ -36339,7 +36373,8 @@ export default function App() {
   // richiesti per questa classe (nessun dato personale/di pagamento)
   const paramModelle = new URLSearchParams(window.location.search).get("modelle");
   if (paramModelle) {
-    return <VistaRicercaModelle param={paramModelle} />;
+    const mostraClasse = new URLSearchParams(window.location.search).get("classe") === "1";
+    return <VistaRicercaModelle param={paramModelle} mostraClasse={mostraClasse} />;
   }
 
   const [ok, setOk] = useState(sessionStorage.getItem("edc_ok") === "1");
