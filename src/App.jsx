@@ -1375,7 +1375,7 @@ function TileHome({
         onDragOver={onDragOverTasto}
         onDrop={onDropTasto}
         style={{
-          ...fontBody, width: "90%", margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
+          ...fontBody, width: "82%", margin: "0 auto", boxSizing: "border-box", background: "none", border: "none", padding: 0,
           display: "flex", flexDirection: "column", alignItems: "center", cursor: attivo ? "pointer" : "default",
           opacity: attenuato ? 0.5 : 1,
         }}
@@ -1388,7 +1388,7 @@ function TileHome({
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
           {maniglia}
-          <Icona size={30} color={coloreTesto} />
+          <Icona size={27} color={coloreTesto} />
           {!attivo && (
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
           )}
@@ -1662,7 +1662,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
           </div>
         )}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 14 : 16, rowGap: isMobile ? 18 : 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : `repeat(${colonneEffettive}, 1fr)`, gap: isMobile ? 14 : 16, rowGap: isMobile ? 21 : 16 }}>
         {listaVisibile.map((nodo) => {
           const isCartella = typeof nodo === "object" && nodo?.tipo === "cartella";
           const chiave = isCartella ? nodo.id : nodo;
