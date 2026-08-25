@@ -14365,6 +14365,7 @@ const TASTI_HOME = [
   { chiave: "crmallievi", etichetta: "CRM Allievi" },
   { chiave: "storicoallievi", etichetta: "Storico Allievi" },
   { chiave: "impostazioni", etichetta: "Setting" },
+  { chiave: "prezzicorsi", etichetta: "Prezzi corsi" },
 ];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
