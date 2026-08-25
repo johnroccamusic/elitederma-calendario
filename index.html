@@ -25,11 +25,14 @@
       body {
         background-color: #F7F5EF;
         background-image: url("/sfondo-app-mobile.jpg");
-        /* "auto 100%" invece di "cover": forza SEMPRE la copertura
-           verticale completa (mai un bordo bianco sopra/sotto), a costo
-           di tagliare di più i lati se la pagina è più stretta/larga del
-           previsto — esattamente il compromesso richiesto */
-        background-size: auto 100%;
+        /* "cover" da solo, in certi casi (differenze di misurazione del
+           viewport tra dispositivi/browser mobili), può lasciare un
+           bordo scoperto su un lato. 115% di larghezza forza sempre un
+           margine extra di sovraccopertura su entrambi gli assi (le
+           proporzioni dell'immagine sono vicine a quelle di un telefono),
+           assorbendo qualunque discrepanza — mai più un bordo scoperto,
+           a costo di tagliare un po' di più i lati */
+        background-size: 115% auto;
         background-position: top center;
         background-repeat: no-repeat;
       }
