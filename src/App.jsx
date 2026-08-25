@@ -31393,7 +31393,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   if (isMobile) {
     return (
-      <div style={{ background: "transparent", minHeight: "100vh", padding: `24px 16px ${carrello.length > 0 ? 190 : 100}px` }}>
+      <div style={{ background: "transparent", minHeight: "100vh", padding: `24px 16px ${carrello.length > 0 ? 214 : 124}px` }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
@@ -31454,7 +31454,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         {paginazione}
 
         {carrello.length > 0 && !carrelloEspanso && (
-          <div onClick={() => setCarrelloEspanso(true)} style={{ position: "fixed", left: 0, right: 0, bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)", background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, borderRadius: "16px 16px 0 0", boxShadow: "0 -6px 18px rgba(0,0,0,0.10)", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40 }}>
+          <div onClick={() => setCarrelloEspanso(true)} style={{ position: "fixed", left: 0, right: 0, bottom: "calc(env(safe-area-inset-bottom, 0px) + 120px)", background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, borderRadius: "16px 16px 0 0", boxShadow: "0 -6px 18px rgba(0,0,0,0.10)", padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <div style={{ position: "relative", width: 40, height: 40, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <IconaCarrelloPos size={19} />
@@ -37981,7 +37981,7 @@ export default function App() {
   })();
 
   return (
-    <div style={{ ...fontBody, background: "transparent", minHeight: "100vh", paddingBottom: isMobile ? 104 : 0 }}>
+    <div style={{ ...fontBody, background: "transparent", minHeight: "100vh", paddingBottom: isMobile ? 130 : 0 }}>
       {!isMobile && (
         <div
           style={{
@@ -38069,11 +38069,11 @@ export default function App() {
             aria-label="Password menù"
             title="Password menù"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 14,
-              width: 46, height: 46, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
+              width: 66, height: 66, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3" />
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
@@ -38084,12 +38084,12 @@ export default function App() {
             aria-label="Indietro"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 14,
-              width: 46, height: 46, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
+              width: 66, height: 66, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
           </button>
@@ -38099,12 +38099,12 @@ export default function App() {
             aria-label="Avanti"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 14,
-              width: 46, height: 46, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
+              width: 66, height: 66, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="9 18 15 12 9 6" />
             </svg>
           </button>
@@ -38113,11 +38113,11 @@ export default function App() {
             aria-label="Home"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 14,
-              width: 46, height: 46, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "none", borderRadius: 20,
+              width: 66, height: 66, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
