@@ -1356,6 +1356,10 @@ function TileHome({
   // opzionali: i 27+ usi esistenti di TileHome non li passano e restano
   // identici a prima
   maniglia, draggableTasto = false, onDragStartTasto, onDragEndTasto, onDragOverTasto, onDropTasto, attenuato = false, evidenziato = false,
+  // rinomina del tasto (solo programmatore, solo mobile — vedi
+  // GrigliaTasti): toccando il testo sotto l'icona invece di aprire il
+  // tasto. Assente per chi non è programmatore o per le cartelle.
+  onRinominaEtichetta,
 }) {
   const isMobile = useIsMobile();
   const ricca = !!Icona;
@@ -1389,7 +1393,14 @@ function TileHome({
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
           )}
         </div>
-        <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "100%", whiteSpace: "normal", wordBreak: "break-word" }}>
+        <div
+          onClick={onRinominaEtichetta ? (e) => { e.stopPropagation(); onRinominaEtichetta(); } : undefined}
+          title={onRinominaEtichetta ? "Tocca per rinominare questo tasto" : undefined}
+          style={{
+            ...fontBody, fontSize: 11, fontWeight: 600, color: coloreTesto, marginTop: 6, lineHeight: 1.25, textAlign: "center", width: "100%", whiteSpace: "normal", wordBreak: "break-word",
+            ...(onRinominaEtichetta ? { cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 2 } : {}),
+          }}
+        >
           {title}
         </div>
       </button>
@@ -1505,7 +1516,7 @@ function TastoLivelloPrecedente({ titolo, onClick }) {
 //   dell'app). Un tasto dentro una cartella aperta, trascinato
 //   sull'icona Home del breadcrumb, torna in cima — nessuna cartella
 //   dentro un'altra cartella, per restare semplice.
-function GrigliaTasti({ pagina, definizioni, ordine, colonne, ruoloUtente, onSalvaOrdine, onSalvaColonne, consentiCartelle = false, colonneDesktop = 3 }) {
+function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ruoloUtente, onSalvaOrdine, onSalvaColonne, onSalvaEtichetta, consentiCartelle = false, colonneDesktop = 3 }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   // scelta del programmatore per QUESTA pagina, salvata — se non ha mai
@@ -1661,7 +1672,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, ruoloUtente, onSal
           return (
             <TileHome
               key={chiave}
-              title={isCartella ? nodo.nome : def.title}
+              title={isCartella ? nodo.nome : (etichette[chiave] || def.title)}
               descrizione={isCartella ? `${nTasti} tast${nTasti === 1 ? "o" : "i"}` : def.descrizione}
               Icona={isCartella ? IconaCartellaShop : def.Icona}
               attivo={isCartella ? true : def.attivo}
@@ -1674,6 +1685,11 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, ruoloUtente, onSal
               onDropTasto={() => programmatore && rilasciaSuChiave(chiave)}
               attenuato={trascinata === chiave}
               evidenziato={!!dragRef.current && dragRef.current.chiave !== chiave && suCursore === chiave}
+              onRinominaEtichetta={programmatore && !isCartella && onSalvaEtichetta ? () => {
+                const attuale = etichette[chiave] || def.title;
+                const nuovo = window.prompt("Testo per questo tasto (vuoto = nome originale):", attuale);
+                if (nuovo !== null) onSalvaEtichetta(chiave, nuovo);
+              } : undefined}
             />
           );
         })}
@@ -2650,7 +2666,7 @@ function ModaleGestisciSede({ cd, location, onClose, onSalvato }) {
 // docente extra aggiungere (master/assistente/leva): ognuna diventa
 // una riga propria in corsi_date_docenti, con i propri biglietti di
 // viaggio e il proprio hotel.
-function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio }) {
+function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, master, hotel, assistente, leva, spese, ruoloUtente, layoutCondiviso, ricarica, onBack, onApriRegistraSpesaAlloggio, titolo = "Operativo corsi" }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
 
@@ -3324,7 +3340,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20, flexWrap: "wrap", marginBottom: 18 }}>
           <div>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 1.2, marginBottom: 4 }}>Team</div>
-            <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Operativo corsi</div>
+            <div style={{ ...fontDisplay, fontSize: 32, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Organizza il team, gli assistenti e le trasferte per ogni corso</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -3501,7 +3517,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
 // aree che prima stavano nell'hub ERP (Performance Aziendale, ex
 // "Dashboard analisi", e Statistiche Vendite Prodotti), essendo entrambe
 // analisi/numeri più che gestione operativa
-function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
+function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriPerformanceAziendale, onApriStatisticheVenditeProdotti, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Statistiche" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -3509,10 +3525,10 @@ function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriP
         <div style={{ marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
         </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Statistiche</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Analisi, report e KPI della tua Academy.</div>
         <GrigliaTasti
-          pagina="statistiche" ordine={ordineTasti} colonne={colonneTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} colonneDesktop={3}
+          pagina="statistiche" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "venditori", title: "Statistiche venditori", descrizione: "Iscrizioni fatte da ciascun venditore, per corso.", Icona: IconaTileVenditori, attivo: true, onClick: onApriVenditori },
             { chiave: "master", title: "Statistiche Master", descrizione: "Vendite prodotti conseguite da ogni master, per mese, trimestre e oltre.", Icona: IconaTileMaster, attivo: true, onClick: onApriStatisticheMaster },
@@ -4392,7 +4408,7 @@ function esportaCsvStatisticaVenditori(righeCorsi, colonneVenditori) {
   URL.revokeObjectURL(url);
 }
 
-function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack }) {
+function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, titolo = "Statistiche venditori" }) {
   // periodo di default: mese corrente (stessa convenzione di "Ultimo
   // mese" nella scheda personale del venditore) — così le classifiche
   // qui sotto mostrano subito dati utili senza dover scegliere un filtro
@@ -4646,7 +4662,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
       <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} /></div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
         <div>
-          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>Statistiche venditori</div>
+          <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{titolo}</div>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Corsi chiusi da ciascun venditore nel periodo selezionato</div>
         </div>
         <button
@@ -5218,6 +5234,7 @@ function PaginaDashboardVenditori({
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
   registraInterceptaIndietro,
   venditeShop, prodottiShop, targetVenditeProdotti,
+  titolo = "Dashboard venditori",
 }) {
   const isMobile = useIsMobile();
   // se un venditore ha fatto login (venditoreBloccato valorizzato), la
@@ -5476,7 +5493,7 @@ function PaginaDashboardVenditori({
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>
-              {venditoreSel ? `Dashboard ${toTitleCase(venditoreSel.nome)}` : "Dashboard venditori"}
+              {venditoreSel ? `Dashboard ${toTitleCase(venditoreSel.nome)}` : titolo}
             </div>
           </div>
           {venditoreBloccato ? null : (
@@ -6048,7 +6065,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriClasse, onBack }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriClasse, onBack, titolo = "Dashboard master" }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -6191,7 +6208,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
           )}
         </div>
         <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>
-          {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : "Dashboard master"}
+          {masterSel ? `Dashboard ${toTitleCase(masterSel.nome)}` : titolo}
         </div>
         {masterSel && <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Area master</div>}
 
@@ -7409,7 +7426,7 @@ function VistaGiornoEspanso({ data, voci, corsiGiorno, onClickVoce, onNuovoEvent
 // di tasti fra cui scegliere quale aprire. Solo il Programmatore può
 // crearne/eliminarle (e vede sempre tutte); chiunque acceda a un'agenda
 // può aggiungere/togliere le sue voci
-function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, location, corsiDate, ruoloUtente, utenteLoggato, ricarica, onBack }) {
+function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, location, corsiDate, ruoloUtente, utenteLoggato, ricarica, onBack, titolo = "Agenda" }) {
   const isMobile = useIsMobile();
   const isProgrammatore = ruoloUtente === "programmatore";
   const isStaff = ruoloUtente === "programmatore" || ruoloUtente === "amministratore";
@@ -7556,7 +7573,7 @@ function PaginaAgenda({ agende, agendaVoci, agendaNoteSettimanali, corsi, locati
               titolo={agendaAperta && agendeVisibili.length > 1 ? "Agenda" : "Home"}
               onClick={() => (agendaAperta && agendeVisibili.length > 1 ? setAgendaApertaId(null) : onBack())}
             />
-            <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : "Agenda"}</div>
+            <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{agendaAperta ? agendaAperta.nome : titolo}</div>
           </div>
           {agendaAperta && (
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -8612,6 +8629,7 @@ function PaginaGestioneModelle({
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
   selectFiltroCorsoHomeRef, selectFiltroCittaHomeRef, selectFiltroMasterHomeRef,
+  titolo = "Gestione modelle",
 }) {
   const isMobile = useIsMobile();
   const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio
@@ -8621,7 +8639,7 @@ function PaginaGestioneModelle({
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 4 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Gestione modelle</div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>Fabbisogno, scadenze e assegnazioni</div>
           </div>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -9350,7 +9368,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -9625,7 +9643,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Setting" onBack={onBack} />
+      <TopBar title={titolo} onBack={onBack} />
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 18, alignItems: "start" }}>
         {gruppiSetting.map((g) => (
@@ -9865,7 +9883,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro, titolo = "Gestione corsi" }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -9947,7 +9965,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
 
   const intestazioneGestioneCorsi = (
     <>
-      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>Gestione corsi</div>
+      <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>{titolo}</div>
       <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
         <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
         <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
@@ -11809,7 +11827,7 @@ function scaricaBlob(blob, nomeFile) {
 // genera i PNG nero (sempre) e bianco (se la categoria lo richiede) con
 // nome e codice progressivo scritti sopra, usando la calibrazione fatta
 // in "Setting loghi"
-function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica, onBack }) {
+function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica, onBack, titolo = "Generazione loghi" }) {
   const [masterId, setMasterId] = useState("");
   const [corso, setCorso] = useState("");
   const [variante, setVariante] = useState("artist");
@@ -11897,7 +11915,7 @@ function GenerazioneLoghi({ master, loghiCategorie, loghiImpostazioni, ricarica,
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px" }}>
-      <TopBar title="Generazione loghi" onBack={onBack} />
+      <TopBar title={titolo} onBack={onBack} />
       <div style={cardStyle}>
         <Field label="Master">
           <select style={inputStyle} value={masterId} onChange={(e) => setMasterId(e.target.value)}>
@@ -18943,7 +18961,7 @@ function PannelloConfrontoAnnuale({ corsiDate, iscritti, spese, costiCategorieBy
 // TileHome usato lì). Magazzino/Shop e le statistiche vendite si sono
 // spostati altrove (Home > Gestione magazzino e shop, Statistiche): qui
 // restano solo le due aree propriamente amministrative
-function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
+function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti, onApriAssegnazioneMaster, onApriAnagrafiche, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Amministrazione" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -18951,10 +18969,10 @@ function PaginaErp({ onBack, onApriAmministrazione, onApriCatalogoCategorieCosti
         <div style={{ marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
         </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Amministrazione</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Costi, ricavi, categorie di spesa e organizzazione operativa dei corsi.</div>
         <GrigliaTasti
-          pagina="amministrazione" ordine={ordineTasti} colonne={colonneTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} colonneDesktop={3}
+          pagina="amministrazione" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "contabilita", title: "Contabilità", descrizione: "Prima nota cassa, quadro impegni, documenti fornitore e scadenziari attivo/passivo.", Icona: IconaTileCostiRicavi, attivo: true, onClick: onApriAmministrazione },
             { chiave: "categoriespesa", title: "Categorie di spesa", descrizione: "Organizza e gestisci le categorie usate in Prima nota cassa.", Icona: IconaTileCatalogo, attivo: true, onClick: onApriCatalogoCategorieCosti },
@@ -19161,7 +19179,7 @@ function costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, ve
 // presente nelle rispettive pagine di gestione, qui raggiungibile in
 // un solo posto. Le location (semplici spazi, non soggetti fiscali)
 // rimandano invece alla loro pagina di gestione esistente.
-function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, citta, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation }) {
+function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, citta, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriGestioneLocation, titolo = "Anagrafiche" }) {
   const isMobile = useIsMobile();
   const [filtro, setFiltro] = useState("tutti");
   const [ricerca, setRicerca] = useState("");
@@ -19379,7 +19397,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Anagrafiche</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Tutti i soggetti con cui l'accademia ha rapporti: chi sono, come si pagano, che ruolo hanno.</div>
 
@@ -19651,7 +19669,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti }) {
+function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -19659,10 +19677,10 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
         <div style={{ marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
         </div>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>Gestione magazzino e shop</div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Magazzino fisico, shop online e le vendite che ne derivano.</div>
         <GrigliaTasti
-          pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} colonneDesktop={3}
+          pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileGestioneMagazzino, attivo: true, onClick: onApriMagazzino },
             { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileLogistica, attivo: true, onClick: onApriMagazziniEsterni },
@@ -19700,7 +19718,7 @@ function nomiVociVenduteDistinti(venditeShop) {
   });
   return set;
 }
-function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, ricarica, onBack }) {
+function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, ricarica, onBack, titolo = "Classificazione voci di vendita" }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
   const [filtroTipo, setFiltroTipo] = useState("tutti");
@@ -19742,7 +19760,7 @@ function PaginaClassificazioneVociShop({ vociShopClassificazione, venditeShop, r
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>Classificazione voci di vendita</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Distingue corsi, prodotti ed esclusioni fra le righe vendute nello shop — usata per calcolare statistiche prodotto corrette.</div>
 
@@ -19888,7 +19906,7 @@ const COLONNE_CRM_SHOP = [
   { chiave: "giorniMedi", etichetta: "Giorni medi fra ordini" },
 ];
 
-function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificazioneVoci, onBack }) {
+function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificazioneVoci, onBack, titolo = "CRM Shop Online" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("clienti"); // clienti | classifica
   const [ricerca, setRicerca] = useState("");
@@ -19949,7 +19967,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
           <DettaglioClienteShop cliente={clienteAperto} />
         ) : (
           <>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>CRM Shop Online</div>
+            <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Clienti dello shop online, raggruppati per account (o per email quando non c'è un account).</div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
@@ -20248,7 +20266,7 @@ async function generaCodiceReferralUnivoco(nome) {
   }
 }
 
-function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, ricarica, onBack }) {
+function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("manuale");
   const [codice, setCodice] = useState("");
@@ -20612,7 +20630,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>Genera Coupon</div>
+          <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>Crea codici sconto per lo shop online. Il salvataggio qui è solo locale — "Crea su WooCommerce" lo rende davvero utilizzabile.</div>
 
@@ -21220,7 +21238,7 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
 function PaginaDashboardAnalisi({
   corsi, location, corsiDate, iscritti, spese, costiCategorie, costiSottocategorie, entrateManuali,
   eventi, fornitori, speseAttribuzioni, costiBudget, costiSoglieAllerta,
-  onApriModificaSpesa, ricarica, onBack,
+  onApriModificaSpesa, ricarica, onBack, titolo = "Performance Aziendale",
 }) {
   const isMobile = useIsMobile();
   return (
@@ -21228,7 +21246,7 @@ function PaginaDashboardAnalisi({
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Performance Aziendale</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
 
         <SezioneAnalisiAndamento
@@ -22661,7 +22679,7 @@ function PaginaRiconciliazione({
   );
 }
 
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab }) {
+function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -23096,7 +23114,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
       <div style={{ maxWidth: 900, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Contabilità</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
 
@@ -23963,7 +23981,7 @@ function etichettaStatoVenditaShop(stato) {
 // "pos" → "Vendite al banco" (solo vendite fatte dal POS interno) — stessa
 // struttura di pagina, filtrate a monte così le due non si mescolano mai
 // e ciascuna ha il proprio contesto/KPI puliti
-function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
+function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
   const [statoSel, setStatoSel] = useState("");
@@ -24035,7 +24053,7 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack }) {
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{origine === "pos" ? "Vendite al banco" : "Vendite Shop Online"}</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           {origine === "woocommerce" && (
             <div style={{ textAlign: "right" }}>
               <Button variant="ghost" onClick={recuperaOrdiniMancanti} disabled={recuperando}>{recuperando ? "Controllo WooCommerce…" : "Recupera ordini mancanti"}</Button>
@@ -24418,7 +24436,7 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
 // "Omaggi": prodotti usciti dal POS senza essere venduti (tipo_movimento
 // "omaggio", totale sempre zero) — qui interessa solo cosa e quanto è
 // stato regalato, non un incasso che non esiste
-function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
+function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
 
@@ -24444,7 +24462,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Omaggi</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti usciti dal POS senza essere venduti — regalati, con nota obbligatoria sul motivo.</div>
 
@@ -24530,7 +24548,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack }) {
 // corsi come contenuto dei kit (mai venduto, mai un omaggio del POS —
 // semplicemente materiale didattico/consumo distribuito) — somma
 // quantitaInviataPerProdotto su tutte le edizioni del periodo scelto
-function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, onBack }) {
+function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, onBack, titolo = "Prodotti usati per i kit" }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("annoscolastico");
   const oggi = new Date();
@@ -24563,7 +24581,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Prodotti usati per i kit</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit (materiale didattico/consumo).</div>
 
@@ -25282,7 +25300,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, venditeShop, ricarica, onBack, titolo = "Gestione magazzino" }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -25531,7 +25549,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, v
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={tornaIndietro} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestione magazzino</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
             <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
@@ -25951,7 +25969,7 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
 // inventari di fine corso delle master, oppure a mano in qualunque
 // momento col tasto "Inventario" (PannelloInventarioMagazzino), per un
 // controllo scorte periodico non legato alla fine di un corso
-function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventarioSede, prodottiShop, costiSottocategorie, segnalazioniMagazzino, corsi, corsiDate, master, ricarica, onBack }) {
+function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventarioSede, prodottiShop, costiSottocategorie, segnalazioniMagazzino, corsi, corsiDate, master, ricarica, onBack, titolo = "Magazzini esterni" }) {
   const isMobile = useIsMobile();
   const [inventarioApertoId, setInventarioApertoId] = useState(null);
   const sediConMagazzino = (location || []).filter((l) => l.magazzino_locale).sort((a, b) => (a.nome_sede || a.nome || "").localeCompare(b.nome_sede || b.nome || ""));
@@ -25973,7 +25991,7 @@ function PaginaMagazziniEsterni({ location, magazzinoLocaleConsumabili, inventar
       <div style={{ maxWidth: 980, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>Magazzini esterni</div>
+          <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 20 }}>
           Cosa c'è fisicamente in ogni sede: si aggiorna da solo con gli inventari che le master dichiarano a fine corso.
@@ -26474,7 +26492,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, ricarica, onChiudi }) 
 // periodo/operatore/prodotto, con l'avanzamento dei target in corso — mai
 // una cifra di "Vendite Corsi" qui dentro (tutt'altra pagina, con le sue
 // statistiche separate)
-function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi }) {
+function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi, titolo = "Statistiche Totali Vendite Prodotti" }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -26540,7 +26558,7 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Statistiche Totali Vendite Prodotti</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Somma di shop online e vendite al banco (POS) — le Vendite Corsi sono un'area separata, con le proprie statistiche.</div>
 
@@ -26641,7 +26659,7 @@ function rangeStatisticheMaster(periodo) {
 // oggi, con la stessa scelta di periodo delle altre pagine ERP — solo
 // operatore_tipo "master" (i venditori hanno la propria pagina già in
 // Statistiche Vendite Prodotti, qui si guarda solo il lato master)
-function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVenditeProdotti, onBack }) {
+function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVenditeProdotti, onBack, titolo = "Statistiche Master" }) {
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("mese");
   const range = rangeStatisticheMaster(periodo);
@@ -26674,7 +26692,7 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
       <div style={{ maxWidth: 1000, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Statistiche" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Statistiche Master</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Vendite al POS di ogni master, fino a oggi.</div>
 
@@ -29302,7 +29320,7 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
 // costruisciAllieviCrm) — nessuna query server-side, nessuna
 // paginazione: stesso stile del resto dell'app, tutto già in memoria e
 // filtrato/ordinato nel browser
-function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi }) {
+function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, titolo = "CRM / Allievi" }) {
   const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -29480,7 +29498,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>CRM / Allievi</div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>Tutti gli allievi che hanno acquistato almeno un corso.</div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -29810,7 +29828,7 @@ function DettaglioStoricoAllievo({ riga, corso, onClose, ricarica }) {
   );
 }
 
-function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, location, ricarica, onBack }) {
+function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, location, ricarica, onBack, titolo = "Storico Allievi" }) {
   const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const tutte = useMemo(() => costruisciStoricoUnificato(storicoAllievi, iscritti, corsiDate, location), [storicoAllievi, iscritti, corsiDate, location]);
@@ -29937,7 +29955,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 20 }}>
           <div>
-            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Storico Allievi</div>
+            <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
             <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginTop: 2 }}>
               Corsi pre-gestionale recuperati dagli archivi, più i corsi già conclusi nel gestionale ({tutte.length.toLocaleString("it-IT")} allieve).
             </div>
@@ -30075,7 +30093,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 // origine="pos"), così compare da sola nei totali di "Vendite shop" e
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
-function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente }) {
+function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
   // programmatore — chi entra con la propria password di master o
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
@@ -30686,7 +30704,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : "POS Vendita diretta"}</div>
+              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : titolo}</div>
               <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
             </div>
           </div>
@@ -30790,7 +30808,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
-              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : "POS Vendita diretta"}</div>
+              <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{operatore ? `POS ${toTitleCase(operatore.nome)}` : titolo}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 2 }}>Vendita al pubblico · Scarico automatico dal magazzino</div>
             </div>
           </div>
@@ -32839,7 +32857,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, onApriMagazziniLocali, onBack, ricarica }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -33123,7 +33141,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
             <div>
-              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{vistaStorico ? "Storico spedizioni" : "Logistica prodotti"}</div>
+              <div style={{ ...fontDisplay, fontSize: 26, color: NAVY }}>{vistaStorico ? "Storico spedizioni" : titolo}</div>
               <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>
                 {vistaStorico ? "Corsi già conclusi: le schede restano consultabili qui, non spariscono più." : "Seleziona la fase raggiunta per ogni corso. La preparazione dei materiali resta qui a destra."}
               </div>
@@ -34927,7 +34945,7 @@ function slugificaCosti(testo) {
 // più una costante fissa nel codice): aggiungi/rinomina/riordina/
 // disattiva, blocco cancellazione se già usata da qualche spesa, più le
 // soglie di allerta configurabili
-function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spese, costiSoglieAllerta, ricarica, onBack }) {
+function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spese, costiSoglieAllerta, ricarica, onBack, titolo = "Gestisci categorie di spesa" }) {
   const [categoriaAperta, setCategoriaAperta] = useState("");
   const [nuovaCategoria, setNuovaCategoria] = useState("");
   const [testoNuovaSottocategoria, setTestoNuovaSottocategoria] = useState({});
@@ -35013,7 +35031,7 @@ function PaginaCatalogoCategorieCosti({ costiCategorie, costiSottocategorie, spe
       <div style={{ maxWidth: 800, margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
           <TastoLivelloPrecedente titolo="Amministrazione" onClick={onBack} />
-          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>Gestisci categorie di spesa</div>
+          <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Aggiungi, rinomina, riordina o disattiva le categorie e le sotto-voci di "Analisi costi di gestione".</div>
 
@@ -36875,6 +36893,22 @@ export default function App() {
     const { error } = await supabase.from("impostazioni_layout_tasti").upsert(nuovaRiga, { onConflict: "pagina" });
     if (error) { window.alert("Errore nel salvare il layout: " + error.message); fetchDati(["impostazioni_layout_tasti"]); }
   }
+  // rinomina di un singolo tasto (solo programmatore, toccando il testo
+  // sotto l'icona su mobile — vedi TileHome/GrigliaTasti): stringa vuota
+  // = torna al nome di default, tolto dalla mappa invece di salvato vuoto
+  async function salvaEtichettaTasto(pagina, chiave, testo) {
+    const etichette = { ...(layoutTasti[pagina]?.etichette || {}) };
+    if (testo && testo.trim()) etichette[chiave] = testo.trim();
+    else delete etichette[chiave];
+    await salvaLayoutTasti(pagina, { etichette });
+  }
+  // il nome effettivo di un tasto/pagina: quello personalizzato se esiste,
+  // altrimenti il default passato da chi chiama — usato sia per il testo
+  // del tasto sia per il titolo della pagina che apre, così restano sempre
+  // allineati
+  function etichettaTasto(pagina, chiave, fallback) {
+    return layoutTasti[pagina]?.etichette?.[chiave] || fallback;
+  }
 
   async function eliminaDataArchiviata(id) {
     const cd = corsiDate.find((x) => x.id === id);
@@ -37683,9 +37717,11 @@ export default function App() {
             pagina="home"
             ordine={layoutTasti.home?.ordine}
             colonne={layoutTasti.home?.colonne}
+            etichette={layoutTasti.home?.etichette}
             ruoloUtente={ruoloUtente}
             onSalvaOrdine={(nuovoOrdine) => salvaLayoutTasti("home", { ordine: nuovoOrdine })}
             onSalvaColonne={(n) => salvaLayoutTasti("home", { colonne: n })}
+            onSalvaEtichetta={(chiave, testo) => salvaEtichettaTasto("home", chiave, testo)}
             consentiCartelle
             colonneDesktop={4}
             definizioni={[
@@ -37732,7 +37768,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
       )}
 
       {view === "gestionedate" && (
@@ -37747,6 +37783,7 @@ export default function App() {
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
           cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
           registraInterceptaIndietro={registraInterceptaIndietro}
+          titolo={etichettaTasto("home", "gestionedate", "Gestione corsi")}
         />
       )}
 
@@ -37784,6 +37821,8 @@ export default function App() {
           onApriAnagrafiche={() => apriViewProtetta("anagrafiche")}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.amministrazione?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("amministrazione", { ordine: o })}
           colonneTasti={layoutTasti.amministrazione?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("amministrazione", { colonne: n })}
+          etichetteTasti={layoutTasti.amministrazione?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("amministrazione", chiave, testo)}
+          titolo={etichettaTasto("home", "erp", "Amministrazione")}
         />
       )}
 
@@ -37809,6 +37848,7 @@ export default function App() {
           onApriRiconciliazione={apriRiconciliazione}
           tabIniziale={amministrazioneTabIniziale}
           onCambiaTab={setAmministrazioneTabIniziale}
+          titolo={etichettaTasto("amministrazione", "contabilita", "Contabilità")}
         />
       )}
 
@@ -37837,6 +37877,7 @@ export default function App() {
           ricarica={fetchDati}
           onBack={() => setView("erp")}
           onApriGestioneLocation={apriGestioneLocation}
+          titolo={etichettaTasto("amministrazione", "anagrafiche", "Anagrafiche")}
         />
       )}
 
@@ -37855,6 +37896,8 @@ export default function App() {
           onApriMagazziniEsterni={apriMagazziniEsterni}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.magazzinoshop?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("magazzinoshop", { ordine: o })}
           colonneTasti={layoutTasti.magazzinoshop?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("magazzinoshop", { colonne: n })}
+          etichetteTasti={layoutTasti.magazzinoshop?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("magazzinoshop", chiave, testo)}
+          titolo={etichettaTasto("home", "magazzinoshop", "Gestione magazzino e shop")}
         />
       )}
 
@@ -37862,11 +37905,12 @@ export default function App() {
         <PaginaClassificazioneVociShop
           vociShopClassificazione={vociShopClassificazione} venditeShop={venditeShop}
           ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "classificazionevoci", "Classificazione voci di vendita")}
         />
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} titolo={etichettaTasto("magazzinoshop", "crmshop", "CRM Shop Online")} />
       )}
 
       {view === "generacoupon" && (
@@ -37877,6 +37921,7 @@ export default function App() {
           venditeShop={venditeShop}
           puntiMasterRegolaBase={puntiMasterRegolaBase} puntiMasterPeriodiSpeciali={puntiMasterPeriodiSpeciali} puntiMasterImpostazioni={puntiMasterImpostazioni}
           ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "generacoupon", "Genera Coupon")}
         />
       )}
 
@@ -37885,6 +37930,7 @@ export default function App() {
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} venditori={venditori}
           targetVenditeProdotti={targetVenditeProdotti} onBack={() => setView("statistiche")}
           onApriTotale={apriStatVenditeTotale} onApriShop={apriStatVenditeShop} onApriBanco={apriStatVenditeAlBanco} onApriAnalisi={apriStatAnalisiVenditaProdotti}
+          titolo={etichettaTasto("statistiche", "venditeprodotti", "Statistiche Totali Vendite Prodotti")}
         />
       )}
 
@@ -37932,19 +37978,20 @@ export default function App() {
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} entrateManuali={entrateManuali}
           eventi={eventi} fornitori={fornitori} speseAttribuzioni={speseAttribuzioni} costiBudget={costiBudget} costiSoglieAllerta={costiSoglieAllerta}
           onApriModificaSpesa={apriModificaSpesa} ricarica={fetchDati} onBack={() => setView("statistiche")}
+          titolo={etichettaTasto("statistiche", "performance", "Performance Aziendale")}
         />
       )}
 
       {view === "venditeshop" && (
-        <PaginaVenditeShop venditeShop={venditeShop} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} />
+        <PaginaVenditeShop venditeShop={venditeShop} origine="woocommerce" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditeshop", "Vendite Shop Online")} />
       )}
 
       {view === "venditealbanco" && (
-        <PaginaVenditeShop venditeShop={venditeShop} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} />
+        <PaginaVenditeShop venditeShop={venditeShop} origine="pos" ricarica={fetchDati} onBack={() => setView(provenienzaVenditeShop)} titolo={etichettaTasto("magazzinoshop", "venditealbanco", "Vendite al banco")} />
       )}
 
       {view === "omaggi" && (
-        <PaginaOmaggi venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} />
+        <PaginaOmaggi venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")} titolo={etichettaTasto("magazzinoshop", "omaggi", "Omaggi")} />
       )}
 
       {view === "prodottiusatikit" && (
@@ -37952,6 +37999,7 @@ export default function App() {
           corsi={corsi} corsiDate={corsiDate} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
           logisticaKitEdizioni={logisticaKitEdizioni} iscritti={iscritti} prodottiShop={prodottiShop}
           onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "prodottiusatikit", "Prodotti usati per i kit")}
         />
       )}
 
@@ -37959,6 +38007,7 @@ export default function App() {
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
       )}
 
@@ -37967,6 +38016,7 @@ export default function App() {
           location={location} magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioSede={inventarioSede}
           prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie} onBack={() => setView("magazzinoshop")}
           segnalazioniMagazzino={segnalazioniMagazzino} corsi={corsi} corsiDate={corsiDate} master={master} ricarica={fetchDati}
+          titolo={etichettaTasto("magazzinoshop", "magazziniesterni", "Magazzini esterni")}
         />
       )}
 
@@ -37976,6 +38026,7 @@ export default function App() {
           prodottiImmagini={prodottiImmagini} venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("home")}
           utenteLoggato={utenteLoggato} venditoreLoggato={venditoreLoggato} targetVenditeProdotti={targetVenditeProdotti}
           ruoloUtente={ruoloUtente} corsiDate={corsiDate} corsi={corsi} location={location} iscritti={iscritti} coupon={coupon}
+          titolo={etichettaTasto("home", "pos", "POS Vendita diretta")}
         />
       )}
 
@@ -37991,6 +38042,7 @@ export default function App() {
         <PaginaCatalogoCategorieCosti
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} spese={spese} costiSoglieAllerta={costiSoglieAllerta}
           ricarica={fetchDati} onBack={() => setView("erp")}
+          titolo={etichettaTasto("amministrazione", "categoriespesa", "Categorie di spesa")}
         />
       )}
 
@@ -38034,7 +38086,7 @@ export default function App() {
       )}
 
       {view === "generazioneloghi" && (
-        <GenerazioneLoghi master={master} loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni} ricarica={fetchDati} onBack={() => setView("home")} />
+        <GenerazioneLoghi master={master} loghiCategorie={loghiCategorie} loghiImpostazioni={loghiImpostazioni} ricarica={fetchDati} onBack={() => setView("home")} titolo={etichettaTasto("home", "generazioneloghi", "Assegna logo")} />
       )}
 
       {view === "dashboardvenditori" && (
@@ -38053,6 +38105,7 @@ export default function App() {
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti}
+          titolo={etichettaTasto("home", "dashboardvenditori", "Dashboard venditori")}
         />
       )}
 
@@ -38065,6 +38118,7 @@ export default function App() {
           onApriInventarioSede={apriInventarioSede}
           onApriClasse={apriClasseMaster}
           onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "dashboardmaster", "Dashboard master")}
         />
       )}
 
@@ -38109,6 +38163,7 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate}
           ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           ricarica={fetchDati} onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "agenda", "Agenda")}
         />
       )}
 
@@ -38124,6 +38179,7 @@ export default function App() {
           apriFiltroCittaHome={apriFiltroCittaHome} setApriFiltroCittaHome={setApriFiltroCittaHome}
           apriFiltroMasterHome={apriFiltroMasterHome} setApriFiltroMasterHome={setApriFiltroMasterHome}
           selectFiltroCorsoHomeRef={selectFiltroCorsoHomeRef} selectFiltroCittaHomeRef={selectFiltroCittaHomeRef} selectFiltroMasterHomeRef={selectFiltroMasterHomeRef}
+          titolo={etichettaTasto("home", "gestionemodelle", "Gestione modelle")}
         />
       )}
 
@@ -38134,6 +38190,7 @@ export default function App() {
           prodottiApertiMagazzino={prodottiApertiMagazzino}
           onApriMagazziniLocali={apriMagazziniLocali}
           ricarica={fetchDati} onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "logisticaprodotti", "Logistica prodotti")}
         />
       )}
 
@@ -38172,6 +38229,8 @@ export default function App() {
           onApriStatisticheVenditeProdotti={apriStatisticheVenditeProdotti}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.statistiche?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("statistiche", { ordine: o })}
           colonneTasti={layoutTasti.statistiche?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("statistiche", { colonne: n })}
+          etichetteTasti={layoutTasti.statistiche?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("statistiche", chiave, testo)}
+          titolo={etichettaTasto("home", "statistiche", "Statistiche")}
         />
       )}
 
@@ -38179,6 +38238,7 @@ export default function App() {
         <PaginaStatisticheMaster
           venditeShop={venditeShop} prodottiShop={prodottiShop} master={master} targetVenditeProdotti={targetVenditeProdotti}
           onBack={() => setView("statistiche")}
+          titolo={etichettaTasto("statistiche", "master", "Statistiche Master")}
         />
       )}
 
@@ -38225,15 +38285,16 @@ export default function App() {
           iscritti={iscritti} allieviCrm={allieviCrm} corsi={corsi} corsiDate={corsiDate} location={location}
           ricarica={fetchDati} onBack={() => setView("home")}
           onApriStoricoAllievi={apriStoricoAllievi}
+          titolo={etichettaTasto("home", "crmallievi", "CRM / Allievi")}
         />
       )}
 
       {view === "storicoallievi" && (
-        <PaginaStoricoAllievi storicoAllievi={storicoAllievi} corsi={corsi} iscritti={iscritti} corsiDate={corsiDate} location={location} ricarica={fetchDati} onBack={() => setView("home")} />
+        <PaginaStoricoAllievi storicoAllievi={storicoAllievi} corsi={corsi} iscritti={iscritti} corsiDate={corsiDate} location={location} ricarica={fetchDati} onBack={() => setView("home")} titolo={etichettaTasto("home", "storicoallievi", "Storico Allievi")} />
       )}
 
       {view === "statisticavenditori" && (
-        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} venditori={venditori} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("statistiche")} />
+        <StatisticaVenditori corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} venditori={venditori} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("statistiche")} titolo={etichettaTasto("statistiche", "venditori", "Statistiche venditori")} />
       )}
 
       {view === "ultimeiscrizioni" && (
@@ -38241,7 +38302,7 @@ export default function App() {
       )}
 
       {view === "assegnazionemaster" && (
-        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} />
+        <AssegnazioneMaster corsi={corsi} location={location} corsiDate={corsiDate} corsiDateDocenti={corsiDateDocenti} master={master} hotel={hotel} assistente={assistente} leva={leva} spese={spese} ruoloUtente={ruoloUtente} layoutCondiviso={layoutAssegnazioneMaster} ricarica={fetchDati} onBack={() => setView("erp")} onApriRegistraSpesaAlloggio={apriRegistraSpesaAlloggio} titolo={etichettaTasto("amministrazione", "operativocorsi", "Operativo corsi")} />
       )}
 
       {view === "calendario" && (
