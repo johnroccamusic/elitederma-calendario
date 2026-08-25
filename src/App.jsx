@@ -38069,8 +38069,8 @@ export default function App() {
             aria-label="Password menù"
             title="Password menù"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
-              width: 50, height: 50, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -38084,8 +38084,8 @@ export default function App() {
             aria-label="Indietro"
             title="Indietro"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
-              width: 50, height: 50, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -38099,8 +38099,8 @@ export default function App() {
             aria-label="Avanti"
             title="Avanti"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
-              width: 50, height: 50, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
@@ -38113,8 +38113,8 @@ export default function App() {
             aria-label="Home"
             title="Home"
             style={{
-              background: NAVY, color: "#fff", border: "none", borderRadius: 16,
-              width: 50, height: 50, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              background: NAVY, color: "#fff", border: "none", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             }}
           >
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
