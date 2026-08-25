@@ -37531,16 +37531,7 @@ export default function App() {
     return a.vista === b.vista && a.modificandoId === b.modificandoId && a.mostraGestione === b.mostraGestione;
   }
 
-  // il documento (html/body) non scorre più: scorre questo contenitore
-  // (vedi il div con questo ref più sotto, height:100dvh+overflowY:auto).
-  // Su iOS/Safari un "position:fixed" ancorato al documento che scorre
-  // "balla" visibilmente durante il gesto di trascinamento (bug storico e
-  // mai risolto del compositing di WebKit): tenendo il documento fermo e
-  // scorrendo solo questo contenitore interno, la pasticca in basso
-  // (fixed rispetto al viewport, non a questo contenitore) resta
-  // perfettamente immobile su qualunque dispositivo, iOS o Android
-  const scrollAppRef = React.useRef(null);
-  function scrollAppInCima() { scrollAppRef.current?.scrollTo(0, 0); }
+  function scrollAppInCima() { window.scrollTo(0, 0); }
 
   const statoAttualeRef = React.useRef({ view, corsoDataAperta, sottoVistaScheda });
   const navigazioneStoricoRef = React.useRef(false); // true mentre Indietro/Avanti stanno applicando un cambiamento (per non registrarlo di nuovo)
@@ -37992,7 +37983,7 @@ export default function App() {
   })();
 
   return (
-    <>
+    <div style={{ ...fontBody, background: "transparent", minHeight: "100vh", paddingBottom: isMobile ? 130 : 0 }}>
       {!isMobile && (
         <div
           style={{
@@ -38060,12 +38051,6 @@ export default function App() {
       )}
 
       {isMobile && (
-        // fuori dal contenitore che scorre (vedi sotto): un "position:fixed"
-        // DENTRO un elemento con overflow-y:auto (anche se in teoria dovrebbe
-        // restare ancorato al viewport) su Safari/iOS viene composito insieme
-        // al livello che scorre e si trascina con le dita — bug storico e
-        // molto documentato del rendering WebKit. Da fratello, del tutto
-        // esterno allo scroll, non ha mai questo problema
         <div
           style={{
             position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) - 2px)", left: 14, right: 14,
@@ -38073,6 +38058,10 @@ export default function App() {
             background: "rgba(14,27,51,0.55)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
             border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
             boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+            // spinge l'elemento sul proprio livello grafico (GPU): tecnica
+            // nota per evitare che un "position:fixed" resti visibilmente
+            // indietro durante lo scroll touch su iOS
+            transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform",
           }}
         >
           <button
@@ -38135,15 +38124,6 @@ export default function App() {
           </button>
         </div>
       )}
-
-      <div
-        ref={scrollAppRef}
-        style={{
-          ...fontBody, background: "transparent", boxSizing: "border-box",
-          height: "calc(100dvh - env(safe-area-inset-top, 0px))", overflowY: "auto", WebkitOverflowScrolling: "touch",
-          overscrollBehaviorY: "contain", paddingBottom: isMobile ? 130 : 0,
-        }}
-      >
       {!isMobile && (
         // riserva lo spazio occupato dalla barra fissa qui sopra, altrimenti
         // (essendo "position:fixed") coprirebbe l'inizio del contenuto di
@@ -38822,7 +38802,6 @@ export default function App() {
           onTornaGestioneModelle={() => setView("gestionemodelle")}
         />
       )}
-      </div>
-    </>
+    </div>
   );
 }
