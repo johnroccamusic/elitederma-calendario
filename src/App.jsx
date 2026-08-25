@@ -8700,41 +8700,94 @@ function titoloDaNomeFile(nomeFile) {
     .join(" ");
 }
 
+// nome file sicuro per lo storage: tolta l'estensione, accenti e
+// caratteri non alfanumerici diventano trattini
+function nomeFileSicuro(nomeOriginale) {
+  const puntoEstensione = nomeOriginale.lastIndexOf(".");
+  const base = puntoEstensione > 0 ? nomeOriginale.slice(0, puntoEstensione) : nomeOriginale;
+  const estensione = (puntoEstensione > 0 ? nomeOriginale.slice(puntoEstensione) : ".jpg").toLowerCase();
+  const baseSicura = base
+    .normalize("NFKD").replace(/\p{Diacritic}/gu, "")
+    .replace(/[^a-zA-Z0-9-_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "") || "locandina";
+  return { baseSicura, estensione };
+}
+// evita di sovrascrivere una locandina già caricata con lo stesso nome:
+// aggiunge -2, -3... finché non trova un nome libero
+function nomeFileUnico(baseSicura, estensione, nomiEsistenti) {
+  let candidato = `${baseSicura}${estensione}`;
+  let n = 2;
+  while (nomiEsistenti.has(candidato)) { candidato = `${baseSicura}-${n}${estensione}`; n++; }
+  return candidato;
+}
+
 // griglia delle locandine con i prezzi dei corsi: legge direttamente i
-// file caricati nel bucket "locandine-corsi", senza bisogno di gestirli
-// da nessun'altra parte dell'app. Il download dell'originale è riservato
-// al programmatore, gli altri ruoli vedono solo l'anteprima
+// file del bucket "locandine-corsi", senza tabella di appoggio. Solo il
+// programmatore può caricarne di nuove (trascinandole sul tasto
+// "Aggiungi", sempre in coda alla griglia); tutti possono scaricare una
+// locandina — su mobile, se il telefono lo supporta, tramite la
+// condivisione nativa così finisce direttamente nella galleria foto
 function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
   const isMobile = useIsMobile();
   const programmatore = ruoloUtente === "programmatore";
   const [locandine, setLocandine] = useState([]);
   const [caricando, setCaricando] = useState(true);
   const [scaricandoNome, setScaricandoNome] = useState(null);
+  const [caricandoUpload, setCaricandoUpload] = useState(null); // { fatti, totale }
+  const [trascinaSopra, setTrascinaSopra] = useState(false);
+  const inputFileRef = React.useRef(null);
+
+  async function ricaricaLocandine() {
+    const { data, error } = await supabase.storage.from("locandine-corsi").list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
+    if (error) { window.alert("Errore nel caricare le locandine: " + error.message); return; }
+    const file = (data || []).filter((f) => ESTENSIONI_LOCANDINE.test(f.name));
+    setLocandine(file.map((f) => ({
+      nome: f.name,
+      titolo: titoloDaNomeFile(f.name),
+      url: supabase.storage.from("locandine-corsi").getPublicUrl(f.name).data.publicUrl,
+    })));
+  }
 
   useEffect(() => {
-    let attivo = true;
-    (async () => {
-      const { data, error } = await supabase.storage.from("locandine-corsi").list("", { limit: 200, sortBy: { column: "name", order: "asc" } });
-      if (!attivo) return;
-      if (error) { window.alert("Errore nel caricare le locandine: " + error.message); setCaricando(false); return; }
-      const file = (data || []).filter((f) => ESTENSIONI_LOCANDINE.test(f.name));
-      setLocandine(file.map((f) => ({
-        nome: f.name,
-        titolo: titoloDaNomeFile(f.name),
-        url: supabase.storage.from("locandine-corsi").getPublicUrl(f.name).data.publicUrl,
-      })));
-      setCaricando(false);
-    })();
-    return () => { attivo = false; };
+    (async () => { await ricaricaLocandine(); setCaricando(false); })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function scarica(locandina) {
+  async function caricaFile(fileList) {
     if (!programmatore) return;
+    const file = Array.from(fileList || []).filter((f) => f.type.startsWith("image/"));
+    if (!file.length) return;
+    setCaricandoUpload({ fatti: 0, totale: file.length });
+    const nomiEsistenti = new Set(locandine.map((l) => l.nome));
+    for (const f of file) {
+      const { baseSicura, estensione } = nomeFileSicuro(f.name);
+      const nomeFinale = nomeFileUnico(baseSicura, estensione, nomiEsistenti);
+      nomiEsistenti.add(nomeFinale);
+      const { error } = await supabase.storage.from("locandine-corsi").upload(nomeFinale, f, { contentType: f.type });
+      if (error) window.alert(`Errore nel caricare ${f.name}: ${error.message}`);
+      setCaricandoUpload((prev) => (prev ? { ...prev, fatti: prev.fatti + 1 } : null));
+    }
+    setCaricandoUpload(null);
+    await ricaricaLocandine();
+  }
+
+  async function scaricaOCondividi(locandina) {
     setScaricandoNome(locandina.nome);
-    const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
-    setScaricandoNome(null);
-    if (error) { window.alert("Errore nello scaricare la locandina: " + error.message); return; }
-    scaricaBlob(data, locandina.nome);
+    try {
+      const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
+      if (error) throw error;
+      if (isMobile && navigator.share && navigator.canShare) {
+        const file = new File([data], locandina.nome, { type: data.type || "image/jpeg" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: locandina.titolo });
+          return;
+        }
+      }
+      scaricaBlob(data, locandina.nome);
+    } catch (e) {
+      if (e?.name !== "AbortError") window.alert("Errore nello scaricare la locandina: " + (e?.message || e));
+    } finally {
+      setScaricandoNome(null);
+    }
   }
 
   return (
@@ -8743,46 +8796,88 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 16 : 26 }}>
-          {programmatore ? "Anteprima e download delle locandine con i prezzi dei corsi." : "Anteprima delle locandine con i prezzi dei corsi."}
+          {programmatore
+            ? "Trascina una locandina sul riquadro \"Aggiungi\" per caricarla. Tocca una locandina per scaricarla."
+            : isMobile
+              ? "Tocca una locandina per salvarla nella galleria del telefono."
+              : "Tocca una locandina per scaricarla."}
         </div>
 
         {caricando ? (
           <div style={{ ...fontBody, color: MUTED, textAlign: "center", padding: "40px 0" }}>Caricamento...</div>
-        ) : locandine.length === 0 ? (
+        ) : locandine.length === 0 && !programmatore ? (
           <div style={{ ...fontBody, color: MUTED, textAlign: "center", padding: "40px 0" }}>Nessuna locandina caricata.</div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, 1fr)", gap: isMobile ? 14 : 20 }}>
             {locandine.map((l) => (
               <div key={l.nome} style={{ display: "flex", flexDirection: "column" }}>
                 <div
-                  onClick={programmatore ? () => scarica(l) : undefined}
-                  title={programmatore ? "Tocca per scaricare" : undefined}
+                  onClick={() => scaricaOCondividi(l)}
+                  title="Tocca per scaricare"
                   style={{
                     position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden",
                     background: "#fff", border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 1px 4px rgba(14,27,51,0.16)",
-                    cursor: programmatore ? "pointer" : "default",
+                    cursor: "pointer",
                   }}
                 >
                   <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  {programmatore && (
-                    <div style={{
-                      position: "absolute", bottom: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
-                      background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
-                    }}>
-                      {scaricandoNome === l.nome ? (
-                        <span style={{ fontSize: 10, color: "#fff" }}>...</span>
-                      ) : (
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" />
-                        </svg>
-                      )}
-                    </div>
-                  )}
+                  <div style={{
+                    position: "absolute", bottom: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
+                    background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>
+                    {scaricandoNome === l.nome ? (
+                      <span style={{ fontSize: 10, color: "#fff" }}>...</span>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" />
+                      </svg>
+                    )}
+                  </div>
                 </div>
                 <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 600, color: NAVY, marginTop: 8, textAlign: "center" }}>{l.titolo}</div>
               </div>
             ))}
+
+            {programmatore && (
+              <div
+                onClick={() => inputFileRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setTrascinaSopra(true); }}
+                onDragLeave={() => setTrascinaSopra(false)}
+                onDrop={(e) => { e.preventDefault(); setTrascinaSopra(false); caricaFile(e.dataTransfer.files); }}
+                style={{
+                  width: "100%", aspectRatio: "3 / 4", borderRadius: 12,
+                  border: `2px dashed ${trascinaSopra ? NAVY : CREAM_BORDER}`,
+                  background: trascinaSopra ? "rgba(14,27,51,0.06)" : "#fff",
+                  display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
+                  cursor: "pointer",
+                }}
+              >
+                {caricandoUpload ? (
+                  <div style={{ ...fontBody, fontSize: 11, color: MUTED, textAlign: "center", padding: "0 8px" }}>
+                    Caricamento {caricandoUpload.fatti + 1}/{caricandoUpload.totale}...
+                  </div>
+                ) : (
+                  <>
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: NAVY }}>Aggiungi</div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
+        )}
+
+        {programmatore && (
+          <input
+            ref={inputFileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => { caricaFile(e.target.files); e.target.value = ""; }}
+          />
         )}
       </div>
     </div>
