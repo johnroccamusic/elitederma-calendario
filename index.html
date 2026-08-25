@@ -2,7 +2,7 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Gestionale Elitederma</title>
     <meta property="og:title" content="Gestionale Elitederma" />
     <meta property="og:site_name" content="Gestionale Elitederma" />
@@ -13,34 +13,44 @@
     <meta name="apple-mobile-web-app-title" content="GENYON" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <!-- "black-translucent" (invece del default "default", che disegna la
+         barra di stato con uno sfondo bianco a livello di sistema operativo,
+         sopra qualunque cosa faccia la pagina) + viewport-fit=cover sopra:
+         lascia che il contenuto/sfondo della pagina arrivi fin sotto
+         l'orologio, invece della fascia bianca fissa di iOS -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#0E1B33" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Sofia+Sans+Condensed:wght@400;500;600;700;800&family=Prompt:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&family=Inter:ital,wght@0,400;0,700;0,800;1,400&family=Zen+Dots&display=swap" rel="stylesheet" />
     <style>
       html, body { touch-action: pan-x pan-y; overflow-x: hidden; }
-      /* sfondo decorativo di tutta l'app: solo dietro le pagine, le card
-         restano sempre bianche/piene sopra (cardStyle, invariato) — due
-         immagini, verticale su mobile e orizzontale da 701px in su, stesso
-         breakpoint di useIsMobile() in App.jsx */
-      /* sfondo ancorato a "html", non a "body": su Safari/iOS lo sfondo di
-         "body" scorre via col contenuto (su una pagina più alta di uno
-         schermo resta scoperto sotto) e, durante il "rimbalzo" elastico a
-         inizio/fine pagina, si vede un bordo vuoto perché "body" non
-         copre l'area di overscroll. "html" sì. "fixed" + "cover" ancora
-         l'immagine al viewport (mai più un bordo scoperto, in nessun
-         punto dello scroll, su nessun asse) invece di scorrere via col
-         dito insieme al contenuto */
-      html {
+      /* Safari/iOS non supporta in modo affidabile "background-attachment:
+         fixed" (soprattutto in modalità app da home screen): l'immagine
+         torna a scorrere via col dito insieme al contenuto come se quella
+         proprietà non fosse mai stata scritta. "position: fixed" è un
+         meccanismo diverso, supportato ovunque incluso iOS: un elemento a
+         sé, dietro a tutto ("z-index: -1"), che resta sempre ancorato al
+         viewport qualunque sia lo scroll — le card restano sempre bianche/
+         piene sopra (cardStyle, invariato) */
+      #sfondo-app {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
         background-color: #F7F5EF;
         background-image: url("/sfondo-app-mobile.jpg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
-        background-attachment: fixed;
       }
       @media (min-width: 701px) {
-        html { background-image: url("/sfondo-app-desktop.jpg"); }
+        #sfondo-app { background-image: url("/sfondo-app-desktop.jpg"); }
       }
+      /* con viewport-fit=cover (sopra) il contenuto normale arriverebbe
+         fin sotto la barra di stato/notch: questo padding lo rimanda giù
+         quel tanto che basta, mentre lo sfondo (essendo "position:fixed",
+         non soggetto al padding di "body") continua a coprire anche l'area
+         dietro l'orologio */
+      body { padding-top: env(safe-area-inset-top, 0px); }
       /* campi disabilitati (scheda iscritto in sola lettura): restano
          bloccati ma il testo deve leggersi bene, non solo grigio chiaro.
          -webkit-text-fill-color serve perche' Safari/iOS ignora "color"
@@ -55,6 +65,7 @@
     </style>
   </head>
   <body style="margin:0">
+    <div id="sfondo-app"></div>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
