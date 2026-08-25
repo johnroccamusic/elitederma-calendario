@@ -38057,8 +38057,8 @@ export default function App() {
       {isMobile && (
         <div
           style={{
-            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)", left: "50%", transform: "translateX(-50%)",
-            zIndex: 2000, display: "flex", alignItems: "center", gap: 14,
+            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) + 18px)", left: 14, right: 14,
+            zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
             background: "rgba(14,27,51,0.55)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
             border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
             boxShadow: "0 10px 30px rgba(0,0,0,0.28)",

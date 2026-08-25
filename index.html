@@ -22,22 +22,24 @@
          restano sempre bianche/piene sopra (cardStyle, invariato) — due
          immagini, verticale su mobile e orizzontale da 701px in su, stesso
          breakpoint di useIsMobile() in App.jsx */
-      body {
+      /* sfondo ancorato a "html", non a "body": su Safari/iOS lo sfondo di
+         "body" scorre via col contenuto (su una pagina più alta di uno
+         schermo resta scoperto sotto) e, durante il "rimbalzo" elastico a
+         inizio/fine pagina, si vede un bordo vuoto perché "body" non
+         copre l'area di overscroll. "html" sì. "fixed" + "cover" ancora
+         l'immagine al viewport (mai più un bordo scoperto, in nessun
+         punto dello scroll, su nessun asse) invece di scorrere via col
+         dito insieme al contenuto */
+      html {
         background-color: #F7F5EF;
         background-image: url("/sfondo-app-mobile.jpg");
-        /* "cover" da solo, in certi casi (differenze di misurazione del
-           viewport tra dispositivi/browser mobili), può lasciare un
-           bordo scoperto su un lato. 115% di larghezza forza sempre un
-           margine extra di sovraccopertura su entrambi gli assi (le
-           proporzioni dell'immagine sono vicine a quelle di un telefono),
-           assorbendo qualunque discrepanza — mai più un bordo scoperto,
-           a costo di tagliare un po' di più i lati */
-        background-size: 115% auto;
-        background-position: top center;
+        background-size: cover;
+        background-position: center;
         background-repeat: no-repeat;
+        background-attachment: fixed;
       }
       @media (min-width: 701px) {
-        body { background-image: url("/sfondo-app-desktop.jpg"); }
+        html { background-image: url("/sfondo-app-desktop.jpg"); }
       }
       /* campi disabilitati (scheda iscritto in sola lettura): restano
          bloccati ma il testo deve leggersi bene, non solo grigio chiaro.
