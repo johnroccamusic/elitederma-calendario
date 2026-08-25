@@ -8732,6 +8732,8 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
   const [locandine, setLocandine] = useState([]);
   const [caricando, setCaricando] = useState(true);
   const [scaricandoNome, setScaricandoNome] = useState(null);
+  const [copiandoNome, setCopiandoNome] = useState(null);
+  const [copiatoNome, setCopiatoNome] = useState(null);
   const [caricandoUpload, setCaricandoUpload] = useState(null); // { fatti, totale }
   const [trascinaSopra, setTrascinaSopra] = useState(false);
   const inputFileRef = React.useRef(null);
@@ -8770,6 +8772,57 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
     await ricaricaLocandine();
   }
 
+  // converte in PNG (via canvas): la Clipboard API accetta immagini in
+  // modo affidabile solo in "image/png", indipendentemente dal formato
+  // originale del file caricato
+  function convertiInPng(blob) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(blob);
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        canvas.toBlob((pngBlob) => {
+          URL.revokeObjectURL(url);
+          pngBlob ? resolve(pngBlob) : reject(new Error("conversione dell'immagine non riuscita"));
+        }, "image/png");
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("immagine non valida")); };
+      img.src = url;
+    });
+  }
+
+  // copia l'immagine intera negli appunti, per incollarla altrove (es.
+  // WhatsApp): il ClipboardItem va costruito con una Promise e
+  // navigator.clipboard.write chiamato subito, senza await prima —
+  // altrimenti Safari perde il "gesto utente" e la copia fallisce in
+  // silenzio
+  async function copiaNegliAppunti(locandina) {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+      window.alert("Il tuo browser non supporta la copia diretta dell'immagine. Usa il download.");
+      return;
+    }
+    setCopiandoNome(locandina.nome);
+    try {
+      const item = new ClipboardItem({
+        "image/png": (async () => {
+          const { data, error } = await supabase.storage.from("locandine-corsi").download(locandina.nome);
+          if (error) throw error;
+          return convertiInPng(data);
+        })(),
+      });
+      await navigator.clipboard.write([item]);
+      setCopiatoNome(locandina.nome);
+      setTimeout(() => setCopiatoNome((corrente) => (corrente === locandina.nome ? null : corrente)), 1500);
+    } catch (e) {
+      window.alert("Non riesco a copiare l'immagine: " + (e?.message || e));
+    } finally {
+      setCopiandoNome(null);
+    }
+  }
+
   async function scaricaOCondividi(locandina) {
     setScaricandoNome(locandina.nome);
     try {
@@ -8797,10 +8850,10 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 28, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 16 : 26 }}>
           {programmatore
-            ? "Trascina una locandina sul riquadro \"Aggiungi\" per caricarla. Tocca una locandina per scaricarla."
+            ? "Trascina una locandina sul riquadro \"Aggiungi\" per caricarla. Usa le icone per scaricarla o copiarla."
             : isMobile
-              ? "Tocca una locandina per salvarla nella galleria del telefono."
-              : "Tocca una locandina per scaricarla."}
+              ? "Tocca l'icona per salvarla nella galleria o copiarla e incollarla altrove (es. WhatsApp)."
+              : "Usa le icone per scaricare la locandina o copiarla e incollarla altrove (es. WhatsApp)."}
         </div>
 
         {caricando ? (
@@ -8812,26 +8865,50 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi" }) {
             {locandine.map((l) => (
               <div key={l.nome} style={{ display: "flex", flexDirection: "column" }}>
                 <div
-                  onClick={() => scaricaOCondividi(l)}
-                  title="Tocca per scaricare"
                   style={{
                     position: "relative", width: "100%", aspectRatio: "3 / 4", borderRadius: 12, overflow: "hidden",
                     background: "#fff", border: `1px solid ${CREAM_BORDER}`, boxShadow: "0 1px 4px rgba(14,27,51,0.16)",
-                    cursor: "pointer",
                   }}
                 >
                   <img src={l.url} alt={l.titolo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  <div style={{
-                    position: "absolute", bottom: 8, right: 8, width: 28, height: 28, borderRadius: "50%",
-                    background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}>
-                    {scaricandoNome === l.nome ? (
-                      <span style={{ fontSize: 10, color: "#fff" }}>...</span>
-                    ) : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" />
-                      </svg>
-                    )}
+                  <div style={{ position: "absolute", bottom: 8, right: 8, display: "flex", gap: 6 }}>
+                    <button
+                      onClick={() => copiaNegliAppunti(l)}
+                      title="Copia l'immagine (incollala dove ti serve, es. WhatsApp)"
+                      style={{
+                        width: 26, height: 26, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer",
+                        background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {copiandoNome === l.nome ? (
+                        <span style={{ fontSize: 9, color: "#fff" }}>...</span>
+                      ) : copiatoNome === l.nome ? (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="12" height="12" rx="2" />
+                          <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+                        </svg>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => scaricaOCondividi(l)}
+                      title="Scarica"
+                      style={{
+                        width: 26, height: 26, borderRadius: "50%", border: "none", padding: 0, cursor: "pointer",
+                        background: "rgba(14,27,51,0.75)", display: "flex", alignItems: "center", justifyContent: "center",
+                      }}
+                    >
+                      {scaricandoNome === l.nome ? (
+                        <span style={{ fontSize: 9, color: "#fff" }}>...</span>
+                      ) : (
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 3v12m0 0-4-4m4 4 4-4M4 19h16" />
+                        </svg>
+                      )}
+                    </button>
                   </div>
                 </div>
                 <div style={{ ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 600, color: NAVY, marginTop: 8, textAlign: "center" }}>{l.titolo}</div>
