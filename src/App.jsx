@@ -37531,6 +37531,17 @@ export default function App() {
     return a.vista === b.vista && a.modificandoId === b.modificandoId && a.mostraGestione === b.mostraGestione;
   }
 
+  // il documento (html/body) non scorre più: scorre questo contenitore
+  // (vedi il div con questo ref più sotto, height:100dvh+overflowY:auto).
+  // Su iOS/Safari un "position:fixed" ancorato al documento che scorre
+  // "balla" visibilmente durante il gesto di trascinamento (bug storico e
+  // mai risolto del compositing di WebKit): tenendo il documento fermo e
+  // scorrendo solo questo contenitore interno, la pasticca in basso
+  // (fixed rispetto al viewport, non a questo contenitore) resta
+  // perfettamente immobile su qualunque dispositivo, iOS o Android
+  const scrollAppRef = React.useRef(null);
+  function scrollAppInCima() { scrollAppRef.current?.scrollTo(0, 0); }
+
   const statoAttualeRef = React.useRef({ view, corsoDataAperta, sottoVistaScheda });
   const navigazioneStoricoRef = React.useRef(false); // true mentre Indietro/Avanti stanno applicando un cambiamento (per non registrarlo di nuovo)
   const [pilaIndietro, setPilaIndietro] = useState([]);
@@ -37564,7 +37575,7 @@ export default function App() {
   function vaiIndietro() {
     if (interceptaIndietroRef.current) { interceptaIndietroRef.current(); return; }
     if (pilaIndietro.length === 0) return;
-    window.scrollTo(0, 0); // altrimenti la nuova schermata resta alla posizione di scroll di quella precedente
+    scrollAppInCima(); // altrimenti la nuova schermata resta alla posizione di scroll di quella precedente
     const precedente = pilaIndietro[pilaIndietro.length - 1];
     navigazioneStoricoRef.current = true;
     setPilaAvanti((p) => [...p, statoAttualeRef.current]);
@@ -37582,7 +37593,7 @@ export default function App() {
   }
   function vaiAvanti() {
     if (pilaAvanti.length === 0) return;
-    window.scrollTo(0, 0);
+    scrollAppInCima();
     const successivo = pilaAvanti[pilaAvanti.length - 1];
     navigazioneStoricoRef.current = true;
     setPilaIndietro((p) => [...p, statoAttualeRef.current]);
@@ -37842,7 +37853,7 @@ export default function App() {
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
-  function apriClasseMaster(corsoDataId) { window.scrollTo(0, 0); setClasseMasterCorsoDataId(corsoDataId); setView("classemaster"); }
+  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setView("classemaster"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
   // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
@@ -37955,7 +37966,7 @@ export default function App() {
   // l'elenco della sua classe): usato da "Ultime iscrizioni", dove ogni
   // riga rappresenta un'iscrizione specifica su cui si vuole entrare subito
   function apriIscritto(i) {
-    window.scrollTo(0, 0);
+    scrollAppInCima();
     setVieneDaGestioneModelle(false);
     setCorsoDataAperta(i.corso_data_id);
     setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
@@ -37967,7 +37978,7 @@ export default function App() {
   // stesso pagamento "Integrazione", per contabilizzare con una visione
   // d'insieme invece di aprirle una alla volta
   function apriSchedeAffiancate(iscrittiArr) {
-    window.scrollTo(0, 0);
+    scrollAppInCima();
     setSchedeAffiancateIscritti(iscrittiArr);
     setView("schedeaffiancate");
   }
@@ -37981,7 +37992,14 @@ export default function App() {
   })();
 
   return (
-    <div style={{ ...fontBody, background: "transparent", minHeight: "100vh", paddingBottom: isMobile ? 130 : 0 }}>
+    <div
+      ref={scrollAppRef}
+      style={{
+        ...fontBody, background: "transparent", boxSizing: "border-box",
+        height: "calc(100dvh - env(safe-area-inset-top, 0px))", overflowY: "auto", WebkitOverflowScrolling: "touch",
+        overscrollBehaviorY: "contain", paddingBottom: isMobile ? 130 : 0,
+      }}
+    >
       {!isMobile && (
         <div
           style={{
@@ -38017,7 +38035,7 @@ export default function App() {
               Avanti →
             </button>
             <button
-              onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+              onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
               aria-label="Home"
               title="Home"
               style={{
@@ -38109,7 +38127,7 @@ export default function App() {
             </svg>
           </button>
           <button
-            onClick={() => { window.scrollTo(0, 0); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+            onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
             aria-label="Home"
             title="Home"
             style={{
