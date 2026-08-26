@@ -24988,7 +24988,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // riflette in locale, poi si imposta lo stock iniziale. Senza prezzo
 // (materiali di consumo, arredi, altro non in vendita) resta solo
 // locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
-function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto, prodotto, categoriaIdIniziale }) {
+function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale }) {
   const [nome, setNome] = useState(prodotto?.nome || "");
   const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
   const [prezzo, setPrezzo] = useState(prodotto?.prezzo_vendita != null ? String(prodotto.prezzo_vendita) : "");
@@ -25003,11 +25003,11 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // flag attivi, esattamente come sempre — bundle/componente/variante
   // sono eccezioni che si smarcano qui a mano (vedi migrazione
   // 20260826150000_natura_prodotti_bundle.sql)
-  const [tipoProdotto, setTipoProdotto] = useState(prodotto?.tipo_prodotto || "semplice");
+  const [tipoProdotto, setTipoProdotto] = useState(prodotto?.tipo_prodotto || (padreIniziale ? "variante" : "semplice"));
   const [contaMagazzino, setContaMagazzino] = useState(prodotto ? prodotto.conta_magazzino !== false : true);
   const [contaIncassi, setContaIncassi] = useState(prodotto ? prodotto.conta_incassi !== false : true);
   const [giacenzaPropria, setGiacenzaPropria] = useState(prodotto ? prodotto.giacenza_propria !== false : true);
-  const [prodottoPadreId, setProdottoPadreId] = useState(prodotto?.prodotto_padre_id || "");
+  const [prodottoPadreId, setProdottoPadreId] = useState(prodotto?.prodotto_padre_id || padreIniziale || "");
   // distinta base, solo per tipo "bundle": [{ componenteId, quantita }]
   const [componenti, setComponenti] = useState([]);
   useEffect(() => {
@@ -25025,6 +25025,11 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     setTipoProdotto(nuovo);
     if (nuovo === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(true); }
     else if (nuovo === "componente") { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(false); }
+    else if (nuovo === "vetrina") {
+      // il prezzo e la giacenza stanno sulle varianti, mai sul padre: la
+      // vetrina non si vende né si conta mai da sola
+      setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(false); setPrezzo("");
+    }
     else { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(true); }
   }
   function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
@@ -25082,6 +25087,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
 
   async function crea() {
     if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
+    if (tipoProdotto === "variante" && !prodottoPadreId) { setMsg("Seleziona il prodotto padre (la vetrina)."); return; }
     const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
     const prezzoNum = haPrezzo ? parseNum(prezzo) : null;
     if (haPrezzo && !(prezzoNum > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
@@ -25137,6 +25143,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // resta un aggiornamento locale, come per un prodotto mai online
   async function salva() {
     if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
+    if (tipoProdotto === "variante" && !prodottoPadreId) { setMsg("Seleziona il prodotto padre (la vetrina)."); return; }
     const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
     const prezzoNum = haPrezzo ? parseNum(prezzo) : null;
     if (haPrezzo && !(prezzoNum > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
@@ -25215,8 +25222,13 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
           {categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino fisico, non viene creato su WooCommerce.
         </div>
       )}
-      <Field label="Prezzo di vendita (lascia vuoto se non è in vendita: materiale di consumo, arredo, altro)">
-        <input style={inputStyle} inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} placeholder="Nessun prezzo" />
+      <Field label={tipoProdotto === "vetrina" ? "Prezzo di vendita (sta sulle varianti, non qui)" : "Prezzo di vendita (lascia vuoto se non è in vendita: materiale di consumo, arredo, altro)"}>
+        <input
+          style={{ ...inputStyle, ...(tipoProdotto === "vetrina" ? { background: "#EFEFEF", color: MUTED } : {}) }}
+          inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)}
+          placeholder={tipoProdotto === "vetrina" ? "—" : "Nessun prezzo"}
+          disabled={tipoProdotto === "vetrina"}
+        />
       </Field>
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
@@ -25238,10 +25250,11 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
 
       <Field label="Natura del prodotto">
         <select style={inputStyle} value={tipoProdotto} onChange={(e) => cambiaTipo(e.target.value)}>
-          <option value="semplice">Semplice (comportamento normale)</option>
-          <option value="bundle">Bundle — kit composto da altri prodotti</option>
-          <option value="componente">Componente — fa parte di un bundle</option>
-          <option value="variante">Variante — es. una taglia di un prodotto vetrina</option>
+          <option value="semplice">Semplice — prodotto normale, si vende e si scarica da solo</option>
+          <option value="bundle">Bundle — kit venduto come un pezzo unico, composto da altri prodotti che vengono scaricati insieme</option>
+          <option value="componente">Componente — fa parte di un bundle, non si vende singolarmente</option>
+          <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
+          <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
         </select>
       </Field>
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
@@ -25260,10 +25273,10 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
       </div>
 
       {tipoProdotto === "variante" && (
-        <Field label="Prodotto padre (la vetrina, es. 'Maglietta Elitederma')">
+        <Field label="Prodotto padre — obbligatorio (la vetrina, es. 'Maglietta Elitederma')">
           <select style={inputStyle} value={prodottoPadreId} onChange={(e) => setProdottoPadreId(e.target.value)}>
-            <option value="">— nessuno —</option>
-            {prodottiScelta.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            <option value="">— scegli la vetrina —</option>
+            {prodottiScelta.filter((p) => p.tipo_prodotto === "vetrina").map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
           </select>
         </Field>
       )}
@@ -25275,7 +25288,8 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
               <select style={{ ...inputStyle, flex: 1 }} value={c.componenteId} onChange={(e) => cambiaComponente(i, "componenteId", e.target.value)}>
                 <option value="">— scegli componente —</option>
-                {prodottiScelta.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                {/* una variante o una vetrina non sono componenti scaricabili di un bundle: si scaricano solo per conto proprio */}
+                {prodottiScelta.filter((p) => p.tipo_prodotto !== "variante" && p.tipo_prodotto !== "vetrina" && p.tipo_prodotto !== "bundle").map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
               </select>
               <input style={{ ...inputStyle, width: 60 }} inputMode="numeric" value={c.quantita} onChange={(e) => cambiaComponente(i, "quantita", e.target.value)} placeholder="Qtà" />
               <button onClick={() => rimuoviComponente(i)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 18, lineHeight: 1, padding: 4 }}>×</button>
@@ -25728,7 +25742,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
 
   return (
     <tr>
-      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</td>
+      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
+        <span
+          title={p.woo_product_id && p.stato !== "draft" ? "Pubblicato sullo shop online" : "Solo magazzino: non è sullo shop online"}
+          style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato !== "draft" ? "#2E7D32" : "#CBC6B8" }}
+        />
+        <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
+      </td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
       <td style={tdStyle}>
         <input style={{ ...cellInputStyle, width: 40 }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
@@ -25736,17 +25756,17 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       <td style={tdStyle}>
         {p.giacenza_propria === false ? (
           <div
-            onClick={p.isBundle ? () => onApriIspezione(p) : undefined}
-            title={p.isBundle ? "Tocca per vedere da cosa dipende questa disponibilità" : "Nessuna giacenza propria: non si conta"}
+            onClick={p.isBundle || p.isVetrina ? () => onApriIspezione(p) : undefined}
+            title={p.isBundle ? "Tocca per vedere da cosa dipende questa disponibilità" : p.isVetrina ? "Tocca per vedere le varianti collegate" : "Nessuna giacenza propria: non si conta"}
             style={{
               ...fontBody, fontStyle: "italic", fontSize: 11, color: MUTED, display: "flex", alignItems: "center", gap: 3,
-              cursor: p.isBundle ? "pointer" : "default", textDecoration: p.isBundle ? "underline dotted" : "none",
+              cursor: p.isBundle || p.isVetrina ? "pointer" : "default", textDecoration: p.isBundle || p.isVetrina ? "underline dotted" : "none",
             }}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
               <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" />
             </svg>
-            {p.stockTotale == null ? "∞" : p.stockTotale}
+            {p.isVetrina ? `${p.variantiCollegate.length} variant${p.variantiCollegate.length === 1 ? "e" : "i"}` : p.stockTotale == null ? "∞" : p.stockTotale}
           </div>
         ) : (
           <input
@@ -25865,6 +25885,39 @@ function ModaleIspezioneBundle({ bundle, onChiudi, onApriComponente }) {
   );
 }
 
+// pannello di una vetrina: le sue varianti collegate (es. le taglie),
+// ciascuna con la propria giacenza e il proprio prezzo — a differenza di
+// un bundle, vendere una variante non tocca le altre, quindi qui non c'è
+// nessun "collo di bottiglia" da calcolare, solo un elenco
+function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiVariante }) {
+  const varianti = vetrina.variantiCollegate || [];
+  return (
+    <Modal title={`Varianti di "${vetrina.nome}"`} onClose={onChiudi}>
+      {varianti.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: "20px 0" }}>Nessuna variante collegata.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+          {varianti.map((v) => (
+            <div
+              key={v.id}
+              onClick={() => onApriVariante(v.id)}
+              title="Tocca per aprire la variante"
+              style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, background: "#FAF8F2", border: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}
+            >
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{v.nome}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{v.prezzo_vendita != null ? fmtEuroErp2(v.prezzo_vendita) : "—"}</span>
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{v.stockTotale == null ? "∞" : v.stockTotale} pz</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Button onClick={onAggiungiVariante} style={{ width: "100%" }}>+ Aggiungi variante</Button>
+    </Modal>
+  );
+}
+
 // "Gestione magazzino": versione asciugata (solo filtri + segnalazioni +
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
@@ -25883,7 +25936,11 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
   // scheda con cui è stato creato (non quella completa di Gestione Shop,
   // pensata per la scheda WooCommerce con immagini/descrizioni)
   const [prodottoInModifica, setProdottoInModifica] = useState(null);
-  const [bundleIspezionato, setBundleIspezionato] = useState(null);
+  const [prodottoIspezionato, setProdottoIspezionato] = useState(null);
+  // id della vetrina da precompilare in "Nuovo prodotto" quando si apre da
+  // "+ Aggiungi variante" — distinto da mostraNuovoProdotto perché quella
+  // apertura parte da un prodotto preciso, non da un modulo vuoto
+  const [nuovaVariantePadreId, setNuovaVariantePadreId] = useState(null);
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
@@ -26059,6 +26116,16 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
     // la giacenza di un componente tutti i bundle che lo usano si
     // aggiornano da soli, senza bisogno di toccarli uno per uno
     const isBundle = p.tipo_prodotto === "bundle";
+    const isVetrina = p.tipo_prodotto === "vetrina";
+    // varianti collegate a una vetrina: lette dal prodotto padre, non da
+    // una distinta base — ogni variante ha una giacenza e un prezzo propri,
+    // vendere l'una non tocca le altre (a differenza dei componenti di un bundle)
+    const variantiCollegate = isVetrina
+      ? Object.values(prodottiPerId).filter((v) => v.attivo !== false && v.prodotto_padre_id === p.id).map((v) => ({
+          id: v.id, nome: v.nome, prezzo_vendita: v.prezzo_vendita,
+          stockTotale: v.giacenza_propria !== false ? (v.giacenza_magazzino || 0) + (v.giacenza || 0) : null,
+        }))
+      : [];
     const righeBundle = isBundle ? (bundleComponenti || []).filter((bc) => bc.bundle_id === p.id) : [];
     const dettagliComponenti = righeBundle.map((bc) => {
       const comp = prodottiPerId[bc.componente_id];
@@ -26095,6 +26162,8 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
       esaurito: p.conta_magazzino !== false && stockTotale != null && stockTotale <= 0,
       isBundle,
       dettagliComponenti,
+      isVetrina,
+      variantiCollegate,
       forzatoEscludi,
       forzatoSoloOffline,
     };
@@ -26277,7 +26346,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} onApriIspezione={setBundleIspezionato} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} onApriIspezione={setProdottoIspezionato} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -26306,12 +26375,13 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
         </div>
       </div>
 
-      {mostraNuovoProdotto && (
+      {(mostraNuovoProdotto || nuovaVariantePadreId) && (
         <ModaleNuovoProdotto
           categorieProdotti={categorieProdotti}
           prodottiShop={prodottiShop}
-          onClose={() => setMostraNuovoProdotto(false)}
-          onFatto={() => { setMostraNuovoProdotto(false); ricarica(["prodotti_shop"]); }}
+          padreIniziale={nuovaVariantePadreId}
+          onClose={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); }}
+          onFatto={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); ricarica(["prodotti_shop"]); }}
         />
       )}
       {prodottoInModifica && (
@@ -26324,13 +26394,25 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           onFatto={() => { setProdottoInModifica(null); ricarica(["prodotti_shop", "prodotti_categorie"]); }}
         />
       )}
-      {bundleIspezionato && (
+      {prodottoIspezionato && prodottoIspezionato.isVetrina && (
+        <ModaleIspezioneVetrina
+          vetrina={prodottoIspezionato}
+          onChiudi={() => setProdottoIspezionato(null)}
+          onApriVariante={(varianteId) => {
+            const v = (prodottiShop || []).find((pp) => pp.id === varianteId);
+            setProdottoIspezionato(null);
+            if (v) setProdottoInModifica(v);
+          }}
+          onAggiungiVariante={() => { setNuovaVariantePadreId(prodottoIspezionato.id); setProdottoIspezionato(null); }}
+        />
+      )}
+      {prodottoIspezionato && !prodottoIspezionato.isVetrina && (
         <ModaleIspezioneBundle
-          bundle={bundleIspezionato}
-          onChiudi={() => setBundleIspezionato(null)}
+          bundle={prodottoIspezionato}
+          onChiudi={() => setProdottoIspezionato(null)}
           onApriComponente={(componenteId) => {
             const comp = (prodottiShop || []).find((pp) => pp.id === componenteId);
-            setBundleIspezionato(null);
+            setProdottoIspezionato(null);
             if (comp) setProdottoInModifica(comp);
           }}
         />
