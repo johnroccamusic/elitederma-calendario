@@ -52,12 +52,17 @@
       @media (min-width: 701px) {
         #sfondo-app { background-image: url("/sfondo-app-desktop.jpg"); }
       }
-      /* con viewport-fit=cover (sopra) il contenuto normale arriverebbe
-         fin sotto la barra di stato/notch: questo padding lo rimanda giù
-         quel tanto che basta, mentre lo sfondo (essendo "position:fixed",
-         non soggetto al padding di "body") continua a coprire anche l'area
-         dietro l'orologio */
-      body { padding-top: env(safe-area-inset-top, 0px); }
+      /* con viewport-fit=cover (sopra) il contenuto normale arriverebbe fin
+         sotto la barra di stato/notch: serve rimandarlo giù quel tanto che
+         basta. Il padding va sul contenitore React di ogni schermata (con
+         box-sizing:border-box, vedi App.jsx), non su "body": su "body"
+         quel padding si sommerebbe SEMPRE all'altezza del contenuto,
+         rendendo il documento scrollabile di quel tanto anche quando il
+         contenuto reale sta già tutto in una schermata — quel piccolo
+         scorrimento "a vuoto" è quello che sembrava restare "incollato"
+         in alto/in basso una volta tolto il rimbalzo elastico. Lo sfondo,
+         essendo "position:fixed", non ha comunque mai bisogno di questo
+         padding e copre sempre tutto */
       /* campi disabilitati (scheda iscritto in sola lettura): restano
          bloccati ma il testo deve leggersi bene, non solo grigio chiaro.
          -webkit-text-fill-color serve perche' Safari/iOS ignora "color"

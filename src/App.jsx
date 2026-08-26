@@ -37617,7 +37617,7 @@ export default function App() {
   }, []);
 
 
-  if (!ok) return <div style={{ ...fontBody, background: "transparent", minHeight: "100vh" }}><Gate onOk={(ruolo, utente) => {
+  if (!ok) return <div style={{ ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh", paddingTop: "env(safe-area-inset-top, 0px)" }}><Gate onOk={(ruolo, utente) => {
     setRuoloUtente(ruolo);
     setUtenteLoggato(utente);
     setOk(true);
@@ -37629,7 +37629,7 @@ export default function App() {
 
   if (loading || caricandoSezione) {
     return (
-      <div style={{ ...fontBody, background: BG, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
+      <div style={{ ...fontBody, background: BG, boxSizing: "border-box", minHeight: "100vh", paddingTop: "env(safe-area-inset-top, 0px)", display: "flex", alignItems: "center", justifyContent: "center", color: NAVY }}>
         Caricamento…
       </div>
     );
@@ -37983,7 +37983,7 @@ export default function App() {
   })();
 
   return (
-    <div style={{ ...fontBody, background: "transparent", minHeight: "100vh", paddingBottom: isMobile ? 130 : 0 }}>
+    <div style={{ ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh", paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: isMobile ? 16 : 0 }}>
       {!isMobile && (
         <div
           style={{
