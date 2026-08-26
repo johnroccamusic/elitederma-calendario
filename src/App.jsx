@@ -2354,13 +2354,17 @@ function Gate({ onOk }) {
       // nominale ha un venditore collegato, porta con sé i suoi permessi e
       // "dashboardvenditori" — da qui in poi apriLoginVenditore lo riconosce
       // (utenteLoggato.venditoreId) e va dritto alla sua scheda, mai al
-      // selettore con tutti i venditori
+      // selettore con tutti i venditori. A differenza di chi entra con la
+      // propria password venditore, però, questo account fa anche altro
+      // (es. ufficio/magazzino): al login atterra sempre in Home come
+      // qualunque altro utente nominale, mai dritto sulla dashboard
+      // venditori (restaSuHomeAlLogin, letto più sotto in onOk del Gate)
       ruolo = "user";
       utente = {
         id: nominale.id, nome: nominale.nome,
         permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
         chiave_sistema: null,
-        ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome } : {}),
+        ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome, restaSuHomeAlLogin: true } : {}),
       };
     }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
@@ -37748,8 +37752,11 @@ export default function App() {
     setOk(true);
     // atterra dritto sulla Dashboard venditori solo per chi entra SOLO come
     // venditore: chi è anche master (venditoreId + masterId insieme) resta
-    // su Home per poter scegliere quale delle due dashboard aprire
-    if (utente?.venditoreId && !utente?.masterId) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.venditoreNome || utente.nome }); setView("dashboardvenditori"); }
+    // su Home per poter scegliere quale delle due dashboard aprire, così
+    // come chi è un account nominale con un venditore collegato
+    // (restaSuHomeAlLogin) — fa anche altro, non deve finire forzato fuori
+    // da Home appena entra
+    if (utente?.venditoreId && !utente?.masterId && !utente?.restaSuHomeAlLogin) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.venditoreNome || utente.nome }); setView("dashboardvenditori"); }
   }} /></div>;
 
   if (loading || caricandoSezione) {
