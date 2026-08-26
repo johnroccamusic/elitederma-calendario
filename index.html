@@ -23,14 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Sofia+Sans+Condensed:wght@400;500;600;700;800&family=Prompt:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&family=Inter:ital,wght@0,400;0,700;0,800;1,400&family=Zen+Dots&display=swap" rel="stylesheet" />
     <style>
-      /* "overscroll-behavior: none" spegne il rimbalzo elastico nativo di
-         iOS quando si trascina oltre l'inizio/la fine della pagina: è
-         quello che faceva sembrare "in movimento" anche schermate senza
-         nulla di scrollabile (es. la schermata di accesso) — il rimbalzo è
-         un comportamento nativo del sistema, non della pagina, e si vede
-         identico su Safari/Firefox/Chrome/DuckDuckGo perché su iOS
-         condividono tutti lo stesso motore WebKit */
-      html, body { touch-action: pan-x pan-y; overflow-x: hidden; overscroll-behavior: none; }
+      html, body { touch-action: pan-x pan-y; overflow-x: hidden; }
       /* Safari/iOS non supporta in modo affidabile "background-attachment:
          fixed" (soprattutto in modalità app da home screen): l'immagine
          torna a scorrere via col dito insieme al contenuto come se quella
