@@ -1301,7 +1301,7 @@ function TileHome({
           outline: evidenziato ? `2px solid ${NAVY}` : "none", outlineOffset: 2,
         }}>
           {maniglia}
-          <Icona size={27} color={coloreTesto} />
+          <Icona size={40} color={coloreTesto} />
           {!attivo && (
             <span style={{ position: "absolute", top: 4, right: 4, ...fontBody, fontSize: 6.5, fontWeight: 700, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "1.5px 5px" }}>Non attivo</span>
           )}
