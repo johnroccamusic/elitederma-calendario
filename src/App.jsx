@@ -1718,7 +1718,7 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
   }
 
   return (
-    <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#FAF8F2" }}>
+    <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#FAF8F2" }}>
       <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{titolo}</div>
       <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
         <div style={{ flex: 1 }}>
@@ -25397,6 +25397,7 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // (materiali di consumo, arredi, altro non in vendita) resta solo
 // locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
 function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
+  const isMobile = useIsMobile();
   const [nome, setNome] = useState(prodotto?.nome || "");
   const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
   // prezzo di vendita: sempre netto salvato, il lordo è calcolato (vedi
@@ -25660,26 +25661,34 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
           {categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino fisico, non viene creato su WooCommerce.
         </div>
       )}
-      {tipoProdotto !== "vetrina" && tipoProdotto !== "bundle" && (
-        <BloccoPrezzoIva
-          titolo="Acquisto"
-          inputTesto={costo} onCambiaInputTesto={setCosto}
-          modo={modoAcquisto} onCambiaModo={setModoAcquisto}
-          aliquota={aliquotaAcquisto} onCambiaAliquota={setAliquotaAcquisto}
-        />
-      )}
       {tipoProdotto === "bundle" && costoBundleCalcolato != null && (
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
           Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(costoBundleCalcolato)}</b>
         </div>
       )}
-      {tipoProdotto !== "vetrina" && tipoProdotto !== "componente" && (
-        <BloccoPrezzoIva
-          titolo="Vendita"
-          inputTesto={prezzo} onCambiaInputTesto={setPrezzo}
-          modo={modoVendita} onCambiaModo={setModoVendita}
-          aliquota={aliquotaVendita} onCambiaAliquota={setAliquotaVendita}
-        />
+      {/* Acquisto e Vendita affiancati su desktop: impilati sprecavano mezza
+          larghezza del modale. Due colonne solo quando ci sono davvero
+          entrambi i blocchi (bundle ha solo Vendita, componente solo
+          Acquisto, vetrina nessuno dei due). */}
+      {tipoProdotto !== "vetrina" && (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile || tipoProdotto === "bundle" || tipoProdotto === "componente" ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          {tipoProdotto !== "bundle" && (
+            <BloccoPrezzoIva
+              titolo="Acquisto"
+              inputTesto={costo} onCambiaInputTesto={setCosto}
+              modo={modoAcquisto} onCambiaModo={setModoAcquisto}
+              aliquota={aliquotaAcquisto} onCambiaAliquota={setAliquotaAcquisto}
+            />
+          )}
+          {tipoProdotto !== "componente" && (
+            <BloccoPrezzoIva
+              titolo="Vendita"
+              inputTesto={prezzo} onCambiaInputTesto={setPrezzo}
+              modo={modoVendita} onCambiaModo={setModoVendita}
+              aliquota={aliquotaVendita} onCambiaAliquota={setAliquotaVendita}
+            />
+          )}
+        </div>
       )}
       {margineUnitario != null && (
         <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 14, padding: "8px 12px", background: "#FBF3E4", borderRadius: 8 }}>
