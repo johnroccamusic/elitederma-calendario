@@ -2277,7 +2277,7 @@ function Gate({ onOk }) {
   async function check() {
     setVerificando(true);
     const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
-      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id"),
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario"),
       supabase.from("master").select("id, nome, password, permessi, venditore_id"),
       supabase.from("venditori").select("id, nome, password, permessi"),
     ]);
@@ -2365,6 +2365,10 @@ function Gate({ onOk }) {
         permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
         chiave_sistema: null,
         ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome, restaSuHomeAlLogin: true } : {}),
+        // profilo "kiosk": entra dritto su Gestione corsi (mai Home), sola
+        // lettura del calendario, niente Home/Indietro/Avanti nella
+        // barra di navigazione (vedi onOk del Gate e l'header/pasticca)
+        ...(nominale.solo_calendario ? { soloCalendarioLettura: true } : {}),
       };
     }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
@@ -5020,8 +5024,12 @@ function SezioneDateCorsi({
               <TabPillola compatto={isMobile} attivo={vistaDateTab === "archivio"} onClick={() => setVistaDateTab("archivio")}>Passati</TabPillola>
             </div>
             <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center", flexShrink: 0 }}>
-              <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
-              <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+              {!modoForzato && (
+                <>
+                  <TabPillola compatto={isMobile} attivo={vistaDateModo === "elenco"} onClick={() => setVistaDateModo("elenco")}>Elenco</TabPillola>
+                  <TabPillola compatto={isMobile} attivo={vistaDateModo === "calendario"} onClick={() => setVistaDateModo("calendario")}>Calendario</TabPillola>
+                </>
+              )}
               <div style={{ display: "flex", alignItems: "center", marginLeft: isMobile ? 2 : 6, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, overflow: "hidden", background: "#fff", flexShrink: 0 }}>
                 <button onClick={() => cambiaFontScale(-0.1)} title="Riduci il testo nelle barre del calendario" disabled={fontScale <= 0.8} style={{ ...fontBody, fontSize: isMobile ? 20 : 15, fontWeight: 700, color: NAVY, background: "none", border: "none", width: isMobile ? 33 : 30, height: isMobile ? 39 : 30, cursor: fontScale <= 0.8 ? "default" : "pointer", opacity: fontScale <= 0.8 ? 0.4 : 1 }}>−</button>
                 <div style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
@@ -9129,6 +9137,16 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
       {(venditori || []).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
     </select>
   );
+  // profilo "kiosk": entra dritto su Gestione corsi, mai in Home, sola
+  // lettura del calendario e dei filtri — niente Home/Indietro/Avanti
+  async function salvaSoloCalendario(checked) {
+    const { error } = await persist({ solo_calendario: checked });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["utenti_app"]);
+  }
+  const chkSoloCalendario = (
+    <input type="checkbox" checked={!!utente.solo_calendario} onChange={(e) => salvaSoloCalendario(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Entra dritto su Gestione corsi, sola lettura del calendario e dei filtri: niente Home, Indietro, Avanti, aggiunta/modifica/eliminazione corsi" />
+  );
 
   // da cellulare una riga larga quanto tutte le colonne (TASTI_HOME +
   // agende) costringerebbe a scorrere lateralmente con il dito: qui sotto
@@ -9153,6 +9171,12 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
             <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
             {selVenditoreCollegato}
           </div>
+        )}
+        {!sistema && (
+          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
+            {chkSoloCalendario}
+            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Solo calendario (sola lettura, entra dritto qui)</span>
+          </label>
         )}
         <div style={{ marginBottom: 12 }}>
           {TASTI_HOME.map((t) => (
@@ -9195,6 +9219,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
       </td>
       <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
+      <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkSoloCalendario}</td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -9294,6 +9319,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                 <th style={thStyle}>Nome utente</th>
                 <th style={thStyle}>Password</th>
                 <th style={thStyle}>Venditore collegato</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario</th>
                 {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
                 <th style={thStyle}></th>
@@ -10266,7 +10292,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro, titolo = "Gestione corsi" }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -10349,23 +10375,25 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
   const intestazioneGestioneCorsi = (
     <>
       <div style={{ ...fontDisplay, fontSize: 26, color: NAVY, textAlign: "center", textTransform: "uppercase", marginBottom: 14 }}>{titolo}</div>
-      <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
-        <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
-        <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
-        {numeroAccontiInAttesa > 0 ? (
-          <>
-            <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
-            <button
-              onClick={onApriVerificaAcconti}
-              style={{ ...fontBody, fontSize: isMobile ? 11 : 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: isMobile ? "7px 8px" : "10px 18px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
-            >
-              Verifica Pagamenti ({numeroAccontiInAttesa})
-            </button>
-          </>
-        ) : (
-          <Button variant="ghost" onClick={onApriVerificaAcconti} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Niente da verificare</Button>
-        )}
-      </div>
+      {!soloLettura && (
+        <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 5 : 10, marginBottom: isMobile ? 14 : 22, flexWrap: isMobile ? "nowrap" : "wrap", ...(isMobile ? { overflowX: "auto" } : {}) }}>
+          <Button onClick={() => setMostraAggiungiCorso(true)} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Aggiungi Corso</Button>
+          <Button variant="ghost" onClick={onApriUltimeIscrizioni} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Ultime iscrizioni</Button>
+          {numeroAccontiInAttesa > 0 ? (
+            <>
+              <style>{`@keyframes lampeggiaAcconti { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+              <button
+                onClick={onApriVerificaAcconti}
+                style={{ ...fontBody, fontSize: isMobile ? 11 : 14, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 10, padding: isMobile ? "7px 8px" : "10px 18px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, animation: "lampeggiaAcconti 1.1s ease-in-out infinite" }}
+              >
+                Verifica Pagamenti ({numeroAccontiInAttesa})
+              </button>
+            </>
+          ) : (
+            <Button variant="ghost" onClick={onApriVerificaAcconti} style={isMobile ? { fontSize: 11, padding: "7px 8px", whiteSpace: "nowrap", flexShrink: 0 } : undefined}>Niente da verificare</Button>
+          )}
+        </div>
+      )}
     </>
   );
 
@@ -10373,9 +10401,10 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "0 24px 40px" : "0 20px 40px" }}>
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
-        ricarica={ricarica} onApriData={onApriData}
+        ricarica={ricarica} onApriData={soloLettura ? () => {} : onApriData}
         nascondiTitolo
         stickyControlli intestazioneSticky={intestazioneGestioneCorsi}
+        {...(soloLettura ? { modoForzato: "calendario" } : {})}
         filtroCorsoHome={filtroCorsoDate} setFiltroCorsoHome={setFiltroCorsoDate}
         filtroCittaHome={filtroCittaDate} setFiltroCittaHome={setFiltroCittaDate}
         filtroMasterHome={filtroMasterDate} setFiltroMasterHome={setFiltroMasterDate}
@@ -10384,8 +10413,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         apriFiltroCittaHome={apriFiltroCittaDate} setApriFiltroCittaHome={setApriFiltroCittaDate}
         apriFiltroMasterHome={apriFiltroMasterDate} setApriFiltroMasterHome={setApriFiltroMasterDate}
         selectFiltroCorsoHomeRef={selectFiltroCorsoDateRef} selectFiltroCittaHomeRef={selectFiltroCittaDateRef} selectFiltroMasterHomeRef={selectFiltroMasterDateRef}
-        onEdit={apriModificaData}
-        onDelete={eliminaData}
+        {...(soloLettura ? {} : { onEdit: apriModificaData, onDelete: eliminaData })}
         idInModifica={dataInModifica}
         renderModifica={() => (
           <div style={{ padding: "14px 0", borderTop: `1px solid ${CREAM_BORDER}`, marginTop: 8 }}>
@@ -37757,6 +37785,10 @@ export default function App() {
     // (restaSuHomeAlLogin) — fa anche altro, non deve finire forzato fuori
     // da Home appena entra
     if (utente?.venditoreId && !utente?.masterId && !utente?.restaSuHomeAlLogin) { setVenditoreLoggato({ id: utente.venditoreId, nome: utente.venditoreNome || utente.nome }); setView("dashboardvenditori"); }
+    // profilo "kiosk" (Gestione utenti > Solo calendario): entra dritto su
+    // Gestione corsi, mai in Home — l'header/pasticca nasconderanno anche
+    // Home/Indietro/Avanti per lui (vedi utenteLoggato.soloCalendarioLettura)
+    if (utente?.soloCalendarioLettura) { setView("gestionedate"); }
   }} /></div>;
 
   if (loading || caricandoSezione) {
@@ -38128,42 +38160,46 @@ export default function App() {
             <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 34, width: "auto", flexShrink: 1, minWidth: 0, filter: "invert(1) brightness(1.8)" }} />
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-            <button
-              onClick={vaiIndietro}
-              disabled={pilaIndietro.length === 0}
-              style={{
-                ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
-                padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
-              }}
-            >
-              ← Indietro
-            </button>
-            <button
-              onClick={vaiAvanti}
-              disabled={pilaAvanti.length === 0}
-              style={{
-                ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
-                padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
-              }}
-            >
-              Avanti →
-            </button>
-            <button
-              onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
-              aria-label="Home"
-              title="Home"
-              style={{
-                background: "#fff", color: NAVY, border: "none", borderRadius: "50%",
-                width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-            </button>
+            {!utenteLoggato?.soloCalendarioLettura && (
+              <>
+                <button
+                  onClick={vaiIndietro}
+                  disabled={pilaIndietro.length === 0}
+                  style={{
+                    ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
+                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                    cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+                  }}
+                >
+                  ← Indietro
+                </button>
+                <button
+                  onClick={vaiAvanti}
+                  disabled={pilaAvanti.length === 0}
+                  style={{
+                    ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
+                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
+                    cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+                  }}
+                >
+                  Avanti →
+                </button>
+                <button
+                  onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+                  aria-label="Home"
+                  title="Home"
+                  style={{
+                    background: "#fff", color: NAVY, border: "none", borderRadius: "50%",
+                    width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                  </svg>
+                </button>
+              </>
+            )}
             <button
               onClick={apriRotellinaPassword}
               aria-label="Password menù"
@@ -38210,50 +38246,54 @@ export default function App() {
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
-          <button
-            onClick={vaiIndietro}
-            disabled={pilaIndietro.length === 0}
-            aria-label="Indietro"
-            title="Indietro"
-            style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-          </button>
-          <button
-            onClick={vaiAvanti}
-            disabled={pilaAvanti.length === 0}
-            aria-label="Avanti"
-            title="Avanti"
-            style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
-          </button>
-          <button
-            onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
-            aria-label="Home"
-            title="Home"
-            style={{
-              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-              width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            }}
-          >
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-              <polyline points="9 22 9 12 15 12 15 22" />
-            </svg>
-          </button>
+          {!utenteLoggato?.soloCalendarioLettura && (
+            <>
+              <button
+                onClick={vaiIndietro}
+                disabled={pilaIndietro.length === 0}
+                aria-label="Indietro"
+                title="Indietro"
+                style={{
+                  background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+                  width: 70, height: 70, flexShrink: 0, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
+                </svg>
+              </button>
+              <button
+                onClick={vaiAvanti}
+                disabled={pilaAvanti.length === 0}
+                aria-label="Avanti"
+                title="Avanti"
+                style={{
+                  background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+                  width: 70, height: 70, flexShrink: 0, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6" />
+                </svg>
+              </button>
+              <button
+                onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+                aria-label="Home"
+                title="Home"
+                style={{
+                  background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+                  width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                  <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       )}
       {!isMobile && (
@@ -38348,6 +38388,7 @@ export default function App() {
           cronologicoDate={cronologicoDate} setCronologicoDate={setCronologicoDate}
           registraInterceptaIndietro={registraInterceptaIndietro}
           titolo={etichettaTasto("home", "gestionedate", "Gestione corsi")}
+          soloLettura={!!utenteLoggato?.soloCalendarioLettura}
         />
       )}
 
