@@ -2277,7 +2277,7 @@ function Gate({ onOk }) {
   async function check() {
     setVerificando(true);
     const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
-      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema"),
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id"),
       supabase.from("master").select("id, nome, password, permessi, venditore_id"),
       supabase.from("venditori").select("id, nome, password, permessi"),
     ]);
@@ -2315,6 +2315,10 @@ function Gate({ onOk }) {
     // funziona in entrambe le direzioni, qualunque delle due password usi
     const venditoreDellaMaster = masterTrovata?.venditore_id ? (venditoriRighe || []).find((v) => v.id === masterTrovata.venditore_id) : null;
     const masterDelVenditore = venditoreTrovato ? (masterRighe || []).find((m) => m.venditore_id === venditoreTrovato.id) : null;
+    // stesso collegamento esplicito di master.venditore_id, ma su un
+    // account nominale (Gestione utenti > Venditore collegato): per chi fa
+    // sia lavoro d'ufficio sia vendita con la stessa identità (es. Raffaele)
+    const venditoreDelNominale = nominale?.venditore_id ? (venditoriRighe || []).find((v) => v.id === nominale.venditore_id) : null;
 
     let ruolo = null, utente = null;
     if (sProgrammatore.password && code === sProgrammatore.password) { ruolo = "programmatore"; utente = sProgrammatore; }
@@ -2345,7 +2349,20 @@ function Gate({ onOk }) {
         ...(masterDelVenditore ? { masterId: masterDelVenditore.id } : {}),
       };
     }
-    else if (nominale) { ruolo = "user"; utente = { id: nominale.id, nome: nominale.nome, permessi: nominale.permessi || [], chiave_sistema: null }; }
+    else if (nominale) {
+      // simmetrico a masterTrovata/venditoreTrovato: se questo account
+      // nominale ha un venditore collegato, porta con sé i suoi permessi e
+      // "dashboardvenditori" — da qui in poi apriLoginVenditore lo riconosce
+      // (utenteLoggato.venditoreId) e va dritto alla sua scheda, mai al
+      // selettore con tutti i venditori
+      ruolo = "user";
+      utente = {
+        id: nominale.id, nome: nominale.nome,
+        permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
+        chiave_sistema: null,
+        ...(venditoreDelNominale ? { venditoreId: venditoreDelNominale.id, venditoreNome: venditoreDelNominale.nome } : {}),
+      };
+    }
     else if (!sUser.password || code === sUser.password) { ruolo = "user"; utente = sUser; }
 
     if (ruolo) {
@@ -9051,7 +9068,7 @@ function RigaPasswordMenu({ valoreDiDefault, onSalva }) {
 // piuttosto che uscire dal campo). Le 3 righe di sistema non ancora
 // salvate (id nullo, mostrate coi valori di sempre) vengono create al
 // primo salvataggio
-const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, agende, ricarica }, ref) {
+const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, agende, venditori, ricarica }, ref) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(utente.nome);
   const [password, setPassword] = useState(utente.password);
@@ -9090,6 +9107,24 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["utenti_app"]);
   }
+  // collegamento a un venditore che è la stessa persona (stesso meccanismo
+  // di master.venditore_id): solo sulle righe nominali, mai su quelle di
+  // sistema, condivise da più persone con lo stesso ruolo
+  async function salvaVenditoreCollegato(venditoreId) {
+    const { error } = await persist({ venditore_id: venditoreId || null });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["utenti_app"]);
+  }
+  const selVenditoreCollegato = (
+    <select
+      value={utente.venditore_id || ""}
+      onChange={(e) => salvaVenditoreCollegato(e.target.value)}
+      style={{ ...inputStyle, padding: "6px 8px", fontSize: 13 }}
+    >
+      <option value="">— nessuno —</option>
+      {(venditori || []).map((v) => <option key={v.id} value={v.id}>{v.nome.toUpperCase()}</option>)}
+    </select>
+  );
 
   // da cellulare una riga larga quanto tutte le colonne (TASTI_HOME +
   // agende) costringerebbe a scorrere lateralmente con il dito: qui sotto
@@ -9109,6 +9144,12 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, flex: 1 }} />
         </div>
+        {!sistema && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 4 }}>Venditore collegato (stessa persona)</div>
+            {selVenditoreCollegato}
+          </div>
+        )}
         <div style={{ marginBottom: 12 }}>
           {TASTI_HOME.map((t) => (
             <label key={t.chiave} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
@@ -9149,6 +9190,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
       <td style={tdStyle}>
         <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
       </td>
+      <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
           <input type="checkbox" checked={permessiLocali.includes(t.chiave)} onChange={(e) => toggleTasto(t.chiave, e.target.checked)} />
@@ -9203,7 +9245,7 @@ function BottoneGeneraUtente({ utentiApp, ricarica }) {
 // e una colonna per ogni tasto della home (TASTI_HOME): un tasto non
 // spuntato per una riga resta disattivato e non cliccabile in home per
 // chi entra con quella password, senza dover chiedere nessuna password
-function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
+function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
   const isMobile = useIsMobile();
   const righeSistema = RIGHE_SISTEMA_DEFAULT.map((def) => {
     const esistente = utentiApp.find((u) => u.chiave_sistema === def.chiave);
@@ -9237,7 +9279,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
       {isMobile ? (
         <div style={{ marginTop: 14 }}>
           {righe.map((u) => (
-            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} ricarica={ricarica} />
+            <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} venditori={venditori} ricarica={ricarica} />
           ))}
         </div>
       ) : (
@@ -9247,6 +9289,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
               <tr>
                 <th style={thStyle}>Nome utente</th>
                 <th style={thStyle}>Password</th>
+                <th style={thStyle}>Venditore collegato</th>
                 {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
                 <th style={thStyle}></th>
@@ -9254,7 +9297,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, ricarica }) {
             </thead>
             <tbody>
               {righe.map((u) => (
-                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} ricarica={ricarica} />
+                <RigaTabellaUtente key={u.chiave_sistema || u.id} ref={(el) => { refRighe.current[u.chiave_sistema || u.id] = el; }} utente={u} agende={agende} venditori={venditori} ricarica={ricarica} />
               ))}
             </tbody>
           </table>
@@ -9553,7 +9596,7 @@ function PaginaPasswordMenu({ passwordMenu, utentiApp, master, agende, venditori
         </div>
 
         <div style={{ marginBottom: 28 }}>
-          <TabellaGestioneUtenti utentiApp={utentiApp} agende={agende} ricarica={ricarica} />
+          <TabellaGestioneUtenti utentiApp={utentiApp} agende={agende} venditori={venditori} ricarica={ricarica} />
         </div>
 
         <TabellaPasswordMaster master={master} agende={agende} venditori={venditori} ricarica={ricarica} />
