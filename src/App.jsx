@@ -1670,6 +1670,98 @@ function parseNum(v) {
   const n = parseFloat(String(v).replace(",", "."));
   return isNaN(n) ? 0 : n;
 }
+
+// ---------- IVA prodotti: il netto è sempre il dato canonico, il lordo
+// è sempre derivato (mai scritto a mano) — vedi migrazione
+// 20260827120000_gestione_iva_prodotti.sql. L'imposta si arrotonda una
+// sola volta (netto*aliquota/100): il lordo è sempre netto+imposta
+// arrotondata, mai arrotondato per conto suo, così netto+iva=lordo torna
+// sempre esatto sui centesimi
+const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
+function calcolaIvaELordo(netto, aliquotaPct) {
+  if (netto == null || aliquotaPct == null) return { iva: null, lordo: null };
+  const iva = round2(netto * (aliquotaPct / 100));
+  return { iva, lordo: round2(netto + iva) };
+}
+// unico punto in cui si parte dal lordo (il toggle "netto/lordo" in
+// scheda prodotto): il netto si ricava all'indietro e si arrotonda
+// subito, diventando da qui in poi l'unico valore salvato — un nuovo
+// giro netto->lordo->netto riparte sempre da un netto già arrotondato,
+// non da un lordo "vecchio", quindi non si accumula mai una deriva tra
+// un salvataggio e l'altro (al più ±1 centesimo di scarto in un singolo
+// giro di conversione, inevitabile arrotondando sui centesimi)
+function nettoDaLordo(lordo, aliquotaPct) {
+  if (lordo == null || aliquotaPct == null) return null;
+  return round2(lordo / (1 + aliquotaPct / 100));
+}
+function fmtEuroIva(n) {
+  return n == null ? "—" : n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+}
+// blocco riutilizzabile "prezzo + IVA" (acquisto e vendita nella scheda
+// prodotto): un solo campo di testo, il cui significato dipende dal
+// toggle "netto/lordo" — passando da un modo all'altro il valore nel
+// campo si converte subito, così i tasti non "cambiano significato"
+// sotto le dita restando uguali. Il netto è sempre e solo quello
+// derivato dal campo+modo attuali: è l'unico valore poi salvato.
+function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambiaModo, aliquota, onCambiaAliquota, obbligatorio }) {
+  const netto = modo === "netto" ? (inputTesto.trim() === "" ? null : parseNum(inputTesto)) : nettoDaLordo(inputTesto.trim() === "" ? null : parseNum(inputTesto), aliquota);
+  const { iva, lordo } = calcolaIvaELordo(netto, aliquota);
+  const aliquotaÈStandard = ALIQUOTE_IVA_STANDARD.includes(Number(aliquota));
+
+  function cambiaModo(nuovoModo) {
+    if (nuovoModo === modo) return;
+    // converte il valore digitato nell'equivalente del nuovo modo, invece
+    // di lasciarlo lì a significare qualcos'altro
+    if (nuovoModo === "lordo") onCambiaInputTesto(lordo != null ? String(lordo) : "");
+    else onCambiaInputTesto(netto != null ? String(netto) : "");
+    onCambiaModo(nuovoModo);
+  }
+
+  return (
+    <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#FAF8F2" }}>
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{titolo}</div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label={`Prezzo ${modo === "netto" ? "netto (IVA esclusa)" : "lordo (IVA inclusa)"}${obbligatorio ? "" : " — opzionale"}`}>
+            <input style={inputStyle} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
+          </Field>
+        </div>
+        <div style={{ display: "flex", alignItems: "flex-end", marginBottom: 14 }}>
+          <div style={{ display: "flex", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+            <button type="button" onClick={() => cambiaModo("netto")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "10px 12px", border: "none", cursor: "pointer", background: modo === "netto" ? NAVY : "#fff", color: modo === "netto" ? "#fff" : NAVY }}>Netto</button>
+            <button type="button" onClick={() => cambiaModo("lordo")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "10px 12px", border: "none", cursor: "pointer", background: modo === "lordo" ? NAVY : "#fff", color: modo === "lordo" ? "#fff" : NAVY }}>Lordo</button>
+          </div>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Aliquota IVA">
+            <select
+              style={inputStyle}
+              value={aliquotaÈStandard ? String(Number(aliquota)) : "altra"}
+              onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
+            >
+              {ALIQUOTE_IVA_STANDARD.map((a) => <option key={a} value={a}>{a}%</option>)}
+              <option value="altra">Altra…</option>
+            </select>
+          </Field>
+        </div>
+        {!aliquotaÈStandard && (
+          <div style={{ flex: 1 }}>
+            <Field label="Aliquota personalizzata (%)">
+              <input style={inputStyle} inputMode="decimal" value={aliquota ?? ""} onChange={(e) => onCambiaAliquota(parseNum(e.target.value))} placeholder="es. 15" />
+            </Field>
+          </div>
+        )}
+      </div>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+        {netto != null
+          ? <>{fmtEuroIva(netto)} netto → {fmtEuroIva(lordo)} lordo, IVA {aliquota}% = {fmtEuroIva(iva)}</>
+          : "Nessun prezzo inserito."}
+      </div>
+    </div>
+  );
+}
 // avanzamento di un target vendite prodotti (Target Master/Venditori):
 // somma le vendite POS dello stesso soggetto nel periodo del target — un
 // domani, un reso/annullamento (righe negative, vedi §8 della specifica)
@@ -9777,7 +9869,16 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+  const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
+  useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
+  async function salvaAliquotaIvaDefault() {
+    const nuovo = parseNum(aliquotaIvaDefaultInput);
+    if (nuovo === (impostazioniIva?.aliquota_default ?? 22)) return;
+    const { error } = await supabase.from("impostazioni_iva").update({ aliquota_default: nuovo }).eq("id", true);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["impostazioni_iva"]);
+  }
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
   const [colore, setColore] = useState("#4A90D9");
@@ -10087,6 +10188,15 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             </div>
           </div>
         ))}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 20, maxWidth: 340 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 4 }}>Aliquota IVA predefinita</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>Precompila acquisto e vendita sui nuovi prodotti — resta comunque modificabile prodotto per prodotto.</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input style={{ ...inputStyle, width: 90 }} inputMode="decimal" value={aliquotaIvaDefaultInput} onChange={(e) => setAliquotaIvaDefaultInput(e.target.value)} onBlur={salvaAliquotaIvaDefault} />
+          <div style={{ ...fontBody, fontSize: 14, color: NAVY, display: "flex", alignItems: "center" }}>%</div>
+        </div>
       </div>
 
       {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 6 }}>{msg}</div>}
@@ -14517,6 +14627,7 @@ const AREA_MADRE_VISTA = {
   magazzino: ["magazzinoshop"],
   magazzinoesterni: ["magazzinoshop"],
   gestioneshop: ["magazzinoshop"],
+  gestioneiva: ["magazzinoshop"],
 };
 // Logistica prodotti: le 4 fasi di spedizione di un'edizione (in
 // ordine) e i 3 elementi della checklist di preparazione kit. Ogni
@@ -20089,7 +20200,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -20112,8 +20223,230 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriClassificazioneVoci },
             { chiave: "crmshop", title: "CRM Shop Online", descrizione: "Clienti dello shop: ordini, spesa, carrello medio.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
             { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto per lo shop online.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
+            { chiave: "gestioneiva", title: "Gestione IVA", descrizione: "IVA su acquisti e vendite, per aliquota e per prodotto.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriGestioneIva },
           ]}
         />
+      </div>
+    </div>
+  );
+}
+
+// "Gestione IVA": vendite scorporate riga per riga nel periodo scelto
+// (imponibile/imposta ricavati dal totale realmente incassato, IVA
+// inclusa, con l'aliquota del prodotto EFFETTIVAMENTE venduto — un
+// bundle usa la propria aliquota, mai quella dei componenti, una
+// variante la propria, mai quella della vetrina: la corrispondenza è
+// per nome, e il nome venduto è sempre quello del bundle/della variante,
+// mai quello di un componente o di una vetrina); acquisti invece
+// un'istantanea del magazzino ATTUALE (non esiste uno storico datato dei
+// carichi, quindi non è possibile un vero "IVA a credito del periodo" —
+// deciso esplicitamente con l'utente, vedi commit)
+function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione, onBack, titolo = "Gestione IVA" }) {
+  const isMobile = useIsMobile();
+  const [periodo, setPeriodo] = useState("mese");
+  const [customDa, setCustomDa] = useState(dataOggiStr());
+  const [customA, setCustomA] = useState(dataOggiStr());
+  const [prodottoEspanso, setProdottoEspanso] = useState(null);
+
+  const range = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth();
+    const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (periodo === "mese") return { inizio: iso(new Date(y, m, 1)), fine: iso(new Date(y, m + 1, 0)) };
+    if (periodo === "trimestre") { const q = Math.floor(m / 3); return { inizio: iso(new Date(y, q * 3, 1)), fine: iso(new Date(y, q * 3 + 3, 0)) }; }
+    if (periodo === "anno") return { inizio: iso(new Date(y, 0, 1)), fine: iso(new Date(y, 11, 31)) };
+    return { inizio: customDa, fine: customA };
+  }, [periodo, customDa, customA]);
+
+  const prodottiPerNome = useMemo(() => {
+    const m = {};
+    (prodottiShop || []).forEach((p) => { const k = (p.nome || "").trim().toLowerCase(); if (!m[k]) m[k] = p; });
+    return m;
+  }, [prodottiShop]);
+  // vendite_shop mischia prodotti veri e corsi venduti come se fossero
+  // articoli (stessa distinzione già usata da "Classificazione voci di
+  // vendita"/CRM Shop): un corso non ha un'aliquota in prodotti_shop, va
+  // escluso qui, non lasciato a finire nel bucket "aliquota sconosciuta"
+  // (altrimenti l'IVA vera sulle vendite risulterebbe sottostimata)
+  const mappaTipoVoce = useMemo(() => Object.fromEntries((vociShopClassificazione || []).map((v) => [v.nome, v.tipo])), [vociShopClassificazione]);
+
+  const { perAliquotaVendite, perProdottoVendite, ivaVenditeTotale, imponibileVenditeTotale } = useMemo(() => {
+    const perAliquota = {}, perProdotto = {};
+    let ivaTot = 0, imponibileTot = 0;
+    (venditeShop || []).forEach((v) => {
+      if (v.tipo_movimento === "omaggio") return; // nessun incasso reale, niente IVA a debito
+      const d = (v.data_ordine || "").slice(0, 10);
+      if (!d || d < range.inizio || d > range.fine) return;
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((riga) => {
+        const nome = (riga?.nome || "").trim();
+        const lordo = Number(riga?.totale_riga) || 0;
+        if (!nome || lordo === 0) return;
+        const tipoVoce = mappaTipoVoce[nome] || "prodotto";
+        if (tipoVoce === "corso" || tipoVoce === "escluso") return;
+        const prod = prodottiPerNome[nome.toLowerCase()];
+        const aliquota = prod?.aliquota_iva_vendita;
+        const netto = aliquota != null ? nettoDaLordo(lordo, aliquota) : lordo;
+        const iva = round2(lordo - netto);
+        ivaTot += iva; imponibileTot += netto;
+        const chiaveAliquota = aliquota != null ? String(aliquota) : "sconosciuta";
+        if (!perAliquota[chiaveAliquota]) perAliquota[chiaveAliquota] = { aliquota, imponibile: 0, imposta: 0 };
+        perAliquota[chiaveAliquota].imponibile = round2(perAliquota[chiaveAliquota].imponibile + netto);
+        perAliquota[chiaveAliquota].imposta = round2(perAliquota[chiaveAliquota].imposta + iva);
+        if (!perProdotto[nome]) perProdotto[nome] = { nome, quantita: 0, imponibile: 0, imposta: 0, aliquota };
+        perProdotto[nome].quantita += Number(riga.quantita) || 0;
+        perProdotto[nome].imponibile = round2(perProdotto[nome].imponibile + netto);
+        perProdotto[nome].imposta = round2(perProdotto[nome].imposta + iva);
+      });
+    });
+    return {
+      perAliquotaVendite: Object.values(perAliquota).sort((a, b) => (b.aliquota ?? -1) - (a.aliquota ?? -1)),
+      perProdottoVendite: Object.values(perProdotto).sort((a, b) => b.imposta - a.imposta),
+      ivaVenditeTotale: round2(ivaTot), imponibileVenditeTotale: round2(imponibileTot),
+    };
+  }, [venditeShop, range, prodottiPerNome, mappaTipoVoce]);
+
+  const { perAliquotaAcquisti, ivaAcquistiTotale, imponibileAcquistiTotale } = useMemo(() => {
+    const perAliquota = {};
+    let ivaTot = 0, imponibileTot = 0;
+    (prodottiShop || []).forEach((p) => {
+      if (p.attivo === false || p.conta_magazzino === false) return; // bundle/vetrina: nessuna giacenza propria da valorizzare
+      if (p.costo_acquisto == null || p.aliquota_iva_acquisto == null) return;
+      const stock = (p.giacenza_magazzino || 0) + (p.giacenza || 0);
+      if (stock <= 0) return;
+      const imponibile = round2(stock * p.costo_acquisto);
+      const imposta = round2(imponibile * (p.aliquota_iva_acquisto / 100));
+      ivaTot += imposta; imponibileTot += imponibile;
+      const chiave = String(p.aliquota_iva_acquisto);
+      if (!perAliquota[chiave]) perAliquota[chiave] = { aliquota: p.aliquota_iva_acquisto, imponibile: 0, imposta: 0 };
+      perAliquota[chiave].imponibile = round2(perAliquota[chiave].imponibile + imponibile);
+      perAliquota[chiave].imposta = round2(perAliquota[chiave].imposta + imposta);
+    });
+    return { perAliquotaAcquisti: Object.values(perAliquota).sort((a, b) => b.aliquota - a.aliquota), ivaAcquistiTotale: round2(ivaTot), imponibileAcquistiTotale: round2(imponibileTot) };
+  }, [prodottiShop]);
+
+  const saldo = round2(ivaVenditeTotale - ivaAcquistiTotale);
+  const cardStyleIva = { ...cardStyle, marginBottom: 0 };
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>IVA su acquisti e vendite, per aliquota e per prodotto.</div>
+
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 20 }}>
+          {[{ v: "mese", l: "Questo mese" }, { v: "trimestre", l: "Questo trimestre" }, { v: "anno", l: "Quest'anno" }, { v: "personalizzato", l: "Periodo personalizzato" }].map((p) => (
+            <button key={p.v} onClick={() => setPeriodo(p.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "8px 14px", borderRadius: 16, border: "none", background: periodo === p.v ? NAVY : BG, color: periodo === p.v ? "#fff" : NAVY, cursor: "pointer" }}>{p.l}</button>
+          ))}
+          {periodo === "personalizzato" && (
+            <>
+              <input type="date" style={{ ...inputStyle, width: "auto" }} value={customDa} onChange={(e) => setCustomDa(e.target.value)} />
+              <span style={{ color: MUTED }}>—</span>
+              <input type="date" style={{ ...inputStyle, width: "auto" }} value={customA} onChange={(e) => setCustomA(e.target.value)} />
+            </>
+          )}
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Vendite dal {fmtData(range.inizio)} al {fmtData(range.fine)}</div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 14, marginBottom: 22 }}>
+          <div style={cardStyleIva}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>IVA sugli acquisti (a credito)</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroIva(ivaAcquistiTotale)}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Istantanea sul magazzino attuale — non per periodo (vedi nota sotto)</div>
+          </div>
+          <div style={cardStyleIva}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>IVA sulle vendite (a debito)</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroIva(ivaVenditeTotale)}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Imponibile: {fmtEuroIva(imponibileVenditeTotale)}</div>
+          </div>
+          <div style={cardStyleIva}>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Saldo IVA (indicativo)</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: saldo >= 0 ? "#C0392B" : "#2E7D32" }}>{fmtEuroIva(Math.abs(saldo))}</div>
+            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{saldo >= 0 ? "A debito (da versare)" : "A credito"}</div>
+          </div>
+        </div>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 22, fontStyle: "italic" }}>
+          Il saldo confronta un flusso del periodo (vendite) con una fotografia del magazzino di oggi (acquisti): è un indicatore di massima, non una liquidazione IVA — manca uno storico datato dei carichi di magazzino per calcolare l'IVA a credito realmente maturata nel periodo.
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)", gap: 16, marginBottom: 22 }}>
+          <div style={cardStyleIva}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Vendite per aliquota</div>
+            {perAliquotaVendite.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessuna vendita nel periodo.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                <thead><tr>
+                  <th style={{ textAlign: "left", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Aliquota</th>
+                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imponibile</th>
+                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imposta</th>
+                </tr></thead>
+                <tbody>
+                  {perAliquotaVendite.map((r) => (
+                    <tr key={r.aliquota ?? "sconosciuta"} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <td style={{ padding: "6px", color: NAVY, fontWeight: 600 }}>{r.aliquota != null ? `${r.aliquota}%` : "Sconosciuta"}</td>
+                      <td style={{ padding: "6px", textAlign: "right", color: NAVY }}>{fmtEuroIva(r.imponibile)}</td>
+                      <td style={{ padding: "6px", textAlign: "right", color: NAVY }}>{fmtEuroIva(r.imposta)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+          <div style={cardStyleIva}>
+            <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Acquisti per aliquota (magazzino attuale)</div>
+            {perAliquotaAcquisti.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto con costo di acquisto e aliquota impostati.</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                <thead><tr>
+                  <th style={{ textAlign: "left", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Aliquota</th>
+                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imponibile</th>
+                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imposta</th>
+                </tr></thead>
+                <tbody>
+                  {perAliquotaAcquisti.map((r) => (
+                    <tr key={r.aliquota} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+                      <td style={{ padding: "6px", color: NAVY, fontWeight: 600 }}>{r.aliquota}%</td>
+                      <td style={{ padding: "6px", textAlign: "right", color: NAVY }}>{fmtEuroIva(r.imponibile)}</td>
+                      <td style={{ padding: "6px", textAlign: "right", color: NAVY }}>{fmtEuroIva(r.imposta)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        <div style={cardStyleIva}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Vendite per prodotto (nel periodo)</div>
+          {perProdottoVendite.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessuna vendita nel periodo.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {perProdottoVendite.map((r) => (
+                <div key={r.nome}>
+                  <div
+                    onClick={() => setProdottoEspanso((v) => (v === r.nome ? null : r.nome))}
+                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: "#FAF8F2", cursor: "pointer" }}
+                  >
+                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.nome}</div>
+                    <div style={{ display: "flex", gap: 14, flexShrink: 0, ...fontBody, fontSize: 12, color: MUTED }}>
+                      <span>{r.quantita} pz</span>
+                      <span>{r.aliquota != null ? `${r.aliquota}%` : "aliquota sconosciuta"}</span>
+                      <span style={{ color: NAVY, fontWeight: 600 }}>{fmtEuroIva(r.imposta)}</span>
+                    </div>
+                  </div>
+                  {prodottoEspanso === r.nome && (
+                    <div style={{ padding: "8px 14px", ...fontBody, fontSize: 12, color: MUTED }}>
+                      Imponibile: <b style={{ color: NAVY }}>{fmtEuroIva(r.imponibile)}</b> — Imposta: <b style={{ color: NAVY }}>{fmtEuroIva(r.imposta)}</b> — Lordo incassato: <b style={{ color: NAVY }}>{fmtEuroIva(round2(r.imponibile + r.imposta))}</b>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -25063,10 +25396,18 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // riflette in locale, poi si imposta lo stock iniziale. Senza prezzo
 // (materiali di consumo, arredi, altro non in vendita) resta solo
 // locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
-function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale }) {
+function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
   const [nome, setNome] = useState(prodotto?.nome || "");
   const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
+  // prezzo di vendita: sempre netto salvato, il lordo è calcolato (vedi
+  // BloccoPrezzoIva) — "modoVendita" dice solo cosa rappresenta il testo
+  // digitato in QUESTO momento, non cosa viene salvato
   const [prezzo, setPrezzo] = useState(prodotto?.prezzo_vendita != null ? String(prodotto.prezzo_vendita) : "");
+  const [modoVendita, setModoVendita] = useState("netto");
+  const [aliquotaVendita, setAliquotaVendita] = useState(prodotto?.aliquota_iva_vendita ?? aliquotaIvaDefault);
+  const [costo, setCosto] = useState(prodotto?.costo_acquisto != null ? String(prodotto.costo_acquisto) : "");
+  const [modoAcquisto, setModoAcquisto] = useState("netto");
+  const [aliquotaAcquisto, setAliquotaAcquisto] = useState(prodotto?.aliquota_iva_acquisto ?? aliquotaIvaDefault);
   const [qtaMagazzino, setQtaMagazzino] = useState(prodotto?.giacenza_magazzino != null ? String(prodotto.giacenza_magazzino) : "");
   const [qtaShop, setQtaShop] = useState(prodotto?.giacenza != null ? String(prodotto.giacenza) : "");
   const [salvando, setSalvando] = useState(false);
@@ -25098,12 +25439,12 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // "semplice" con i flag spenti a mano, non un tipo a parte
   function cambiaTipo(nuovo) {
     setTipoProdotto(nuovo);
-    if (nuovo === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(true); }
-    else if (nuovo === "componente") { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(false); }
+    if (nuovo === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(true); setCosto(""); }
+    else if (nuovo === "componente") { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(false); setPrezzo(""); }
     else if (nuovo === "vetrina") {
       // il prezzo e la giacenza stanno sulle varianti, mai sul padre: la
       // vetrina non si vende né si conta mai da sola
-      setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(false); setPrezzo("");
+      setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(false); setPrezzo(""); setCosto("");
     }
     else { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(true); }
   }
@@ -25125,9 +25466,24 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
       }, 0)
     : null;
 
-  // salva natura + distinta base dopo che il prodotto esiste già (crea()
-  // o salva() più sotto): stesso giro per entrambi, un solo posto da
-  // mantenere
+  // netto sempre canonico (vedi BloccoPrezzoIva/nettoDaLordo): per il
+  // bundle il costo non si scrive mai a mano, è la somma (già netta) dei
+  // componenti calcolata sopra
+  const costoNetto = tipoProdotto === "bundle"
+    ? costoBundleCalcolato
+    : (costo.trim() === "" ? null : (modoAcquisto === "netto" ? parseNum(costo) : nettoDaLordo(parseNum(costo), aliquotaAcquisto)));
+  const prezzoVenditaNetto = prezzo.trim() === "" ? null : (modoVendita === "netto" ? parseNum(prezzo) : nettoDaLordo(parseNum(prezzo), aliquotaVendita));
+  const prezzoVenditaLordo = calcolaIvaELordo(prezzoVenditaNetto, aliquotaVendita).lordo;
+  // margine sempre sui netti, mai sui lordi: l'IVA non deve sporcare il
+  // confronto tra costo e ricavo
+  const margineUnitario = costoNetto != null && prezzoVenditaNetto != null ? round2(prezzoVenditaNetto - costoNetto) : null;
+  const marginePct = margineUnitario != null && prezzoVenditaNetto > 0 ? round2((margineUnitario / prezzoVenditaNetto) * 100) : null;
+
+  // salva natura + distinta base + IVA dopo che il prodotto esiste già
+  // (crea() o salva() più sotto): stesso giro per entrambi, un solo posto
+  // da mantenere. iva_verificata=true SEMPRE qui: un salvataggio esplicito
+  // dal form, anche a parità di aliquota, vale come verifica a mano —
+  // i prodotti mai passati da qui restano false (vedi migrazione)
   async function salvaNaturaProdotto(prodottoId) {
     const { error } = await supabase.from("prodotti_shop").update({
       tipo_prodotto: tipoProdotto,
@@ -25135,6 +25491,10 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
       conta_incassi: contaIncassi,
       giacenza_propria: giacenzaPropria,
       prodotto_padre_id: tipoProdotto === "variante" && prodottoPadreId ? prodottoPadreId : null,
+      costo_acquisto: tipoProdotto === "bundle" ? null : costoNetto,
+      aliquota_iva_acquisto: tipoProdotto === "vetrina" || tipoProdotto === "bundle" ? null : aliquotaAcquisto,
+      aliquota_iva_vendita: tipoProdotto === "vetrina" || tipoProdotto === "componente" ? null : aliquotaVendita,
+      iva_verificata: true,
     }).eq("id", prodottoId);
     if (error) return error.message;
     if (tipoProdotto === "bundle") {
@@ -25150,7 +25510,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     }
     return null;
   }
-  const haPrezzo = prezzo.trim() !== "";
+  const haPrezzo = prezzoVenditaNetto != null;
   // "solo offline" può venire dalla categoria scelta (forzato, vale per
   // tutti i prodotti di quella categoria) oppure impostato a mano sul
   // singolo prodotto: anche con un prezzo, se uno dei due è attivo il
@@ -25164,14 +25524,16 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
     if (tipoProdotto === "variante" && !prodottoPadreId) { setMsg("Seleziona il prodotto padre (la vetrina)."); return; }
     const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
-    const prezzoNum = haPrezzo ? parseNum(prezzo) : null;
-    if (haPrezzo && !(prezzoNum > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
+    if (haPrezzo && !(prezzoVenditaNetto > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
     setSalvando(true);
     setMsg("");
 
     if (vaSuWoo) {
+      // WooCommerce ha i prezzi IVA inclusa (confermato): manda il lordo,
+      // mai il netto, altrimenti il prezzo pubblicato sullo shop risulta
+      // scontato dell'IVA
       const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
-        body: { azione: "crea", nome: nome.trim(), prezzo: prezzoNum, stato: "publish", categorieIds: categoriaId ? [categoriaId] : [] },
+        body: { azione: "crea", nome: nome.trim(), prezzo: prezzoVenditaLordo, stato: "publish", categorieIds: categoriaId ? [categoriaId] : [] },
       });
       if (error || data?.errore) { setSalvando(false); setMsg("Errore creazione su WooCommerce: " + (data?.errore || error.message)); return; }
       const prodottoId = data.prodottoId;
@@ -25196,7 +25558,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     // valorizzare il magazzino)
     const { data: riga, error: erroreInsert } = await supabase
       .from("prodotti_shop")
-      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, prezzo_vendita: prezzoNum, attivo: true, solo_offline: soloOfflineChk })
+      .insert({ nome: nome.trim(), giacenza: 0, giacenza_magazzino: magazzino, prezzo_vendita: prezzoVenditaNetto, attivo: true, solo_offline: soloOfflineChk })
       .select().single();
     if (erroreInsert) { setSalvando(false); setMsg("Errore: " + erroreInsert.message); return; }
     if (categoriaId) {
@@ -25220,17 +25582,18 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
     if (tipoProdotto === "variante" && !prodottoPadreId) { setMsg("Seleziona il prodotto padre (la vetrina)."); return; }
     const magazzino = qtaMagazzino === "" ? 0 : parseInt(parseNum(qtaMagazzino), 10);
-    const prezzoNum = haPrezzo ? parseNum(prezzo) : null;
-    if (haPrezzo && !(prezzoNum > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
+    if (haPrezzo && !(prezzoVenditaNetto > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
     setSalvando(true);
     setMsg("");
 
     if (vaSuWoo) {
+      // WooCommerce ha i prezzi IVA inclusa (confermato): manda il lordo,
+      // mai il netto
       const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
         body: {
           azione: prodotto.woo_product_id ? "modifica" : "crea",
           prodottoId: prodotto.id,
-          nome: nome.trim(), prezzo: prezzoNum, stato: "publish",
+          nome: nome.trim(), prezzo: prezzoVenditaLordo, stato: "publish",
           categorieIds: categoriaId ? [categoriaId] : [],
         },
       });
@@ -25262,7 +25625,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
       }
     }
     const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({
-      nome: nome.trim(), prezzo_vendita: prezzoNum, giacenza_magazzino: magazzino, solo_offline: soloOfflineChk,
+      nome: nome.trim(), prezzo_vendita: prezzoVenditaNetto, giacenza_magazzino: magazzino, solo_offline: soloOfflineChk,
     }).eq("id", prodotto.id);
     if (erroreUpdate) { setSalvando(false); setMsg("Errore: " + erroreUpdate.message); return; }
     const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", prodotto.id);
@@ -25297,14 +25660,32 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
           {categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino fisico, non viene creato su WooCommerce.
         </div>
       )}
-      <Field label={tipoProdotto === "vetrina" ? "Prezzo di vendita (sta sulle varianti, non qui)" : "Prezzo di vendita (lascia vuoto se non è in vendita: materiale di consumo, arredo, altro)"}>
-        <input
-          style={{ ...inputStyle, ...(tipoProdotto === "vetrina" ? { background: "#EFEFEF", color: MUTED } : {}) }}
-          inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)}
-          placeholder={tipoProdotto === "vetrina" ? "—" : "Nessun prezzo"}
-          disabled={tipoProdotto === "vetrina"}
+      {tipoProdotto !== "vetrina" && tipoProdotto !== "bundle" && (
+        <BloccoPrezzoIva
+          titolo="Acquisto"
+          inputTesto={costo} onCambiaInputTesto={setCosto}
+          modo={modoAcquisto} onCambiaModo={setModoAcquisto}
+          aliquota={aliquotaAcquisto} onCambiaAliquota={setAliquotaAcquisto}
         />
-      </Field>
+      )}
+      {tipoProdotto === "bundle" && costoBundleCalcolato != null && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
+          Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(costoBundleCalcolato)}</b>
+        </div>
+      )}
+      {tipoProdotto !== "vetrina" && tipoProdotto !== "componente" && (
+        <BloccoPrezzoIva
+          titolo="Vendita"
+          inputTesto={prezzo} onCambiaInputTesto={setPrezzo}
+          modo={modoVendita} onCambiaModo={setModoVendita}
+          aliquota={aliquotaVendita} onCambiaAliquota={setAliquotaVendita}
+        />
+      )}
+      {margineUnitario != null && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 14, padding: "8px 12px", background: "#FBF3E4", borderRadius: 8 }}>
+          Margine (sui netti): <b>{fmtEuroIva(margineUnitario)}</b>{marginePct != null && <> — <b>{marginePct}%</b></>}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10 }}>
         <div style={{ flex: 1 }}>
           <Field label="Quantità in magazzino">
@@ -25373,10 +25754,6 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
           <button onClick={aggiungiComponente} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", width: "100%" }}>
             + Aggiungi componente
           </button>
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>
-            Costo calcolato dalla distinta base: <b style={{ color: NAVY }}>{fmtEuroErp2(costoBundleCalcolato || 0)}</b>
-            {haPrezzo && <> — margine: <b style={{ color: NAVY }}>{fmtEuroErp2(parseNum(prezzo) - (costoBundleCalcolato || 0))}</b></>}
-          </div>
         </div>
       )}
 
@@ -25730,33 +26107,13 @@ function GraficoTrendBarre({ voci }) {
 // gli spostamenti non ancora sincronizzati, evidenziati in oro finché non
 // si preme "Sincronizza magazzini"
 function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, sincronizzandoMagazzini, onApriIspezione }) {
-  const [prezzo, setPrezzo] = useState(p.prezzo_vendita != null ? String(p.prezzo_vendita) : "");
-  const [costo, setCosto] = useState(p.costo_acquisto != null ? String(p.costo_acquisto) : "");
+  // prezzo di vendita e costo di acquisto non sono più modificabili da
+  // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
+  // anche cosa mandare a WooCommerce (il lordo, mai il netto)
   const [unitaMisura, setUnitaMisura] = useState(p.unita_misura || "");
   const [scortaMin, setScortaMin] = useState(p.scorta_minima != null ? String(p.scorta_minima) : "");
   const [stockTotaleInput, setStockTotaleInput] = useState(String(p.stockTotale));
 
-  async function salvaPrezzo() {
-    const nuovo = prezzo.trim() === "" ? null : parseNum(prezzo);
-    if (nuovo === p.prezzo_vendita) return;
-    if (!p.woo_product_id) {
-      const { error } = await supabase.from("prodotti_shop").update({ prezzo_vendita: nuovo }).eq("id", p.id);
-      if (error) { window.alert("Errore: " + error.message); setPrezzo(p.prezzo_vendita != null ? String(p.prezzo_vendita) : ""); return; }
-      ricarica(["prodotti_shop"]);
-      return;
-    }
-    if (nuovo == null || nuovo <= 0) { window.alert("Il prezzo di vendita deve essere maggiore di zero."); setPrezzo(p.prezzo_vendita != null ? String(p.prezzo_vendita) : ""); return; }
-    const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: p.id, prezzoVendita: nuovo } });
-    if (error || data?.errore) { window.alert("Prezzo NON sincronizzato con WooCommerce: " + (data?.errore || error.message)); setPrezzo(p.prezzo_vendita != null ? String(p.prezzo_vendita) : ""); return; }
-    ricarica(["prodotti_shop"]);
-  }
-  async function salvaCosto() {
-    const nuovo = costo.trim() === "" ? null : parseNum(costo);
-    if (nuovo === p.costo_acquisto) return;
-    const { error } = await supabase.from("prodotti_shop").update({ costo_acquisto: nuovo }).eq("id", p.id);
-    if (error) { window.alert("Errore: " + error.message); setCosto(p.costo_acquisto != null ? String(p.costo_acquisto) : ""); return; }
-    ricarica(["prodotti_shop"]);
-  }
   async function salvaUnitaMisura() {
     const nuovo = unitaMisura.trim() === "" ? null : unitaMisura.trim();
     if (nuovo === p.unita_misura) return;
@@ -25893,17 +26250,18 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
           </span>
         )}
       </td>
-      <td style={tdStyle}>
-        <input style={cellInputStyle} inputMode="decimal" value={prezzo} onChange={(e) => setPrezzo(e.target.value)} onBlur={salvaPrezzo} placeholder="—" />
+      <td style={tdStyle} title="Si modifica solo dalla scheda prodotto (clic sul nome)">
+        <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
+          {p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}
+          {!p.iva_verificata && (
+            <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 12, lineHeight: 1 }}>⚠</span>
+          )}
+        </span>
       </td>
-      <td style={tdStyle}>
-        {p.isBundle ? (
-          <span title="Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" style={{ ...fontBody, fontStyle: "italic", fontSize: 11, color: MUTED }}>
-            {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
-          </span>
-        ) : (
-          <input style={cellInputStyle} inputMode="decimal" value={costo} onChange={(e) => setCosto(e.target.value)} onBlur={salvaCosto} placeholder="—" />
-        )}
+      <td style={tdStyle} title={p.isBundle ? "Calcolato dalla distinta base — si modifica cambiando il costo dei componenti" : "Si modifica solo dalla scheda prodotto (clic sul nome)"}>
+        <span style={{ ...fontBody, fontStyle: p.isBundle ? "italic" : "normal", fontSize: 11, color: p.isBundle ? MUTED : NAVY }}>
+          {p.costo_acquisto != null ? fmtEuroErp2(p.costo_acquisto) : "—"}
+        </span>
       </td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
@@ -25997,7 +26355,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, venditeShop, ricarica, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, venditeShop, ricarica, onBack, titolo = "Gestione magazzino" }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -26455,6 +26813,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           categorieProdotti={categorieProdotti}
           prodottiShop={prodottiShop}
           padreIniziale={nuovaVariantePadreId}
+          aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
           onClose={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); }}
           onFatto={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); ricarica(["prodotti_shop"]); }}
         />
@@ -26465,6 +26824,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           prodottiShop={prodottiShop}
           prodotto={prodottoInModifica}
           categoriaIdIniziale={(prodottiCategorie || []).find((pc) => pc.prodotto_id === prodottoInModifica.id)?.categoria_id || ""}
+          aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
           onClose={() => setProdottoInModifica(null)}
           onFatto={() => { setProdottoInModifica(null); ricarica(["prodotti_shop", "prodotti_categorie"]); }}
         />
@@ -37259,6 +37619,7 @@ export default function App() {
   const [prodottiShop, setProdottiShop] = useState([]);
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
+  const [impostazioniIva, setImpostazioniIva] = useState(null);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
   // obiettivi individuali (Target Master/Venditori, Impostazioni > Vendite
   // prodotti) sulle vendite POS: incasso, quantità di prodotto, o entrambi
@@ -37410,6 +37771,7 @@ export default function App() {
     vendite_shop_crm: async () => setVenditeShopCrm((await supabase.from("vendite_shop").select("id, payload_raw")).data || []),
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
+    impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
     prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
     prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
@@ -37552,8 +37914,9 @@ export default function App() {
   // il contesto di questa scelta
   const TABELLE_PER_VIEW = {
     home: [], erp: [], magazzinoshop: [], statistiche: [],
+    gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
@@ -37573,7 +37936,7 @@ export default function App() {
     venditealbanco: ["vendite_shop"],
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -37978,6 +38341,7 @@ export default function App() {
   function apriClassificazioneVoci() { apriViewProtetta("classificazionevocishop"); }
   function apriCrmShop() { apriViewProtetta("crmshop"); }
   function apriGeneraCoupon() { apriViewProtetta("generacoupon"); }
+  function apriGestioneIva() { apriViewProtetta("gestioneiva"); }
   function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
   // raggiungibili solo dai due tasti dentro "Statistiche Vendite
   // Prodotti" (già un'area protetta): nessun secondo cancello password,
@@ -38372,7 +38736,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
       )}
 
       {view === "gestionedate" && (
@@ -38499,10 +38863,19 @@ export default function App() {
           onApriCrmShop={apriCrmShop}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
+          onApriGestioneIva={apriGestioneIva}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.magazzinoshop?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("magazzinoshop", { ordine: o })}
           colonneTasti={layoutTasti.magazzinoshop?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("magazzinoshop", { colonne: n })}
           etichetteTasti={layoutTasti.magazzinoshop?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("magazzinoshop", chiave, testo)}
           titolo={etichettaTasto("home", "magazzinoshop", "Gestione magazzino e shop")}
+        />
+      )}
+
+      {view === "gestioneiva" && (
+        <PaginaGestioneIva
+          venditeShop={venditeShop} prodottiShop={prodottiShop} vociShopClassificazione={vociShopClassificazione}
+          onBack={() => setView("magazzinoshop")}
+          titolo={etichettaTasto("magazzinoshop", "gestioneiva", "Gestione IVA")}
         />
       )}
 
@@ -38611,7 +38984,7 @@ export default function App() {
       {view === "magazzino" && (
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          bundleComponenti={bundleComponenti}
+          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
