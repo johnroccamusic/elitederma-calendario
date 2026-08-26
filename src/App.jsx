@@ -25425,6 +25425,12 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   const [contaIncassi, setContaIncassi] = useState(prodotto ? prodotto.conta_incassi !== false : true);
   const [giacenzaPropria, setGiacenzaPropria] = useState(prodotto ? prodotto.giacenza_propria !== false : true);
   const [prodottoPadreId, setProdottoPadreId] = useState(prodotto?.prodotto_padre_id || padreIniziale || "");
+  // bundle con giacenza fisica (pacco sigillato sullo scaffale, es. box di
+  // aghi da 20): stock proprio + collegamento al prodotto sfuso, vedi
+  // migrazione 20260828100000_pacchi_sigillati_sfusi.sql
+  const [bundleFisica, setBundleFisica] = useState(!!prodotto?.bundle_con_giacenza_fisica);
+  const [prodottoSfusoId, setProdottoSfusoId] = useState(prodotto?.prodotto_sfuso_id || "");
+  const [pezziConfezione, setPezziConfezione] = useState(prodotto?.pezzi_per_confezione != null ? String(prodotto.pezzi_per_confezione) : "");
   // distinta base, solo per tipo "bundle": [{ componenteId, quantita }]
   const [componenti, setComponenti] = useState([]);
   useEffect(() => {
@@ -25449,6 +25455,14 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     }
     else { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(true); }
   }
+  // attivare/spegnere la giacenza fisica di un bundle cambia anche i flag
+  // tipici: il box sigillato SI conta in magazzino e ha stock proprio, il
+  // bundle virtuale no (resta calcolato dai componenti)
+  function cambiaBundleFisica(attiva) {
+    setBundleFisica(attiva);
+    if (attiva) { setContaMagazzino(true); setGiacenzaPropria(true); }
+    else { setContaMagazzino(false); setGiacenzaPropria(false); setCosto(""); }
+  }
   function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
   function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
   function cambiaComponente(i, campo, valore) { setComponenti((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valore } : c))); }
@@ -25459,7 +25473,8 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // costo_unitario × quantità dei componenti, così se cambia il costo di
   // un componente tutti i bundle che lo usano si riprezzano da soli — qui
   // solo un'anteprima, il calcolo "vivo" per i report vive in PaginaMagazzino
-  const costoBundleCalcolato = tipoProdotto === "bundle"
+  const bundleVirtualeForm = tipoProdotto === "bundle" && !bundleFisica;
+  const costoBundleCalcolato = bundleVirtualeForm
     ? componenti.reduce((s, c) => {
         const comp = prodottiPerId[c.componenteId];
         const q = parseNum(c.quantita) || 0;
@@ -25470,7 +25485,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // netto sempre canonico (vedi BloccoPrezzoIva/nettoDaLordo): per il
   // bundle il costo non si scrive mai a mano, è la somma (già netta) dei
   // componenti calcolata sopra
-  const costoNetto = tipoProdotto === "bundle"
+  const costoNetto = bundleVirtualeForm
     ? costoBundleCalcolato
     : (costo.trim() === "" ? null : (modoAcquisto === "netto" ? parseNum(costo) : nettoDaLordo(parseNum(costo), aliquotaAcquisto)));
   const prezzoVenditaNetto = prezzo.trim() === "" ? null : (modoVendita === "netto" ? parseNum(prezzo) : nettoDaLordo(parseNum(prezzo), aliquotaVendita));
@@ -25486,24 +25501,36 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // dal form, anche a parità di aliquota, vale come verifica a mano —
   // i prodotti mai passati da qui restano false (vedi migrazione)
   async function salvaNaturaProdotto(prodottoId) {
+    const bundleConFisica = tipoProdotto === "bundle" && bundleFisica;
     const { error } = await supabase.from("prodotti_shop").update({
       tipo_prodotto: tipoProdotto,
       conta_magazzino: contaMagazzino,
       conta_incassi: contaIncassi,
       giacenza_propria: giacenzaPropria,
       prodotto_padre_id: tipoProdotto === "variante" && prodottoPadreId ? prodottoPadreId : null,
-      costo_acquisto: tipoProdotto === "bundle" ? null : costoNetto,
-      aliquota_iva_acquisto: tipoProdotto === "vetrina" || tipoProdotto === "bundle" ? null : aliquotaAcquisto,
+      // solo il bundle VIRTUALE ha costo/IVA acquisto calcolati dalla
+      // distinta: il box sigillato si compra davvero dal produttore,
+      // quindi costo e aliquota restano i suoi
+      costo_acquisto: bundleVirtualeForm ? null : costoNetto,
+      aliquota_iva_acquisto: tipoProdotto === "vetrina" || bundleVirtualeForm ? null : aliquotaAcquisto,
       aliquota_iva_vendita: tipoProdotto === "vetrina" || tipoProdotto === "componente" ? null : aliquotaVendita,
       iva_verificata: true,
+      bundle_con_giacenza_fisica: bundleConFisica,
+      prodotto_sfuso_id: bundleConFisica && prodottoSfusoId ? prodottoSfusoId : null,
+      pezzi_per_confezione: bundleConFisica && parseNum(pezziConfezione) > 0 ? parseInt(parseNum(pezziConfezione), 10) : null,
     }).eq("id", prodottoId);
     if (error) return error.message;
     if (tipoProdotto === "bundle") {
+      // il box con giacenza fisica non usa la distinta base (gli sfusi si
+      // muovono solo con "Apri confezione"): eventuali righe residue vanno
+      // pulite, altrimenti resterebbe una doppia natura ambigua
       const { error: erroreDelete } = await supabase.from("bundle_componenti").delete().eq("bundle_id", prodottoId);
       if (erroreDelete) return erroreDelete.message;
-      const righe = componenti
-        .filter((c) => c.componenteId && parseNum(c.quantita) > 0)
-        .map((c) => ({ bundle_id: prodottoId, componente_id: c.componenteId, quantita_per_bundle: parseNum(c.quantita) }));
+      const righe = bundleVirtualeForm
+        ? componenti
+            .filter((c) => c.componenteId && parseNum(c.quantita) > 0)
+            .map((c) => ({ bundle_id: prodottoId, componente_id: c.componenteId, quantita_per_bundle: parseNum(c.quantita) }))
+        : [];
       if (righe.length) {
         const { error: erroreInsert } = await supabase.from("bundle_componenti").insert(righe);
         if (erroreInsert) return erroreInsert.message;
@@ -25671,8 +25698,8 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
           entrambi i blocchi (bundle ha solo Vendita, componente solo
           Acquisto, vetrina nessuno dei due). */}
       {tipoProdotto !== "vetrina" && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile || tipoProdotto === "bundle" || tipoProdotto === "componente" ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 14 }}>
-          {tipoProdotto !== "bundle" && (
+        <div style={{ display: "grid", gridTemplateColumns: isMobile || bundleVirtualeForm || tipoProdotto === "componente" ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 14 }}>
+          {!bundleVirtualeForm && (
             <BloccoPrezzoIva
               titolo="Acquisto"
               inputTesto={costo} onCambiaInputTesto={setCosto}
@@ -25747,6 +25774,37 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
       )}
 
       {tipoProdotto === "bundle" && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
+            <input type="checkbox" checked={bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
+            Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
+          </label>
+          {bundleFisica && (
+            <>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
+                Il box ha uno stock suo (i pacchi sigillati) e il prodotto sfuso collegato ne ha un altro (i pezzi aperti): sono indipendenti, si travasano solo con l'operazione "Apri confezione" in Gestione magazzino.
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ flex: "2 1 200px" }}>
+                  <Field label="Prodotto sfuso collegato (il pezzo singolo)">
+                    <select style={inputStyle} value={prodottoSfusoId} onChange={(e) => setProdottoSfusoId(e.target.value)}>
+                      <option value="">— scegli il prodotto sfuso —</option>
+                      {prodottiScelta.filter((p) => p.tipo_prodotto === "componente" || p.tipo_prodotto === "semplice").map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div style={{ flex: "1 1 120px" }}>
+                  <Field label="Pezzi per confezione">
+                    <input style={inputStyle} inputMode="numeric" value={pezziConfezione} onChange={(e) => setPezziConfezione(e.target.value)} placeholder="es. 20" />
+                  </Field>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {bundleVirtualeForm && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Distinta base (componenti del kit)</div>
           {componenti.map((c, i) => (
@@ -26115,7 +26173,64 @@ function GraficoTrendBarre({ voci }) {
 // locale (istantaneo, nessuna chiamata) — il numero mostrato include già
 // gli spostamenti non ancora sincronizzati, evidenziati in oro finché non
 // si preme "Sincronizza magazzini"
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, sincronizzandoMagazzini, onApriIspezione }) {
+// "Apri confezione": lo spostamento fisico dal pacco sigillato allo
+// scaffale degli sfusi (−N box, +N×pezzi_per_confezione pezzi singoli).
+// Passa da una funzione SQL atomica (apri_confezione) che controlla la
+// disponibilità reale con lock di riga e registra il movimento nello
+// storico movimenti_magazzino — mai due update separati dal browser
+function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
+  const box = (prodottiShop || []).find((p) => p.id === boxId) || null;
+  const sfuso = box?.prodotto_sfuso_id ? (prodottiShop || []).find((p) => p.id === box.prodotto_sfuso_id) || null : null;
+  const [quante, setQuante] = useState("1");
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState("");
+  if (!box) return null;
+  const pezzi = box.pezzi_per_confezione || 0;
+  const n = parseInt(parseNum(quante), 10) || 0;
+  const boxInMagazzino = box.giacenza_magazzino || 0;
+  const configurato = !!sfuso && pezzi > 0;
+
+  async function conferma() {
+    if (n <= 0) { setMsg("Indica quante confezioni aprire (almeno 1)."); return; }
+    if (n > boxInMagazzino) { setMsg(`In magazzino ci sono solo ${boxInMagazzino} pacchi sigillati: non posso aprirne ${n}.`); return; }
+    setSalvando(true); setMsg("");
+    const { error } = await supabase.rpc("apri_confezione", { p_box_id: box.id, p_confezioni: n });
+    setSalvando(false);
+    if (error) { setMsg(error.message); return; }
+    await ricarica(["prodotti_shop"]);
+    onClose();
+  }
+
+  return (
+    <Modal title="Apri confezione" onClose={onClose} maxWidth={460}>
+      <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{box.nome}</div>
+      {!configurato ? (
+        <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 14 }}>
+          Questo box non è ancora configurato: apri la scheda prodotto e imposta il prodotto sfuso collegato e i pezzi per confezione.
+        </div>
+      ) : (
+        <>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 4 }}>Pacchi sigillati in magazzino: <b>{boxInMagazzino}</b></div>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>Pezzi sfusi attuali ({sfuso.nome}): <b>{(sfuso.giacenza_magazzino || 0) + (sfuso.giacenza || 0)}</b></div>
+          <Field label="Quante confezioni aprire">
+            <input style={inputStyle} inputMode="numeric" value={quante} onChange={(e) => setQuante(e.target.value)} autoFocus />
+          </Field>
+          {n > 0 && (
+            <div style={{ ...fontBody, fontSize: 13, color: NAVY, background: "#FBF3E4", borderRadius: 8, padding: "8px 12px", marginBottom: 14 }}>
+              −{n} pacc{n === 1 ? "o sigillato" : "hi sigillati"} → <b>+{n * pezzi} pezzi sfusi</b>
+            </div>
+          )}
+          {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
+          <Button onClick={conferma} disabled={salvando || boxInMagazzino <= 0} style={{ width: "100%" }}>
+            {salvando ? "Apro…" : boxInMagazzino <= 0 ? "Nessun pacco sigillato in magazzino" : "Apri e sposta negli sfusi"}
+          </Button>
+        </>
+      )}
+    </Modal>
+  );
+}
+
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, sincronizzandoMagazzini, onApriIspezione, onApriConfezione }) {
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
@@ -26210,13 +26325,20 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
             {p.isVetrina ? `${p.variantiCollegate.length} variant${p.variantiCollegate.length === 1 ? "e" : "i"}` : p.stockTotale == null ? "∞" : p.stockTotale}
           </div>
         ) : (
-          <input
-            style={{ ...cellInputStyle, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY }}
-            inputMode="numeric" value={stockTotaleInput} title="Scrivi il nuovo stock totale: la differenza va in magazzino"
-            onChange={(e) => setStockTotaleInput(e.target.value)}
-            onBlur={salvaStockTotale}
-            onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
-          />
+          <>
+            <input
+              style={{ ...cellInputStyle, fontWeight: 700, color: p.sottoScorta ? "#C0392B" : NAVY }}
+              inputMode="numeric" value={stockTotaleInput} title="Scrivi il nuovo stock totale: la differenza va in magazzino"
+              onChange={(e) => setStockTotaleInput(e.target.value)}
+              onBlur={salvaStockTotale}
+              onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+            />
+            {p.sfusoCollegato && (
+              <div title={`Pezzi singoli già aperti sull'altro scaffale (${p.sfusoCollegato.nome})`} style={{ ...fontBody, fontSize: 9.5, color: MUTED, whiteSpace: "nowrap", marginTop: 2 }}>
+                (+{p.sfusoCollegato.stock} sfusi)
+              </div>
+            )}
+          </>
         )}
       </td>
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
@@ -26253,10 +26375,35 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         {p.conta_magazzino === false ? (
           <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
+        ) : p.boxCollegato && (p.esaurito || p.sottoScorta) && p.boxCollegato.inMagazzino > 0 ? (
+          // sfuso sotto soglia ma con pacchi sigillati disponibili: la mossa
+          // giusta non è riordinare dal fornitore, è aprire un pacco
+          <button
+            onClick={() => onApriConfezione(p.boxCollegato.id)}
+            title={`Sfusi sotto soglia, ma in magazzino ci sono ${p.boxCollegato.inMagazzino} pacchi sigillati di "${p.boxCollegato.nome}": aprine uno`}
+            style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#B8860B", background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
+          >
+            Apri un pacco →
+          </button>
+        ) : p.boxCollegato && (p.esaurito || p.sottoScorta) ? (
+          <span title={`Sfusi sotto soglia e nessun pacco sigillato di "${p.boxCollegato.nome}" in magazzino: da riordinare`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
+            Riordina dal fornitore
+          </span>
         ) : (
           <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
             {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
           </span>
+        )}
+        {p.bundle_con_giacenza_fisica && p.prodotto_sfuso_id && (
+          <div style={{ marginTop: 3 }}>
+            <button
+              onClick={() => onApriConfezione(p.id)}
+              title="Apri una o più confezioni: i pezzi passano dallo scaffale dei sigillati a quello degli sfusi"
+              style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "2px 6px", cursor: "pointer" }}
+            >
+              Apri confezione
+            </button>
+          </div>
         )}
       </td>
       <td style={tdStyle} title="Si modifica solo dalla scheda prodotto (clic sul nome)">
@@ -26379,6 +26526,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
   // pensata per la scheda WooCommerce con immagini/descrizioni)
   const [prodottoInModifica, setProdottoInModifica] = useState(null);
   const [prodottoIspezionato, setProdottoIspezionato] = useState(null);
+  const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null); // id del box di cui aprire confezioni, o null
   // id della vetrina da precompilare in "Nuovo prodotto" quando si apre da
   // "+ Aggiungi variante" — distinto da mostraNuovoProdotto perché quella
   // apertura parte da un prodotto preciso, non da un modulo vuoto
@@ -26553,12 +26701,18 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
     const giacenzaMagazzinoVis = (p.giacenza_magazzino || 0) + deltaPendente;
     const giacenzaVis = (p.giacenza || 0) - deltaPendente;
 
-    // bundle: né il costo né la disponibilità sono numeri scritti a mano,
-    // si ricavano sempre dalla distinta base — così cambiando il costo o
-    // la giacenza di un componente tutti i bundle che lo usano si
-    // aggiornano da soli, senza bisogno di toccarli uno per uno
-    const isBundle = p.tipo_prodotto === "bundle";
+    // bundle VIRTUALE: né il costo né la disponibilità sono numeri scritti
+    // a mano, si ricavano sempre dalla distinta base. Un bundle con
+    // giacenza fisica (box sigillato) invece si comporta da prodotto
+    // normale: stock e costo suoi — qui sotto isBundle indica solo i virtuali
+    const isBundle = bundleVirtuale(p);
     const isVetrina = p.tipo_prodotto === "vetrina";
+    // collegamento box <-> sfuso: sul box mostro anche quanti pezzi sfusi
+    // ci sono sull'altro scaffale; sullo sfuso serve sapere se c'è un box
+    // da aprire (per l'avviso "apri un pacco" invece di "riordina")
+    const sfusoCollegato = p.bundle_con_giacenza_fisica && p.prodotto_sfuso_id ? prodottiPerId[p.prodotto_sfuso_id] || null : null;
+    const boxCollegatoRaw = (prodottiShop || []).find((b) => b.prodotto_sfuso_id === p.id && b.attivo !== false) || null;
+    const boxCollegato = boxCollegatoRaw ? { id: boxCollegatoRaw.id, nome: boxCollegatoRaw.nome, stock: (boxCollegatoRaw.giacenza_magazzino || 0) + (boxCollegatoRaw.giacenza || 0), inMagazzino: boxCollegatoRaw.giacenza_magazzino || 0 } : null;
     // varianti collegate a una vetrina: lette dal prodotto padre, non da
     // una distinta base — ogni variante ha una giacenza e un prezzo propri,
     // vendere l'una non tocca le altre (a differenza dei componenti di un bundle)
@@ -26608,6 +26762,8 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
       variantiCollegate,
       forzatoEscludi,
       forzatoSoloOffline,
+      sfusoCollegato: sfusoCollegato ? { id: sfusoCollegato.id, nome: sfusoCollegato.nome, stock: (sfusoCollegato.giacenza_magazzino || 0) + (sfusoCollegato.giacenza || 0) } : null,
+      boxCollegato,
     };
   });
 
@@ -26788,7 +26944,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} onApriIspezione={setProdottoIspezionato} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -26817,6 +26973,9 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
         </div>
       </div>
 
+      {apriConfezioneBoxId && (
+        <ModaleApriConfezione boxId={apriConfezioneBoxId} prodottiShop={prodottiShop} onClose={() => setApriConfezioneBoxId(null)} ricarica={ricarica} />
+      )}
       {(mostraNuovoProdotto || nuovaVariantePadreId) && (
         <ModaleNuovoProdotto
           categorieProdotti={categorieProdotti}
@@ -27274,6 +27433,15 @@ function RigaSegnalazioneMagazzino({ segnalazione, fonte, onSalvaNota }) {
 // risolto — usato sia dal POS (vendita/disponibilità) sia da Resi/Cambio
 // (restituzione): un bundle non ha mai una giacenza propria, chi vende o
 // rende un bundle scarica/ripristina sempre i suoi componenti, mai lui
+// un bundle "virtuale" non esiste fisicamente: niente giacenza propria,
+// disponibilità e scarico passano dai componenti della distinta base.
+// Un bundle CON giacenza fisica (bundle_con_giacenza_fisica=true, es. il
+// box di aghi sigillato sullo scaffale) invece è a tutti gli effetti un
+// prodotto normale: ha il suo stock, si vende e si scarica da solo — il
+// legame coi pezzi sfusi passa SOLO dall'operazione "Apri confezione"
+function bundleVirtuale(p) {
+  return p?.tipo_prodotto === "bundle" && !p?.bundle_con_giacenza_fisica;
+}
 function righeBundleCon(prodottoId, bundleComponenti, prodottiPerId) {
   return (bundleComponenti || [])
     .filter((bc) => bc.bundle_id === prodottoId)
@@ -27305,7 +27473,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
   // il prodotto stesso — usato da reso, annullamento e dal lato
   // "rientrano" del cambio
   async function ripristinaStock(prodotto, quantita) {
-    if (prodotto.tipo_prodotto === "bundle") {
+    if (bundleVirtuale(prodotto)) {
       for (const r of righeBundleCon(prodotto.id, bundleComponenti, prodottiPerId)) {
         const nuovoMagazzino = (r.prodotto.giacenza_magazzino || 0) + quantita * r.quantitaPerBundle;
         const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", r.componenteId);
@@ -27488,7 +27656,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     // se stesso), tutti gli altri seguono la stessa cascata magazzino→shop
     // del POS
     for (const u of prodottiUscenti) {
-      if (u.prodotto.tipo_prodotto === "bundle") {
+      if (bundleVirtuale(u.prodotto)) {
         for (const r of righeBundleCon(u.prodotto.id, bundleComponenti, prodottiPerId)) {
           const nuovoMagazzino = (r.prodotto.giacenza_magazzino || 0) - u.quantita * r.quantitaPerBundle;
           const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", r.componenteId);
@@ -31457,7 +31625,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function disponibiliDi(prodottoId) {
     const p = trovaProdotto(prodottoId);
     if (!p) return 0;
-    if (p.tipo_prodotto === "bundle") return disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerId);
+    if (bundleVirtuale(p)) return disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerId);
     return (p.giacenza_magazzino || 0) + (p.giacenza || 0);
   }
 
@@ -31520,9 +31688,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // altrimenti si rischia di vendere online un pezzo già dato al banco
     for (const r of carrello) {
       const p = trovaProdotto(r.prodottoId);
-      // un bundle non ha giacenza propria: si scaricano i componenti
-      // (proporzionati alla quantità venduta), mai il bundle stesso
-      if (p?.tipo_prodotto === "bundle") {
+      // un bundle VIRTUALE non ha giacenza propria: si scaricano i componenti
+      // (proporzionati alla quantità venduta), mai il bundle stesso. Un box
+      // con giacenza fisica invece scarica il proprio stock come un normale
+      // prodotto (ramo sotto), senza toccare gli sfusi collegati
+      if (bundleVirtuale(p)) {
         for (const c of righeBundleCon(r.prodottoId, bundleComponenti, prodottiPerId)) {
           const nuovoMagazzino = (c.prodotto.giacenza_magazzino || 0) - r.quantita * c.quantitaPerBundle;
           const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", c.componenteId);
@@ -34188,7 +34358,36 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       }
     });
 
-    if (Object.keys(deltaPerProdotto).length === 0) return;
+    if (Object.keys(deltaPerProdotto).length === 0) return true;
+
+    // nessuna giacenza può andare sotto zero: se lo scarico farebbe
+    // scendere un prodotto in negativo si blocca TUTTO (nessun update
+    // parziale) e si spiega cosa fare. Se il prodotto è il pezzo sfuso di
+    // un box sigillato, la mossa non è comprare: è aprire una confezione
+    // (azione fisica che qualcuno deve compiere davvero, mai automatica)
+    const mancanti = [];
+    Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
+      if (delta >= 0) return;
+      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+      if (!prodotto || prodotto.conta_magazzino === false) return;
+      const risultante = (prodotto.giacenza_magazzino || 0) + delta;
+      if (risultante < 0) {
+        const box = prodottiShop.find((b) => b.prodotto_sfuso_id === prodottoId && b.attivo !== false);
+        mancanti.push({ nome: prodotto.nome, servono: -delta, inMagazzino: prodotto.giacenza_magazzino || 0, box });
+      }
+    });
+    if (mancanti.length > 0) {
+      const righe = mancanti.map((m) => {
+        if (m.box && (m.box.giacenza_magazzino || 0) > 0) {
+          const daAprire = Math.ceil((m.servono - m.inMagazzino) / Math.max(1, m.box.pezzi_per_confezione || 1));
+          return `• "${m.nome}": servono ${m.servono} pezzi, in magazzino ce ne sono ${m.inMagazzino}. Apri ${daAprire} confezion${daAprire === 1 ? "e" : "i"} di "${m.box.nome}" (Gestione magazzino → Apri confezione) e riprova.`;
+        }
+        return `• "${m.nome}": servono ${m.servono} pezzi, in magazzino ce ne sono ${m.inMagazzino}. Carica il magazzino prima di scaricare i kit.`;
+      });
+      window.alert("Scarico kit bloccato — il magazzino non basta e nessuna giacenza può andare sotto zero:\n\n" + righe.join("\n"));
+      return false;
+    }
+
     // scarico/rientro dei kit è un movimento FISICO (esce/rientra dalla
     // sede): tocca solo giacenza_magazzino, mai giacenza (shop online,
     // sincronizzata con WooCommerce) — altrimenti preparare un kit
@@ -34199,6 +34398,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       return supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId);
     }));
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati });
+    return true;
   }
   // ricarica in giacenza_magazzino esattamente quanto è registrato come
   // scaricato per questa edizione, kit per kit (ognuno con la propria
@@ -34250,7 +34450,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   async function cambiaFaseLogistica(corsoData, fase) {
     if (fase === "ritirato_corriere") {
       if (!window.confirm("Vuoi scaricare i prodotti in partenza dal magazzino?")) return;
-      await sincronizzaMagazzino(corsoData);
+      // se lo scarico è bloccato (magazzino insufficiente) la fase NON
+      // avanza: altrimenti risulterebbe "ritirato" senza scarico registrato
+      const ok = await sincronizzaMagazzino(corsoData);
+      if (ok === false) return;
     }
     await salvaCampiEdizione(corsoData.id, { fase });
   }
@@ -34287,7 +34490,8 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   async function tornaIndietroFaseRientro(corsoData, faseTarget) {
     if (statoDi(corsoData.id).fase_rientro === FASE_LOGISTICA_COMPLETATA) {
       if (!window.confirm("Tornando indietro, questi prodotti verranno tolti di nuovo dal magazzino. Confermi?")) return;
-      await sincronizzaMagazzino(corsoData);
+      const ok = await sincronizzaMagazzino(corsoData);
+      if (ok === false) return;
     }
     salvaCampiEdizione(corsoData.id, { fase_rientro: faseTarget });
   }
