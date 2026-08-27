@@ -25919,7 +25919,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
       // quindi costo e aliquota restano i suoi
       costo_acquisto: bundleVirtualeForm ? null : costoNetto,
       aliquota_iva_acquisto: tipoProdotto === "vetrina" || bundleVirtualeForm ? null : aliquotaAcquisto,
-      aliquota_iva_vendita: tipoProdotto === "vetrina" || tipoProdotto === "componente" ? null : aliquotaVendita,
+      aliquota_iva_vendita: tipoProdotto === "vetrina" ? null : aliquotaVendita,
       iva_verificata: true,
       // scorta e riordino: partono dallo stato, che è inizializzato dal
       // prodotto — quindi un salvataggio da una scheda dove il riquadro non
@@ -26107,7 +26107,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
           blocco non esiste (bundle ha solo Vendita, componente solo
           Acquisto, vetrina nessuno dei due). */}
       {tipoProdotto !== "vetrina" && (
-        <div style={{ display: "grid", gridTemplateColumns: bundleVirtualeForm || tipoProdotto === "componente" ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bundleVirtualeForm ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
           {!bundleVirtualeForm && (
             <BloccoPrezzoIva
               titolo="Acquisto"
@@ -26116,7 +26116,11 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
               aliquota={aliquotaAcquisto} onCambiaAliquota={setAliquotaAcquisto}
             />
           )}
-          {tipoProdotto !== "componente" && (
+          {/* il prezzo di vendita c'è anche sui componenti: "componente"
+              dice che fa parte di un kit, non che non si possa vendere —
+              gli anelli porta inchiostro stanno nei kit E sullo shop.
+              Nasconderlo rendeva il prezzo invisibile e non modificabile */}
+          {true && (
             <BloccoPrezzoIva
               titolo="Vendita"
               inputTesto={prezzo} onCambiaInputTesto={setPrezzo}
