@@ -26389,6 +26389,13 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
           <span title={`Sfusi sotto soglia e nessun pacco sigillato di "${p.boxCollegato.nome}" in magazzino: da riordinare`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
             Riordina dal fornitore
           </span>
+        ) : p.bundle_con_giacenza_fisica && (p.esaurito || p.sottoScorta) ? (
+          // il box sigillato ha una SUA soglia di riordino (Scorta min. sulla
+          // riga): quando i pacchi scendono sotto, l'avviso è già di riordino
+          // dal produttore — senza aspettare che finiscano del tutto
+          <span title={`Pacchi sigillati ${p.esaurito ? "esauriti" : "sotto la soglia di riordino"}: riordina dal produttore`} style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 6px" }}>
+            Riordina dal fornitore
+          </span>
         ) : (
           <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: p.esaurito ? "#C0392B" : p.sottoScorta ? "#B8860B" : "#2E7D32", background: p.esaurito ? "#FBE4E1" : p.sottoScorta ? "#FBF1D9" : "#E3F3E5", borderRadius: 8, padding: "2px 6px" }}>
             {p.esaurito ? "Esaurito" : p.sottoScorta ? "Sotto scorta" : "OK"}
