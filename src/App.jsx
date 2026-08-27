@@ -28240,12 +28240,15 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, ricarica, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, ricarica, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
   const [sceltaKit, setSceltaKit] = useState({});   // chiave gruppo -> kit scelto
   const [salvandoGruppo, setSalvandoGruppo] = useState(null);
+  const [raggruppaLead, setRaggruppaLead] = useState("categoria"); // categoria | fornitore
+  const [giorniGruppo, setGiorniGruppo] = useState({});
+  const [salvandoLead, setSalvandoLead] = useState(null);
 
   const risultato = useMemo(
     () => simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi }),
@@ -28310,6 +28313,58 @@ function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kit
     setSalvandoGruppo(null);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
+  }
+
+  // compilazione massiva del tempo di consegna: 230 prodotti uno per uno
+  // non li compila nessuno, mentre "tutti gli aghi 45 giorni" si fa in un
+  // gesto. Il valore riempie SOLO i campi ancora vuoti — un lead time
+  // scritto a mano non viene mai sovrascritto senza chiederlo prima
+  const gruppiLeadTime = useMemo(() => {
+    const configurabili = (prodottiShop || []).filter((p) => p.attivo !== false && p.conta_magazzino !== false && p.giacenza_propria !== false);
+    const gruppi = new Map();
+    function aggiungi(chiave, nome, prodotto) {
+      if (!gruppi.has(chiave)) gruppi.set(chiave, { chiave, nome, prodotti: [] });
+      gruppi.get(chiave).prodotti.push(prodotto);
+    }
+    if (raggruppaLead === "fornitore") {
+      configurabili.forEach((p) => {
+        const f = p.fornitore_id ? fornitorePerId[p.fornitore_id] : null;
+        aggiungi(p.fornitore_id || "__nessuno", f?.nome || "Senza fornitore", p);
+      });
+    } else {
+      const categoriePerProdotto = {};
+      (prodottiCategorie || []).forEach((pc) => {
+        if (!categoriePerProdotto[pc.prodotto_id]) categoriePerProdotto[pc.prodotto_id] = [];
+        categoriePerProdotto[pc.prodotto_id].push(pc.categoria_id);
+      });
+      const nomeCategoria = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
+      configurabili.forEach((p) => {
+        const cats = categoriePerProdotto[p.id] || [];
+        if (!cats.length) { aggiungi("__nessuna", "Senza categoria", p); return; }
+        cats.forEach((cid) => aggiungi(cid, nomeCategoria[cid] || "Categoria", p));
+      });
+    }
+    return [...gruppi.values()]
+      .map((g) => ({ ...g, vuoti: g.prodotti.filter((p) => p.lead_time_giorni == null), impostati: g.prodotti.filter((p) => p.lead_time_giorni != null) }))
+      .filter((g) => g.prodotti.length > 0)
+      .sort((a, b) => b.vuoti.length - a.vuoti.length || a.nome.localeCompare(b.nome));
+  }, [prodottiShop, prodottiCategorie, categorieProdotti, fornitorePerId, raggruppaLead]);
+
+  async function applicaLeadTime(g, ancheImpostati) {
+    const giorni = interoOpzionale(giorniGruppo[g.chiave]);
+    if (giorni == null) { window.alert("Scrivi un numero di giorni."); return; }
+    const bersagli = ancheImpostati ? g.prodotti : g.vuoti;
+    if (!bersagli.length) return;
+    const testo = ancheImpostati
+      ? `Scrivere ${giorni} giorni di tempo di consegna su TUTTI i ${bersagli.length} prodotti di "${g.nome}", sovrascrivendo anche i ${g.impostati.length} già impostati a mano?`
+      : `Scrivere ${giorni} giorni di tempo di consegna sui ${bersagli.length} prodotti di "${g.nome}" che ne sono ancora sprovvisti?${g.impostati.length ? `\n\nI ${g.impostati.length} già impostati restano come sono.` : ""}`;
+    if (!window.confirm(testo)) return;
+    setSalvandoLead(g.chiave);
+    const { error } = await supabase.from("prodotti_shop").update({ lead_time_giorni: giorni }).in("id", bersagli.map((p) => p.id));
+    setSalvandoLead(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setGiorniGruppo((prev) => ({ ...prev, [g.chiave]: "" }));
+    ricarica(["prodotti_shop"]);
   }
 
   const inRitardo = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo");
@@ -28431,6 +28486,51 @@ function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kit
               </div>
             );
           })}
+        </div>
+      )}
+
+      {prodottiDaConfigurare.length > 0 && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8D9A0` }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+            <div style={titoloBlocco}>Tempi di consegna da configurare ({prodottiDaConfigurare.length} prodotti)</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              {[["categoria", "per categoria"], ["fornitore", "per fornitore"]].map(([valore, etichetta]) => (
+                <button
+                  key={valore} onClick={() => setRaggruppaLead(valore)}
+                  style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
+                    border: `1px solid ${raggruppaLead === valore ? NAVY : CREAM_BORDER}`, background: raggruppaLead === valore ? NAVY : "#fff",
+                    color: raggruppaLead === valore ? "#fff" : NAVY }}
+                >{etichetta}</button>
+              ))}
+            </div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+            Scrivi un numero per gruppo: riempie <b>solo i prodotti ancora vuoti</b>, quelli già scritti a mano restano intatti. Ogni prodotto resta comunque modificabile dalla sua scheda.
+          </div>
+          {gruppiLeadTime.filter((g) => g.vuoti.length > 0).map((g) => (
+            <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "9px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ flex: "1 1 240px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY }}>
+                <b>{g.nome}</b>
+                <span style={{ color: MUTED, fontSize: 12 }}> · {g.vuoti.length} da configurare{g.impostati.length > 0 ? `, ${g.impostati.length} già impostati` : ""}</span>
+              </div>
+              <input
+                style={{ ...inputStyle, width: 90 }} inputMode="numeric" placeholder="giorni"
+                value={giorniGruppo[g.chiave] || ""}
+                onChange={(e) => setGiorniGruppo((prev) => ({ ...prev, [g.chiave]: e.target.value }))}
+              />
+              <Button onClick={() => applicaLeadTime(g, false)} disabled={salvandoLead === g.chiave}>
+                {salvandoLead === g.chiave ? "Salvo…" : `Applica ai ${g.vuoti.length} vuoti`}
+              </Button>
+              {g.impostati.length > 0 && (
+                <button
+                  onClick={() => applicaLeadTime(g, true)} disabled={salvandoLead === g.chiave}
+                  style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                >
+                  sovrascrivi anche i {g.impostati.length} già impostati
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -39246,7 +39346,7 @@ export default function App() {
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
-    advisor: ["prodotti_shop", "impostazioni_magazzino", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "impostazioni_magazzino", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -40294,7 +40394,8 @@ export default function App() {
 
       {view === "advisor" && (
         <PaginaAdvisor
-          prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
           ricarica={fetchDati} onBack={() => setView("magazzino")}
