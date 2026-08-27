@@ -28515,7 +28515,7 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, ricarica, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, ricarica, onApriIscritto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
@@ -28732,9 +28732,23 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                 <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, marginBottom: 6 }}>
                   <b>{corsoPerId[g.corsoId]?.nome || "—"}</b> · scritto <b style={{ color: GOLD }}>"{g.etichetta}"</b> su {g.iscritti.length} iscritt{g.iscritti.length === 1 ? "o" : "i"}
                 </div>
-                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
-                  {g.iscritti.slice(0, 6).map((i) => `${i.nome || "senza nome"} (${fmtData(i.data)})`).join(" · ")}
-                  {g.iscritti.length > 6 ? ` · e altri ${g.iscritti.length - 6}` : ""}
+                {/* i nomi sono cliccabili: spesso il kit scritto a mano non
+                    si capisce senza guardare la scheda dell'allievo (accordi,
+                    note, cosa ha pagato). Da lì il tasto "torna indietro"
+                    riporta qui */}
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "baseline" }}>
+                  {g.iscritti.map((i, idx) => (
+                    <span key={i.iscrittoId}>
+                      <button
+                        onClick={() => onApriIscritto && onApriIscritto(i.iscrittoId)}
+                        title="Apri la scheda dell'allievo"
+                        style={{ ...fontBody, fontSize: 11.5, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}
+                      >
+                        {i.nome || "senza nome"}
+                      </button>
+                      <span style={{ color: MUTED }}> ({fmtData(i.data)}){idx < g.iscritti.length - 1 ? " ·" : ""}</span>
+                    </span>
+                  ))}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                   <select
@@ -40177,6 +40191,20 @@ export default function App() {
     setSchedaKey((k) => k + 1);
     setView("scheda");
   }
+  // stessa cosa di apriIscritto, ma memorizza che si arriva dall'Advisor:
+  // così il tasto "torna indietro" della scheda riporta lì e non nella
+  // vista da cui si era entrati l'ultima volta in una scheda
+  function apriIscrittoDaAdvisor(iscrittoId) {
+    const i = (iscritti || []).find((x) => x.id === iscrittoId);
+    if (!i) return;
+    scrollAppInCima();
+    setViewPrimaDiScheda("advisor");
+    setVieneDaGestioneModelle(false);
+    setCorsoDataAperta(i.corso_data_id);
+    setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
+    setSchedaKey((k) => k + 1);
+    setView("scheda");
+  }
   // "Apri tutte le schede associate" (solo desktop): affianca in colonne le
   // schede di più iscritti — stessa persona, corsi diversi — legati allo
   // stesso pagamento "Integrazione", per contabilizzare con una visione
@@ -40673,6 +40701,7 @@ export default function App() {
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
+          onApriIscritto={apriIscrittoDaAdvisor}
           ricarica={fetchDati} onBack={() => setView("magazzino")}
         />
       )}
