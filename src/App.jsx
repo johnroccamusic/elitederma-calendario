@@ -10640,7 +10640,10 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         ricarica={ricarica} onApriData={soloLettura ? () => {} : onApriData}
         nascondiTitolo
         stickyControlli intestazioneSticky={intestazioneGestioneCorsi}
-        {...(soloLettura ? { modoForzato: "calendario" } : {})}
+        {/* il profilo di sola lettura (es. Ruh) entra direttamente nell'ELENCO
+            dei corsi, non nel calendario mensile: chi lo usa cerca la
+            prossima data in una lista, non naviga fra i mesi */}
+        {...(soloLettura ? { modoForzato: "elenco" } : {})}
         filtroCorsoHome={filtroCorsoDate} setFiltroCorsoHome={setFiltroCorsoDate}
         filtroCittaHome={filtroCittaDate} setFiltroCittaHome={setFiltroCittaDate}
         filtroMasterHome={filtroMasterDate} setFiltroMasterHome={setFiltroMasterDate}
