@@ -16844,22 +16844,43 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   }
 
   // stesso principio, ma per la modella di un allievo in un giorno preciso
-  // di "Assegna modelle": SOLO nome/telefono/orario di una richiesta già
-  // fatta in iscrizione (idx>=0) — non crea mai una voce nuova. La riga
-  // segnaposto per un giorno mai richiesto esiste solo per poter compilare
-  // rapidamente le richieste vere già presenti: un click sul suo checkbox
-  // creava in silenzio, senza conferma, una richiesta che l'allievo non
-  // aveva mai fatto (successo davvero: Rebecca Cappelli, 25/08/2026 —
-  // numero_modelle restava 2 ma tipi_modelle saliva a 3). Chi vuole
-  // aggiungere davvero un trattamento non richiesto lo fa dalla scheda di
-  // iscrizione, dove numero_modelle e tipi_modelle restano coerenti insieme.
-  async function aggiornaModellaAllievoGiorno(iscrittoId, numeroGiorno, campo, valore) {
+  // di "Assegna modelle".
+  //
+  // Per chi ha chiesto le modelle A NOI (richiede_modelle) qui si compila
+  // SOLO una richiesta già fatta in iscrizione (idx>=0), non se ne creano
+  // di nuove: un click sul checkbox di una riga segnaposto creava in
+  // silenzio una richiesta mai fatta, e l'incasso non tornava più
+  // (successo davvero: Rebecca Cappelli, 25/08/2026 — numero_modelle
+  // restava 2 ma tipi_modelle saliva a 3). Chi vuole aggiungere davvero un
+  // trattamento richiesto lo fa dalla scheda di iscrizione, dove
+  // numero_modelle e tipi_modelle restano coerenti insieme.
+  //
+  // Per chi invece PORTA LA SUA MODELLA quel rischio non esiste: non è una
+  // richiesta a noi, non entra nel riepilogo di chi dobbiamo cercare (che
+  // filtra su richiede_modelle) e non tocca numero_modelle, l'unico campo
+  // da cui dipende quanto l'allievo deve pagare. Lì il posto si crea al
+  // primo click, perché sapere in che turno arriva la modella che porta
+  // lui serve eccome — a chi prepara l'aula e a chi la accoglie.
+  async function aggiornaModellaAllievoGiorno(iscrittoId, numeroGiorno, campo, valore, opzioni = {}) {
     const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
     if (!iscritto) return;
     const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
     const idx = elenco.findIndex((m) => (m.giorno ?? giornoDiRipiegoAllievi) === numeroGiorno);
     if (idx < 0) {
-      setMsg(`${iscritto.nome} ${iscritto.cognome} non ha richiesto questo trattamento: aggiungilo dalla scheda di iscrizione, non da qui.`);
+      if (!opzioni.creaSeMancante) {
+        setMsg(`${iscritto.nome} ${iscritto.cognome} non ha richiesto questo trattamento: aggiungilo dalla scheda di iscrizione, non da qui.`);
+        return;
+      }
+      const nuovoPosto = {
+        giorno: numeroGiorno,
+        tipo: opzioni.tipoDefault || "",
+        mattina: false, pomeriggio: false,
+        nome_modella: "", telefono_modella: "",
+        [campo]: valore,
+      };
+      const { error: erroreNuovo } = await supabase.from("iscritti").update({ tipi_modelle: [...elenco, nuovoPosto] }).eq("id", iscrittoId);
+      if (erroreNuovo) { setMsg("Errore: " + erroreNuovo.message); return; }
+      ricarica(["iscritti"]);
       return;
     }
     const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
@@ -18564,7 +18585,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                               opzioniTipo={opzioniTipoModellaCorso}
                               tuttiGliSlot={elenco}
                               mioIndice={indiceReale}
-                              onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore)}
+                              onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, { creaSeMancante: !nostra, tipoDefault: g.tipo_modella_allievi || "" })}
                               onCambiaGruppo={indiceReale != null ? (altroIdx, spuntato) => aggiornaModellaGruppo(i.id, indiceReale, altroIdx, spuntato) : undefined}
                             />
                           </div>
