@@ -19864,6 +19864,13 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
   const [modificaAperta, setModificaAperta] = useState(null);
   const [formModifica, setFormModifica] = useState({});
   const [salvando, setSalvando] = useState(false);
+  // creazione di un fornitore da qui: finora si potevano solo modificare
+  // quelli già esistenti, e un fornitore nuovo nasceva di rimbalzo da una
+  // spesa o da una riconciliazione — col nome scritto di fretta e senza
+  // dati fiscali. Stessi campi della scheda di modifica, niente di più
+  const [nuovoAperto, setNuovoAperto] = useState(false);
+  const [formNuovo, setFormNuovo] = useState({});
+  const [salvandoNuovo, setSalvandoNuovo] = useState(false);
 
   const soggetti = costruisciSoggettiAnagrafiche({ master, assistente, hotel, location, venditori, fornitori, spese, costiSottocategorie, categorieGruppi });
   const conta = (ruolo) => soggetti.filter((s) => s.ruoli.includes(ruolo)).length;
@@ -19908,6 +19915,34 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
     if (error) { window.alert("Errore: " + error.message); return; }
     setModificaAperta(null);
     await ricarica([s.tabella]);
+  }
+
+  function apriNuovoFornitore() {
+    setFormNuovo({ nome: "", telefono: "", email: "", indirizzo: "", citta: "", partitaIva: "", codiceFiscale: "", iban: "", categoriaId: "", sottocategoriaId: "" });
+    setNuovoAperto(true);
+  }
+  async function creaFornitore() {
+    const nome = (formNuovo.nome || "").trim();
+    if (!nome) { window.alert("Scrivi il nome del fornitore."); return; }
+    const giaEsiste = (fornitori || []).some((f) => (f.nome || "").trim().toLowerCase() === nome.toLowerCase());
+    if (giaEsiste && !window.confirm(`Esiste già un fornitore che si chiama "${nome}". Vuoi crearne comunque un altro?`)) return;
+    setSalvandoNuovo(true);
+    const { error } = await supabase.from("fornitori").insert({
+      nome,
+      telefono: (formNuovo.telefono || "").trim() || null,
+      email: (formNuovo.email || "").trim() || null,
+      indirizzo: (formNuovo.indirizzo || "").trim() || null,
+      citta: (formNuovo.citta || "").trim() || null,
+      partita_iva: (formNuovo.partitaIva || "").trim() || null,
+      codice_fiscale: (formNuovo.codiceFiscale || "").trim() || null,
+      iban: (formNuovo.iban || "").trim() || null,
+      categoria_id: formNuovo.categoriaId || null,
+      sottocategoria_id: formNuovo.sottocategoriaId || null,
+    });
+    setSalvandoNuovo(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setNuovoAperto(false);
+    await ricarica(["fornitori"]);
   }
 
   // "Associa": collega un fornitore "puro" (senza già un ruolo master/
@@ -20089,6 +20124,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{elencoFiltrato.length} soggetti</div>
+          <Button variant="ghost" onClick={apriNuovoFornitore}>+ Aggiungi fornitore</Button>
           <label
             onDragOver={(e) => { e.preventDefault(); setTrascinandoDoc(true); }}
             onDragLeave={() => setTrascinandoDoc(false)}
@@ -20183,6 +20219,56 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
             <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
               <button onClick={() => setModificaAperta(null)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Annulla</button>
               <Button onClick={salvaModifica} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {nuovoAperto && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(14,27,51,0.45)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 50 }} onClick={() => setNuovoAperto(false)}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 26, width: "100%", maxWidth: 440, maxHeight: "88vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Nuovo fornitore</div>
+            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 18 }}>Gli stessi dati con cui sono anagrafati gli altri soggetti.</div>
+
+            <Field label="Nome — obbligatorio">
+              <input style={inputStyle} autoFocus value={formNuovo.nome || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, nome: e.target.value }))} />
+            </Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><Field label="Telefono"><input style={inputStyle} value={formNuovo.telefono || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, telefono: e.target.value }))} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="Email"><input style={inputStyle} value={formNuovo.email || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, email: e.target.value }))} /></Field></div>
+            </div>
+            <Field label="Indirizzo"><input style={inputStyle} value={formNuovo.indirizzo || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, indirizzo: e.target.value }))} /></Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={formNuovo.citta || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, citta: e.target.value }))} /></Field></div>
+              <div style={{ flex: 1 }}><Field label="P.IVA"><input style={inputStyle} value={formNuovo.partitaIva || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, partitaIva: e.target.value }))} /></Field></div>
+            </div>
+            <Field label="Codice fiscale"><input style={inputStyle} value={formNuovo.codiceFiscale || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, codiceFiscale: e.target.value }))} /></Field>
+            <Field label="IBAN"><input style={inputStyle} value={formNuovo.iban || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, iban: e.target.value }))} /></Field>
+            <div style={{ display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <Field label="Categoria di spesa (default)">
+                  <select style={inputStyle} value={formNuovo.categoriaId || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, categoriaId: e.target.value, sottocategoriaId: "" }))}>
+                    <option value="">— nessuna —</option>
+                    {[...(costiCategorie || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Field label="Sotto-categoria">
+                  <select style={inputStyle} value={formNuovo.sottocategoriaId || ""} onChange={(e) => setFormNuovo((f) => ({ ...f, sottocategoriaId: e.target.value }))} disabled={!formNuovo.categoriaId}>
+                    <option value="">— scegli —</option>
+                    {sottocategorieDiCategoria(costiSottocategorie, formNuovo.categoriaId).map((v) => <option key={v.id} value={v.id}>{v.nome}</option>)}
+                  </select>
+                </Field>
+              </div>
+            </div>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 4 }}>
+              Se il nome coincide con una master, un hotel o una sede già anagrafati, in elenco i due compaiono come un unico soggetto con più ruoli.
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+              <button onClick={() => setNuovoAperto(false)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer", padding: "10px 12px" }}>Annulla</button>
+              <Button onClick={creaFornitore} disabled={salvandoNuovo}>{salvandoNuovo ? "Creo…" : "Crea fornitore"}</Button>
             </div>
           </div>
         </div>
