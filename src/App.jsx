@@ -1264,7 +1264,7 @@ function BadgeFileCaricato() {
 // componente (Home, Statistiche, Amministrazione, Gestione magazzino e
 // shop), non solo la Home.
 function TileHome({
-  title, descrizione, Icona, attivo = true, onClick,
+  title, descrizione, Icona, attivo = true, onClick, badge,
   // riordino/cartelle (solo programmatore, vedi GrigliaTasti) — tutti
   // opzionali: i 27+ usi esistenti di TileHome non li passano e restano
   // identici a prima
@@ -1345,6 +1345,9 @@ function TileHome({
       {maniglia}
       {!attivo && (
         <span style={{ position: "absolute", top: isMobile ? 10 : 16, right: isMobile ? 8 : 18, ...fontBody, fontSize: isMobile ? 8 : 10.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "2px 8px" : "3px 10px" }}>Non attivo</span>
+      )}
+      {attivo && badge > 0 && (
+        <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: isMobile ? 6 : 14, right: isMobile ? 6 : 16, ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: isMobile ? 18 : 22, height: isMobile ? 18 : 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{badge}</span>
       )}
       {ricca ? (
         <>
@@ -1589,6 +1592,7 @@ function GrigliaTasti({ pagina, definizioni, ordine, colonne, etichette = {}, ru
               descrizione={isCartella ? `${nTasti} tast${nTasti === 1 ? "o" : "i"}` : def.descrizione}
               Icona={isCartella ? IconaCartellaShop : def.Icona}
               attivo={isCartella ? true : def.attivo}
+              badge={isCartella ? null : def.badge}
               onClick={isCartella ? () => setCartellaApertaId(nodo.id) : def.onClick}
               maniglia={maniglia(chiave)}
               draggableTasto={programmatore && consentiCartelle && !isCartella}
@@ -20200,7 +20204,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, onApriGestioneIva, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, onApriGestioneIva, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -20213,7 +20217,7 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
         <GrigliaTasti
           pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
-            { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileGestioneMagazzino, attivo: true, onClick: onApriMagazzino },
+            { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileGestioneMagazzino, attivo: true, onClick: onApriMagazzino, badge: numeroAvvisiMagazzino },
             { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileLogistica, attivo: true, onClick: onApriMagazziniEsterni },
             { chiave: "gestioneshop", title: "Gestione shop", descrizione: "Gestisci prodotti, ordini, clienti e impostazioni dello shop.", Icona: IconaTileGestioneShop, attivo: true, onClick: onApriGestioneShop },
             { chiave: "venditeshop", title: "Vendite Shop Online", descrizione: "Ordini e performance dello shop online WooCommerce.", Icona: IconaTileVenditeShop, attivo: true, onClick: onApriVenditeShop },
@@ -26778,6 +26782,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
   const senzaCosto = prodottiConStato.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
   const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
+  const avvisiMagazzino = useMemo(() => calcolaAvvisiMagazzino(prodottiShop), [prodottiShop]);
 
   // i totali aggregati contano solo chi ha davvero un magazzino da
   // sommare: un bundle/vetrina con conta_magazzino=false falserebbe la
@@ -26873,6 +26878,34 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
               <span style={{ fontWeight: 700 }}>{senzaCosto.length} ›</span>
             </button>
           </div>
+          {avvisiMagazzino.length > 0 && (
+            <div style={{ marginTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Avvisi ({avvisiMagazzino.length})</div>
+              {avvisiMagazzino.map((a, i) => {
+                const p = a.prodotto;
+                const stock = (p.giacenza_magazzino || 0) + (p.giacenza || 0);
+                const colore = a.tipo === "apri_pacco" ? "#B8860B" : "#C0392B";
+                return (
+                  <div key={`${a.tipo}-${p.id}-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: "1 1 260px" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: colore, flexShrink: 0 }} />
+                      <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
+                        <b>{p.nome}</b>
+                        {a.tipo === "negativo" && <> — giacenza negativa ({p.giacenza_magazzino || 0} in magazzino{(p.giacenza || 0) < 0 ? `, ${p.giacenza} shop` : ""}): da sistemare</>}
+                        {a.tipo === "apri_pacco" && <> — {stock} sfus{stock === 1 ? "o" : "i"} rimast{stock === 1 ? "o" : "i"}{p.scorta_minima != null ? ` (soglia ${p.scorta_minima})` : ""} · {a.box.giacenza_magazzino} pacc{a.box.giacenza_magazzino === 1 ? "o sigillato" : "hi sigillati"} disponibil{a.box.giacenza_magazzino === 1 ? "e" : "i"}</>}
+                        {a.tipo === "riordina" && <> — {stock} rimast{stock === 1 ? "o" : "i"}{p.scorta_minima != null ? ` (soglia ${p.scorta_minima})` : ""}{a.box ? " e nessun pacco sigillato" : ""}: riordina dal fornitore</>}
+                      </span>
+                    </div>
+                    {a.tipo === "apri_pacco" ? (
+                      <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
+                    ) : (
+                      <button onClick={() => setProdottoInModifica(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri scheda</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
@@ -27448,6 +27481,32 @@ function RigaSegnalazioneMagazzino({ segnalazione, fonte, onSalvaNota }) {
 // legame coi pezzi sfusi passa SOLO dall'operazione "Apri confezione"
 function bundleVirtuale(p) {
   return p?.tipo_prodotto === "bundle" && !p?.bundle_con_giacenza_fisica;
+}
+// avvisi azionabili del magazzino, in ordine di gravità: giacenze rimaste
+// negative (da sistemare), sfusi sotto soglia con pacchi sigillati da
+// aprire, box/sfusi da riordinare dal fornitore. I prodotti "normali"
+// sotto scorta NON stanno qui: hanno già la segnalazione "Prodotti sotto
+// scorta" in Gestione magazzino — questa lista copre i casi con
+// un'azione specifica da compiere. Usata sia dal pannello "Da gestire
+// oggi" sia dal badge sul tasto "Gestione magazzino"
+function calcolaAvvisiMagazzino(prodottiShop) {
+  const attivi = (prodottiShop || []).filter((p) => p.attivo !== false);
+  const boxPerSfusoId = new Map();
+  attivi.forEach((b) => { if (b.prodotto_sfuso_id) boxPerSfusoId.set(b.prodotto_sfuso_id, b); });
+  const avvisi = [];
+  attivi.forEach((p) => {
+    if (p.giacenza_propria === false || p.conta_magazzino === false) return;
+    if ((p.giacenza_magazzino || 0) < 0 || (p.giacenza || 0) < 0) avvisi.push({ tipo: "negativo", prodotto: p });
+    const stock = (p.giacenza_magazzino || 0) + (p.giacenza || 0);
+    const sottoSoglia = (p.scorta_minima != null && stock < p.scorta_minima) || stock <= 0;
+    if (!sottoSoglia) return;
+    const box = boxPerSfusoId.get(p.id) || null;
+    if (box && (box.giacenza_magazzino || 0) > 0) avvisi.push({ tipo: "apri_pacco", prodotto: p, box });
+    else if (box) avvisi.push({ tipo: "riordina", prodotto: p, box });
+    else if (p.bundle_con_giacenza_fisica) avvisi.push({ tipo: "riordina", prodotto: p });
+  });
+  const ordine = { negativo: 0, apri_pacco: 1, riordina: 2 };
+  return avvisi.sort((a, b) => ordine[a.tipo] - ordine[b.tipo]);
 }
 function righeBundleCon(prodottoId, bundleComponenti, prodottiPerId) {
   return (bundleComponenti || [])
@@ -39084,6 +39143,7 @@ export default function App() {
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
           onApriGestioneIva={apriGestioneIva}
+          numeroAvvisiMagazzino={calcolaAvvisiMagazzino(prodottiShop).length}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.magazzinoshop?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("magazzinoshop", { ordine: o })}
           colonneTasti={layoutTasti.magazzinoshop?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("magazzinoshop", { colonne: n })}
           etichetteTasti={layoutTasti.magazzinoshop?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("magazzinoshop", chiave, testo)}
