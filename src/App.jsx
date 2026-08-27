@@ -27986,14 +27986,18 @@ function mappaBoxPerSfuso(prodottiShop) {
 function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdotti, statoLogistica) {
   const perProdotto = {};
   const nonRisolti = [];
+  const senzaKit = [];
   const conteggioKit = {};
 
   (iscritti || []).forEach((i) => {
     if (i.corso_data_id !== corsoData.id) return;
     const etichetta = String(i.pacchetto_kit || "").trim();
-    const kit = etichetta
-      ? (kitDefinizioni || []).find((k) => k.corso_id === corsoData.corso_id && k.nome === i.pacchetto_kit)
-      : null;
+    // due casi diversi, e vanno tenuti separati: chi non ha proprio un kit
+    // (nessun fabbisogno, niente da segnalare) e chi ne ha uno SCRITTO che
+    // però non corrisponde a nessun kit configurato — quello è un dato da
+    // sistemare, non un allievo senza kit
+    if (!etichetta) { senzaKit.push({ iscrittoId: i.id, nome: `${i.nome || ""} ${i.cognome || ""}`.trim() }); return; }
+    const kit = (kitDefinizioni || []).find((k) => k.corso_id === corsoData.corso_id && k.nome === i.pacchetto_kit);
     if (!kit) { nonRisolti.push({ iscrittoId: i.id, nome: `${i.nome || ""} ${i.cognome || ""}`.trim(), etichetta }); return; }
     conteggioKit[kit.id] = (conteggioKit[kit.id] || 0) + 1;
   });
@@ -28022,7 +28026,7 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
     if (residuo > 0) perProdotto[prodottoId] = (perProdotto[prodottoId] || 0) + residuo;
   });
 
-  return { perProdotto, nonRisolti, conteggioKit };
+  return { perProdotto, nonRisolti, senzaKit, conteggioKit };
 }
 
 // il cuore: scorre i corsi futuri in ordine di data sottraendo il
@@ -28069,12 +28073,14 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
   let dataCriticaComplessiva = null;
   let edizioneCriticaComplessiva = null;
   const nonRisoltiTotali = [];
+  let senzaKitTotali = 0;
   let edizioniSenzaIscritti = 0;
 
   edizioni.forEach((cd) => {
-    const { perProdotto: richiesto, nonRisolti, conteggioKit } =
+    const { perProdotto: richiesto, nonRisolti, senzaKit, conteggioKit } =
       fabbisognoEdizione(cd, iscritti, kitDefinizioni, corsiKitProdotti, statoPerEdizione[cd.id]);
-    nonRisolti.forEach((n) => nonRisoltiTotali.push({ ...n, corsoDataId: cd.id, data: cd.data_inizio }));
+    nonRisolti.forEach((n) => nonRisoltiTotali.push({ ...n, corsoDataId: cd.id, corsoId: cd.corso_id, data: cd.data_inizio }));
+    senzaKitTotali += senzaKit.length;
     const haIscritti = (iscritti || []).some((i) => i.corso_data_id === cd.id);
     if (!haIscritti) edizioniSenzaIscritti += 1;
 
@@ -28117,7 +28123,7 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
     edizioniConsiderate: edizioni.length,
     perProdotto, perEdizione, perKit,
     dataCriticaComplessiva, edizioneCriticaComplessiva,
-    nonRisolti: nonRisoltiTotali, edizioniSenzaIscritti,
+    nonRisolti: nonRisoltiTotali, senzaKit: senzaKitTotali, edizioniSenzaIscritti,
   };
 }
 
@@ -28234,10 +28240,12 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, ricarica, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
+  const [sceltaKit, setSceltaKit] = useState({});   // chiave gruppo -> kit scelto
+  const [salvandoGruppo, setSalvandoGruppo] = useState(null);
 
   const risultato = useMemo(
     () => simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi }),
@@ -28275,14 +28283,34 @@ function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kit
     (p) => p.attivo !== false && p.conta_magazzino !== false && p.giacenza_propria !== false && p.lead_time_giorni != null
   );
   const kitSenzaComposizione = kitOggi.filter((k) => k.senzaComposizione);
-  const nonRisoltiPerEtichetta = useMemo(() => {
-    const m = {};
+  // gli iscritti il cui "pacchetto kit" non corrisponde a nessun kit
+  // configurato, raggruppati per corso + testo scritto: sono la stessa
+  // correzione ripetuta N volte, quindi si sistemano in blocco. Finché
+  // restano così valgono come "nessun kit" — il loro fabbisogno non entra
+  // nella previsione, ed è per questo che vanno chiusi
+  const gruppiDaAssegnare = useMemo(() => {
+    const m = new Map();
     (risultato.nonRisolti || []).forEach((n) => {
-      const chiave = n.etichetta || "(vuoto)";
-      m[chiave] = (m[chiave] || 0) + 1;
+      const chiave = `${n.corsoId}||${n.etichetta}`;
+      if (!m.has(chiave)) m.set(chiave, { chiave, corsoId: n.corsoId, etichetta: n.etichetta, iscritti: [] });
+      m.get(chiave).iscritti.push(n);
     });
-    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+    return [...m.values()].sort((a, b) => b.iscritti.length - a.iscritti.length);
   }, [risultato]);
+
+  async function applicaGruppo(g) {
+    const scelta = sceltaKit[g.chiave];
+    if (!scelta) return;
+    const nomeKit = scelta === "__nessuno" ? null : (kitDefinizioni || []).find((k) => k.id === scelta)?.nome || null;
+    const quanti = g.iscritti.length;
+    const descrizione = nomeKit ? `"${nomeKit}"` : "nessun kit";
+    if (!window.confirm(`Assegnare ${descrizione} a ${quanti} iscritt${quanti === 1 ? "o" : "i"} del corso ${corsoPerId[g.corsoId]?.nome || ""} che oggi hanno scritto "${g.etichetta}"?`)) return;
+    setSalvandoGruppo(g.chiave);
+    const { error } = await supabase.from("iscritti").update({ pacchetto_kit: nomeKit }).in("id", g.iscritti.map((i) => i.iscrittoId));
+    setSalvandoGruppo(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["iscritti"]);
+  }
 
   const inRitardo = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo");
   const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente");
@@ -28353,11 +28381,58 @@ function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kit
         <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.7 }}>
           Advisor attivo su <b>{prodottiConfigurati.length}</b> prodotti su {prodottiConfigurati.length + prodottiDaConfigurare.length}.
           {prodottiDaConfigurare.length > 0 && <> <b>{prodottiDaConfigurare.length}</b> senza tempo di consegna: su quelli non posso dire entro quando ordinare.</>}
-          {risultato.nonRisolti.length > 0 && <><br /><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: il loro fabbisogno non è calcolato.</>}
+          {risultato.nonRisolti.length > 0 && <><br /><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: valgono come "nessun kit" finché non li assegni qui sotto.</>}
+          {risultato.senzaKit > 0 && <><br /><b>{risultato.senzaKit}</b> iscritti senza kit: nessun fabbisogno, nessun problema.</>}
           {risultato.edizioniSenzaIscritti > 0 && <><br /><b>{risultato.edizioniSenzaIscritti}</b> corsi futuri non hanno ancora iscritti: per loro il fabbisogno risulta zero.</>}
           {piano.parametriMancanti && <><br /><b style={{ color: "#C0392B" }}>Margine di sicurezza e copertura non impostati</b> (Impostazioni → Magazzino e riordini): senza, nessuna data limite d'ordine viene calcolata.</>}
         </div>
       </div>
+
+      {gruppiDaAssegnare.length > 0 && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8D9A0` }}>
+          <div style={titoloBlocco}>Kit da assegnare ({risultato.nonRisolti.length} iscritti)</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+            Su questi iscritti il pacchetto kit è scritto a mano e non corrisponde a nessun kit configurato per il loro corso.
+            Finché restano così valgono come <b>nessun kit</b>: il loro fabbisogno non entra nella previsione. Scegli il kit giusto e il calcolo si aggiorna da solo.
+          </div>
+          {gruppiDaAssegnare.map((g) => {
+            const kitDelCorso = (kitDefinizioni || []).filter((k) => k.corso_id === g.corsoId);
+            return (
+              <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
+                <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, marginBottom: 6 }}>
+                  <b>{corsoPerId[g.corsoId]?.nome || "—"}</b> · scritto <b style={{ color: GOLD }}>"{g.etichetta}"</b> su {g.iscritti.length} iscritt{g.iscritti.length === 1 ? "o" : "i"}
+                </div>
+                <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>
+                  {g.iscritti.slice(0, 6).map((i) => `${i.nome || "senza nome"} (${fmtData(i.data)})`).join(" · ")}
+                  {g.iscritti.length > 6 ? ` · e altri ${g.iscritti.length - 6}` : ""}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <select
+                    style={{ ...inputStyle, flex: "1 1 260px", maxWidth: 460 }}
+                    value={sceltaKit[g.chiave] || ""}
+                    onChange={(e) => setSceltaKit((prev) => ({ ...prev, [g.chiave]: e.target.value }))}
+                  >
+                    <option value="">— scegli il kit giusto —</option>
+                    {kitDelCorso.map((k) => <option key={k.id} value={k.id}>{k.nome}</option>)}
+                    <option value="__nessuno">Nessun kit (cancella il testo)</option>
+                  </select>
+                  <Button
+                    onClick={() => applicaGruppo(g)}
+                    disabled={!sceltaKit[g.chiave] || salvandoGruppo === g.chiave}
+                  >
+                    {salvandoGruppo === g.chiave ? "Assegno…" : `Applica a ${g.iscritti.length}`}
+                  </Button>
+                </div>
+                {kitDelCorso.length === 0 && (
+                  <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: 6 }}>
+                    Questo corso non ha nessun kit configurato: creane uno in Impostazioni → Tipologie di kit.
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
         <div style={titoloBlocco}>Da ordinare adesso</div>
@@ -28479,12 +28554,9 @@ function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kit
               <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{prodottiDaConfigurare.slice(0, 8).map((p) => p.nome).join(" · ")}{prodottiDaConfigurare.length > 8 ? ` · e altri ${prodottiDaConfigurare.length - 8}` : ""}</div>
             </div>
           )}
-          {nonRisoltiPerEtichetta.length > 0 && (
+          {gruppiDaAssegnare.length > 0 && (
             <div style={{ marginBottom: 10 }}>
-              <b>Kit scritti sugli iscritti che non corrispondono a nessun kit configurato.</b>
-              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
-                {nonRisoltiPerEtichetta.map(([etichetta, quanti]) => `"${etichetta}" (${quanti})`).join(" · ")}
-              </div>
+              <b>{risultato.nonRisolti.length} iscritti con un kit scritto che non esiste</b> — si sistemano nel riquadro "Kit da assegnare" qui sopra.
             </div>
           )}
           {kitSenzaComposizione.length > 0 && (
@@ -40225,7 +40297,7 @@ export default function App() {
           prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
-          onBack={() => setView("magazzino")}
+          ricarica={fetchDati} onBack={() => setView("magazzino")}
         />
       )}
 
