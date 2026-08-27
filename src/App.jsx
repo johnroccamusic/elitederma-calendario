@@ -25459,13 +25459,15 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
     }
     else { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(true); }
   }
-  // attivare/spegnere la giacenza fisica di un bundle cambia anche i flag
-  // tipici: il box sigillato SI conta in magazzino e ha stock proprio, il
-  // bundle virtuale no (resta calcolato dai componenti)
+  // attivare/spegnere la giacenza fisica cambia anche i flag tipici: il
+  // box sigillato SI conta in magazzino e ha stock proprio. Spegnendola su
+  // un bundle si torna al virtuale (nessuna giacenza propria, tutto
+  // calcolato dai componenti); su un prodotto semplice invece resta un
+  // prodotto normale, che in magazzino ci sta eccome
   function cambiaBundleFisica(attiva) {
     setBundleFisica(attiva);
     if (attiva) { setContaMagazzino(true); setGiacenzaPropria(true); }
-    else { setContaMagazzino(false); setGiacenzaPropria(false); setCosto(""); }
+    else if (tipoProdotto === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setCosto(""); }
   }
   function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
   function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
@@ -25505,7 +25507,11 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   // dal form, anche a parità di aliquota, vale come verifica a mano —
   // i prodotti mai passati da qui restano false (vedi migrazione)
   async function salvaNaturaProdotto(prodottoId) {
-    const bundleConFisica = tipoProdotto === "bundle" && bundleFisica;
+    // un box di pezzi sigillati non è per forza un "bundle": nell'anagrafica
+    // è quasi sempre un prodotto semplice ("Ago 3RLLT - 0,25 - Box 20 pz"),
+    // e obbligare a cambiargli natura per collegargli lo sfuso nascondeva
+    // la funzione a chi la cercava
+    const bundleConFisica = (tipoProdotto === "bundle" || tipoProdotto === "semplice") && bundleFisica;
     const { error } = await supabase.from("prodotti_shop").update({
       tipo_prodotto: tipoProdotto,
       conta_magazzino: contaMagazzino,
@@ -25777,7 +25783,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
         </Field>
       )}
 
-      {tipoProdotto === "bundle" && (
+      {(tipoProdotto === "bundle" || tipoProdotto === "semplice") && (
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
             <input type="checkbox" checked={bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
