@@ -26259,6 +26259,11 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
   const [shopInput, setShopInput] = useState(String(p.giacenza || 0));
   useEffect(() => { setMagazzinoInput(String(p.giacenza_magazzino || 0)); }, [p.giacenza_magazzino]);
   useEffect(() => { setShopInput(String(p.giacenza || 0)); }, [p.giacenza]);
+  // anche lo stock totale cambia senza passare da questa casella: "Apri
+  // confezione", una vendita al banco, lo scarico dei kit. Senza questo
+  // riallineamento restava fermo al valore letto all'apertura della
+  // pagina, e sembrava che i pacchi aperti non fossero stati scalati
+  useEffect(() => { setStockTotaleInput(String(p.stockTotale)); }, [p.stockTotale]);
 
   // come il "+", la ripartizione scritta a mano resta locale finché non si
   // sincronizza: la giacenza online la scrive WooCommerce, mai il browser
