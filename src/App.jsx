@@ -27021,6 +27021,32 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
 
   // larghezza delle colonne trascinabile col mouse (stesso pattern di
   // Assegnazione Master/Statistica Venditori): mappa "etichetta colonna"
+  // -> px, salvata per sempre in questo browser
+  const [larghezze, setLarghezze] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_MAGAZZINO) || "{}"); } catch { return {}; }
+  });
+  function larghezzaDi(etichetta, larghezzaDefault) { return larghezze[etichetta] ?? larghezzaDefault; }
+  const ridimensionamentoRef = React.useRef(null);
+  function iniziaRidimensionamento(e, etichetta, larghezzaAttuale) {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    ridimensionamentoRef.current = { etichetta, pointerId: e.pointerId, startX: e.clientX, startWidth: larghezzaAttuale };
+  }
+  function muoviRidimensionamento(e) {
+    const r = ridimensionamentoRef.current;
+    if (!r || e.pointerId !== r.pointerId) return;
+    const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
+    setLarghezze((precedenti) => ({ ...precedenti, [r.etichetta]: nuovaLarghezza }));
+  }
+  function fineRidimensionamento() {
+    if (!ridimensionamentoRef.current) return;
+    ridimensionamentoRef.current = null;
+    setLarghezze((attuali) => {
+      try { localStorage.setItem(CHIAVE_LARGHEZZE_MAGAZZINO, JSON.stringify(attuali)); } catch { /* ignora */ }
+      return attuali;
+    });
+  }
+
   function tornaIndietro() { onBack(); }
 
   function ordinaPer(campo) {
