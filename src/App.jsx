@@ -32901,7 +32901,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         .map((t) => ({ t, avanzamento: calcolaAvanzamentoTarget(t, venditeShop, prodottiShop) }))
     : [];
 
-  // "Corso in corso" (opzionale): permette di legare la vendita al
+  // "Collega la vendita al corso" (opzionale): permette di legare la vendita al
   // corso attivo — serve alla verifica di congruità dell'Inventario
   // post corso ("Venduti") e alla spedizione a domicilio qui sotto.
   // Una master vede solo i corsi assegnati a lei; un venditore, non
@@ -33196,6 +33196,24 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // l'involucro intorno cambia
   const contenutoCarrelloCorpo = (
     <>
+      {corsiEleggibiliPos.length > 0 && (
+        <div style={{ marginBottom: isMobile ? 8 : 14 }}>
+          <Field label="Collega la vendita al corso">
+            <select style={inputStyle} value={corsoPosId} onChange={(e) => {
+              const nuovoId = e.target.value;
+              setCorsoPosId(nuovoId); setSpedIscrittoId("");
+              const couponEdizione = (coupon || []).find((c) => c.corsi_date_id === nuovoId);
+              setCouponValore(couponEdizione ? String(couponEdizione.valore) : "");
+              setCouponAttivo(couponEdizione || null);
+            }}>
+              <option value="">— vendita non legata a un corso —</option>
+              {corsiEleggibiliPos.map((cd) => (
+                <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+      )}
       {carrello.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: isMobile ? "10px 0" : "20px 0", textAlign: "center" }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
       ) : (
@@ -33281,25 +33299,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isMobile ? 8 : 14 }}>
           <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 16, height: 16 }} />
           <label htmlFor="pos-omaggio" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Omaggio — azzera l'incasso</label>
-        </div>
-      )}
-
-      {corsiEleggibiliPos.length > 0 && (
-        <div style={{ marginBottom: isMobile ? 8 : 14 }}>
-          <Field label="Corso in corso (opzionale)">
-            <select style={inputStyle} value={corsoPosId} onChange={(e) => {
-              const nuovoId = e.target.value;
-              setCorsoPosId(nuovoId); setSpedIscrittoId("");
-              const couponEdizione = (coupon || []).find((c) => c.corsi_date_id === nuovoId);
-              setCouponValore(couponEdizione ? String(couponEdizione.valore) : "");
-              setCouponAttivo(couponEdizione || null);
-            }}>
-              <option value="">— vendita non legata a un corso —</option>
-              {corsiEleggibiliPos.map((cd) => (
-                <option key={cd.id} value={cd.id}>{corsoById[cd.corso_id]?.nome || "—"} · {toTitleCase(locById[cd.location_id]?.nome || "—")}</option>
-              ))}
-            </select>
-          </Field>
         </div>
       )}
 
