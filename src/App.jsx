@@ -40290,22 +40290,24 @@ export default function App() {
                 >
                   Avanti →
                 </button>
-                <button
-                  onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
-                  aria-label="Home"
-                  title="Home"
-                  style={{
-                    background: "#fff", color: NAVY, border: "none", borderRadius: "50%",
-                    width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                    <polyline points="9 22 9 12 15 12 15 22" />
-                  </svg>
-                </button>
               </>
             )}
+            {/* Home resta anche per il profilo di sola lettura: senza, chi
+                entra col calendario non ha più nessun modo di uscirne */}
+            <button
+              onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+              aria-label="Home"
+              title="Home"
+              style={{
+                background: "#fff", color: NAVY, border: "none", borderRadius: "50%",
+                width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+            </button>
             <button
               onClick={apriRotellinaPassword}
               aria-label="Password menù"
@@ -40384,22 +40386,22 @@ export default function App() {
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </button>
-              <button
-                onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
-                aria-label="Home"
-                title="Home"
-                style={{
-                  background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
-                  width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                }}
-              >
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              </button>
             </>
           )}
+          <button
+            onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+            aria-label="Home"
+            title="Home"
+            style={{
+              background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 22,
+              width: 70, height: 70, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            }}
+          >
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+          </button>
         </div>
       )}
       {!isMobile && (
