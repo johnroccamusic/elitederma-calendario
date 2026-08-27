@@ -26207,10 +26207,15 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ flex: "2 1 200px" }}>
                   <Field label="Prodotto sfuso collegato (il pezzo singolo)">
-                    <select style={inputStyle} value={prodottoSfusoId} onChange={(e) => setProdottoSfusoId(e.target.value)}>
-                      <option value="">— scegli il prodotto sfuso —</option>
-                      {prodottiScelta.filter((p) => p.tipo_prodotto === "componente" || p.tipo_prodotto === "semplice").map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                    </select>
+                    <TendinaRicerca
+                      valore={prodottoSfusoId}
+                      opzioni={prodottiScelta
+                        .filter((p) => p.tipo_prodotto === "componente" || p.tipo_prodotto === "semplice")
+                        .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                      onCambia={setProdottoSfusoId}
+                      etichettaVuoto="— scegli il prodotto sfuso —"
+                      placeholderRicerca="Cerca prodotto…"
+                    />
                   </Field>
                 </div>
                 <div style={{ flex: "1 1 120px" }}>
@@ -26229,11 +26234,20 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
           <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Distinta base (componenti del kit)</div>
           {componenti.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-              <select style={{ ...inputStyle, flex: 1 }} value={c.componenteId} onChange={(e) => cambiaComponente(i, "componenteId", e.target.value)}>
-                <option value="">— scegli componente —</option>
-                {/* una variante o una vetrina non sono componenti scaricabili di un bundle: si scaricano solo per conto proprio */}
-                {prodottiScelta.filter((p) => p.tipo_prodotto !== "variante" && p.tipo_prodotto !== "vetrina" && p.tipo_prodotto !== "bundle").map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-              </select>
+              {/* una variante o una vetrina non sono componenti scaricabili di
+                  un bundle: si scaricano solo per conto proprio. L'elenco è
+                  lungo quanto il magazzino, quindi si cerca per parola */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TendinaRicerca
+                  valore={c.componenteId}
+                  opzioni={prodottiScelta
+                    .filter((p) => p.tipo_prodotto !== "variante" && p.tipo_prodotto !== "vetrina" && p.tipo_prodotto !== "bundle")
+                    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                  onCambia={(valore) => cambiaComponente(i, "componenteId", valore)}
+                  etichettaVuoto="— scegli componente —"
+                  placeholderRicerca="Cerca prodotto…"
+                />
+              </div>
               <input style={{ ...inputStyle, width: 60 }} inputMode="numeric" value={c.quantita} onChange={(e) => cambiaComponente(i, "quantita", e.target.value)} placeholder="Qtà" />
               <button onClick={() => rimuoviComponente(i)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 18, lineHeight: 1, padding: 4 }}>×</button>
             </div>
