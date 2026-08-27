@@ -1744,6 +1744,14 @@ function parseNum(v) {
 // arrotondata, mai arrotondato per conto suo, così netto+iva=lordo torna
 // sempre esatto sui centesimi
 const ALIQUOTE_IVA_STANDARD = [0, 4, 5, 10, 22];
+// il prezzo al pubblico di un prodotto: nel database prezzo_vendita è il
+// NETTO (l'IVA si gestisce in anagrafica), ma in tutti gli elenchi conta
+// il numero che paga il cliente — quello sul sito e sullo scontrino.
+// Mostrare il netto faceva sembrare sbagliato l'intero listino
+function prezzoAlPubblico(p) {
+  if (p?.prezzo_vendita == null) return null;
+  return round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? 22) / 100));
+}
 function calcolaIvaELordo(netto, aliquotaPct) {
   if (netto == null || aliquotaPct == null) return { iva: null, lordo: null };
   const iva = round2(netto * (aliquotaPct / 100));
@@ -26478,7 +26486,7 @@ const COLONNE_MAGAZZINO = [
   { label: "Non sul POS", campo: null, larghezza: 64 },
   { label: "Solo offline", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
-  { label: "Prezzo vendita", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
@@ -26904,9 +26912,9 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </div>
         )}
       </td>
-      <td style={tdStyle} title="Si modifica solo dalla scheda prodotto (clic sul nome)">
+      <td style={tdStyle} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
         <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
-          {p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}
+          {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
           {!p.iva_verificata && (
             <span title="Aliquota IVA assegnata in automatico dalla migrazione, non ancora verificata a mano" style={{ color: "#B8860B", fontSize: 12, lineHeight: 1 }}>⚠</span>
           )}
@@ -27010,7 +27018,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
             >
               <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{v.nome}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{v.prezzo_vendita != null ? fmtEuroErp2(v.prezzo_vendita) : "—"}</span>
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>{prezzoAlPubblico(v) != null ? fmtEuroErp2(prezzoAlPubblico(v)) : "—"}</span>
                 <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{v.stockTotale == null ? "∞" : v.stockTotale} pz</span>
               </div>
             </div>
@@ -29070,7 +29078,7 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     const rigaAttribuzione = prodottiRientranti[0];
     const prodottiRiga = [
       ...prodottiRientranti.map((r) => ({ nome: r.nome, quantita: -Number(r.quantitaResa), totale_riga: -round2(r.prezzoUnitario * Number(r.quantitaResa)) })),
-      ...prodottiUscenti.map((u) => ({ nome: u.prodotto.nome, quantita: u.quantita, totale_riga: round2(u.prodotto.prezzo_vendita * u.quantita) })),
+      ...prodottiUscenti.map((u) => ({ nome: u.prodotto.nome, quantita: u.quantita, totale_riga: round2(prezzoAlPubblico(u.prodotto) * u.quantita) })),
     ];
     const differenzaFinale = round2(prodottiRiga.reduce((s, p) => s + p.totale_riga, 0));
     const imponibile = round2(differenzaFinale / 1.22);
@@ -29091,7 +29099,9 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
   }
 
   const totaleRientranti = round2(prodottiRientranti.reduce((s, r) => s + r.prezzoUnitario * (Number(r.quantitaResa) || 0), 0));
-  const totaleUscenti = round2(prodottiUscenti.reduce((s, u) => s + u.prodotto.prezzo_vendita * u.quantita, 0));
+  // anche qui conta il prezzo che paga il cliente: la differenza di un
+  // cambio si calcola sui prezzi al pubblico, non sui netti
+  const totaleUscenti = round2(prodottiUscenti.reduce((s, u) => s + prezzoAlPubblico(u.prodotto) * u.quantita, 0));
   const differenzaCambio = round2(totaleUscenti - totaleRientranti);
 
   return (
@@ -33028,7 +33038,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         if (esistente.quantita >= disponibili) return prev;
         return prev.map((r) => (r.prodottoId === p.id ? { ...r, quantita: r.quantita + 1 } : r));
       }
-      return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: p.prezzo_vendita, sku: p.sku || "", quantita: 1 }];
+      // il POS incassa il prezzo che paga il cliente: prezzo_vendita è il
+      // netto (l'IVA sta in anagrafica), e metterlo qui faceva vendere
+      // tutto il 22% sotto listino — con l'IVA scorporata per giunta da un
+      // importo che era già netto
+      return [...prev, { prodottoId: p.id, nome: p.nome, prezzo: prezzoAlPubblico(p), sku: p.sku || "", quantita: 1 }];
     });
   }
   function incrementaRiga(prodottoId) {
@@ -33385,7 +33399,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: esaurito ? "#C0392B" : "#2E7D32" }}>{esaurito ? "Esaurito" : `Disponibili ${disponibili} pz`}</div>
             </div>
             <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(p.prezzo_vendita)}</div>
+              <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(prezzoAlPubblico(p))}</div>
               <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>IVA incl.</div>
             </div>
             <button
@@ -33414,7 +33428,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 8 }}>{nomiCategorie || "—"}{p.sku ? ` · Cod. ${p.sku}` : ""}</div>
             <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
               <div>
-                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(p.prezzo_vendita)}</div>
+                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(prezzoAlPubblico(p))}</div>
                 <div style={{ ...fontBody, fontSize: 10.5, color: MUTED }}>IVA incl.</div>
               </div>
               <div style={{ textAlign: "right" }}>
@@ -34701,7 +34715,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</div>
               </div>
               {(() => {
                 const etichetta = !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : "Online";
@@ -35026,7 +35040,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{p.prezzo_vendita != null ? fmtEuroErp2(p.prezzo_vendita) : "—"}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</div>
               </div>
             </div>
           );
