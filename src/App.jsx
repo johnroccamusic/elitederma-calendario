@@ -1791,46 +1791,52 @@ function BloccoPrezzoIva({ titolo, inputTesto, onCambiaInputTesto, modo, onCambi
     onCambiaModo(nuovoModo);
   }
 
+  // sul telefono i due blocchi (Acquisto e Vendita) stanno affiancati come
+  // su desktop: impilati allungavano la scheda al punto che il campo del
+  // prezzo finiva fuori schermo. In mezza larghezza ci stanno solo con
+  // caratteri e spaziature ridotte, e con il selettore Netto/Lordo su una
+  // riga sua invece che accanto al campo
+  const stretto = useIsMobile();
+  const etichetta = { ...fontBody, fontSize: stretto ? 9.5 : 12, color: MUTED, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.4, lineHeight: 1.2 };
+  const campo = stretto ? { ...inputStyle, padding: "7px 8px", fontSize: 12.5 } : inputStyle;
+
   return (
-    <div style={{ padding: 12, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#FAF8F2" }}>
-      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>{titolo}</div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label={`Prezzo ${modo === "netto" ? "netto (IVA esclusa)" : "lordo (IVA inclusa)"}${obbligatorio ? "" : " — opzionale"}`}>
-            <input style={inputStyle} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
-          </Field>
+    <div style={{ padding: stretto ? 8 : 12, borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: "#FAF8F2", minWidth: 0 }}>
+      <div style={{ ...fontBody, fontSize: stretto ? 11.5 : 12.5, fontWeight: 700, color: NAVY, marginBottom: stretto ? 6 : 10 }}>{titolo}</div>
+      <div style={{ display: "flex", flexDirection: stretto ? "column" : "row", gap: stretto ? 6 : 10, marginBottom: stretto ? 6 : 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={etichetta}>{stretto ? (modo === "netto" ? "Prezzo netto" : "Prezzo lordo") : `Prezzo ${modo === "netto" ? "netto (IVA esclusa)" : "lordo (IVA inclusa)"}${obbligatorio ? "" : " — opzionale"}`}</div>
+          <input style={campo} inputMode="decimal" value={inputTesto} onChange={(e) => onCambiaInputTesto(e.target.value)} placeholder="0,00" />
         </div>
-        <div style={{ display: "flex", alignItems: "flex-end", marginBottom: 14 }}>
-          <div style={{ display: "flex", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, overflow: "hidden" }}>
-            <button type="button" onClick={() => cambiaModo("netto")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "10px 12px", border: "none", cursor: "pointer", background: modo === "netto" ? NAVY : "#fff", color: modo === "netto" ? "#fff" : NAVY }}>Netto</button>
-            <button type="button" onClick={() => cambiaModo("lordo")} style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "10px 12px", border: "none", cursor: "pointer", background: modo === "lordo" ? NAVY : "#fff", color: modo === "lordo" ? "#fff" : NAVY }}>Lordo</button>
+        <div style={{ display: "flex", alignItems: stretto ? "stretch" : "flex-end", marginBottom: stretto ? 0 : 14 }}>
+          <div style={{ display: "flex", flex: stretto ? 1 : undefined, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, overflow: "hidden" }}>
+            <button type="button" onClick={() => cambiaModo("netto")} style={{ ...fontBody, flex: stretto ? 1 : undefined, fontSize: stretto ? 11 : 12, fontWeight: 700, padding: stretto ? "6px 8px" : "10px 12px", border: "none", cursor: "pointer", background: modo === "netto" ? NAVY : "#fff", color: modo === "netto" ? "#fff" : NAVY }}>Netto</button>
+            <button type="button" onClick={() => cambiaModo("lordo")} style={{ ...fontBody, flex: stretto ? 1 : undefined, fontSize: stretto ? 11 : 12, fontWeight: 700, padding: stretto ? "6px 8px" : "10px 12px", border: "none", cursor: "pointer", background: modo === "lordo" ? NAVY : "#fff", color: modo === "lordo" ? "#fff" : NAVY }}>Lordo</button>
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Aliquota IVA">
-            <select
-              style={inputStyle}
-              value={aliquotaÈStandard ? String(Number(aliquota)) : "altra"}
-              onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
-            >
-              {ALIQUOTE_IVA_STANDARD.map((a) => <option key={a} value={a}>{a}%</option>)}
-              <option value="altra">Altra…</option>
-            </select>
-          </Field>
+      <div style={{ display: "flex", gap: stretto ? 6 : 10, alignItems: "flex-end", marginBottom: stretto ? 6 : 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={etichetta}>Aliquota IVA</div>
+          <select
+            style={campo}
+            value={aliquotaÈStandard ? String(Number(aliquota)) : "altra"}
+            onChange={(e) => onCambiaAliquota(e.target.value === "altra" ? aliquota : Number(e.target.value))}
+          >
+            {ALIQUOTE_IVA_STANDARD.map((a) => <option key={a} value={a}>{a}%</option>)}
+            <option value="altra">Altra…</option>
+          </select>
         </div>
         {!aliquotaÈStandard && (
-          <div style={{ flex: 1 }}>
-            <Field label="Aliquota personalizzata (%)">
-              <input style={inputStyle} inputMode="decimal" value={aliquota ?? ""} onChange={(e) => onCambiaAliquota(parseNum(e.target.value))} placeholder="es. 15" />
-            </Field>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={etichetta}>{stretto ? "Personalizzata %" : "Aliquota personalizzata (%)"}</div>
+            <input style={campo} inputMode="decimal" value={aliquota ?? ""} onChange={(e) => onCambiaAliquota(parseNum(e.target.value))} placeholder="es. 15" />
           </div>
         )}
       </div>
-      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+      <div style={{ ...fontBody, fontSize: stretto ? 10.5 : 12.5, color: MUTED, lineHeight: 1.3 }}>
         {netto != null
-          ? <>{fmtEuroIva(netto)} netto → {fmtEuroIva(lordo)} lordo, IVA {aliquota}% = {fmtEuroIva(iva)}</>
+          ? <>{fmtEuroIva(netto)} netto → <b style={{ color: NAVY }}>{fmtEuroIva(lordo)}</b> lordo, IVA {aliquota}%</>
           : "Nessun prezzo inserito."}
       </div>
     </div>
@@ -26095,12 +26101,13 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
           Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(costoBundleCalcolato)}</b>
         </div>
       )}
-      {/* Acquisto e Vendita affiancati su desktop: impilati sprecavano mezza
-          larghezza del modale. Due colonne solo quando ci sono davvero
-          entrambi i blocchi (bundle ha solo Vendita, componente solo
+      {/* Acquisto e Vendita affiancati ovunque, telefono compreso: impilati
+          allungavano la scheda al punto che il prezzo finiva fuori schermo e
+          non si riusciva a modificarlo. Una colonna sola quando il secondo
+          blocco non esiste (bundle ha solo Vendita, componente solo
           Acquisto, vetrina nessuno dei due). */}
       {tipoProdotto !== "vetrina" && (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile || bundleVirtualeForm || tipoProdotto === "componente" ? "1fr" : "1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: bundleVirtualeForm || tipoProdotto === "componente" ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
           {!bundleVirtualeForm && (
             <BloccoPrezzoIva
               titolo="Acquisto"
@@ -26124,16 +26131,16 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
           Margine (sui netti): <b>{fmtEuroIva(margineUnitario)}</b>{marginePct != null && <> — <b>{marginePct}%</b></>}
         </div>
       )}
-      <div style={{ display: "flex", gap: 10 }}>
-        <div style={{ flex: 1 }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <div style={{ flex: isMobile ? "0 0 110px" : 1 }}>
           <Field label="Quantità in stock">
-            <input style={{ ...inputStyle, ...(giacenzaPropria ? {} : { background: "#EFEFEF", color: MUTED }) }} inputMode="numeric" value={qtaStock} onChange={(e) => setQtaStock(e.target.value)} placeholder="0" disabled={!giacenzaPropria} />
+            <input style={{ ...inputStyle, ...(isMobile ? { padding: "7px 8px", fontSize: 12.5 } : {}), ...(giacenzaPropria ? {} : { background: "#EFEFEF", color: MUTED }) }} inputMode="numeric" value={qtaStock} onChange={(e) => setQtaStock(e.target.value)} placeholder="0" disabled={!giacenzaPropria} />
           </Field>
         </div>
-        <div style={{ flex: 1, ...fontBody, fontSize: 11.5, color: MUTED, display: "flex", alignItems: "center", paddingTop: 18 }}>
+        <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: MUTED, lineHeight: 1.3, paddingTop: isMobile ? 20 : 18 }}>
           {vaSuWoo
-            ? "Pezzi fisicamente presenti. Sono gli stessi che lo shop online vende: la quantità pubblicata su WooCommerce viene riallineata a questo numero."
-            : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno."}
+            ? (isMobile ? "Pezzi presenti: sono gli stessi che vende lo shop online, la quantità sul sito viene riallineata a questo numero." : "Pezzi fisicamente presenti. Sono gli stessi che lo shop online vende: la quantità pubblicata su WooCommerce viene riallineata a questo numero.")
+            : (isMobile ? "Pezzi presenti. Non è in vendita online: lo stock resta interno." : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")}
         </div>
       </div>
       {!giacenzaPropria && (
@@ -26230,24 +26237,24 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
         <div style={{ marginBottom: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
           <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Scorta e riordino</div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 120px" }}>
+            <div style={{ flex: "1 1 90px", minWidth: 0 }}>
               <Field label="Scorta minima">
                 <input style={inputStyle} inputMode="numeric" value={scortaMinima} onChange={(e) => setScortaMinima(e.target.value)} placeholder="—" />
               </Field>
             </div>
-            <div style={{ flex: "1 1 150px" }}>
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
               <Field label="Tempo di consegna (giorni)">
                 <input style={inputStyle} inputMode="numeric" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} placeholder="es. 45" />
               </Field>
             </div>
-            <div style={{ flex: "1 1 150px" }}>
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
               <Field label="Margine di sicurezza (giorni)">
                 <input style={inputStyle} inputMode="numeric" value={giorniSicurezza} onChange={(e) => setGiorniSicurezza(e.target.value)} placeholder="da Impostazioni" />
               </Field>
             </div>
           </div>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "2 1 220px" }}>
+            <div style={{ flex: "2 1 160px", minWidth: 0 }}>
               <Field label="Fornitore">
                 <TendinaRicerca
                   valore={fornitoreId}
@@ -26257,7 +26264,7 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
                 />
               </Field>
             </div>
-            <div style={{ flex: "1 1 150px" }}>
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
               <Field label="Lotto minimo d'ordine">
                 <input style={inputStyle} inputMode="numeric" value={lottoMinimo} onChange={(e) => setLottoMinimo(e.target.value)} placeholder="—" />
               </Field>
