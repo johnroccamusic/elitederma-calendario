@@ -17,7 +17,7 @@
 // da Supabase a ogni Edge Function, non vanno impostati a mano.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mappaOrdine, attribuisciMasterReferral, STATI_VIVI, applicaMovimentoBundle, sincronizzaDisponibilitaBundle } from "../_shared/woo.ts";
+import { mappaOrdine, attribuisciMasterReferral, STATI_VIVI, applicaMovimentoBundle, applicaMovimentoProdottiSemplici, sincronizzaDisponibilitaBundle } from "../_shared/woo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -127,8 +127,10 @@ Deno.serve(async (req) => {
     let bundleToccati = new Set<string>();
     if (!eraVivo && oraVivo) {
       bundleToccati = await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1);
+      await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1);
     } else if (eraVivo && !oraVivo) {
       bundleToccati = await applicaMovimentoBundle(supabase, (esistente?.prodotti as any[]) || [], 1);
+      await applicaMovimentoProdottiSemplici(supabase, (esistente?.prodotti as any[]) || [], 1);
     }
     if (bundleToccati.size) {
       const siteUrl = Deno.env.get("WC_SITE_URL");

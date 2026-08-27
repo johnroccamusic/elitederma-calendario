@@ -120,16 +120,20 @@ Deno.serve(async (req) => {
         nome: p.name,
         sku: p.sku || null,
         prezzo_vendita: p.price !== "" && p.price != null ? parseFloat(p.price) : (p.regular_price ? parseFloat(p.regular_price) : null),
-        giacenza: p.stock_quantity != null ? parseInt(p.stock_quantity, 10) : null,
+        // lo stock NON si importa più da WooCommerce: da quando magazzino e
+        // shop sono un contenitore solo, la fonte di verità è l'app e
+        // WooCommerce ne è lo specchio. Reimportarlo qui cancellerebbe i
+        // pezzi che l'app conosce e il sito no. I prodotti nuovi nascono a
+        // zero e si caricano da Gestione magazzino
         descrizione: p.description || null,
         descrizione_breve: p.short_description || null,
         stato: p.status || "publish",
         attivo: true,
         ts_sync: new Date().toISOString(),
       }));
-      // NOTA: costo_acquisto e scorta_minima NON compaiono qui di
-      // proposito — l'upsert non li tocca mai, così i valori inseriti a
-      // mano nell'app restano intatti
+      // NOTA: costo_acquisto, soglia_riordino e quantita NON compaiono
+      // qui di proposito — l'upsert non li tocca mai, così i valori
+      // dell'app (stock compreso) restano intatti
       const { data: prodottiSalvati, error: erroreProd } = await supabase
         .from("prodotti_shop")
         .upsert(righeProdotti, { onConflict: "woo_product_id" })

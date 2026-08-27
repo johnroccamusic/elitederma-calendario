@@ -127,16 +127,49 @@ export async function applicaMovimentoBundle(supabase: any, prodotti: any[], dir
     if (!prodotto || prodotto.tipo_prodotto !== "bundle") continue;
     const { data: componenti } = await supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", prodotto.id);
     for (const c of componenti || []) {
-      const { data: comp } = await supabase.from("prodotti_shop").select("giacenza_magazzino").eq("id", c.componente_id).maybeSingle();
+      const { data: comp } = await supabase.from("prodotti_shop").select("quantita").eq("id", c.componente_id).maybeSingle();
       if (!comp) continue;
-      const nuovoMagazzino = (comp.giacenza_magazzino || 0) + direzione * quantita * c.quantita_per_bundle;
-      if (nuovoMagazzino < 0) console.error(`Bundle "${nome}": componente ${c.componente_id} andrebbe sotto zero (${nuovoMagazzino}), portato a 0`);
-      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: Math.max(0, nuovoMagazzino) }).eq("id", c.componente_id);
+      const delta = direzione * quantita * c.quantita_per_bundle;
+      const nuova = (comp.quantita || 0) + delta;
+      if (nuova < 0) console.error(`Bundle "${nome}": componente ${c.componente_id} andrebbe sotto zero (${nuova}), portato a 0`);
+      const { error } = await supabase.from("prodotti_shop").update({ quantita: Math.max(0, nuova) }).eq("id", c.componente_id);
       if (error) console.error(`Bundle "${nome}": errore aggiornando il componente ${c.componente_id}:`, error.message);
+      else await supabase.from("movimenti_magazzino").insert({
+        prodotto_id: c.componente_id, delta, origine: "ordine_online",
+        nota: `Componente di "${nome}" venduto online`, utente: "WooCommerce",
+      });
     }
     bundleToccati.add(prodotto.id);
   }
   return bundleToccati;
+}
+
+// prodotti NON bundle venduti online: da quando lo stock è uno solo e la
+// fonte di verità è l'app, l'ordine va scalato anche qui — prima bastava
+// che WooCommerce scalasse il suo e il sync riallineasse il locale, ma il
+// sync non importa più lo stock. Il nome è la chiave, come ovunque
+// nell'app; il floor a zero evita di scrivere un negativo se il sito ha
+// venduto più pezzi di quanti ne risultino qui
+export async function applicaMovimentoProdottiSemplici(supabase: any, prodotti: any[], direzione: 1 | -1): Promise<Set<string>> {
+  const toccati = new Set<string>();
+  for (const riga of prodotti || []) {
+    const nome = String(riga?.nome || "").trim();
+    const quantita = Number(riga?.quantita) || 0;
+    if (!nome || !quantita) continue;
+    const { data: prodotto } = await supabase.from("prodotti_shop").select("id, tipo_prodotto, quantita").ilike("nome", nome).maybeSingle();
+    if (!prodotto || prodotto.tipo_prodotto === "bundle") continue;
+    const delta = direzione * quantita;
+    const nuova = (prodotto.quantita || 0) + delta;
+    if (nuova < 0) console.error(`"${nome}": lo stock andrebbe a ${nuova}, portato a 0`);
+    const { error } = await supabase.from("prodotti_shop").update({ quantita: Math.max(0, nuova) }).eq("id", prodotto.id);
+    if (error) { console.error(`"${nome}": errore aggiornando lo stock:`, error.message); continue; }
+    await supabase.from("movimenti_magazzino").insert({
+      prodotto_id: prodotto.id, delta, origine: "ordine_online",
+      nota: direzione < 0 ? "Venduto sullo shop online" : "Ordine online annullato/rimborsato", utente: "WooCommerce",
+    });
+    toccati.add(prodotto.id);
+  }
+  return toccati;
 }
 
 // ricalcola quanti bundle si possono comporre con le giacenze attuali dei
@@ -159,8 +192,8 @@ export async function sincronizzaDisponibilitaBundle(
     if (!componenti?.length) continue;
     let disponibilita = Infinity;
     for (const c of componenti) {
-      const { data: comp } = await supabase.from("prodotti_shop").select("giacenza_magazzino, giacenza").eq("id", c.componente_id).maybeSingle();
-      const giac = (comp?.giacenza_magazzino || 0) + (comp?.giacenza || 0);
+      const { data: comp } = await supabase.from("prodotti_shop").select("quantita").eq("id", c.componente_id).maybeSingle();
+      const giac = comp?.quantita || 0;
       const possibili = c.quantita_per_bundle > 0 ? Math.floor(giac / c.quantita_per_bundle) : 0;
       disponibilita = Math.min(disponibilita, possibili);
     }

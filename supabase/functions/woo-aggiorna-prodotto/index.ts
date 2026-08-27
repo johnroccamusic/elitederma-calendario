@@ -1,5 +1,5 @@
 // Edge Function "woo-aggiorna-prodotto"
-// Scrive prezzo di vendita e/o giacenza (valori ASSOLUTI, non delta) di
+// Scrive prezzo di vendita e/o quantità (valori ASSOLUTI, non delta) di
 // un prodotto su WooCommerce (PUT /products/{id}) e, SOLO se questa
 // chiamata riesce, aggiorna anche il dato locale in prodotti_shop. Se
 // fallisce, il dato locale NON viene toccato — WooCommerce resta la
@@ -57,21 +57,26 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ errore: "JSON non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  const { prodottoId, prezzoVendita, giacenza, giacenzaMagazzino } = corpo || {};
+  // "quantita" è lo stock unico del prodotto: da quando magazzino e shop
+  // sono un contenitore solo, è questo il numero che va anche su
+  // WooCommerce. "giacenza" resta accettato come sinonimo per non rompere
+  // eventuali chiamate vecchie ancora in giro
+  const { prodottoId, prezzoVendita, giacenzaMagazzino } = corpo || {};
+  const quantita = corpo?.quantita != null ? corpo.quantita : corpo?.giacenza;
   if (!prodottoId) {
     return new Response(JSON.stringify({ errore: "Parametro mancante: prodottoId" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   const cambiaPrezzo = prezzoVendita != null && Number.isFinite(prezzoVendita);
-  const cambiaGiacenza = giacenza != null && Number.isFinite(giacenza);
+  const cambiaGiacenza = quantita != null && Number.isFinite(quantita);
   const cambiaMagazzino = giacenzaMagazzino != null && Number.isFinite(giacenzaMagazzino);
   if (!cambiaPrezzo && !cambiaGiacenza) {
-    return new Response(JSON.stringify({ errore: "Nulla da aggiornare: servono prezzoVendita e/o giacenza" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ errore: "Nulla da aggiornare: servono prezzoVendita e/o quantita" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   if (cambiaPrezzo && prezzoVendita <= 0) {
     return new Response(JSON.stringify({ errore: "Il prezzo di vendita deve essere maggiore di zero" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
-  if (cambiaGiacenza && giacenza < 0) {
-    return new Response(JSON.stringify({ errore: "La giacenza non può essere negativa" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (cambiaGiacenza && quantita < 0) {
+    return new Response(JSON.stringify({ errore: "La quantità non può essere negativa" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
   if (cambiaMagazzino && giacenzaMagazzino < 0) {
     return new Response(JSON.stringify({ errore: "La giacenza in magazzino non può essere negativa" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -95,7 +100,7 @@ Deno.serve(async (req) => {
 
   const payloadWoo: Record<string, unknown> = {};
   if (cambiaPrezzo) payloadWoo.regular_price = String(prezzoVendita);
-  if (cambiaGiacenza) payloadWoo.stock_quantity = giacenza;
+  if (cambiaGiacenza) payloadWoo.stock_quantity = quantita;
 
   const auth = "Basic " + btoa(`${consumerKeyWrite}:${consumerSecretWrite}`);
   const rispostaWoo = await fetch(`${siteUrl}/wp-json/wc/v3/products/${prodotto.woo_product_id}`, {
@@ -115,12 +120,10 @@ Deno.serve(async (req) => {
 
   const aggiornamentoLocale: Record<string, unknown> = { ts_sync: new Date().toISOString() };
   if (cambiaPrezzo) aggiornamentoLocale.prezzo_vendita = prezzoVendita;
-  if (cambiaGiacenza) aggiornamentoLocale.giacenza = giacenza;
-  // giacenza_magazzino non esiste su WooCommerce (dato solo dell'app):
-  // si scrive qui, nello stesso aggiornamento, solo per risparmiare al
-  // browser una seconda chiamata separata — non richiede una sua verifica
-  // su WooCommerce, quindi può stare insieme senza cambiare la garanzia
-  // "si scrive in locale solo dopo la conferma di WooCommerce"
+  // lo stock locale si scrive SOLO dopo che WooCommerce ha confermato: da
+  // qui in poi la fonte di verità è l'app, ma se lo specchio rifiuta
+  // l'aggiornamento è meglio restare indietro che divergere in silenzio
+  if (cambiaGiacenza) aggiornamentoLocale.quantita = quantita;
   if (cambiaMagazzino) aggiornamentoLocale.giacenza_magazzino = giacenzaMagazzino;
 
   const { error: erroreAggiorna } = await supabase.from("prodotti_shop").update(aggiornamentoLocale).eq("id", prodottoId);
@@ -133,5 +136,5 @@ Deno.serve(async (req) => {
     );
   }
 
-  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, giacenza: cambiaGiacenza ? giacenza : undefined, giacenzaMagazzino: cambiaMagazzino ? giacenzaMagazzino : undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  return new Response(JSON.stringify({ ok: true, prezzoVendita: cambiaPrezzo ? prezzoVendita : undefined, quantita: cambiaGiacenza ? quantita : undefined }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });
