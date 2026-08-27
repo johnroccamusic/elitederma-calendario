@@ -32859,6 +32859,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // venditore ha sempre ruoloUtente "user", anche loggato, quindi resta
   // escluso automaticamente
   const puoGestireResi = ruoloUtente === "amministratore" || ruoloUtente === "programmatore";
+  // sconto libero e omaggio decidono da soli quanto entra in cassa, quindi
+  // restano ad amministratore e programmatore: una master che vende al
+  // banco applica il prezzo di listino, oppure un coupon — che è uno sconto
+  // deciso a monte e tracciato, non una cifra scritta al momento
+  const puoScontare = puoGestireResi;
   const isMobile = useIsMobile();
   // chi ha una password collegata sia a un profilo master sia a un
   // profilo venditore (es. Andrea/Andrea Paura) svolge davvero entrambi
@@ -33218,23 +33223,27 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: couponNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Sconto vendita">
-            <select style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
-              <option value="percentuale">Percentuale</option>
-              <option value="importo">Importo fisso</option>
-            </select>
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label={scontoTipo === "percentuale" ? "%" : "€"}>
-            <input style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
-          </Field>
-        </div>
-      </div>
-      {couponNum > 0 && (
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Svuota il campo Coupon per inserire uno sconto manuale.</div>
+      {puoScontare && (
+        <>
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: couponNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
+            <div style={{ flex: 1 }}>
+              <Field label="Sconto vendita">
+                <select style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
+                  <option value="percentuale">Percentuale</option>
+                  <option value="importo">Importo fisso</option>
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              <Field label={scontoTipo === "percentuale" ? "%" : "€"}>
+                <input style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
+              </Field>
+            </div>
+          </div>
+          {couponNum > 0 && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Svuota il campo Coupon per inserire uno sconto manuale.</div>
+          )}
+        </>
       )}
 
       <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: scontoNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
@@ -33268,10 +33277,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isMobile ? 8 : 14 }}>
-        <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 16, height: 16 }} />
-        <label htmlFor="pos-omaggio" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Omaggio — azzera l'incasso</label>
-      </div>
+      {puoScontare && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isMobile ? 8 : 14 }}>
+          <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 16, height: 16 }} />
+          <label htmlFor="pos-omaggio" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Omaggio — azzera l'incasso</label>
+        </div>
+      )}
 
       {corsiEleggibiliPos.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
