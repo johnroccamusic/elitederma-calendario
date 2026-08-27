@@ -32968,19 +32968,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [carrelloEspanso, setCarrelloEspanso] = useState(false); // solo mobile: carrello come foglio a comparsa dal basso
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
-  // su mobile la barra del carrello occupa il fondo dello schermo fino al
-  // bordo: la pasticca di navigazione deve salirle SOPRA, altrimenti le
-  // finisce sotto. Il messaggio passa da una variabile CSS invece che da
-  // uno stato condiviso: la pasticca vive in App, lontanissima da qui, e
-  // l'unica cosa che deve sapere è di quanto alzarsi
-  const barraCarrelloAFondo = isMobile && carrello.length > 0 && !carrelloEspanso;
-  useEffect(() => {
-    const radice = document.documentElement;
-    if (barraCarrelloAFondo) radice.style.setProperty("--alzata-pasticca", "82px");
-    else radice.style.removeProperty("--alzata-pasticca");
-    return () => radice.style.removeProperty("--alzata-pasticca");
-  }, [barraCarrelloAFondo]);
-
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
   // categorie escluse dalla vendita diretta ("Non sul POS", Gestisci
   // categorie in Magazzino): né la categoria compare nel filtro, né i
@@ -33534,15 +33521,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
         {carrello.length > 0 && !carrelloEspanso && (
           <div onClick={() => setCarrelloEspanso(true)} style={{
-            // appoggiata al bordo inferiore vero del dispositivo: il fondo
-            // bianco arriva fino in fondo (niente striscia di sfondo sotto),
-            // mentre il contenuto resta sopra la barra gesti dell'iPhone
-            // grazie al padding con la safe area
+            // appoggiata al bordo inferiore vero del dispositivo, e alta
+            // abbastanza da ospitare la pasticca di navigazione dentro di
+            // sé: la riga del carrello sta in alto, la pasticca galleggia
+            // sul bianco appena sotto. Il padding in fondo tiene conto
+            // della barra gesti dell'iPhone, così su nessun dispositivo il
+            // bianco si ferma prima del bordo né la pasticca ci finisce sopra
             position: "fixed", left: 0, right: 0, bottom: 0,
             background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, borderRadius: "16px 16px 0 0",
             boxShadow: "0 -6px 18px rgba(0,0,0,0.10)",
-            padding: "14px 18px calc(env(safe-area-inset-bottom, 0px) + 14px)",
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40,
+            padding: "14px 18px calc(env(safe-area-inset-bottom, 0px) + 78px)",
+            display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
               <div style={{ position: "relative", width: 40, height: 40, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -40219,9 +40208,7 @@ export default function App() {
       {isMobile && (
         <div
           style={{
-            // "--alzata-pasticca" la alza quando qualcosa occupa il fondo
-            // dello schermo (oggi: la barra del carrello nel POS)
-            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) - 2px + var(--alzata-pasticca, 0px))", left: 14, right: 14,
+            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) - 2px)", left: 14, right: 14,
             zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
             background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
             border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
