@@ -25639,7 +25639,7 @@ function interoOpzionale(testo) {
   const n = parseInt(parseNum(t), 10);
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
-function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
+function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricarica, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(prodotto?.nome || "");
   const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
@@ -25662,6 +25662,15 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, onClo
   const [giorniSicurezza, setGiorniSicurezza] = useState(prodotto?.giorni_sicurezza != null ? String(prodotto.giorni_sicurezza) : "");
   const [fornitoreId, setFornitoreId] = useState(prodotto?.fornitore_id || "");
   const [lottoMinimo, setLottoMinimo] = useState(prodotto?.lotto_minimo_ordine != null ? String(prodotto.lotto_minimo_ordine) : "");
+  // gli stessi dati di scorta e riordino valgono quasi sempre per una
+  // famiglia intera di prodotti (tutti i pigmenti, tutti gli aghi di un
+  // fornitore): copiarli a mano prodotto per prodotto è la strada per non
+  // compilarli mai. Qui si scelgono i destinatari e si applicano in blocco
+  const [copiaAperta, setCopiaAperta] = useState(false);
+  const [filtroCopia, setFiltroCopia] = useState("");
+  const [selezionatiCopia, setSelezionatiCopia] = useState({});
+  const [applicandoCopia, setApplicandoCopia] = useState(false);
+  const [msgCopia, setMsgCopia] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
   const [soloOfflineChk, setSoloOfflineChk] = useState(!!prodotto?.solo_offline);
@@ -25715,6 +25724,40 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, onClo
     setBundleFisica(attiva);
     if (attiva) { setContaMagazzino(true); setGiacenzaPropria(true); }
     else if (tipoProdotto === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setCosto(""); }
+  }
+  // copia SOLO i campi compilati: quelli lasciati vuoti non vengono
+  // toccati sui prodotti scelti, altrimenti un campo che non hai mai
+  // riempito qui cancellerebbe quello che loro hanno già
+  function campiRiordinoDaCopiare() {
+    const campi = {};
+    if (String(scortaMinima).trim() !== "") campi.scorta_minima = interoOpzionale(scortaMinima);
+    if (String(leadTime).trim() !== "") campi.lead_time_giorni = interoOpzionale(leadTime);
+    if (String(giorniSicurezza).trim() !== "") campi.giorni_sicurezza = interoOpzionale(giorniSicurezza);
+    if (fornitoreId) campi.fornitore_id = fornitoreId;
+    if (String(lottoMinimo).trim() !== "") campi.lotto_minimo_ordine = interoOpzionale(lottoMinimo);
+    return campi;
+  }
+  async function applicaRiordinoAdAltri() {
+    const ids = Object.keys(selezionatiCopia).filter((id) => selezionatiCopia[id]);
+    const campi = campiRiordinoDaCopiare();
+    if (!ids.length) { setMsgCopia("Seleziona almeno un prodotto."); return; }
+    if (!Object.keys(campi).length) { setMsgCopia("Compila almeno un dato di scorta e riordino da copiare."); return; }
+    const etichette = {
+      scorta_minima: `scorta minima ${campi.scorta_minima}`,
+      lead_time_giorni: `tempo di consegna ${campi.lead_time_giorni} giorni`,
+      giorni_sicurezza: `margine ${campi.giorni_sicurezza} giorni`,
+      fornitore_id: `fornitore "${(fornitori || []).find((f) => f.id === campi.fornitore_id)?.nome || ""}"`,
+      lotto_minimo_ordine: `lotto minimo ${campi.lotto_minimo_ordine}`,
+    };
+    const elenco = Object.keys(campi).map((k) => etichette[k]).join(", ");
+    if (!window.confirm(`Applicare ${elenco} a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}?\n\nI campi lasciati vuoti qui sopra non vengono toccati.`)) return;
+    setApplicandoCopia(true); setMsgCopia("");
+    const { error } = await supabase.from("prodotti_shop").update(campi).in("id", ids);
+    setApplicandoCopia(false);
+    if (error) { setMsgCopia("Errore: " + error.message); return; }
+    setMsgCopia(`Applicato a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}.`);
+    setSelezionatiCopia({});
+    if (ricarica) ricarica(["prodotti_shop"]);
   }
   function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
   function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
@@ -26127,6 +26170,65 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, onClo
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
             Senza tempo di consegna l'Advisor non può dire entro quando ordinare questo prodotto: resta solo l'avviso "sotto scorta".
           </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 10 }}>
+            <input type="checkbox" checked={copiaAperta} onChange={(e) => { setCopiaAperta(e.target.checked); setMsgCopia(""); }} style={{ width: 14, height: 14 }} />
+            Applica questi dati anche ad altri prodotti
+          </label>
+          {copiaAperta && (() => {
+            const candidati = prodottiScelta.filter((p) => p.attivo !== false && p.giacenza_propria !== false);
+            const filtrati = filtroCopia.trim()
+              ? candidati.filter((p) => (p.nome || "").toLowerCase().includes(filtroCopia.trim().toLowerCase()))
+              : candidati;
+            const selezionati = Object.keys(selezionatiCopia).filter((id) => selezionatiCopia[id]);
+            const tuttiFiltratiSelezionati = filtrati.length > 0 && filtrati.every((p) => selezionatiCopia[p.id]);
+            return (
+              <div style={{ marginTop: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
+                <input
+                  style={{ ...inputStyle, marginBottom: 8 }} placeholder="Filtra per parola (es. pigmento, ago, matita)…"
+                  value={filtroCopia} onChange={(e) => setFiltroCopia(e.target.value)}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6, ...fontBody, fontSize: 11.5, color: MUTED }}>
+                  <span>{filtrati.length} prodotti{selezionati.length > 0 ? ` · ${selezionati.length} selezionati` : ""}</span>
+                  <button
+                    onClick={() => setSelezionatiCopia((prev) => {
+                      const nuovo = { ...prev };
+                      filtrati.forEach((p) => { if (tuttiFiltratiSelezionati) delete nuovo[p.id]; else nuovo[p.id] = true; });
+                      return nuovo;
+                    })}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                  >
+                    {tuttiFiltratiSelezionati ? "deseleziona tutti" : "seleziona tutti i filtrati"}
+                  </button>
+                </div>
+                <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+                  {filtrati.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, padding: 10 }}>Nessun prodotto con questo filtro.</div>
+                  ) : filtrati.map((p) => (
+                    <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                      <input
+                        type="checkbox" checked={!!selezionatiCopia[p.id]} style={{ width: 14, height: 14, flexShrink: 0 }}
+                        onChange={(e) => setSelezionatiCopia((prev) => ({ ...prev, [p.id]: e.target.checked }))}
+                      />
+                      <span style={{ flex: 1, minWidth: 0 }}>{p.nome}</span>
+                      {(p.scorta_minima != null || p.lead_time_giorni != null || p.fornitore_id) && (
+                        <span title="Ha già dei dati di scorta e riordino: verranno sovrascritti" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>già impostato</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                {msgCopia && <div style={{ ...fontBody, fontSize: 12, color: msgCopia.startsWith("Errore") || msgCopia.startsWith("Seleziona") || msgCopia.startsWith("Compila") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{msgCopia}</div>}
+                <div style={{ marginTop: 8 }}>
+                  <Button onClick={applicaRiordinoAdAltri} disabled={applicandoCopia || selezionati.length === 0} style={{ width: "100%" }}>
+                    {applicandoCopia ? "Applico…" : `Applica a ${selezionati.length} prodott${selezionati.length === 1 ? "o" : "i"}`}
+                  </Button>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>
+                  Si applicano solo i campi compilati qui sopra; quelli vuoti restano come sono sui prodotti scelti. Il prodotto aperto si salva come sempre con "Salva modifiche".
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -26294,6 +26396,11 @@ const COLONNE_MAGAZZINO = [
   { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
   { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
   { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
+  // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
+  // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
+  // margine di sicurezza ha il suo valore generale in Impostazioni e il
+  // lotto minimo è facoltativo: non fanno colore
+  { label: "S/R", campo: "riordinoCompleto", direzioneIniziale: "asc", larghezza: 40 },
 ];
 
 function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -26779,6 +26886,23 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       </td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.margine != null ? fmtPctErp(p.margine) : "N/D"}</td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 11, color: NAVY, whiteSpace: "nowrap" }}>{p.quantitaVenduta}</td>
+      <td style={{ ...tdStyle, textAlign: "center" }}>
+        {p.giacenza_propria === false || p.conta_magazzino === false ? (
+          <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
+        ) : (() => {
+          const mancano = [
+            p.scorta_minima == null ? "scorta minima" : null,
+            p.lead_time_giorni == null ? "tempo di consegna" : null,
+            !p.fornitore_id ? "fornitore" : null,
+          ].filter(Boolean);
+          return (
+            <span
+              title={mancano.length ? `Manca: ${mancano.join(", ")}` : "Scorta e riordino completi"}
+              style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: mancano.length ? "#C0392B" : "#2E7D32" }}
+            />
+          );
+        })()}
+      </td>
     </tr>
   );
 }
@@ -27131,6 +27255,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
       giorniFermo: giorniFermo(p.nome),
       stockTotale,
+      riordinoCompleto: p.scorta_minima != null && p.lead_time_giorni != null && !!p.fornitore_id,
       sottoScorta: p.conta_magazzino !== false && p.scorta_minima != null && stockTotale != null && stockTotale < p.scorta_minima,
       esaurito: p.conta_magazzino !== false && stockTotale != null && stockTotale <= 0,
       isBundle,
@@ -27422,7 +27547,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           categorieProdotti={categorieProdotti}
           prodottiShop={prodottiShop}
           padreIniziale={nuovaVariantePadreId}
-          fornitori={fornitori}
+          fornitori={fornitori} ricarica={ricarica}
           aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
           onClose={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); }}
           onFatto={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); ricarica(["prodotti_shop"]); }}
@@ -27434,7 +27559,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           prodottiShop={prodottiShop}
           prodotto={prodottoInModifica}
           categoriaIdIniziale={(prodottiCategorie || []).find((pc) => pc.prodotto_id === prodottoInModifica.id)?.categoria_id || ""}
-          fornitori={fornitori}
+          fornitori={fornitori} ricarica={ricarica}
           aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
           onClose={() => setProdottoInModifica(null)}
           onFatto={() => { setProdottoInModifica(null); ricarica(["prodotti_shop", "prodotti_categorie"]); }}
