@@ -2183,6 +2183,21 @@ function slugify(testo) {
 
 // "MARIA ROSSI" o "maria rossi" → "Maria Rossi": solo iniziali maiuscole,
 // usato in stampa (mai per come il dato resta salvato nel database)
+// nei filtri si sceglie una CITTÀ, non una sede: Roma ha due sedi e
+// comparirebbe due volte, e sceglierne una nasconderebbe metà dei corsi
+// dell'altra. Qui le sedi si riducono a città distinte, e il valore del
+// filtro diventa il nome della città invece dell'id della sede
+function cittaDistinte(location) {
+  const perNome = new Map();
+  (location || []).forEach((l) => {
+    const nome = (l.nome || "").trim();
+    if (nome && !perNome.has(nome.toUpperCase())) perNome.set(nome.toUpperCase(), { id: nome, nome });
+  });
+  return [...perNome.values()].sort((a, b) => a.nome.localeCompare(b.nome, "it"));
+}
+function cittaDiSede(location, locationId) {
+  return ((location || []).find((l) => l.id === locationId)?.nome || "").trim();
+}
 function toTitleCase(testo) {
   return (testo || "")
     .toLowerCase()
@@ -2931,7 +2946,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const righe = corsiDate
     .filter((cd) => inPeriodoVisualizzato(cd))
     .filter((cd) => !filtroCorso || cd.corso_id === filtroCorso)
-    .filter((cd) => !filtroCitta || cd.location_id === filtroCitta)
+    .filter((cd) => !filtroCitta || cittaDiSede(location, cd.location_id) === filtroCitta)
     .filter((cd) => !filtroMaster || cd.master_id === filtroMaster || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "master" && d.persona_id === filtroMaster))
     .filter((cd) => !filtroAssistente || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "assistente" && d.persona_id === filtroAssistente))
     .filter((cd) => !filtroLeva || (docentiPerCorsoData[cd.id] || []).some((d) => d.tipo === "leva" && d.persona_id === filtroLeva))
@@ -3550,7 +3565,7 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
             />
           </div>
           {filtroDropdown("corso", "Corso", filtroCorso, setFiltroCorso, corsi, IconaLaureaErp)}
-          {filtroDropdown("citta", "Città", filtroCitta, setFiltroCitta, location, IconaPin)}
+          {filtroDropdown("citta", "Città", filtroCitta, setFiltroCitta, cittaDistinte(location), IconaPin)}
           {filtroDropdown("master", "Master", filtroMaster, setFiltroMaster, master, IconaMasterRiga)}
           {filtroDropdown("assistente", "Assistente", filtroAssistente, setFiltroAssistente, assistente, IconaAssistentiRiga)}
           {filtroDropdown("leva", "Leve", filtroLeva, setFiltroLeva, leva, IconaCalendarioLeve)}
@@ -5164,7 +5179,7 @@ function SezioneDateCorsi({
   const corsiDateFiltrate = corsiDate.filter((cd) => {
     if (vistaDateTab === "programmazione" ? cd.data_fine < oggiStr : cd.data_fine >= oggiStr) return false;
     if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
-    if (filtroCittaHome && cd.location_id !== filtroCittaHome) return false;
+    if (filtroCittaHome && cittaDiSede(location, cd.location_id) !== filtroCittaHome) return false;
     if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
     const termini = ricercaDate.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (termini.length === 0) return true;
@@ -5229,8 +5244,8 @@ function SezioneDateCorsi({
           onBlur={() => setApriFiltroCorsoHome(false)}
         />
         <FiltroPill compatto={isMobile} Icona={IconaPin}
-          etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={location}
-          valore={filtroCittaHome} etichettaAttiva={location.find((l) => l.id === filtroCittaHome)?.nome.toUpperCase()}
+          etichetta="Filtra città" opzioneVuota="Tutte le città" opzioni={cittaDistinte(location)}
+          valore={filtroCittaHome} etichettaAttiva={filtroCittaHome ? filtroCittaHome.toUpperCase() : undefined}
           aperto={apriFiltroCittaHome} selectRef={selectFiltroCittaHomeRef}
           onToggle={() => { setApriFiltroCittaHome((v) => !v); setApriFiltroCorsoHome(false); setApriFiltroMasterHome(false); }}
           onChange={(e) => { setFiltroCittaHome(e.target.value); setApriFiltroCittaHome(false); }}
