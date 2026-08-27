@@ -26234,13 +26234,39 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
   );
 }
 
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, sincronizzandoMagazzini, onApriIspezione, onApriConfezione }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSpostaLocale, onImpostaRipartizione, sincronizzandoMagazzini, onApriIspezione, onApriConfezione }) {
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
   const [unitaMisura, setUnitaMisura] = useState(p.unita_misura || "");
   const [scortaMin, setScortaMin] = useState(p.scorta_minima != null ? String(p.scorta_minima) : "");
   const [stockTotaleInput, setStockTotaleInput] = useState(String(p.stockTotale));
+  // Magazzino e Shop sono due facce dello stesso stock: col solo "+" un
+  // pezzo alla volta non ci si arriva mai quando sono tanti, quindi si
+  // scrive direttamente quanti pezzi stanno da un lato e l'altro si
+  // aggiorna da sé. Il totale non cambia MAI da qui — quello lo decide
+  // solo la colonna "Stock totale", che resta l'unica a dire quanti pezzi
+  // esistono davvero. Le due caselle rispecchiano i valori già
+  // comprensivi degli spostamenti in sospeso, per questo si riallineano
+  // ogni volta che quelli cambiano
+  const [magazzinoInput, setMagazzinoInput] = useState(String(p.giacenza_magazzino || 0));
+  const [shopInput, setShopInput] = useState(String(p.giacenza || 0));
+  useEffect(() => { setMagazzinoInput(String(p.giacenza_magazzino || 0)); }, [p.giacenza_magazzino]);
+  useEffect(() => { setShopInput(String(p.giacenza || 0)); }, [p.giacenza]);
+
+  // come il "+", la ripartizione scritta a mano resta locale finché non si
+  // sincronizza: la giacenza online la scrive WooCommerce, mai il browser
+  function confermaRipartizione(testo, lato) {
+    const totale = p.stockTotale || 0;
+    const n = testo.trim() === "" ? NaN : parseInt(parseNum(testo), 10);
+    if (!Number.isFinite(n) || n < 0 || n > totale) {
+      window.alert(`Scrivi un numero fra 0 e ${totale}: è lo stock totale di "${p.nome}", e spostare pezzi fra magazzino e shop non lo cambia.\n\nPer cambiarlo usa la colonna "Stock totale".`);
+      setMagazzinoInput(String(p.giacenza_magazzino || 0));
+      setShopInput(String(p.giacenza || 0));
+      return;
+    }
+    onImpostaRipartizione(p.id, lato === "magazzino" ? n : totale - n);
+  }
 
   async function salvaUnitaMisura() {
     const nuovo = unitaMisura.trim() === "" ? null : unitaMisura.trim();
@@ -26350,7 +26376,14 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
           <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 14, textAlign: "right" }}>{p.giacenza_magazzino || 0}</span>
+            <input
+              style={{ ...cellInputStyle, width: 44, textAlign: "right", fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY }}
+              inputMode="numeric" value={magazzinoInput} disabled={sincronizzandoMagazzini}
+              title={`Quanti pezzi stanno in magazzino: scrivi il numero e lo shop si aggiorna da solo (stock totale ${p.stockTotale}, non cambia)`}
+              onChange={(e) => setMagazzinoInput(e.target.value)}
+              onBlur={() => confermaRipartizione(magazzinoInput, "magazzino")}
+              onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+            />
             {bottoneSposta(sincronizzandoMagazzini || (p.giacenza || 0) <= 0, "#3B6FA0", () => onSpostaLocale(p.id, "magazzino"), "Sposta un pezzo dallo Shop al Magazzino (in locale, da sincronizzare)")}
           </div>
         )}
@@ -26358,7 +26391,14 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onSposta
       <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         {p.giacenza_propria !== false && p.woo_product_id && !(p.forzatoSoloOffline || p.solo_offline) ? (
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY, minWidth: 14, textAlign: "right" }}>{p.giacenza || 0}</span>
+            <input
+              style={{ ...cellInputStyle, width: 44, textAlign: "right", fontWeight: p.deltaPendente ? 700 : 400, color: p.deltaPendente ? GOLD : NAVY }}
+              inputMode="numeric" value={shopInput} disabled={sincronizzandoMagazzini}
+              title={`Quanti pezzi stanno sullo shop online: scrivi il numero e il magazzino si aggiorna da solo (stock totale ${p.stockTotale}, non cambia)`}
+              onChange={(e) => setShopInput(e.target.value)}
+              onBlur={() => confermaRipartizione(shopInput, "shop")}
+              onKeyDown={(e) => e.key === "Enter" && e.target.blur()}
+            />
             {bottoneSposta(sincronizzandoMagazzini || (p.giacenza_magazzino || 0) <= 0, GOLD, () => onSpostaLocale(p.id, "shop"), "Sposta un pezzo dal Magazzino allo Shop (in locale, da sincronizzare)")}
           </div>
         ) : <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>}
@@ -26596,6 +26636,25 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
       const nuovo = attuale + (verso === "magazzino" ? 1 : -1);
       if (nuovo === 0) { const { [prodottoId]: _tolto, ...resto } = prev; return resto; }
       return { ...prev, [prodottoId]: nuovo };
+    });
+  }
+
+  // stessa cosa del "+", ma scrivendo il numero: qui arriva quanti pezzi
+  // devono stare in magazzino (se si è scritto nella casella dello shop
+  // il conto l'ha già fatto la riga) e da lì si ricava il delta rispetto
+  // al valore vero. Lo stock totale resta quello che è: si sposta soltanto
+  // il confine fra i due scaffali, e il risultato è comunque compreso fra
+  // 0 e il totale, quindi nessuna delle due giacenze può andare negativa
+  function impostaRipartizioneLocale(prodottoId, magazzinoDesiderato) {
+    const p = (prodottiShop || []).find((pp) => pp.id === prodottoId);
+    if (!p) return;
+    const totale = (p.giacenza_magazzino || 0) + (p.giacenza || 0);
+    const magazzino = Math.max(0, Math.min(Math.round(magazzinoDesiderato), totale));
+    const delta = magazzino - (p.giacenza_magazzino || 0);
+    setMsgSyncMagazzini("");
+    setModifichePendenti((prev) => {
+      if (delta === 0) { const { [prodottoId]: _tolto, ...resto } = prev; return resto; }
+      return { ...prev, [prodottoId]: delta };
     });
   }
 
@@ -26984,7 +27043,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onSpostaLocale={spostaLocale} onImpostaRipartizione={impostaRipartizioneLocale} sincronizzandoMagazzini={sincronizzandoMagazzini} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -27525,6 +27584,103 @@ function disponibilitaBundleCalcolata(prodottoId, bundleComponenti, prodottiPerI
   }));
 }
 
+// ---------- Regola unica di scarico dello stock ----------
+// Nessuna giacenza può finire sotto zero, da nessun punto dell'app.
+// Quando il magazzino fisico non basta, i pezzi mancanti si tolgono dallo
+// shop online — ma solo fino alla scorta minima impostata per quel
+// prodotto, che è la riserva da lasciare online. Per scendere anche sotto
+// quella soglia serve una conferma esplicita, e comunque si arriva al
+// massimo a zero: quello che manca ancora blocca l'operazione invece di
+// essere scritto in negativo.
+//
+// Le tre operazioni che scaricano davvero — vendita al banco, cambio
+// merce, scarico dei kit di un'edizione — passano tutte di qui:
+// preparaScarichi() decide se si può fare (in blocco, mai a metà) e
+// applicaScarichi() scrive.
+function pianoScarico(prodotto, quantita, { sogliaInvalicabile = false } = {}) {
+  const magazzino = prodotto?.giacenza_magazzino || 0;
+  const shop = prodotto?.giacenza || 0;
+  const soglia = Math.max(0, prodotto?.scorta_minima || 0);
+  const daMagazzino = Math.max(0, Math.min(quantita, magazzino));
+  const daShop = Math.max(0, Math.min(quantita - daMagazzino, shop - soglia));
+  const daShopSottoSoglia = sogliaInvalicabile ? 0 : Math.max(0, Math.min(quantita - daMagazzino - daShop, shop - daShop));
+  return {
+    magazzino, shop, soglia, daMagazzino, daShop, daShopSottoSoglia,
+    mancanti: quantita - daMagazzino - daShop - daShopSottoSoglia,
+  };
+}
+// espande una riga da scaricare: un bundle virtuale non ha giacenza
+// propria e scarica i suoi componenti, tutto il resto scarica se stesso
+function righeScarico(prodotto, quantita, bundleComponenti, prodottiPerId) {
+  if (!prodotto) return [];
+  if (bundleVirtuale(prodotto)) {
+    return righeBundleCon(prodotto.id, bundleComponenti, prodottiPerId)
+      .map((r) => ({ prodotto: r.prodotto, quantita: quantita * r.quantitaPerBundle }));
+  }
+  return [{ prodotto, quantita }];
+}
+// verifica un elenco di scarichi e restituisce i piani da applicare,
+// oppure null se l'operazione va annullata (pezzi insufficienti, o
+// conferma negata per scendere sotto la scorta minima dello shop). Le
+// righe sullo stesso prodotto si sommano: due voci da 3 pezzi ciascuna
+// sono un unico scarico da 6, altrimenti ognuna si crederebbe coperta
+function preparaScarichi(righe, { suggerimento, sogliaInvalicabile = false, titoloBlocco } = {}) {
+  const perProdotto = new Map();
+  (righe || []).forEach(({ prodotto, quantita }) => {
+    if (!prodotto || !(quantita > 0)) return;
+    const gia = perProdotto.get(prodotto.id);
+    if (gia) gia.quantita += quantita;
+    else perProdotto.set(prodotto.id, { prodotto, quantita });
+  });
+  const piani = [...perProdotto.values()].map((v) => ({ ...v, piano: pianoScarico(v.prodotto, v.quantita, { sogliaInvalicabile }) }));
+
+  const bloccati = piani.filter((v) => v.piano.mancanti > 0);
+  if (bloccati.length > 0) {
+    const righeMsg = bloccati.map((v) => {
+      const extra = suggerimento ? suggerimento(v.prodotto, v.piano.mancanti) : "";
+      const finoA = sogliaInvalicabile && v.piano.soglia > 0
+        ? `${v.piano.magazzino} in magazzino e ${Math.max(0, v.piano.shop - v.piano.soglia)} prendibili dallo shop online (che non può scendere sotto la scorta minima di ${v.piano.soglia})`
+        : `${v.piano.magazzino} in magazzino e ${v.piano.shop} sullo shop online`;
+      return `• PRODOTTO ESAURITO "${v.prodotto.nome}": servono ${v.quantita} pezzi, ce ne sono ${finoA}. Ne mancano ${v.piano.mancanti}.${extra ? " " + extra : ""}`;
+    });
+    window.alert((titoloBlocco || "Operazione bloccata — nessuna giacenza può andare sotto zero:") + "\n\n" + righeMsg.join("\n"));
+    return null;
+  }
+
+  const sottoSoglia = piani.filter((v) => v.piano.daShopSottoSoglia > 0);
+  if (sottoSoglia.length > 0) {
+    const righeMsg = sottoSoglia.map((v) => {
+      const dalloShop = v.piano.daShop + v.piano.daShopSottoSoglia;
+      return `• "${v.prodotto.nome}": ${dalloShop} pezzi presi dallo shop online, che resterebbe a ${v.piano.shop - dalloShop} (scorta minima ${v.piano.soglia})`;
+    });
+    if (!window.confirm("Il magazzino non basta e lo shop online scenderebbe sotto la scorta minima:\n\n" + righeMsg.join("\n") + "\n\nProcedo lo stesso?")) return null;
+  }
+  return piani;
+}
+// applica i piani già verificati, uno alla volta: la quota presa dallo
+// shop passa da WooCommerce (fonte di verità della giacenza online) e il
+// magazzino viaggia nella stessa chiamata quando la riga è divisa fra le
+// due fonti — un giro di rete in meno
+async function applicaScarichi(piani) {
+  for (const { prodotto, piano } of piani || []) {
+    const dalloShop = piano.daShop + piano.daShopSottoSoglia;
+    if (dalloShop > 0) {
+      const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", {
+        body: {
+          prodottoId: prodotto.id,
+          giacenza: piano.shop - dalloShop,
+          ...(piano.daMagazzino > 0 ? { giacenzaMagazzino: piano.magazzino - piano.daMagazzino } : {}),
+        },
+      });
+      if (error || data?.errore) return `"${prodotto.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`;
+    } else if (piano.daMagazzino > 0) {
+      const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: piano.magazzino - piano.daMagazzino }).eq("id", prodotto.id);
+      if (error) return `"${prodotto.nome}": errore nello scarico del magazzino — ${error.message}`;
+    }
+  }
+  return null;
+}
+
 // registrano uno storno in vendite_shop (valori negativi, stesso
 // tipo_movimento diverso da "vendita") collegato alla vendita originale
 // tramite vendita_collegata_id — una somma semplice, nessuna logica
@@ -27709,6 +27865,14 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
     for (const r of prodottiRientranti) {
       if (!(Number(r.quantitaResa) > 0) || Number(r.quantitaResa) > r.quantita) { setMsg(`Quantità non valida per "${r.nome}".`); return; }
     }
+    // gli scarichi si verificano PRIMA di qualunque scrittura, con la
+    // stessa regola del POS (magazzino → shop fino alla scorta minima):
+    // se i pezzi non bastano il cambio non parte nemmeno, invece di
+    // lasciare i rientri già registrati e le uscite a metà
+    const righeUscita = prodottiUscenti.flatMap((u) => righeScarico(u.prodotto, u.quantita, bundleComponenti, prodottiPerId));
+    const pianiUscita = preparaScarichi(righeUscita);
+    if (!pianiUscita) { setMsg("Cambio non registrato: disponibilità insufficiente."); return; }
+
     setSalvando(true); setMsg("");
 
     // rientrano tutti i prodotti scelti
@@ -27718,32 +27882,9 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
       const erroreMagazzino = await ripristinaStock(p, Number(r.quantitaResa));
       if (erroreMagazzino) { setSalvando(false); setMsg(`Errore magazzino ("${r.nome}"): ` + erroreMagazzino); return; }
     }
-    // escono tutti i prodotti scelti: un bundle scarica i componenti (mai
-    // se stesso), tutti gli altri seguono la stessa cascata magazzino→shop
-    // del POS
-    for (const u of prodottiUscenti) {
-      if (bundleVirtuale(u.prodotto)) {
-        for (const r of righeBundleCon(u.prodotto.id, bundleComponenti, prodottiPerId)) {
-          const nuovoMagazzino = (r.prodotto.giacenza_magazzino || 0) - u.quantita * r.quantitaPerBundle;
-          const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", r.componenteId);
-          if (error) { setSalvando(false); setMsg(`"${r.prodotto.nome}" (componente di "${u.prodotto.nome}"): errore nello scarico del magazzino — ${error.message}`); return; }
-        }
-        continue;
-      }
-      const magazzino = u.prodotto.giacenza_magazzino || 0;
-      const shop = u.prodotto.giacenza || 0;
-      const daMagazzino = Math.min(u.quantita, magazzino);
-      const daShop = u.quantita - daMagazzino;
-      if (daShop > 0) {
-        // giacenza e giacenza_magazzino nello stesso giro quando servono
-        // entrambe (riga divisa tra le due fonti): un giro di rete in meno
-        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: u.prodotto.id, giacenza: shop - daShop, ...(daMagazzino > 0 ? { giacenzaMagazzino: magazzino - daMagazzino } : {}) } });
-        if (error || data?.errore) { setSalvando(false); setMsg(`"${u.prodotto.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`); return; }
-      } else if (daMagazzino > 0) {
-        const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino - daMagazzino }).eq("id", u.prodotto.id);
-        if (error) { setSalvando(false); setMsg(`"${u.prodotto.nome}": errore nello scarico del magazzino — ${error.message}`); return; }
-      }
-    }
+    // escono tutti i prodotti scelti, con i piani verificati sopra
+    const erroreUscita = await applicaScarichi(pianiUscita);
+    if (erroreUscita) { setSalvando(false); setMsg(erroreUscita); return; }
 
     // segue chi ha generato la vendita originale del PRIMO prodotto
     // rientrante (§8.4) — in pratica un cambio riguarda quasi sempre
@@ -31742,45 +31883,20 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
     if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return; }
     if (spedizioneAttiva && !spedDestinatario.trim()) { setMsg("Indica il destinatario della spedizione."); return; }
-    for (const r of carrello) {
-      if (r.quantita > disponibiliDi(r.prodottoId)) { setMsg(`"${r.nome}" non ha più abbastanza disponibilità.`); return; }
-    }
+    // scarico in due tempi: prima si verifica TUTTO il carrello (magazzino
+    // fisico, poi shop online fino alla scorta minima — vedi
+    // preparaScarichi), solo dopo si scrive. Un bundle virtuale non ha
+    // giacenza propria e si risolve nei suoi componenti; un box con
+    // giacenza fisica scarica il proprio stock come un prodotto normale
+    const righeVendita = carrello.flatMap((r) => righeScarico(trovaProdotto(r.prodottoId), r.quantita, bundleComponenti, prodottiPerId));
+    const pianiVendita = preparaScarichi(righeVendita);
+    if (!pianiVendita) { setMsg("Vendita non registrata: disponibilità insufficiente."); return; }
+
     setSalvando(true);
     setMsg("");
 
-    // scarico: prima dal magazzino fisico, solo per l'eventuale resto si
-    // attinge dallo shop online — quella quota va scritta PRIMA su
-    // WooCommerce (valore assoluto) e solo se riesce anche in locale,
-    // altrimenti si rischia di vendere online un pezzo già dato al banco
-    for (const r of carrello) {
-      const p = trovaProdotto(r.prodottoId);
-      // un bundle VIRTUALE non ha giacenza propria: si scaricano i componenti
-      // (proporzionati alla quantità venduta), mai il bundle stesso. Un box
-      // con giacenza fisica invece scarica il proprio stock come un normale
-      // prodotto (ramo sotto), senza toccare gli sfusi collegati
-      if (bundleVirtuale(p)) {
-        for (const c of righeBundleCon(r.prodottoId, bundleComponenti, prodottiPerId)) {
-          const nuovoMagazzino = (c.prodotto.giacenza_magazzino || 0) - r.quantita * c.quantitaPerBundle;
-          const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: nuovoMagazzino }).eq("id", c.componenteId);
-          if (error) { setSalvando(false); setMsg(`"${c.prodotto.nome}" (componente di "${r.nome}"): errore nello scarico del magazzino — ${error.message}`); return; }
-        }
-        continue;
-      }
-      const magazzino = p?.giacenza_magazzino || 0;
-      const shop = p?.giacenza || 0;
-      const daMagazzino = Math.min(r.quantita, magazzino);
-      const daShop = r.quantita - daMagazzino;
-
-      if (daShop > 0) {
-        // giacenza e giacenza_magazzino nello stesso giro quando servono
-        // entrambe (riga divisa tra le due fonti): un giro di rete in meno
-        const { data, error } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: r.prodottoId, giacenza: shop - daShop, ...(daMagazzino > 0 ? { giacenzaMagazzino: magazzino - daMagazzino } : {}) } });
-        if (error || data?.errore) { setSalvando(false); setMsg(`"${r.nome}": scarico dallo shop online non riuscito — ${data?.errore || error.message}`); return; }
-      } else if (daMagazzino > 0) {
-        const { error } = await supabase.from("prodotti_shop").update({ giacenza_magazzino: magazzino - daMagazzino }).eq("id", r.prodottoId);
-        if (error) { setSalvando(false); setMsg(`"${r.nome}": errore nello scarico del magazzino — ${error.message}`); return; }
-      }
-    }
+    const erroreScarico = await applicaScarichi(pianiVendita);
+    if (erroreScarico) { setSalvando(false); setMsg(erroreScarico); return; }
 
     // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
     // righe, così il fatturato per prodotto in Magazzino/Analisi resta
@@ -34426,43 +34542,56 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 
     if (Object.keys(deltaPerProdotto).length === 0) return true;
 
-    // nessuna giacenza può andare sotto zero: se lo scarico farebbe
-    // scendere un prodotto in negativo si blocca TUTTO (nessun update
-    // parziale) e si spiega cosa fare. Se il prodotto è il pezzo sfuso di
-    // un box sigillato, la mossa non è comprare: è aprire una confezione
-    // (azione fisica che qualcuno deve compiere davvero, mai automatica)
-    const mancanti = [];
+    // nessuna giacenza può andare sotto zero: quello che il magazzino
+    // fisico non copre si prende dalla riserva dello shop online, ma solo
+    // fino alla scorta minima impostata sulla riga del prodotto — lì il
+    // sistema blocca TUTTO (nessun update parziale) perché quel corso, con
+    // le scorte di oggi, non si può allestire. Se il
+    // prodotto è il pezzo sfuso di un box sigillato, la mossa non è
+    // comprare: è aprire una confezione (azione fisica che qualcuno deve
+    // compiere davvero, mai automatica)
+    const righeKit = [];
     Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
       if (delta >= 0) return;
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       if (!prodotto || prodotto.conta_magazzino === false) return;
-      const risultante = (prodotto.giacenza_magazzino || 0) + delta;
-      if (risultante < 0) {
-        const box = prodottiShop.find((b) => b.prodotto_sfuso_id === prodottoId && b.attivo !== false);
-        mancanti.push({ nome: prodotto.nome, servono: -delta, inMagazzino: prodotto.giacenza_magazzino || 0, box });
-      }
+      righeKit.push({ prodotto, quantita: -delta });
     });
-    if (mancanti.length > 0) {
-      const righe = mancanti.map((m) => {
-        if (m.box && (m.box.giacenza_magazzino || 0) > 0) {
-          const daAprire = Math.ceil((m.servono - m.inMagazzino) / Math.max(1, m.box.pezzi_per_confezione || 1));
-          return `• "${m.nome}": servono ${m.servono} pezzi, in magazzino ce ne sono ${m.inMagazzino}. Apri ${daAprire} confezion${daAprire === 1 ? "e" : "i"} di "${m.box.nome}" (Gestione magazzino → Apri confezione) e riprova.`;
+    const pianiKit = preparaScarichi(righeKit, {
+      // qui la scorta minima NON si supera nemmeno con una conferma: la
+      // riserva dello shop online è il limite oltre il quale il corso non
+      // si può allestire, e va detto subito con nome e data
+      sogliaInvalicabile: true,
+      titoloBlocco: `NON TI SARÀ POSSIBILE ALLESTIRE IL CORSO DEL ${fmtData(corsoData.data_inizio)}`,
+      suggerimento: (prodotto, mancanti) => {
+        const box = prodottiShop.find((b) => b.prodotto_sfuso_id === prodotto.id && b.attivo !== false);
+        if (box && (box.giacenza_magazzino || 0) > 0) {
+          const daAprire = Math.ceil(mancanti / Math.max(1, box.pezzi_per_confezione || 1));
+          return `Apri ${daAprire} confezion${daAprire === 1 ? "e" : "i"} di "${box.nome}" (Gestione magazzino → Apri confezione) e riprova.`;
         }
-        return `• "${m.nome}": servono ${m.servono} pezzi, in magazzino ce ne sono ${m.inMagazzino}. Carica il magazzino prima di scaricare i kit.`;
-      });
-      window.alert("Scarico kit bloccato — il magazzino non basta e nessuna giacenza può andare sotto zero:\n\n" + righe.join("\n"));
-      return false;
-    }
+        return "Carica il magazzino prima di scaricare i kit.";
+      },
+    });
+    if (!pianiKit) return false;
 
-    // scarico/rientro dei kit è un movimento FISICO (esce/rientra dalla
-    // sede): tocca solo giacenza_magazzino, mai giacenza (shop online,
-    // sincronizzata con WooCommerce) — altrimenti preparare un kit
-    // cambierebbe silenziosamente la disponibilità mostrata online
-    await Promise.all(Object.entries(deltaPerProdotto).map(([prodottoId, delta]) => {
+    // scarico/rientro dei kit resta un movimento FISICO: i rientri (delta
+    // positivo) e i prodotti che non contano a magazzino tornano dritti in
+    // giacenza_magazzino, mentre gli scarichi veri seguono la cascata qui
+    // sopra — che, quando il magazzino è a zero, intacca anche la
+    // disponibilità online invece di bloccare la preparazione del corso
+    const scrittureDirette = Object.entries(deltaPerProdotto).filter(([prodottoId, delta]) => {
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      if (!prodotto) return null;
+      return prodotto && (delta > 0 || prodotto.conta_magazzino === false);
+    });
+    await Promise.all(scrittureDirette.map(([prodottoId, delta]) => {
+      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       return supabase.from("prodotti_shop").update({ giacenza_magazzino: (prodotto.giacenza_magazzino || 0) + delta }).eq("id", prodottoId);
     }));
+    const erroreScaricoKit = await applicaScarichi(pianiKit);
+    if (erroreScaricoKit) {
+      window.alert("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
+      return false;
+    }
     await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati });
     return true;
   }
