@@ -27095,6 +27095,17 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
   const larghezzaTabellaMagazzino = COLONNE_MAGAZZINO.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
 
   async function sincronizzaCatalogo() {
+    // da quando la fonte di verità è l'app, importare dal sito serve solo
+    // in un caso: recuperare un prodotto creato direttamente su
+    // WooCommerce. Tutto il resto lo decide qui, e reimportarlo può solo
+    // riportare indietro una modifica appena fatta — per questo l'azione
+    // non è più automatica (il cron è stato spento) e chiede conferma
+    if (!window.confirm(
+      "Importare i prodotti dal sito?\n\n" +
+      "Serve solo se hai creato o rinominato un prodotto direttamente su WooCommerce.\n\n" +
+      "Verranno sovrascritti con la versione del sito: nome, SKU, descrizioni, categorie, immagini e stato.\n" +
+      "NON verranno toccati: stock, prezzi, costi, soglie di riordino, fornitori e configurazioni dei box."
+    )) return;
     setSincronizzando(true);
     setMsgSync("");
     const { data, error } = await supabase.functions.invoke("woo-sync-catalogo");
@@ -27300,9 +27311,9 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
                 sola: dal sito verso qui. Stock e prezzi non si toccano — li
                 decide l'app, il sito ne è lo specchio */}
             <div style={{ textAlign: "right", maxWidth: 230 }}>
-              <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Leggo dal sito…" : "Aggiorna dal sito"}</Button>
+              <Button variant="ghost" onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Importo dal sito…" : "Importa dal sito"}</Button>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 4, lineHeight: 1.35 }}>
-                Prende dal sito nomi, categorie, immagini e stato. Stock e prezzi restano quelli di qui.
+                Da usare solo se hai creato un prodotto direttamente su WooCommerce: riporta indietro nomi, categorie e immagini dal sito.
               </div>
               {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
             </div>
