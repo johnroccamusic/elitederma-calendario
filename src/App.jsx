@@ -27295,8 +27295,15 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
             <Button variant="ghost" onClick={onApriAdvisor}>Advisor</Button>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
             <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
-            <div style={{ textAlign: "right" }}>
-              <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Sincronizzo…" : "Sincronizza catalogo"}</Button>
+            {/* il nome vecchio ("Sincronizza catalogo") non diceva in che
+                direzione andasse la sincronizzazione, e la direzione è una
+                sola: dal sito verso qui. Stock e prezzi non si toccano — li
+                decide l'app, il sito ne è lo specchio */}
+            <div style={{ textAlign: "right", maxWidth: 230 }}>
+              <Button onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Leggo dal sito…" : "Aggiorna dal sito"}</Button>
+              <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 4, lineHeight: 1.35 }}>
+                Prende dal sito nomi, categorie, immagini e stato. Stock e prezzi restano quelli di qui.
+              </div>
               {msgSync && <div style={{ ...fontBody, fontSize: 11.5, color: msgSync.startsWith("Errore") ? "#C0392B" : "#2E7D32", marginTop: 4 }}>{msgSync}</div>}
             </div>
           </div>
