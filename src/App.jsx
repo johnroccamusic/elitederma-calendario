@@ -12803,6 +12803,16 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   const [telefono, setTelefono] = useState(modella.telefono_modella || "");
   useEffect(() => { setNome(modella.nome_modella || ""); }, [modella.nome_modella]);
   useEffect(() => { setTelefono(modella.telefono_modella || ""); }, [modella.telefono_modella]);
+  // MAT/POM si muovono SUBITO, senza aspettare il salvataggio: prima
+  // seguivano solo il dato arrivato dal server, quindi fra il click e il
+  // segno di spunta passavano scrittura + ricaricamento di tutti gli
+  // iscritti. Il salvataggio parte lo stesso in sottofondo e, quando i
+  // dati tornano, questi due useEffect riallineano la casella — se la
+  // scrittura fosse fallita, il segno torna indietro da solo
+  const [mattina, setMattina] = useState(!!modella.mattina);
+  const [pomeriggio, setPomeriggio] = useState(!!modella.pomeriggio);
+  useEffect(() => { setMattina(!!modella.mattina); }, [modella.mattina]);
+  useEffect(() => { setPomeriggio(!!modella.pomeriggio); }, [modella.pomeriggio]);
 
   // altri posti modella dello STESSO allievo (mai di un altro): compaiono
   // solo se ce n'è più di uno in totale, e solo se il chiamante sa dirci
@@ -12850,11 +12860,11 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
                 campo Tel. che altrimenti veniva mozzato */}
             <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
               MAT
-              <input type="checkbox" checked={!!modella.mattina} onChange={(e) => onSalva("mattina", e.target.checked)} />
+              <input type="checkbox" checked={mattina} onChange={(e) => { setMattina(e.target.checked); onSalva("mattina", e.target.checked); }} />
             </label>
             <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", ...fontBody, fontSize: 11, color: NAVY, flexShrink: 0 }}>
               POM
-              <input type="checkbox" checked={!!modella.pomeriggio} onChange={(e) => onSalva("pomeriggio", e.target.checked)} />
+              <input type="checkbox" checked={pomeriggio} onChange={(e) => { setPomeriggio(e.target.checked); onSalva("pomeriggio", e.target.checked); }} />
             </label>
           </>
         )}
