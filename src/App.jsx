@@ -33530,7 +33530,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             position: "fixed", left: 0, right: 0, bottom: 0,
             background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, borderRadius: "16px 16px 0 0",
             boxShadow: "0 -6px 18px rgba(0,0,0,0.10)",
-            padding: "14px 18px calc(env(safe-area-inset-bottom, 0px) + 93px)",
+            padding: "14px 18px calc(env(safe-area-inset-bottom, 0px) + 98px)",
             display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
