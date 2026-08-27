@@ -5225,7 +5225,10 @@ function SezioneDateCorsi({
           onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
         />
       ) : (
-        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} />
+        // spostabile solo dove è già consentito modificare le date (Gestione
+        // corsi passa onEdit/onDelete; Dashboard venditori e Gestione modelle
+        // restano di sola consultazione)
+        <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
       )}
     </div>
   );
@@ -13896,7 +13899,7 @@ function SelettoreSpostamento({ corsi, location, corsiDate, iscritti, corsoDataE
 // in CalendarioModifica, non da questa barra: se lo spostamento la fa
 // comparire in una settimana diversa, React distrugge e ricrea il suo nodo
 // DOM, e qualunque cattura del puntore impostata su di essa andrebbe persa.
-function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento, fontScaleBarre = 1 }) {
+function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriData, corsoById, locById, idEvidenziato, overrideInizio, overrideFine, onDragBarra, onSpostaDaBarra, refEvidenziato, onClickGiornoVuoto, onDoppioClickEvento, fontScaleBarre = 1 }) {
   // su schermi stretti (cellulare) le barre dei corsi diventano illeggibili
   // se restano alla dimensione pensata per desktop: qui si ingrandiscono
   // corsia, intestazione del giorno e i relativi font
@@ -14008,8 +14011,15 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                     key={ev.id}
                     ref={evidenziata ? refEvidenziato : null}
                     onClick={() => gestisciClickBarra(ev)}
-                    onPointerDown={evidenziata && onDragBarra ? (e) => onDragBarra(e, "sposta") : undefined}
-                    title={`${corso?.nome?.toUpperCase()} · ${loc?.nome?.toUpperCase()}${occupancy != null ? ` · ${numeroAllievi}/${capienza}` : ""}`}
+                    onPointerDown={(e) => {
+                      // tasto destro tenuto premuto = sposta il corso nel
+                      // calendario (solo dove è consentito modificare, vedi
+                      // "spostabile" in Calendario). Il click sinistro resta
+                      // com'è: apre la scheda, doppio click elimina
+                      if (onSpostaDaBarra && e.button === 2) { e.preventDefault(); onSpostaDaBarra(e, ev); return; }
+                      if (evidenziata && onDragBarra) onDragBarra(e, "sposta");
+                    }}
+                    title={`${corso?.nome?.toUpperCase()} · ${loc?.nome?.toUpperCase()}${occupancy != null ? ` · ${numeroAllievi}/${capienza}` : ""}${onSpostaDaBarra ? " — tieni premuto il tasto destro per spostarlo" : ""}`}
                     style={{
                       position: "relative",
                       pointerEvents: "auto",
@@ -14036,7 +14046,7 @@ function MeseGriglia({ anno, mese, corsi, location, corsiDate, iscritti, onApriD
                       fontSize: (isMobile ? 9 : 8) * fontScaleBarre,
                       fontWeight: 500,
                       ...fontBody,
-                      cursor: evidenziata ? "grab" : "pointer",
+                      cursor: evidenziata ? (onSpostaDaBarra ? "grabbing" : "grab") : "pointer",
                       touchAction: evidenziata ? "none" : undefined,
                       userSelect: evidenziata ? "none" : undefined,
                       boxShadow: evidenziata ? "0 0 0 2px #fff, 0 0 0 4px " + NAVY : "none",
@@ -14160,9 +14170,85 @@ function PopupEliminaData({ evento, corsoById, locById, onElimina, onChiudi }) {
   );
 }
 
-function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1, scrollMarginTop = 54 }) {
+function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, onBack, ricarica, apriPopupInizialeData, fontScaleBarre = 1, scrollMarginTop = 54, spostabile = false }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
+
+  // ---- spostare un corso trascinandolo col TASTO DESTRO del mouse ----
+  // Mentre il tasto resta premuto la barra segue il puntatore giorno per
+  // giorno: l'anteprima è "finta" (vive solo qui in memoria, vedi
+  // spostamento) e il database si tocca una sola volta, al rilascio. Il
+  // giorno sotto il puntatore si legge dal DOM (celle con data-data), non
+  // dai pixel percorsi: così si può saltare direttamente su un'altra
+  // settimana o un altro mese senza passare per i giorni intermedi.
+  const [spostamento, setSpostamento] = useState(null); // { id, inizio, fine } o null
+  const dragSpostaRef = React.useRef(null);
+  const contenitoreRef = React.useRef(null);
+
+  function trovaGiornoSotto(clientX, clientY) {
+    const pila = document.elementsFromPoint(clientX, clientY);
+    for (const el of pila) {
+      if (el.hasAttribute && el.hasAttribute("data-data")) return el.getAttribute("data-data");
+    }
+    return null;
+  }
+  // vicino al bordo alto/basso della finestra la pagina scorre da sola,
+  // altrimenti non si potrebbe raggiungere un mese fuori dalla vista
+  function autoScrollFinestra(clientY) {
+    const margine = 80;
+    if (clientY < margine) window.scrollBy(0, -18);
+    else if (clientY > window.innerHeight - margine) window.scrollBy(0, 18);
+  }
+
+  function iniziaSpostamento(e, ev) {
+    // la cattura del puntatore va sul CONTENITORE (che non sparisce mai):
+    // spostando il corso su un'altra settimana React distrugge e ricrea il
+    // nodo della barra, e una cattura impostata su di essa andrebbe persa
+    contenitoreRef.current?.setPointerCapture?.(e.pointerId);
+    const giornoAggancio = trovaGiornoSotto(e.clientX, e.clientY) || ev.data_inizio;
+    dragSpostaRef.current = {
+      pointerId: e.pointerId, id: ev.id,
+      origInizio: ev.data_inizio, origFine: ev.data_fine || ev.data_inizio,
+      giornoAggancio, ultimoGiorno: giornoAggancio,
+    };
+    setSpostamento({ id: ev.id, inizio: ev.data_inizio, fine: ev.data_fine || ev.data_inizio });
+  }
+  function posizioneDa(d, giornoSotto) {
+    const delta = differenzaGiorni(d.giornoAggancio, giornoSotto);
+    return { id: d.id, inizio: addGiorni(d.origInizio, delta), fine: addGiorni(d.origFine, delta) };
+  }
+  function muoviSpostamento(e) {
+    const d = dragSpostaRef.current;
+    if (!d || e.pointerId !== d.pointerId) return;
+    autoScrollFinestra(e.clientY);
+    const giornoSotto = trovaGiornoSotto(e.clientX, e.clientY);
+    if (!giornoSotto || giornoSotto === d.ultimoGiorno) return;
+    d.ultimoGiorno = giornoSotto;
+    setSpostamento(posizioneDa(d, giornoSotto));
+  }
+  async function fineSpostamento(e) {
+    const d = dragSpostaRef.current;
+    if (!d) return;
+    dragSpostaRef.current = null;
+    // la posizione finale si ricalcola dalle coordinate del rilascio, non
+    // dall'ultimo movimento ricevuto: il corso resta esattamente dove viene
+    // lasciato
+    const giornoSotto = trovaGiornoSotto(e.clientX, e.clientY) || d.ultimoGiorno;
+    const finale = posizioneDa(d, giornoSotto);
+    if (finale.inizio === d.origInizio) { setSpostamento(null); return; }
+    // l'anteprima resta sul punto di rilascio finché non si decide, così la
+    // barra non "rimbalza" indietro mentre si legge la richiesta di conferma
+    setSpostamento(finale);
+    const ev = corsiDate.find((cd) => cd.id === d.id);
+    const nome = [corsoById[ev?.corso_id]?.nome, locById[ev?.location_id]?.nome].filter(Boolean).join(" · ").toUpperCase();
+    const daTesto = d.origInizio === d.origFine ? fmtData(d.origInizio) : `${fmtData(d.origInizio)} → ${fmtData(d.origFine)}`;
+    const aTesto = finale.inizio === finale.fine ? fmtData(finale.inizio) : `${fmtData(finale.inizio)} → ${fmtData(finale.fine)}`;
+    if (!window.confirm(`Spostare ${nome}?\n\nDa: ${daTesto}\nA:  ${aTesto}`)) { setSpostamento(null); return; }
+    const { error } = await supabase.from("corsi_date").update({ data_inizio: finale.inizio, data_fine: finale.fine }).eq("id", d.id);
+    setSpostamento(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["corsi_date"]);
+  }
 
   // apriPopupInizialeData: solo chi monta un Calendario fresco apposta per
   // aggiungere subito una data (es. tasto "Aggiungi Corso" di Gestione
@@ -14203,13 +14289,24 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
   }, []);
 
   return (
-    <div style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}>
+    <div
+      ref={contenitoreRef}
+      onPointerMove={spostabile ? muoviSpostamento : undefined}
+      onPointerUp={spostabile ? fineSpostamento : undefined}
+      onPointerCancel={spostabile ? fineSpostamento : undefined}
+      // nel calendario il tasto destro serve a spostare i corsi: il menù
+      // contestuale del browser va soppresso, altrimenti su Windows compare
+      // al rilascio e su Mac alla pressione, interrompendo il trascinamento
+      onContextMenu={spostabile ? (e) => e.preventDefault() : undefined}
+      style={{ maxWidth: 820, margin: "0 auto", padding: "40px 20px" }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <TopBar title="Calendario" onBack={onBack} />
         <Button variant="ghost" onClick={() => refOggi.current?.scrollIntoView({ block: "start", behavior: "smooth" })}>Oggi</Button>
       </div>
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 16 }}>
         Scorri su o giù per vedere gli altri mesi. Clicca un corso per aprire iscritti e posti disponibili (doppio click per eliminarlo), clicca un giorno vuoto per crearne uno nuovo.
+        {spostabile && <> Per <b>spostare un corso</b>: tieni premuto il <b>tasto destro</b> sulla sua barra e trascinalo sul giorno voluto.</>}
       </div>
 
       {mesi.map(({ anno, mese }) => (
@@ -14225,6 +14322,9 @@ function Calendario({ corsi, location, corsiDate, iscritti, master, onApriData, 
             onClickGiornoVuoto={setPopupNuovo}
             onDoppioClickEvento={setPopupElimina}
             fontScaleBarre={fontScaleBarre}
+            onSpostaDaBarra={spostabile ? iniziaSpostamento : undefined}
+            idEvidenziato={spostamento?.id}
+            overrideInizio={spostamento?.inizio} overrideFine={spostamento?.fine}
           />
         </div>
       ))}
