@@ -9876,7 +9876,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, impostazioniMagazzino, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -9885,6 +9885,25 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     const { error } = await supabase.from("impostazioni_iva").update({ aliquota_default: nuovo }).eq("id", true);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["impostazioni_iva"]);
+  }
+  // parametri di riordino: valgono per tutto il magazzino e nascono VUOTI.
+  // Finché non sono impostati l'Advisor non calcola nessuna data limite
+  // d'ordine — segnala solo le scorte sotto soglia. È voluto: una data
+  // ricavata da parametri inventati sarebbe peggio del silenzio
+  const [margineSicurezzaInput, setMargineSicurezzaInput] = useState(impostazioniMagazzino?.giorni_sicurezza_default != null ? String(impostazioniMagazzino.giorni_sicurezza_default) : "");
+  const [coperturaInput, setCoperturaInput] = useState(impostazioniMagazzino?.orizzonte_copertura_giorni != null ? String(impostazioniMagazzino.orizzonte_copertura_giorni) : "");
+  useEffect(() => {
+    setMargineSicurezzaInput(impostazioniMagazzino?.giorni_sicurezza_default != null ? String(impostazioniMagazzino.giorni_sicurezza_default) : "");
+    setCoperturaInput(impostazioniMagazzino?.orizzonte_copertura_giorni != null ? String(impostazioniMagazzino.orizzonte_copertura_giorni) : "");
+  }, [impostazioniMagazzino]);
+  async function salvaParametroMagazzino(campo, testo, ripristina) {
+    const t = String(testo || "").trim();
+    const nuovo = t === "" ? null : parseInt(parseNum(t), 10);
+    if (t !== "" && (!Number.isFinite(nuovo) || nuovo < 0)) { window.alert("Scrivi un numero di giorni valido."); ripristina(); return; }
+    if (nuovo === (impostazioniMagazzino?.[campo] ?? null)) return;
+    const { error } = await supabase.from("impostazioni_magazzino").upsert({ id: true, [campo]: nuovo }, { onConflict: "id" });
+    if (error) { window.alert("Errore: " + error.message); ripristina(); return; }
+    ricarica(["impostazioni_magazzino"]);
   }
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
@@ -10203,6 +10222,30 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
         <div style={{ display: "flex", gap: 8 }}>
           <input style={{ ...inputStyle, width: 90 }} inputMode="decimal" value={aliquotaIvaDefaultInput} onChange={(e) => setAliquotaIvaDefaultInput(e.target.value)} onBlur={salvaAliquotaIvaDefault} />
           <div style={{ ...fontBody, fontSize: 14, color: NAVY, display: "flex", alignItems: "center" }}>%</div>
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, padding: 20, maxWidth: 340, marginTop: 14 }}>
+        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 4 }}>Magazzino e riordini</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+          Servono all'Advisor per dire entro quando ordinare. Finché restano vuoti l'Advisor segnala solo le scorte sotto soglia e non calcola nessuna data.
+        </div>
+        <Field label="Margine di sicurezza (giorni)">
+          <input
+            style={{ ...inputStyle, width: 110 }} inputMode="numeric" placeholder="es. 7"
+            value={margineSicurezzaInput} onChange={(e) => setMargineSicurezzaInput(e.target.value)}
+            onBlur={() => salvaParametroMagazzino("giorni_sicurezza_default", margineSicurezzaInput, () => setMargineSicurezzaInput(impostazioniMagazzino?.giorni_sicurezza_default != null ? String(impostazioniMagazzino.giorni_sicurezza_default) : ""))}
+          />
+        </Field>
+        <Field label="Copertura da ordinare (giorni)">
+          <input
+            style={{ ...inputStyle, width: 110 }} inputMode="numeric" placeholder="es. 60"
+            value={coperturaInput} onChange={(e) => setCoperturaInput(e.target.value)}
+            onBlur={() => salvaParametroMagazzino("orizzonte_copertura_giorni", coperturaInput, () => setCoperturaInput(impostazioniMagazzino?.orizzonte_copertura_giorni != null ? String(impostazioniMagazzino.orizzonte_copertura_giorni) : ""))}
+          />
+        </Field>
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+          Il tempo di consegna invece si scrive prodotto per prodotto, nella scheda prodotto: cambia troppo da un articolo all'altro per avere un valore unico.
         </div>
       </div>
 
@@ -25500,7 +25543,17 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // riflette in locale, poi si imposta lo stock iniziale. Senza prezzo
 // (materiali di consumo, arredi, altro non in vendita) resta solo
 // locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
-function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
+// campo numerico opzionale: vuoto significa "non impostato" (null), mai
+// zero. La differenza conta: un tempo di consegna a 0 vorrebbe dire "arriva
+// subito" e farebbe calcolare all'Advisor una data limite d'ordine falsa,
+// mentre null gli fa dire "non posso esprimermi su questo prodotto"
+function interoOpzionale(testo) {
+  const t = String(testo ?? "").trim();
+  if (t === "") return null;
+  const n = parseInt(parseNum(t), 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
   const isMobile = useIsMobile();
   const [nome, setNome] = useState(prodotto?.nome || "");
   const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
@@ -25515,6 +25568,14 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
   const [aliquotaAcquisto, setAliquotaAcquisto] = useState(prodotto?.aliquota_iva_acquisto ?? aliquotaIvaDefault);
   const [qtaMagazzino, setQtaMagazzino] = useState(prodotto?.giacenza_magazzino != null ? String(prodotto.giacenza_magazzino) : "");
   const [qtaShop, setQtaShop] = useState(prodotto?.giacenza != null ? String(prodotto.giacenza) : "");
+  // scorta e riordino: la scorta minima è LO STESSO campo della lista
+  // prodotti (prodotti_shop.scorta_minima), non un secondo campo; gli
+  // altri quattro servono all'Advisor per dire entro quando ordinare
+  const [scortaMinima, setScortaMinima] = useState(prodotto?.scorta_minima != null ? String(prodotto.scorta_minima) : "");
+  const [leadTime, setLeadTime] = useState(prodotto?.lead_time_giorni != null ? String(prodotto.lead_time_giorni) : "");
+  const [giorniSicurezza, setGiorniSicurezza] = useState(prodotto?.giorni_sicurezza != null ? String(prodotto.giorni_sicurezza) : "");
+  const [fornitoreId, setFornitoreId] = useState(prodotto?.fornitore_id || "");
+  const [lottoMinimo, setLottoMinimo] = useState(prodotto?.lotto_minimo_ordine != null ? String(prodotto.lotto_minimo_ordine) : "");
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
   const [soloOfflineChk, setSoloOfflineChk] = useState(!!prodotto?.solo_offline);
@@ -25625,6 +25686,14 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
       aliquota_iva_acquisto: tipoProdotto === "vetrina" || bundleVirtualeForm ? null : aliquotaAcquisto,
       aliquota_iva_vendita: tipoProdotto === "vetrina" || tipoProdotto === "componente" ? null : aliquotaVendita,
       iva_verificata: true,
+      // scorta e riordino: partono dallo stato, che è inizializzato dal
+      // prodotto — quindi un salvataggio da una scheda dove il riquadro non
+      // è visibile riscrive gli stessi valori, non li azzera
+      scorta_minima: interoOpzionale(scortaMinima),
+      lead_time_giorni: interoOpzionale(leadTime),
+      giorni_sicurezza: interoOpzionale(giorniSicurezza),
+      fornitore_id: fornitoreId || null,
+      lotto_minimo_ordine: interoOpzionale(lottoMinimo),
       bundle_con_giacenza_fisica: bundleConFisica,
       prodotto_sfuso_id: bundleConFisica && prodottoSfusoId ? prodottoSfusoId : null,
       pezzi_per_confezione: bundleConFisica && parseNum(pezziConfezione) > 0 ? parseInt(parseNum(pezziConfezione), 10) : null,
@@ -25931,6 +26000,47 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, onClose, onFatto
           <button onClick={aggiungiComponente} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", width: "100%" }}>
             + Aggiungi componente
           </button>
+        </div>
+      )}
+
+      {giacenzaPropria && (
+        <div style={{ marginBottom: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Scorta e riordino</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 120px" }}>
+              <Field label="Scorta minima">
+                <input style={inputStyle} inputMode="numeric" value={scortaMinima} onChange={(e) => setScortaMinima(e.target.value)} placeholder="—" />
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 150px" }}>
+              <Field label="Tempo di consegna (giorni)">
+                <input style={inputStyle} inputMode="numeric" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} placeholder="es. 45" />
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 150px" }}>
+              <Field label="Margine di sicurezza (giorni)">
+                <input style={inputStyle} inputMode="numeric" value={giorniSicurezza} onChange={(e) => setGiorniSicurezza(e.target.value)} placeholder="da Impostazioni" />
+              </Field>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "2 1 220px" }}>
+              <Field label="Fornitore">
+                <select style={inputStyle} value={fornitoreId} onChange={(e) => setFornitoreId(e.target.value)}>
+                  <option value="">— nessuno —</option>
+                  {(fornitori || []).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 150px" }}>
+              <Field label="Lotto minimo d'ordine">
+                <input style={inputStyle} inputMode="numeric" value={lottoMinimo} onChange={(e) => setLottoMinimo(e.target.value)} placeholder="—" />
+              </Field>
+            </div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+            Senza tempo di consegna l'Advisor non può dire entro quando ordinare questo prodotto: resta solo l'avviso "sotto scorta".
+          </div>
         </div>
       )}
 
@@ -26673,7 +26783,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, venditeShop, ricarica, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, fornitori, venditeShop, ricarica, onBack, titolo = "Gestione magazzino" }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -27191,6 +27301,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           categorieProdotti={categorieProdotti}
           prodottiShop={prodottiShop}
           padreIniziale={nuovaVariantePadreId}
+          fornitori={fornitori}
           aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
           onClose={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); }}
           onFatto={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); ricarica(["prodotti_shop"]); }}
@@ -27202,6 +27313,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           prodottiShop={prodottiShop}
           prodotto={prodottoInModifica}
           categoriaIdIniziale={(prodottiCategorie || []).find((pc) => pc.prodotto_id === prodottoInModifica.id)?.categoria_id || ""}
+          fornitori={fornitori}
           aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
           onClose={() => setProdottoInModifica(null)}
           onFatto={() => { setProdottoInModifica(null); ricarica(["prodotti_shop", "prodotti_categorie"]); }}
@@ -38139,6 +38251,7 @@ export default function App() {
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
   const [impostazioniIva, setImpostazioniIva] = useState(null);
+  const [impostazioniMagazzino, setImpostazioniMagazzino] = useState(null);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
   // obiettivi individuali (Target Master/Venditori, Impostazioni > Vendite
   // prodotti) sulle vendite POS: incasso, quantità di prodotto, o entrambi
@@ -38291,6 +38404,7 @@ export default function App() {
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
     impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
+    impostazioni_magazzino: async () => setImpostazioniMagazzino((await supabase.from("impostazioni_magazzino").select("*").maybeSingle()).data || null),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
     prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
     prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
@@ -38435,7 +38549,7 @@ export default function App() {
     home: [], erp: [], magazzinoshop: [], statistiche: [],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "impostazioni_magazzino"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
@@ -38455,7 +38569,7 @@ export default function App() {
     venditealbanco: ["vendite_shop"],
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -39255,7 +39369,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
+        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
       )}
 
       {view === "gestionedate" && (
@@ -39504,7 +39618,7 @@ export default function App() {
       {view === "magazzino" && (
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva}
+          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
