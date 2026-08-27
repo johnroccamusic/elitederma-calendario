@@ -25753,8 +25753,15 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
   // prezzo di vendita: sempre netto salvato, il lordo è calcolato (vedi
   // BloccoPrezzoIva) — "modoVendita" dice solo cosa rappresenta il testo
   // digitato in QUESTO momento, non cosa viene salvato
-  const [prezzo, setPrezzo] = useState(prodotto?.prezzo_vendita != null ? String(prodotto.prezzo_vendita) : "");
-  const [modoVendita, setModoVendita] = useState("netto");
+  // il prezzo di vendita si apre sempre sul LORDO: è il numero che paga il
+  // cliente, quello che sta in testa a chi lavora e quello che si legge sul
+  // sito. Il netto resta a un clic di distanza, e lo salvato è comunque il netto
+  const [prezzo, setPrezzo] = useState(
+    prodotto?.prezzo_vendita != null
+      ? String(round2(prodotto.prezzo_vendita * (1 + (prodotto.aliquota_iva_vendita ?? aliquotaIvaDefault) / 100)))
+      : ""
+  );
+  const [modoVendita, setModoVendita] = useState("lordo");
   const [aliquotaVendita, setAliquotaVendita] = useState(prodotto?.aliquota_iva_vendita ?? aliquotaIvaDefault);
   const [costo, setCosto] = useState(prodotto?.costo_acquisto != null ? String(prodotto.costo_acquisto) : "");
   const [modoAcquisto, setModoAcquisto] = useState("netto");
@@ -26506,6 +26513,7 @@ const COLONNE_MAGAZZINO = [
   // margine di sicurezza ha il suo valore generale in Impostazioni e il
   // lotto minimo è facoltativo: non fanno colore
   { label: "S/R", campo: "riordinoCompleto", direzioneIniziale: "asc", larghezza: 40 },
+  { label: "", campo: null, larghezza: 34 },
 ];
 
 function fmtDataIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -26761,7 +26769,7 @@ function ModaleApriConfezione({ boxId, prodottiShop, onClose, ricarica }) {
   );
 }
 
-function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione }) {
+function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIspezione, onApriConfezione, onElimina }) {
   // prezzo di vendita e costo di acquisto non sono più modificabili da
   // qui: si generano solo dalla scheda prodotto (con l'IVA), che decide
   // anche cosa mandare a WooCommerce (il lordo, mai il netto)
@@ -26942,18 +26950,38 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         {p.giacenza_propria === false || p.conta_magazzino === false ? (
           <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>—</span>
         ) : (() => {
-          const mancano = [
+          const mancanoSR = [
             p.soglia_riordino == null ? "soglia di riordino" : null,
             p.lead_time_giorni == null ? "tempo di consegna" : null,
             !p.fornitore_id ? "fornitore" : null,
           ].filter(Boolean);
           return (
             <span
-              title={mancano.length ? `Manca: ${mancano.join(", ")}` : "Scorta e riordino completi"}
-              style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: mancano.length ? "#C0392B" : "#2E7D32" }}
+              title={mancanoSR.length ? `Manca: ${mancanoSR.join(", ")}` : "Scorta e riordino completi"}
+              style={{ display: "inline-block", width: 9, height: 9, borderRadius: "50%", background: mancanoSR.length ? "#C0392B" : "#2E7D32" }}
             />
           );
         })()}
+      </td>
+      {/* il cestino c'è solo per i prodotti mai venduti: cancellare un
+          prodotto con uno storico spezzerebbe le vendite che lo citano,
+          quindi lì non si offre nemmeno l'opzione */}
+      <td style={{ ...tdStyle, textAlign: "center" }}>
+        {(p.quantitaVenduta || 0) > 0 ? (
+          <span title={`Ha uno storico di vendite (${p.quantitaVenduta} pezzi): non si può cancellare`} style={{ ...fontBody, fontSize: 11, color: "#D8D3C6" }}>—</span>
+        ) : (
+          <button
+            onClick={() => onElimina(p)}
+            title="Cancella definitivamente questo prodotto"
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 2, lineHeight: 1, color: "#C0392B", opacity: 0.75 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18" /><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+              <path d="M10 11v6M14 11v6" />
+            </svg>
+          </button>
+        )}
       </td>
     </tr>
   );
@@ -27104,6 +27132,37 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
   const larghezzaTabellaMagazzino = COLONNE_MAGAZZINO.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
+
+  // cancellazione definitiva di un prodotto. Prima di toccare qualunque
+  // cosa si controlla dove è usato: "corsi_kit_prodotti" è a cascata, quindi
+  // cancellare un prodotto lo toglierebbe in silenzio da tutti i kit dei
+  // corsi che lo contengono — meglio fermarsi e dirlo
+  async function eliminaProdotto(p) {
+    if ((p.quantitaVenduta || 0) > 0) {
+      window.alert(`"${p.nome}" ha uno storico di vendite (${p.quantitaVenduta} pezzi): non si può cancellare, altrimenti quelle vendite resterebbero senza prodotto.`);
+      return;
+    }
+    const kitCheLoUsano = (corsiKitProdotti || []).filter((r) => r.prodotto_id === p.id).length;
+    if (kitCheLoUsano > 0) {
+      window.alert(`"${p.nome}" fa parte di ${kitCheLoUsano} kit dei corsi. Toglilo prima da quei kit (Impostazioni → Tipologie di kit), altrimenti sparirebbe anche da lì.`);
+      return;
+    }
+    const bundleCheLoUsano = (bundleComponenti || []).filter((bc) => bc.componente_id === p.id).length;
+    if (bundleCheLoUsano > 0) {
+      window.alert(`"${p.nome}" è un componente di ${bundleCheLoUsano} bundle. Toglilo prima dalle loro distinte base.`);
+      return;
+    }
+    const suWoo = !!p.woo_product_id;
+    if (!window.confirm(`Sei sicuro di cancellare questo prodotto?\n\n"${p.nome}"${suWoo ? "\n\nVerrà eliminato anche dallo shop online." : ""}\n\nL'operazione non si può annullare.`)) return;
+
+    if (suWoo) {
+      const { data, error } = await supabase.functions.invoke("woo-elimina-prodotto", { body: { prodottoId: p.id } });
+      if (error || data?.errore) { window.alert("Non sono riuscito a cancellarlo dallo shop online: " + (data?.errore || error.message)); return; }
+    }
+    const { error } = await supabase.from("prodotti_shop").delete().eq("id", p.id);
+    if (error) { window.alert("Errore nella cancellazione: " + error.message); return; }
+    ricarica(["prodotti_shop", "prodotti_categorie", "bundle_componenti"]);
+  }
 
   async function sincronizzaCatalogo() {
     // da quando la fonte di verità è l'app, importare dal sito serve solo
@@ -27480,7 +27539,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
