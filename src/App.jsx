@@ -1664,6 +1664,68 @@ const inputStyle = {
 // con pochi campi, troppo alto per una tabella di più righe
 const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 };
 
+// tendina con ricerca: una <select> nativa va benissimo per dieci voci,
+// ma con 140 fornitori in ordine alfabetico trovare il proprio significa
+// scorrere a mano fino alla lettera giusta. Qui la lista si apre con una
+// riga di ricerca in testa e si filtra per parola mentre si scrive.
+// opzioni = [{ id, nome }]; valore "" significa nessuna scelta
+function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessuno —", placeholderRicerca = "Cerca per parola…" }) {
+  const [aperta, setAperta] = useState(false);
+  const [filtro, setFiltro] = useState("");
+  const contenitore = useRef(null);
+  // chiusura al clic fuori: senza, la tendina resterebbe aperta sopra il
+  // resto del form e coprirebbe i campi sotto
+  useEffect(() => {
+    if (!aperta) return;
+    function fuori(e) { if (contenitore.current && !contenitore.current.contains(e.target)) setAperta(false); }
+    document.addEventListener("mousedown", fuori);
+    return () => document.removeEventListener("mousedown", fuori);
+  }, [aperta]);
+
+  const scelta = (opzioni || []).find((o) => o.id === valore) || null;
+  const q = filtro.trim().toLowerCase();
+  const filtrate = q ? (opzioni || []).filter((o) => (o.nome || "").toLowerCase().includes(q)) : (opzioni || []);
+  const rigaStile = (attiva) => ({
+    ...fontBody, fontSize: 13, color: NAVY, background: attiva ? "#F4F1E8" : "transparent",
+    border: "none", width: "100%", textAlign: "left", padding: "7px 10px", cursor: "pointer",
+    fontWeight: attiva ? 700 : 400, borderRadius: 6,
+  });
+
+  return (
+    <div ref={contenitore} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => { setAperta((a) => !a); setFiltro(""); }}
+        style={{ ...inputStyle, background: "#fff", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}
+      >
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: scelta ? NAVY : MUTED }}>
+          {scelta ? scelta.nome : etichettaVuoto}
+        </span>
+        <span style={{ color: MUTED, fontSize: 11 }}>▾</span>
+      </button>
+      {aperta && (
+        <div style={{ position: "absolute", zIndex: 60, top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 10px 28px rgba(14,27,51,0.16)", padding: 8 }}>
+          <input
+            autoFocus style={{ ...inputStyle, marginBottom: 6 }} placeholder={placeholderRicerca}
+            value={filtro} onChange={(e) => setFiltro(e.target.value)}
+          />
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            <button type="button" onClick={() => { onCambia(""); setAperta(false); }} style={rigaStile(!valore)}>{etichettaVuoto}</button>
+            {filtrate.map((o) => (
+              <button type="button" key={o.id} onClick={() => { onCambia(o.id); setAperta(false); }} style={rigaStile(o.id === valore)}>
+                {o.nome}
+              </button>
+            ))}
+            {filtrate.length === 0 && (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "8px 10px" }}>Nessun risultato per "{filtro.trim()}".</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- helper per i calcoli di imponibile/IVA/totale ----------
 const PREZZO_MODELLA = 60;
 
@@ -26155,10 +26217,12 @@ function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricar
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={{ flex: "2 1 220px" }}>
               <Field label="Fornitore">
-                <select style={inputStyle} value={fornitoreId} onChange={(e) => setFornitoreId(e.target.value)}>
-                  <option value="">— nessuno —</option>
-                  {(fornitori || []).map((f) => <option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
+                <TendinaRicerca
+                  valore={fornitoreId}
+                  opzioni={[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                  onCambia={setFornitoreId}
+                  placeholderRicerca="Cerca fornitore…"
+                />
               </Field>
             </div>
             <div style={{ flex: "1 1 150px" }}>
