@@ -26783,7 +26783,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, fornitori, venditeShop, ricarica, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, onBack, titolo = "Gestione magazzino" }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -27063,6 +27063,16 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
   const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
   const avvisiMagazzino = useMemo(() => calcolaAvvisiMagazzino(prodottiShop), [prodottiShop]);
+  // sintesi dell'Advisor, in una riga sola: la stessa simulazione della
+  // pagina dedicata, qui ridotta al titolo e al conteggio di cosa ordinare
+  const sintesiAdvisor = useMemo(() => {
+    const oggi = dataOggiStr();
+    const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi });
+    const piano = pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi });
+    const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
+    const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente").length;
+    return { risultato, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, impostazioniMagazzino]);
 
   // i totali aggregati contano solo chi ha davvero un magazzino da
   // sommare: un bundle/vetrina con conta_magazzino=false falserebbe la
@@ -27111,6 +27121,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
+            <Button variant="ghost" onClick={onApriAdvisor}>Advisor</Button>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
             <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
             <div style={{ textAlign: "right" }}>
@@ -27136,6 +27147,30 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           </div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Magazzino fisico e shop online insieme. Clicca sul nome per modificare il prodotto, sullo stock totale per aggiornare il magazzino.</div>
+
+        {(() => {
+          const { risultato, daOrdinare, ritardi } = sintesiAdvisor;
+          const critico = !!risultato.dataCriticaComplessiva;
+          const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
+          const sfondo = ritardi || critico ? "#FBE4E1" : daOrdinare ? "#FBF1D9" : "#E3F3E5";
+          return (
+            <button
+              onClick={onApriAdvisor}
+              style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "12px 16px", marginBottom: 22, borderRadius: 12, border: `1px solid ${colore}44`, background: sfondo, cursor: "pointer" }}
+            >
+              <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, minWidth: 0 }}>
+                <b style={{ color: colore }}>Advisor</b>{" — "}
+                {risultato.modalita === "senza_date"
+                  ? "nessun corso futuro in calendario: nessuna previsione possibile"
+                  : critico
+                    ? `autonomia fino al ${fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}, poi un corso resta scoperto`
+                    : `copri tutti i ${risultato.edizioniConsiderate} corsi in calendario`}
+                {daOrdinare > 0 && <> · <b>{daOrdinare}</b> prodotti da ordinare{ritardi > 0 ? `, ${ritardi} in ritardo` : ""}</>}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>apri ›</span>
+            </button>
+          );
+        })()}
 
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
@@ -27902,6 +27937,575 @@ async function applicaScarichi(piani) {
     }
   }
   return null;
+}
+
+// ===========================================================
+// ADVISOR — previsione delle scorte (PARTE 2)
+//
+// Risponde a una domanda sola: con le scorte di adesso, fino a quando
+// riesco a coprire i corsi in calendario, e cosa devo ordinare?
+//
+// Tutto ciò che segue è SOLA LETTURA: nessuna giacenza viene toccata, la
+// simulazione vive in memoria e si può rieseguire quante volte si vuole.
+//
+// Regola di fondo: quando un dato manca, l'Advisor TACE su quella riga e
+// la dichiara non calcolabile. Mai una data ricavata da un tempo di
+// consegna inventato — una previsione sbagliata detta con sicurezza è
+// peggio del silenzio.
+// ===========================================================
+
+// disponibilità di un prodotto: magazzino + shop, perché lo scarico
+// attinge a entrambi (vedi pianoScarico). I pacchi sigillati NON si
+// sommano qui: entrano solo se e quando servono, aprendo una confezione
+// dentro la simulazione — sommarli subito conterebbe due volte gli stessi
+// pezzi, una come box e una come sfusi
+function disponibileProdotto(p) {
+  return p ? (p.giacenza_magazzino || 0) + (p.giacenza || 0) : 0;
+}
+// disponibilità "aprendo tutto": serve solo alle viste statiche (quanti
+// kit sono componibili adesso), dove il doppio conteggio non c'è perché
+// box e sfuso non vengono mai sommati sullo stesso prodotto
+function disponibileConPacchi(p, boxPerSfusoId) {
+  const box = boxPerSfusoId.get(p?.id);
+  const daiPacchi = box && box.pezzi_per_confezione > 0 ? disponibileProdotto(box) * box.pezzi_per_confezione : 0;
+  return disponibileProdotto(p) + daiPacchi;
+}
+function mappaBoxPerSfuso(prodottiShop) {
+  const m = new Map();
+  (prodottiShop || []).forEach((b) => {
+    if (b.bundle_con_giacenza_fisica && b.prodotto_sfuso_id && b.attivo !== false) m.set(b.prodotto_sfuso_id, b);
+  });
+  return m;
+}
+
+// fabbisogno di UNA edizione: i kit realmente associati ai suoi iscritti
+// (mai "kit standard × numero iscritti"), più i kit di riserva — che
+// partono davvero nel pacco — più gli accessori decisi sull'edizione.
+// Quello che risulta già scaricato non si conta di nuovo: è già uscito
+// dalle giacenze da cui parte la simulazione.
+function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdotti, statoLogistica) {
+  const perProdotto = {};
+  const nonRisolti = [];
+  const conteggioKit = {};
+
+  (iscritti || []).forEach((i) => {
+    if (i.corso_data_id !== corsoData.id) return;
+    const etichetta = String(i.pacchetto_kit || "").trim();
+    const kit = etichetta
+      ? (kitDefinizioni || []).find((k) => k.corso_id === corsoData.corso_id && k.nome === i.pacchetto_kit)
+      : null;
+    if (!kit) { nonRisolti.push({ iscrittoId: i.id, nome: `${i.nome || ""} ${i.cognome || ""}`.trim(), etichetta }); return; }
+    conteggioKit[kit.id] = (conteggioKit[kit.id] || 0) + 1;
+  });
+
+  Object.entries(statoLogistica?.riserva_per_kit || {}).forEach(([kitId, q]) => {
+    if (q > 0) conteggioKit[kitId] = (conteggioKit[kitId] || 0) + q;
+  });
+
+  const giaScaricato = statoLogistica?.scarico_per_kit || {};
+  Object.entries(conteggioKit).forEach(([kitId, quantita]) => {
+    const residuo = Math.max(0, quantita - (giaScaricato[kitId] || 0));
+    if (!residuo) return;
+    (corsiKitProdotti || []).forEach((r) => {
+      if (r.kit_id !== kitId || r.tipo !== "kit" || !r.prodotto_id) return;
+      perProdotto[r.prodotto_id] = (perProdotto[r.prodotto_id] || 0) + (r.quantita || 0) * residuo;
+    });
+  });
+
+  // accessori dell'edizione: chiave "kitId::prodottoId", "accessorio::prodottoId"
+  // o "extra::prodottoId" — il prodotto è sempre l'ultima parte
+  const accessoriScaricati = statoLogistica?.accessori_scaricati || {};
+  Object.entries(statoLogistica?.accessori_quantita || {}).forEach(([chiave, q]) => {
+    const prodottoId = chiave.split("::")[1];
+    if (!prodottoId) return;
+    const residuo = Math.max(0, (q || 0) - (accessoriScaricati[chiave] || 0));
+    if (residuo > 0) perProdotto[prodottoId] = (perProdotto[prodottoId] || 0) + residuo;
+  });
+
+  return { perProdotto, nonRisolti, conteggioKit };
+}
+
+// il cuore: scorre i corsi futuri in ordine di data sottraendo il
+// fabbisogno da uno stock in memoria. I prodotti condivisi (guanti, aghi)
+// escono da un pool SOLO, mai da simulazioni separate per kit: è la
+// differenza fra un'autonomia vera e una tre volte più ottimista.
+function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi }) {
+  const prodottiPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+  const boxPerSfusoId = mappaBoxPerSfuso(prodottiShop);
+  const statoPerEdizione = Object.fromEntries((logisticaKitEdizioni || []).map((e) => [e.corso_data_id, e]));
+
+  const stock = {};
+  (prodottiShop || []).forEach((p) => { stock[p.id] = disponibileProdotto(p); });
+
+  // pezzi sfusi finiti: si aprono i pacchi sigillati, esattamente come si
+  // farebbe in magazzino. Ritorna quanto manca ancora dopo aver preso
+  // tutto il possibile (0 se coperto)
+  function preleva(prodottoId, quantita) {
+    let restano = quantita;
+    const disponibile = stock[prodottoId] || 0;
+    const preso = Math.min(disponibile, restano);
+    stock[prodottoId] = disponibile - preso;
+    restano -= preso;
+    if (restano <= 0) return 0;
+    const box = boxPerSfusoId.get(prodottoId);
+    const pezzi = box?.pezzi_per_confezione || 0;
+    if (!box || pezzi <= 0) return restano;
+    const confezioni = Math.min(Math.ceil(restano / pezzi), stock[box.id] || 0);
+    if (confezioni <= 0) return restano;
+    stock[box.id] -= confezioni;
+    const caricati = confezioni * pezzi;
+    const usati = Math.min(caricati, restano);
+    stock[prodottoId] = caricati - usati; // l'avanzo resta sullo scaffale sfusi
+    return restano - usati;
+  }
+
+  const edizioni = (corsiDate || [])
+    .filter((cd) => cd.data_inizio && cd.data_inizio >= oggi)
+    .sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+
+  const perProdotto = {};   // prodotto_id -> { fabbisogno, mancante, dataCritica, edizioneCriticaId, richieste[] }
+  const perEdizione = [];   // una riga per corso futuro
+  const perKit = {};        // kit_id -> { richiestiTotali, dataAutonomia, edizioneCriticaId }
+  let dataCriticaComplessiva = null;
+  let edizioneCriticaComplessiva = null;
+  const nonRisoltiTotali = [];
+  let edizioniSenzaIscritti = 0;
+
+  edizioni.forEach((cd) => {
+    const { perProdotto: richiesto, nonRisolti, conteggioKit } =
+      fabbisognoEdizione(cd, iscritti, kitDefinizioni, corsiKitProdotti, statoPerEdizione[cd.id]);
+    nonRisolti.forEach((n) => nonRisoltiTotali.push({ ...n, corsoDataId: cd.id, data: cd.data_inizio }));
+    const haIscritti = (iscritti || []).some((i) => i.corso_data_id === cd.id);
+    if (!haIscritti) edizioniSenzaIscritti += 1;
+
+    const mancantiEdizione = [];
+    Object.entries(richiesto).forEach(([prodottoId, quantita]) => {
+      const p = prodottiPerId[prodottoId];
+      // un prodotto senza giacenza propria (bundle virtuale, vetrina) non
+      // ha uno stock da esaurire: si scarica dai suoi componenti altrove
+      if (!p || p.giacenza_propria === false || p.conta_magazzino === false) return;
+      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, dataCritica: null, edizioneCriticaId: null, richieste: [] });
+      riga.fabbisogno += quantita;
+      riga.richieste.push({ data: cd.data_inizio, quantita });
+      const manca = preleva(prodottoId, quantita);
+      if (manca > 0) {
+        riga.mancante += manca;
+        if (!riga.dataCritica) { riga.dataCritica = cd.data_inizio; riga.edizioneCriticaId = cd.id; }
+        mancantiEdizione.push({ prodottoId, nome: p.nome, servono: quantita, mancano: manca });
+      }
+    });
+
+    Object.entries(conteggioKit).forEach(([kitId, q]) => {
+      const k = perKit[kitId] || (perKit[kitId] = { richiestiTotali: 0, dataAutonomia: null, edizioneCriticaId: null });
+      k.richiestiTotali += q;
+      if (mancantiEdizione.length && !k.dataAutonomia) { k.dataAutonomia = cd.data_inizio; k.edizioneCriticaId = cd.id; }
+    });
+
+    if (mancantiEdizione.length && !dataCriticaComplessiva) {
+      dataCriticaComplessiva = cd.data_inizio;
+      edizioneCriticaComplessiva = cd.id;
+    }
+    perEdizione.push({
+      corsoDataId: cd.id, corsoId: cd.corso_id, data: cd.data_inizio,
+      coperta: mancantiEdizione.length === 0, mancanti: mancantiEdizione,
+      kitRichiesti: conteggioKit, nonRisolti: nonRisolti.length, senzaIscritti: !haIscritti,
+    });
+  });
+
+  return {
+    modalita: edizioni.length ? "cronologica" : "senza_date",
+    edizioniConsiderate: edizioni.length,
+    perProdotto, perEdizione, perKit,
+    dataCriticaComplessiva, edizioneCriticaComplessiva,
+    nonRisolti: nonRisoltiTotali, edizioniSenzaIscritti,
+  };
+}
+
+// quanti kit si compongono ADESSO con le scorte di oggi, e chi li limita.
+// È la vista che funziona anche senza date in calendario, e resta valida
+// pure quando le date ci sono: dice "quanti", non "fino a quando"
+function kitComponibiliOggi(kitDefinizioni, corsiKitProdotti, prodottiShop) {
+  const prodottiPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+  const boxPerSfusoId = mappaBoxPerSfuso(prodottiShop);
+  return (kitDefinizioni || []).map((k) => {
+    const righe = (corsiKitProdotti || []).filter((r) => r.kit_id === k.id && r.tipo === "kit" && r.prodotto_id);
+    const dettagli = righe.map((r) => {
+      const p = prodottiPerId[r.prodotto_id];
+      const disponibile = disponibileConPacchi(p, boxPerSfusoId);
+      const perKit = r.quantita || 0;
+      return {
+        prodottoId: r.prodotto_id, nome: p?.nome || "(prodotto eliminato)", perKit, disponibile,
+        componibili: perKit > 0 ? Math.floor(disponibile / perKit) : null,
+        senzaGiacenza: !p || p.giacenza_propria === false || p.conta_magazzino === false,
+      };
+    });
+    const contano = dettagli.filter((d) => !d.senzaGiacenza && d.componibili != null);
+    return {
+      kit: k,
+      senzaComposizione: righe.length === 0,
+      componibili: contano.length ? Math.min(...contano.map((d) => d.componibili)) : null,
+      dettagli: dettagli.sort((a, b) => (a.componibili ?? Infinity) - (b.componibili ?? Infinity)),
+    };
+  });
+}
+
+// da quanti giorni/entro quando ordinare. Parla SOLO se ha tutti i pezzi:
+// tempo di consegna del prodotto, margine di sicurezza (suo o generale) e
+// una data critica dalla simulazione. Altrimenti la riga finisce fra i
+// "non posso esprimermi", con scritto cosa manca.
+function pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi }) {
+  const margineGenerale = impostazioniMagazzino?.giorni_sicurezza_default;
+  const orizzonte = impostazioniMagazzino?.orizzonte_copertura_giorni;
+  const daOrdinare = [];
+  const nonCalcolabili = [];
+
+  (prodottiShop || []).forEach((p) => {
+    if (p.attivo === false || p.conta_magazzino === false || p.giacenza_propria === false) return;
+    const previsione = risultato?.perProdotto?.[p.id] || null;
+    const disponibile = disponibileProdotto(p);
+    const sottoScorta = p.scorta_minima != null && disponibile < p.scorta_minima;
+    const margine = p.giorni_sicurezza != null ? p.giorni_sicurezza : margineGenerale;
+    const haDati = p.lead_time_giorni != null && margine != null;
+
+    // criterio 1 — data limite d'ordine (solo con tutti i dati)
+    let perData = null;
+    if (previsione?.dataCritica && haDati) {
+      const dataLimite = addGiorni(previsione.dataCritica, -(p.lead_time_giorni + margine));
+      const giorni = giorniTra(oggi, dataLimite);
+      perData = {
+        dataLimite, giorni,
+        stato: giorni < 0 ? "ritardo" : giorni <= 7 ? "urgente" : "ok",
+        dataCritica: previsione.dataCritica, edizioneCriticaId: previsione.edizioneCriticaId,
+      };
+    }
+    // criterio 2 — soglia di quantità: rete di sicurezza sempre attiva,
+    // l'unica che vale per i prodotti che non passano dai corsi
+    const perSoglia = sottoScorta ? { disponibile, soglia: p.scorta_minima } : null;
+
+    if (previsione?.dataCritica && !haDati) {
+      nonCalcolabili.push({
+        prodotto: p,
+        motivo: p.lead_time_giorni == null ? "tempo_consegna" : "parametri_generali",
+        dataCritica: previsione.dataCritica,
+      });
+    }
+    if (!perData && !perSoglia) return;
+
+    // un solo avviso per prodotto: vince quello più urgente, e si dice
+    // sempre quale criterio l'ha generato — mai due righe sovrapposte
+    const criterio = perData && (perData.stato === "ritardo" || perData.stato === "urgente" || !perSoglia) ? "data" : "soglia";
+    const fabbisognoFinestra = orizzonte != null && haDati
+      ? fabbisognoEntro(previsione, addGiorni(oggi, p.lead_time_giorni + margine + orizzonte))
+      : null;
+    const suggerita = fabbisognoFinestra != null
+      ? Math.max(0, fabbisognoFinestra - disponibile)
+      : (p.scorta_minima != null ? Math.max(0, p.scorta_minima - disponibile) : null);
+    daOrdinare.push({
+      prodotto: p, criterio, perData, perSoglia, disponibile,
+      fabbisognoTotale: previsione?.fabbisogno || 0,
+      quantitaSuggerita: suggerita != null ? arrotondaALotto(suggerita, p.lotto_minimo_ordine) : null,
+      baseQuantita: fabbisognoFinestra != null ? "previsione" : (p.scorta_minima != null ? "scorta_minima" : null),
+    });
+  });
+
+  daOrdinare.sort((a, b) => {
+    const ga = a.perData ? a.perData.giorni : Infinity;
+    const gb = b.perData ? b.perData.giorni : Infinity;
+    if (ga !== gb) return ga - gb;
+    return (a.prodotto.nome || "").localeCompare(b.prodotto.nome || "");
+  });
+  return { daOrdinare, nonCalcolabili, parametriMancanti: margineGenerale == null || orizzonte == null };
+}
+
+function fabbisognoEntro(previsione, dataLimite) {
+  return (previsione?.richieste || []).reduce((s, r) => (r.data <= dataLimite ? s + r.quantita : s), 0);
+}
+function arrotondaALotto(quantita, lotto) {
+  if (!lotto || lotto <= 1) return Math.ceil(quantita);
+  return Math.ceil(quantita / lotto) * lotto;
+}
+function giorniTra(daIso, aIso) {
+  const [y1, m1, d1] = daIso.split("-").map(Number);
+  const [y2, m2, d2] = aIso.split("-").map(Number);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000);
+}
+
+// pagina Advisor: la lettura umana di simulaScorte/pianoRiordino. Non
+// scrive niente, si limita a mettere in fila le domande nell'ordine in cui
+// servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
+// cosa non sono in grado di dire e perché.
+function PaginaAdvisor({ prodottiShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, onBack, titolo = "Advisor" }) {
+  const isMobile = useIsMobile();
+  const oggi = dataOggiStr();
+  const [kitAperto, setKitAperto] = useState(null);
+
+  const risultato = useMemo(
+    () => simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi }),
+    [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi]
+  );
+  const piano = useMemo(
+    () => pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi }),
+    [prodottiShop, risultato, impostazioniMagazzino, oggi]
+  );
+  const kitOggi = useMemo(
+    () => kitComponibiliOggi(kitDefinizioni, corsiKitProdotti, prodottiShop),
+    [kitDefinizioni, corsiKitProdotti, prodottiShop]
+  );
+
+  const corsoPerId = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const locationPerId = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  const edizionePerId = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
+  const fornitorePerId = useMemo(() => Object.fromEntries((fornitori || []).map((f) => [f.id, f])), [fornitori]);
+  const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
+  function etichettaEdizione(corsoDataId) {
+    const cd = edizionePerId[corsoDataId];
+    if (!cd) return "—";
+    const nome = corsoPerId[cd.corso_id]?.nome || "corso";
+    const citta = locationPerId[cd.location_id]?.nome;
+    return `${nome}${citta ? ` ${toTitleCase(citta)}` : ""} del ${fmtData(cd.data_inizio)}`;
+  }
+
+  // il conteggio onesto di quanta parte del quadro l'Advisor sta vedendo:
+  // senza questo, "nessun avviso" sembrerebbe "va tutto bene" anche quando
+  // in realtà significa "non ho i dati per dirti niente"
+  const prodottiDaConfigurare = (prodottiShop || []).filter(
+    (p) => p.attivo !== false && p.conta_magazzino !== false && p.giacenza_propria !== false && p.lead_time_giorni == null
+  );
+  const prodottiConfigurati = (prodottiShop || []).filter(
+    (p) => p.attivo !== false && p.conta_magazzino !== false && p.giacenza_propria !== false && p.lead_time_giorni != null
+  );
+  const kitSenzaComposizione = kitOggi.filter((k) => k.senzaComposizione);
+  const nonRisoltiPerEtichetta = useMemo(() => {
+    const m = {};
+    (risultato.nonRisolti || []).forEach((n) => {
+      const chiave = n.etichetta || "(vuoto)";
+      m[chiave] = (m[chiave] || 0) + 1;
+    });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [risultato]);
+
+  const inRitardo = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo");
+  const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente");
+  const soloSoglia = piano.daOrdinare.filter((r) => !r.perData && r.perSoglia);
+  const coloreSemaforo = inRitardo.length ? "#C0392B" : (urgenti.length || risultato.dataCriticaComplessiva) ? "#B8860B" : "#2E7D32";
+  const sfondoSemaforo = inRitardo.length ? "#FBE4E1" : (urgenti.length || risultato.dataCriticaComplessiva) ? "#FBF1D9" : "#E3F3E5";
+
+  const titoloBlocco = { ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 10 };
+  const rigaStyle = { display: "flex", gap: 10, alignItems: "baseline", padding: "8px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY };
+
+  // "Da ordinare adesso" raggruppato per fornitore: cinque righe dello
+  // stesso fornitore sono un ordine solo, non cinque
+  const perFornitore = useMemo(() => {
+    const gruppi = new Map();
+    [...inRitardo, ...urgenti, ...soloSoglia].forEach((r) => {
+      const chiave = r.prodotto.fornitore_id || "__nessuno";
+      if (!gruppi.has(chiave)) gruppi.set(chiave, []);
+      gruppi.get(chiave).push(r);
+    });
+    return [...gruppi.entries()];
+  }, [piano]);
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino" onClick={onBack} /></div>
+        <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY, marginBottom: 4 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
+          Con le scorte di adesso, fino a quando riesci a coprire i corsi in calendario — e cosa devi ordinare.
+        </div>
+      <div style={{ ...cardStyle, padding: 18, background: sfondoSemaforo, border: `1px solid ${coloreSemaforo}33`, marginBottom: 16 }}>
+        {risultato.modalita === "senza_date" ? (
+          <>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: coloreSemaforo, marginBottom: 6 }}>
+              Nessun corso futuro in calendario
+            </div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>
+              Senza date non posso dire fino a quando reggono le scorte: qui sotto trovi quanti kit sono componibili adesso e i prodotti sotto scorta minima.
+            </div>
+          </>
+        ) : risultato.dataCriticaComplessiva ? (
+          <>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: coloreSemaforo, marginBottom: 6 }}>
+              Autonomia fino al {fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}.
+            </div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, marginBottom: 4 }}>
+              Non riuscirai a coprire <b>{etichettaEdizione(risultato.edizioneCriticaComplessiva)}</b>.
+            </div>
+            <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+              Mancano: {(risultato.perEdizione.find((e) => e.corsoDataId === risultato.edizioneCriticaComplessiva)?.mancanti || [])
+                .map((m) => `${m.mancano} ${m.nome}`).join(", ")}.
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: coloreSemaforo, marginBottom: 6 }}>
+              Copri tutti i {risultato.edizioniConsiderate} corsi in calendario.
+            </div>
+            <div style={{ ...fontBody, fontSize: 13.5, color: NAVY }}>
+              Con le scorte di oggi e gli iscritti attuali nessun corso resta scoperto. Controlla comunque i prodotti da ordinare qui sotto.
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+        <div style={titoloBlocco}>Quanto sto vedendo</div>
+        <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.7 }}>
+          Advisor attivo su <b>{prodottiConfigurati.length}</b> prodotti su {prodottiConfigurati.length + prodottiDaConfigurare.length}.
+          {prodottiDaConfigurare.length > 0 && <> <b>{prodottiDaConfigurare.length}</b> senza tempo di consegna: su quelli non posso dire entro quando ordinare.</>}
+          {risultato.nonRisolti.length > 0 && <><br /><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: il loro fabbisogno non è calcolato.</>}
+          {risultato.edizioniSenzaIscritti > 0 && <><br /><b>{risultato.edizioniSenzaIscritti}</b> corsi futuri non hanno ancora iscritti: per loro il fabbisogno risulta zero.</>}
+          {piano.parametriMancanti && <><br /><b style={{ color: "#C0392B" }}>Margine di sicurezza e copertura non impostati</b> (Impostazioni → Magazzino e riordini): senza, nessuna data limite d'ordine viene calcolata.</>}
+        </div>
+      </div>
+
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+        <div style={titoloBlocco}>Da ordinare adesso</div>
+        {perFornitore.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Niente da ordinare: nessun prodotto è in ritardo, in scadenza d'ordine o sotto scorta minima.</div>
+        ) : perFornitore.map(([fornitoreId, righe]) => (
+          <div key={fornitoreId} style={{ marginBottom: 14 }}>
+            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, marginBottom: 2 }}>
+              {fornitoreId === "__nessuno" ? "Senza fornitore assegnato" : (fornitorePerId[fornitoreId]?.nome || "Fornitore")}
+            </div>
+            {righe.map((r) => (
+              <div key={r.prodotto.id} style={rigaStyle}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700 }}>{r.prodotto.nome}</div>
+                  <div style={{ fontSize: 12, color: MUTED }}>
+                    {r.criterio === "data" && r.perData ? (
+                      r.perData.stato === "ritardo"
+                        ? <span style={{ color: "#C0392B", fontWeight: 700 }}>Dovevi ordinare il {fmtData(r.perData.dataLimite)} — {-r.perData.giorni} giorni di ritardo: {etichettaEdizione(r.perData.edizioneCriticaId)} non sarà coperto</span>
+                        : <>Ordina entro il <b>{fmtData(r.perData.dataLimite)}</b> ({r.perData.giorni} giorni) — serve per {etichettaEdizione(r.perData.edizioneCriticaId)}</>
+                    ) : (
+                      <>Sotto scorta minima: {r.perSoglia.disponibile} disponibili contro {r.perSoglia.soglia}</>
+                    )}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                  {r.quantitaSuggerita != null && <div style={{ fontWeight: 700 }}>ordina {r.quantitaSuggerita}</div>}
+                  <div style={{ fontSize: 11.5, color: MUTED }}>
+                    {r.baseQuantita === "previsione" ? "sul fabbisogno previsto" : r.baseQuantita === "scorta_minima" ? "per rientrare in scorta" : "quantità da valutare"}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+        <div style={titoloBlocco}>Autonomia per kit</div>
+        {kitOggi.filter((k) => !k.senzaComposizione).length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit con composizione configurata.</div>
+        ) : kitOggi.filter((k) => !k.senzaComposizione)
+          .sort((a, b) => (a.componibili ?? Infinity) - (b.componibili ?? Infinity))
+          .map((k) => {
+            const previsione = risultato.perKit[k.kit.id];
+            const aperto = kitAperto === k.kit.id;
+            // i 10 prodotti più critici, ordinati sul RAPPORTO fra
+            // disponibilità e fabbisogno: 5 pigmenti mancanti su 6 sono
+            // più gravi di 40 aghi su 400
+            const critici = [...k.dettagli].map((d) => {
+              const prev = risultato.perProdotto[d.prodottoId];
+              const fabbisogno = prev?.fabbisogno || 0;
+              return { ...d, fabbisogno, mancano: prev?.mancante || 0, rapporto: fabbisogno > 0 ? d.disponibile / fabbisogno : (d.componibili ?? Infinity) };
+            }).sort((a, b) => a.rapporto - b.rapporto).slice(0, 10);
+            return (
+              <div key={k.kit.id} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
+                <div onClick={() => setKitAperto(aperto ? null : k.kit.id)} style={{ display: "flex", gap: 10, alignItems: "baseline", cursor: "pointer" }}>
+                  <div style={{ flex: 1, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
+                    {k.kit.nome}
+                    <span style={{ fontWeight: 400, color: MUTED, fontSize: 12 }}> · {corsoPerId[k.kit.corso_id]?.nome || "—"}</span>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 13, color: k.componibili === 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>
+                    {k.componibili == null ? "—" : `${k.componibili} componibili`}
+                  </div>
+                </div>
+                {previsione?.dataAutonomia && (
+                  <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginTop: 2 }}>
+                    Coperto fino al {fmtData(addGiorni(previsione.dataAutonomia, -1))} — poi salta {etichettaEdizione(previsione.edizioneCriticaId)}
+                  </div>
+                )}
+                {aperto && (
+                  <div style={{ marginTop: 8, paddingLeft: 6 }}>
+                    {critici.map((d) => (
+                      <div key={d.prodottoId} style={{ ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
+                        <b>{d.nome}</b> — {d.disponibile} disponibili
+                        {d.fabbisogno > 0 && <> su {d.fabbisogno} richiesti dai corsi</>}
+                        {d.mancano > 0 && <span style={{ color: "#C0392B" }}> · mancano {d.mancano}</span>}
+                        {d.senzaGiacenza && <span style={{ color: MUTED }}> · nessuna giacenza propria</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+        <div style={titoloBlocco}>Corsi futuri</div>
+        {risultato.perEdizione.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso futuro in calendario.</div>
+        ) : risultato.perEdizione.map((e) => (
+          <div key={e.corsoDataId} style={rigaStyle}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700 }}>{etichettaEdizione(e.corsoDataId)}</div>
+              {!e.coperta && (
+                <div style={{ fontSize: 12, color: "#C0392B" }}>
+                  Mancano: {e.mancanti.map((m) => `${m.mancano} ${m.nome}`).join(", ")}
+                </div>
+              )}
+              {e.nonRisolti > 0 && <div style={{ fontSize: 11.5, color: GOLD }}>{e.nonRisolti} iscritti con kit non riconosciuto</div>}
+              {e.senzaIscritti && <div style={{ fontSize: 11.5, color: MUTED }}>nessun iscritto: fabbisogno non calcolabile</div>}
+            </div>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: e.coperta ? "#2E7D32" : "#C0392B", whiteSpace: "nowrap" }}>
+              {e.coperta ? "coperto" : "scoperto"}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 24 }}>
+        <div style={titoloBlocco}>Non posso esprimermi</div>
+        <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.6 }}>
+          {prodottiDaConfigurare.length === 0 && kitSenzaComposizione.length === 0 && nonRisoltiPerEtichetta.length === 0 && !piano.parametriMancanti && (
+            <span style={{ color: MUTED }}>Niente: tutti i dati necessari sono compilati.</span>
+          )}
+          {prodottiDaConfigurare.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <b>{prodottiDaConfigurare.length} prodotti senza tempo di consegna.</b> Per loro nessuna data limite d'ordine, solo l'avviso "sotto scorta".
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{prodottiDaConfigurare.slice(0, 8).map((p) => p.nome).join(" · ")}{prodottiDaConfigurare.length > 8 ? ` · e altri ${prodottiDaConfigurare.length - 8}` : ""}</div>
+            </div>
+          )}
+          {nonRisoltiPerEtichetta.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <b>Kit scritti sugli iscritti che non corrispondono a nessun kit configurato.</b>
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+                {nonRisoltiPerEtichetta.map(([etichetta, quanti]) => `"${etichetta}" (${quanti})`).join(" · ")}
+              </div>
+            </div>
+          )}
+          {kitSenzaComposizione.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <b>{kitSenzaComposizione.length} kit senza composizione</b> (Impostazioni → Tipologie di kit).
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{kitSenzaComposizione.map((k) => k.kit.nome).join(" · ")}</div>
+            </div>
+          )}
+          {piano.nonCalcolabili.length > 0 && (
+            <div>
+              <b>{piano.nonCalcolabili.length} prodotti finiscono davvero</b> secondo il calendario, ma senza tempo di consegna non posso dirti entro quando ordinarli.
+              <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+                {piano.nonCalcolabili.slice(0, 8).map((n) => `${n.prodotto.nome} (dal ${fmtData(n.dataCritica)})`).join(" · ")}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+      </div>
+    </div>
+  );
 }
 
 // registrano uno storno in vendite_shop (valori negativi, stesso
@@ -38569,7 +39173,8 @@ export default function App() {
     venditealbanco: ["vendite_shop"],
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    advisor: ["prodotti_shop", "impostazioni_magazzino", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -39615,10 +40220,22 @@ export default function App() {
         />
       )}
 
+      {view === "advisor" && (
+        <PaginaAdvisor
+          prodottiShop={prodottiShop} corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
+          onBack={() => setView("magazzino")}
+        />
+      )}
+
       {view === "magazzino" && (
         <PaginaMagazzino
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
+          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
+          corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
+          corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          onApriAdvisor={() => setView("advisor")}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
