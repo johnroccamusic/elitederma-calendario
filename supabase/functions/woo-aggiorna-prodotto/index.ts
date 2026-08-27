@@ -1,31 +1,23 @@
 // Edge Function "woo-aggiorna-prodotto"
 // Scrive prezzo di vendita e/o quantità (valori ASSOLUTI, non delta) di
 // un prodotto su WooCommerce (PUT /products/{id}) e, SOLO se questa
-// chiamata riesce, aggiorna anche il dato locale in prodotti_shop. Se
-// fallisce, il dato locale NON viene toccato — WooCommerce resta la
-// fonte di verità per prezzo e giacenza.
+// chiamata riesce, aggiorna anche il dato locale in prodotti_shop.
 //
-// costo_acquisto e scorta_minima NON passano da qui: sono dati propri
+// Da quando magazzino e shop sono un contenitore solo, la fonte di verità
+// dello stock è l'app: qui si spinge il totale sul sito e lo si riscrive
+// in locale solo dopo la conferma — se lo specchio rifiuta è meglio
+// restare indietro che divergere in silenzio.
+//
+// costo_acquisto e soglia_riordino NON passano da qui: sono dati propri
 // dell'app (WooCommerce non li conosce), il client li scrive
 // direttamente su prodotti_shop senza bisogno di questa funzione.
-//
-// Usa la SECONDA coppia di chiavi API di WooCommerce, con permessi di
-// SCRITTURA (Read/Write) — le stesse già usate dalla precedente
-// woo-aggiorna-scorte, che questa funzione sostituisce.
 //
 // Variabili d'ambiente richieste (Supabase → Edge Functions → Secrets):
 //   WC_SITE_URL / WC_CONSUMER_KEY_WRITE / WC_CONSUMER_SECRET_WRITE
 //
-// Chiamata dall'app (già autenticata con l'anon key, la verifica JWT
-// di Supabase resta quindi attiva su questa funzione):
-//   supabase.functions.invoke('woo-aggiorna-prodotto', { body: { prodottoId, prezzoVendita, giacenza, giacenzaMagazzino } })
-// prezzoVendita/giacenza/giacenzaMagazzino sono opzionali: passa solo
-// quelli che sono cambiati. giacenzaMagazzino (il magazzino fisico, dato
-// solo dell'app, mai su WooCommerce) viene scritto insieme a "giacenza"
-// nello stesso aggiornamento locale invece che con una seconda chiamata
-// separata dal browser — un giro di rete in meno quando un movimento
-// tocca entrambe (es. "sposta da magazzino a shop"), stessa garanzia:
-// si scrive solo dopo che WooCommerce ha confermato.
+// Chiamata dall'app:
+//   supabase.functions.invoke('woo-aggiorna-prodotto', { body: { prodottoId, prezzoVendita, quantita } })
+// prezzoVendita/quantita sono opzionali: passa solo quelli cambiati.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -57,10 +49,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ errore: "JSON non valido" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 
-  // "quantita" è lo stock unico del prodotto: da quando magazzino e shop
-  // sono un contenitore solo, è questo il numero che va anche su
-  // WooCommerce. "giacenza" resta accettato come sinonimo per non rompere
-  // eventuali chiamate vecchie ancora in giro
+  // "quantita" è lo stock unico del prodotto. "giacenza" resta accettato
+  // come sinonimo per non rompere eventuali chiamate vecchie ancora in giro
   const { prodottoId, prezzoVendita, giacenzaMagazzino } = corpo || {};
   const quantita = corpo?.quantita != null ? corpo.quantita : corpo?.giacenza;
   if (!prodottoId) {
@@ -111,7 +101,7 @@ Deno.serve(async (req) => {
 
   if (!rispostaWoo.ok) {
     const testo = await rispostaWoo.text();
-    // il dato locale NON viene toccato: WooCommerce resta la fonte di verità
+    // il dato locale NON viene toccato: meglio restare indietro che divergere
     return new Response(
       JSON.stringify({ errore: `WooCommerce ha rifiutato l'aggiornamento (${rispostaWoo.status})`, dettaglio: testo }),
       { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -120,16 +110,13 @@ Deno.serve(async (req) => {
 
   const aggiornamentoLocale: Record<string, unknown> = { ts_sync: new Date().toISOString() };
   if (cambiaPrezzo) aggiornamentoLocale.prezzo_vendita = prezzoVendita;
-  // lo stock locale si scrive SOLO dopo che WooCommerce ha confermato: da
-  // qui in poi la fonte di verità è l'app, ma se lo specchio rifiuta
-  // l'aggiornamento è meglio restare indietro che divergere in silenzio
   if (cambiaGiacenza) aggiornamentoLocale.quantita = quantita;
   if (cambiaMagazzino) aggiornamentoLocale.giacenza_magazzino = giacenzaMagazzino;
 
   const { error: erroreAggiorna } = await supabase.from("prodotti_shop").update(aggiornamentoLocale).eq("id", prodottoId);
   if (erroreAggiorna) {
     // caso raro ma da segnalare esplicitamente: su WooCommerce è già
-    // cambiato, sul database locale no — richiede un nuovo sync catalogo
+    // cambiato, sul database locale no
     return new Response(
       JSON.stringify({ errore: "Aggiornato su WooCommerce ma non nel database locale: " + erroreAggiorna.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

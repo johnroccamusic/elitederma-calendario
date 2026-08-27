@@ -107,8 +107,8 @@ export async function attribuisciMasterReferral(supabase: any, ordine: any, riga
 // stati WooCommerce che "impegnano" davvero lo stock (stessi due in cui
 // WooCommerce stesso, di default, decrementa il proprio stock_quantity):
 // solo la transizione DENTRO/FUORI da questo insieme scarica o ripristina
-// i componenti di un bundle — mai due volte per lo stesso ordine, vedi
-// woo-webhook (confronta lo stato PRIMA dell'upsert con quello nuovo)
+// lo stock — mai due volte per lo stesso ordine, vedi woo-webhook
+// (confronta lo stato PRIMA dell'upsert con quello nuovo)
 export const STATI_VIVI = ["processing", "completed"];
 
 // per ogni riga dell'ordine che corrisponde a un prodotto "bundle" (per

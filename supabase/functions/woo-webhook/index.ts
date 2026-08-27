@@ -116,11 +116,12 @@ Deno.serve(async (req) => {
     return new Response("Errore salvataggio: " + error.message, { status: 500 });
   }
 
-  // bundle "kit": non hanno una giacenza propria, chi li vende online
-  // scarica/ripristina i loro componenti — mai il bundle stesso (vedi
-  // applicaMovimentoBundle). Un eventuale errore qui non deve far fallire
-  // la risposta al webhook: la vendita è già salvata, un problema di
-  // magazzino va segnalato nei log della function, non bloccare WooCommerce
+  // stock: un ordine che diventa "vivo" scarica, uno che smette di esserlo
+  // ripristina. I bundle non hanno giacenza propria e muovono i loro
+  // componenti; tutti gli altri prodotti muovono il proprio stock, che da
+  // quando è uno solo non viene più riallineato dal sync del catalogo.
+  // Un errore qui non deve far fallire la risposta al webhook: la vendita
+  // è già salvata, un problema di magazzino va segnalato nei log
   try {
     const eraVivo = STATI_VIVI.includes(String(esistente?.stato || ""));
     const oraVivo = STATI_VIVI.includes(String(riga.stato || ""));
@@ -143,7 +144,7 @@ Deno.serve(async (req) => {
       }
     }
   } catch (erroreBundle) {
-    console.error("Errore nello scarico/ripristino componenti bundle:", erroreBundle);
+    console.error("Errore nello scarico/ripristino dello stock:", erroreBundle);
   }
 
   return new Response("ok", { status: 200 });
