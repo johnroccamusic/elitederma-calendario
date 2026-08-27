@@ -27111,7 +27111,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
     const { data, error } = await supabase.functions.invoke("woo-sync-catalogo");
     setSincronizzando(false);
     if (error || data?.errore) { setMsgSync("Errore: " + (data?.errore || error.message)); return; }
-    setMsgSync(`Sincronizzato: ${data.categorieImportate} categorie, ${data.prodottiImportati} prodotti (${data.prodottiDisattivati} disattivati).`);
+    setMsgSync(`Importati dal sito: ${data.categorieImportate} categorie, ${data.prodottiImportati} prodotti (${data.prodottiDisattivati} disattivati).`);
     ricarica(["categorie_prodotti", "prodotti_shop"]);
   }
 
@@ -27311,7 +27311,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
                 sola: dal sito verso qui. Stock e prezzi non si toccano — li
                 decide l'app, il sito ne è lo specchio */}
             <div style={{ textAlign: "right", maxWidth: 230 }}>
-              <Button variant="ghost" onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Importo dal sito…" : "Importa dal sito"}</Button>
+              <Button variant="ghost" onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Importo dal sito…" : "Importa catalogo dal sito"}</Button>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 4, lineHeight: 1.35 }}>
                 Da usare solo se hai creato un prodotto direttamente su WooCommerce: riporta indietro nomi, categorie e immagini dal sito.
               </div>
