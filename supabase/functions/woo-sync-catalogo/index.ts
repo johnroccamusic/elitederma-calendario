@@ -119,12 +119,15 @@ Deno.serve(async (req) => {
         woo_product_id: p.id,
         nome: p.name,
         sku: p.sku || null,
-        prezzo_vendita: p.price !== "" && p.price != null ? parseFloat(p.price) : (p.regular_price ? parseFloat(p.regular_price) : null),
-        // lo stock NON si importa più da WooCommerce: da quando magazzino e
-        // shop sono un contenitore solo, la fonte di verità è l'app e
-        // WooCommerce ne è lo specchio. Reimportarlo qui cancellerebbe i
-        // pezzi che l'app conosce e il sito no. I prodotti nuovi nascono a
-        // zero e si caricano da Gestione magazzino
+        // NÉ il prezzo NÉ lo stock si importano più da WooCommerce: la fonte
+        // di verità è l'app, il sito ne è lo specchio.
+        //
+        // Sul prezzo era anche peggio che sullo stock: prezzo_vendita è il
+        // NETTO da quando l'IVA è gestita in anagrafica, mentre p.price è il
+        // LORDO pubblicato. Reimportarlo qui scriveva un lordo dentro un
+        // campo netto, e al salvataggio successivo l'app ripubblicava
+        // netto × 1,22 — cioè il lordo moltiplicato ancora per 1,22. Ogni
+        // giro di "salva + sincronizza" gonfiava i prezzi del 22%.
         descrizione: p.description || null,
         descrizione_breve: p.short_description || null,
         stato: p.status || "publish",
