@@ -27024,40 +27024,45 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
                 </button>
               ))}
             </div>
-            {vistaProdotti === "elenco" && (<>
-              <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
-                <option value="">Tutte le categorie</option>
-                {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-              </select>
-              <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
-            </>)}
+            {/* categoria e ricerca valgono per tutte e due le viste: nella
+                vista a categorie pilotano l'albero e il suo elenco */}
+            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+              <option value="">Tutte le categorie</option>
+              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
           </div>
-          {vistaProdotti === "elenco" && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+              {/* questi filtri leggono lo stato del magazzino, cosa che solo
+                  la tabella sa mostrare: sceglierne uno riporta all'elenco
+                  invece di restare un tasto che non fa niente */}
               {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-                <button key={f.v} onClick={() => setFiltroRapido(f.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: filtroRapido === f.v ? NAVY : "transparent", color: filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                <button key={f.v} onClick={() => { setFiltroRapido(f.v); mostraVista("elenco"); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
                   {f.l}
                 </button>
               ))}
             </div>
           </div>
-          )}
         </div>
 
-        {/* la vista a categorie si monta al primo utilizzo e poi resta
-            montata, solo nascosta: tornando all'elenco e rientrando si
-            ritrova la scheda aperta con le modifiche non ancora salvate,
-            invece di una pagina vuota */}
+        {/* la vista a categorie prende il posto della tabella nella stessa
+            cornice bianca, sotto gli stessi comandi: è un altro modo di
+            guardare gli stessi prodotti, non un'altra pagina.
+            Si monta al primo utilizzo e poi resta montata, solo nascosta:
+            tornando all'elenco e rientrando si ritrova la scheda aperta con
+            le modifiche non ancora salvate, invece di una pagina vuota */}
         {categorieMontate && (
-        <div style={{ display: vistaProdotti === "categorie" ? "block" : "none" }}>
+        <div style={{ ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" }}>
           <PaginaGestioneShop
             incorporata
+            altezzaPannelli="min(68vh, 640px)"
             categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
             prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
             fornitori={fornitori} impostazioniIva={impostazioniIva}
             ricarica={ricarica} onBack={onBack}
             vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
+            ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
           />
         </div>
         )}
@@ -33972,12 +33977,20 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, onBack, vistaIniziale, aperturaScheda, incorporata }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId }) {
+  // incorporata dentro Gestione magazzino: i pannelli non sono più alti
+  // quanto lo schermo ma quanto la cornice che li ospita, e la ricerca
+  // arriva dai comandi della pagina che sta sopra
+  const altezzaColonne = altezzaPannelli || "calc(100vh - 230px)";
   const aliquotaIvaDefault = impostazioniIva?.aliquota_default ?? 22;
   const isMobile = useIsMobile();
   const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
   const [collassate, setCollassate] = useState(() => new Set());
-  const [ricerca, setRicerca] = useState("");
+  const [ricercaLocale, setRicercaLocale] = useState("");
+  // quando è incorporata, il campo di ricerca è quello della pagina che la
+  // ospita: qui non se ne apre un secondo che cerca la stessa cosa
+  const ricerca = incorporata ? (ricercaEsterna || "") : ricercaLocale;
+  const setRicerca = incorporata ? () => {} : setRicercaLocale;
   const [filtroStato, setFiltroStato] = useState("tutti");
   const [prodottoForm, setProdottoForm] = useState(null);
   const [categoriaForm, setCategoriaForm] = useState(null);
@@ -34149,6 +34162,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     } : null);
     if (isMobile) setVistaMobile("lista");
   }
+
+  // il menu "Tutte le categorie" della pagina che ospita e l'albero sono
+  // lo stesso comando visto in due modi: scegliere di là seleziona qui
+  useEffect(() => {
+    if (!incorporata) return;
+    setCategoriaSelId(categoriaEsternaId || null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoriaEsternaId, incorporata]);
 
   function toggleCollassa(id) {
     setCollassate((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -34672,7 +34693,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
 
   const paneAlbero = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Struttura shop</div>
       <div
         onClick={() => selezionaCategoria(null)}
@@ -34693,7 +34714,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   const paneLista = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
         {ricerca.trim() ? "Risultati ricerca" : categoriaSelezionata ? categoriaSelezionata.nome : "Tutti i prodotti"}
       </div>
@@ -34782,7 +34803,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }, [prodottoForm, componenti, prodottiShop, categorieProdotti]);
 
   const paneDettaglioProdotto = prodottoForm && (
-    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 230px)", overflow: "auto" }}>
+    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{prodottoForm.id ? "Modifica prodotto" : "Nuovo prodotto"}</div>
         <Button onClick={salvaProdotto} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
@@ -35152,7 +35173,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   const paneDettaglioCategoria = !prodottoForm && categoriaForm && (
-    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 230px)", overflow: "auto" }}>
+    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Categoria</div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -35200,7 +35221,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   const panePlaceholder = (
-    <div style={{ ...cardStyle, marginBottom: 0, height: isMobile ? 200 : "calc(100vh - 230px)", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 30 }}>
+    <div style={{ ...cardStyle, marginBottom: 0, height: isMobile ? 200 : altezzaColonne, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 30 }}>
       <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Seleziona una categoria o un prodotto per vederne i dettagli, oppure crea qualcosa di nuovo.</div>
     </div>
   );
@@ -35315,7 +35336,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
 
   const paneFoCategorie = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Menu (voce principale)</div>
       <div style={{ flex: 1, overflow: "auto" }}>
         {caricandoMenu && menuVoci === null && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Carico il menu da WordPress…</div>}
@@ -35331,7 +35352,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   const paneFoSotto = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{foRootSelezionata ? foRootSelezionata.titolo : "Sotto-voce"}</div>
       <div style={{ flex: 1, overflow: "auto" }}>
         {!foRootId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli prima una voce a sinistra.</div>}
@@ -35346,7 +35367,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   const paneFoProdotti = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : "calc(100vh - 230px)", minHeight: isMobile ? undefined : 400 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
         {foSubSelezionata ? foSubSelezionata.titolo : foRootSelezionata ? foRootSelezionata.titolo : "Prodotti"}
       </div>
@@ -35395,7 +35416,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {vista === "backoffice" && <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} placeholder="Cerca prodotto…" style={{ minWidth: 220 }} />}
+            {vista === "backoffice" && !incorporata && <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} placeholder="Cerca prodotto…" style={{ minWidth: 220 }} />}
             <Button onClick={() => setVista(vista === "backoffice" ? "frontoffice" : "backoffice")}>
               {vista === "backoffice" ? "← Front Office" : "Back Office prodotti"}
             </Button>
