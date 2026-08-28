@@ -27031,6 +27031,21 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
               {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
             <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
+            {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
+                sempre presente e quasi sempre inutile è solo rumore. Toglie
+                in un colpo ricerca, categoria e filtro di stato — capita di
+                non vedere un prodotto e non ricordare quale dei tre lo
+                stava nascondendo */}
+            {(ricercaProdotto.trim() || categoriaSel || filtroRapido !== "tutti") && (
+              <button
+                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFiltroRapido("tutti"); }}
+                title="Togli ricerca, categoria e filtro di stato"
+                style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+                Azzera filtri
+              </button>
+            )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
