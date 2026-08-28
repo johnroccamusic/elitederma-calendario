@@ -34568,7 +34568,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // i due flag valgono per TUTTI i prodotti della categoria, letti come
   // "o l'uno o l'altro" insieme al flag del singolo prodotto: WooCommerce
   // non li conosce, quindi si scrivono sempre e solo in anagrafica
-  async function salvaCategoria() {
+  function chiudiSchedaCategoria() {
+    setCategoriaForm(null);
+    if (isMobile) setVistaMobile("lista");
+  }
+
+  async function salvaCategoria(esciDopo) {
     if (!categoriaForm) return;
     if (!categoriaForm.nome.trim()) { setMsgErrore("Il nome della categoria è obbligatorio."); return; }
     const nomePrecedente = (categorieTutte.find((c) => c.id === categoriaForm.id)?.nome || "").trim();
@@ -34607,6 +34612,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (categoriaForm.wooCategoryId != null && nomePrecedente !== categoriaForm.nome.trim()) {
       await allineaVoceMenu(categoriaForm.nome.trim(), categoriaForm.wooCategoryId);
     }
+    if (esciDopo) chiudiSchedaCategoria();
   }
 
   async function eliminaCategoriaCorrente() {
@@ -34761,7 +34767,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // immagini, prezzo pubblicato, stato, categorie) e magazzino (stock,
   // natura, scorte) insieme. Prima il sito, perché è quello che può
   // rifiutare; solo se accetta si scrive in locale
-  async function salvaProdotto() {
+  // chiude la scheda tornando all'elenco: si usa dopo "Salva e esci", per
+  // chi sistema molti prodotti di fila e non vuole richiudere a mano
+  function chiudiSchedaProdotto() {
+    setProdottoForm(null);
+    if (isMobile) setVistaMobile("lista");
+  }
+
+  async function salvaProdotto(esciDopo) {
     if (!prodottoForm) return;
     const f = prodottoForm;
     if (!f.nome.trim()) { setMsgErrore("Il nome del prodotto è obbligatorio."); return; }
@@ -34828,6 +34841,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
       if (!f.id && idProdotto) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: data?.wooProductId ?? prev.wooProductId }));
       ricarica(["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"]);
+      if (esciDopo) chiudiSchedaProdotto();
       return;
     }
 
@@ -34867,6 +34881,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
     if (!f.id) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: null }));
     ricarica(["prodotti_shop", "prodotti_categorie", "categorie_prodotti"]);
+    if (esciDopo) chiudiSchedaProdotto();
   }
 
   // gli stessi dati di scorta e riordino valgono quasi sempre per una
@@ -35089,7 +35104,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: colonneLibere ? "visible" : "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{prodottoForm.id ? "Modifica prodotto" : "Nuovo prodotto"}</div>
-        <Button onClick={salvaProdotto} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+        <Button onClick={() => salvaProdotto(false)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
       </div>
       {messaggi}
       <Field label="Immagini prodotto">
@@ -35508,10 +35523,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       )}
 
       {messaggi}
-      {/* la scheda è lunga: il tasto sta anche in fondo, non solo in testa */}
-      <Button onClick={salvaProdotto} disabled={salvando} style={{ width: "100%" }}>
-        {salvando ? "Salvo…" : prodottoForm.id ? "Salva modifiche" : "Crea prodotto"}
-      </Button>
+      {/* la scheda è lunga: i tasti stanno anche in fondo, non solo in testa.
+          "Salva e esci" serve a chi sistema molti prodotti di fila: salva e
+          torna all'elenco, senza dover richiudere a mano */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <Button onClick={() => salvaProdotto(false)} disabled={salvando} style={{ flex: "1 1 200px" }}>
+          {salvando ? "Salvo…" : prodottoForm.id ? "Salva modifiche" : "Crea prodotto"}
+        </Button>
+        <Button variant="ghost" onClick={() => salvaProdotto(true)} disabled={salvando} style={{ flex: "1 1 160px" }}>
+          Salva e esci
+        </Button>
+      </div>
     </div>
   );
 
@@ -35521,7 +35543,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Categoria</div>
         <div style={{ display: "flex", gap: 8 }}>
           <Button variant="danger" onClick={eliminaCategoriaCorrente} disabled={salvando}>Elimina</Button>
-          <Button onClick={salvaCategoria} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+          <Button onClick={() => salvaCategoria(false)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
         </div>
       </div>
       {messaggi}
@@ -35594,6 +35616,16 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             </div>
           )}
         </div>
+      </div>
+
+      {/* stessi due tasti della scheda prodotto, per non dover risalire */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+        <Button onClick={() => salvaCategoria(false)} disabled={salvando} style={{ flex: "1 1 200px" }}>
+          {salvando ? "Salvo…" : "Salva modifiche"}
+        </Button>
+        <Button variant="ghost" onClick={() => salvaCategoria(true)} disabled={salvando} style={{ flex: "1 1 160px" }}>
+          Salva e esci
+        </Button>
       </div>
     </div>
   );
