@@ -25448,6 +25448,28 @@ function ModaleDettaglioOrdine({ vendita, onChiudi }) {
 
 function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
   const [ordineAperto, setOrdineAperto] = useState(null);
+  const [statoInModifica, setStatoInModifica] = useState(null); // id della vendita con la tendina aperta
+  const [cambiandoStato, setCambiandoStato] = useState(null);
+
+  // lo stato di un ordine è del sito: è WooCommerce che manda le email al
+  // cliente e decide cosa è spedito. Si cambia là e solo se il sito
+  // accetta si scrive anche qui — mai il contrario, o avremmo due verità.
+  // Il magazzino non lo tocca questa funzione: ci pensa il webhook, che
+  // riceve l'aggiornamento e scarica o ripristina con la regola di sempre
+  async function cambiaStatoOrdine(vendita, nuovoStato) {
+    setStatoInModifica(null);
+    if (nuovoStato === vendita.stato) return;
+    const tornaIndietro = ["cancelled", "refunded"].includes(nuovoStato) && ["processing", "completed"].includes(vendita.stato);
+    const messaggio = tornaIndietro
+      ? `Segnare l'ordine #${vendita.numero_ordine || vendita.woo_order_id} come "${etichettaStatoVenditaShop(nuovoStato)}"?\n\nI pezzi venduti torneranno in magazzino, e il cliente riceverà da WooCommerce la mail prevista per questo stato.`
+      : `Cambiare lo stato dell'ordine #${vendita.numero_ordine || vendita.woo_order_id} in "${etichettaStatoVenditaShop(nuovoStato)}"?\n\nIl cambio avviene sul sito, e il cliente riceverà da WooCommerce la mail prevista per questo stato.`;
+    if (!window.confirm(messaggio)) return;
+    setCambiandoStato(vendita.id);
+    const { data, error } = await supabase.functions.invoke("woo-stato-ordine", { body: { venditaId: vendita.id, stato: nuovoStato } });
+    setCambiandoStato(null);
+    if (error || data?.errore) { window.alert("Stato non cambiato: " + (data?.errore || error.message)); return; }
+    ricarica(["vendite_shop", "prodotti_shop"]);
+  }
   const { ordine: ordineOrdini, cambiaOrdine: cambiaOrdineOrdini, ordina: ordinaOrdini } = useOrdinamentoTabella();
   const { ordine: ordineProdotti, cambiaOrdine: cambiaOrdineProdotti, ordina: ordinaProdotti } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -25608,8 +25630,36 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{v.cliente_nome || v.cliente_email || (origine === "pos" ? "Vendita al banco" : "—")}</td>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, position: "relative" }}>
+                          {/* solo gli ordini del sito hanno uno stato da
+                              cambiare: una vendita al banco non ha nulla da
+                              dire a WooCommerce */}
+                          {v.woo_order_id ? (
+                            <button
+                              onClick={() => setStatoInModifica(statoInModifica === v.id ? null : v.id)}
+                              disabled={cambiandoStato === v.id}
+                              title="Cambia lo stato dell'ordine sul sito"
+                              style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap", border: "none", cursor: cambiandoStato === v.id ? "default" : "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}
+                            >
+                              {cambiandoStato === v.id ? "Aggiorno…" : etichettaStatoVenditaShop(v.stato)}
+                              {cambiandoStato !== v.id && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>}
+                            </button>
+                          ) : (
+                            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 8, padding: "3px 9px", whiteSpace: "nowrap" }}>{etichettaStatoVenditaShop(v.stato)}</span>
+                          )}
+                          {statoInModifica === v.id && (
+                            <div style={{ position: "absolute", top: "100%", left: 10, zIndex: 20, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, boxShadow: "0 10px 24px -12px rgba(14,27,51,0.35)", padding: 4, minWidth: 190 }}>
+                              {["completed", "processing", "on-hold", "pending", "cancelled", "refunded"].map((chiave) => (
+                                <button
+                                  key={chiave}
+                                  onClick={() => cambiaStatoOrdine(v, chiave)}
+                                  style={{ display: "block", width: "100%", textAlign: "left", ...fontBody, fontSize: 12.5, color: chiave === v.stato ? MUTED : NAVY, fontWeight: chiave === v.stato ? 700 : 400, background: "none", border: "none", padding: "7px 10px", borderRadius: 8, cursor: "pointer" }}
+                                >
+                                  {etichettaStatoVenditaShop(chiave)}{chiave === v.stato ? " ✓" : ""}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
