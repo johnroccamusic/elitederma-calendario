@@ -15258,6 +15258,12 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile) {
 function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) {
   return (
     <>
+      {i.dermografo && (
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Dermografo</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: i.dermografo === "nessuno" ? MUTED : NAVY }}>{etichettaDermografo(i.dermografo)}</div>
+        </div>
+      )}
       {i.pacchetto_kit && (
         <div style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pacchetto/Kit</div>
@@ -18881,6 +18887,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                     {i.pacchetto_kit && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
+                    {i.dermografo && <span style={{ fontSize: 12, fontWeight: 400, color: i.dermografo === "nessuno" ? MUTED : GOLD }}>· {etichettaDermografo(i.dermografo)}</span>}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
                   {i.telefono && (
@@ -19485,7 +19492,10 @@ function VistaRicercaModelle({ param, mostraClasse }) {
                   </div>
                   <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia: {i.taglia_divisa || "—"}</div>
                 </div>
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>Kit: {i.pacchetto_kit || "—"}</div>
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>
+                  Kit: {i.pacchetto_kit || "—"}
+                  {i.dermografo && <> · <span style={{ color: i.dermografo === "nessuno" ? MUTED : GOLD, fontWeight: 600 }}>{etichettaDermografo(i.dermografo)}</span></>}
+                </div>
               </div>
             ))}
           </div>
@@ -27979,7 +27989,7 @@ function mappaBoxPerSfuso(prodottiShop) {
 // partono davvero nel pacco — più gli accessori decisi sull'edizione.
 // Quello che risulta già scaricato non si conta di nuovo: è già uscito
 // dalle giacenze da cui parte la simulazione.
-function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdotti, statoLogistica) {
+function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdotti, statoLogistica, prodottiShop) {
   const perProdotto = {};
   const nonRisolti = [];
   const senzaKit = [];
@@ -28002,6 +28012,22 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
     if (q > 0) conteggioKit[kitId] = (conteggioKit[kitId] || 0) + q;
   });
 
+  // i dermografi: non stanno nella distinta di nessun kit, li porta la
+  // scheda dell'allievo. Cinque iscritti di cui uno senza e uno con Horus
+  // fanno 3 Tekna e 1 Horus, non 5 dermografi
+  const dermografiRichiesti = dermografiRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData.id));
+  const dermografiScaricati = statoLogistica?.scarico_dermografi || {};
+  const dermografiSenzaProdotto = [];
+  Object.entries(dermografiRichiesti).forEach(([modello, quantita]) => {
+    const residuo = Math.max(0, quantita - (dermografiScaricati[modello] || 0));
+    if (!residuo) return;
+    const prodotto = prodottoDermografo(prodottiShop, modello);
+    // nessun prodotto riconosciuto in anagrafica: l'Advisor non inventa un
+    // fabbisogno su un prodotto che non sa quale sia, lo dichiara e tace
+    if (!prodotto) { dermografiSenzaProdotto.push({ modello, quantita: residuo }); return; }
+    perProdotto[prodotto.id] = (perProdotto[prodotto.id] || 0) + residuo;
+  });
+
   const giaScaricato = statoLogistica?.scarico_per_kit || {};
   Object.entries(conteggioKit).forEach(([kitId, quantita]) => {
     const residuo = Math.max(0, quantita - (giaScaricato[kitId] || 0));
@@ -28022,7 +28048,7 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
     if (residuo > 0) perProdotto[prodottoId] = (perProdotto[prodottoId] || 0) + residuo;
   });
 
-  return { perProdotto, nonRisolti, senzaKit, conteggioKit };
+  return { perProdotto, nonRisolti, senzaKit, conteggioKit, dermografiRichiesti, dermografiSenzaProdotto };
 }
 
 // il cuore: scorre i corsi futuri in ordine di data sottraendo il
@@ -28071,10 +28097,14 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
   const nonRisoltiTotali = [];
   let senzaKitTotali = 0;
   let edizioniSenzaIscritti = 0;
+  // dermografi richiesti che non hanno un prodotto riconoscibile in
+  // anagrafica: vanno detti, non stimati
+  const dermografiSenzaProdottoTotali = [];
 
   edizioni.forEach((cd) => {
-    const { perProdotto: richiesto, nonRisolti, senzaKit, conteggioKit } =
-      fabbisognoEdizione(cd, iscritti, kitDefinizioni, corsiKitProdotti, statoPerEdizione[cd.id]);
+    const { perProdotto: richiesto, nonRisolti, senzaKit, conteggioKit, dermografiSenzaProdotto } =
+      fabbisognoEdizione(cd, iscritti, kitDefinizioni, corsiKitProdotti, statoPerEdizione[cd.id], prodottiShop);
+    (dermografiSenzaProdotto || []).forEach((d) => dermografiSenzaProdottoTotali.push({ ...d, corsoDataId: cd.id, data: cd.data_inizio }));
     nonRisolti.forEach((n) => nonRisoltiTotali.push({ ...n, corsoDataId: cd.id, corsoId: cd.corso_id, data: cd.data_inizio }));
     senzaKitTotali += senzaKit.length;
     const haIscritti = (iscritti || []).some((i) => i.corso_data_id === cd.id);
@@ -28120,6 +28150,7 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
     perProdotto, perEdizione, perKit,
     dataCriticaComplessiva, edizioneCriticaComplessiva,
     nonRisolti: nonRisoltiTotali, senzaKit: senzaKitTotali, edizioniSenzaIscritti,
+    dermografiSenzaProdotto: dermografiSenzaProdottoTotali,
   };
 }
 
@@ -28498,6 +28529,23 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* dermografi richiesti da qualche allievo che non hanno un prodotto
+          riconoscibile in magazzino: l'Advisor non stima un fabbisogno su
+          un prodotto che non sa quale sia, lo dichiara e basta */}
+      {(risultato.dermografiSenzaProdotto || []).length > 0 && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8A0A0` }}>
+          <div style={titoloBlocco}>Dermografi senza prodotto in magazzino</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.4 }}>
+            Questi allievi hanno chiesto un dermografo che in anagrafica non trovo (o ne trovo più d'uno con lo stesso nome): non lo conto nel fabbisogno e non verrà scaricato.
+          </div>
+          {risultato.dermografiSenzaProdotto.map((d, i) => (
+            <div key={i} style={{ ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+              <b>{d.quantita} × {etichettaDermografo(d.modello)}</b> — corso del {fmtData(d.data)}
+            </div>
+          ))}
         </div>
       )}
 
@@ -36075,6 +36123,44 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA
     </button>
   );
 }
+// ===========================================================
+// DERMOGRAFO
+//
+// Non è un componente del kit ma una scelta dell'iscritto (vedi
+// iscritti.dermografo e corsi.prevede_dermografo). Resta una voce a sé
+// ovunque — preparazione, scarico, Advisor — anche quando è il modello
+// standard: è l'oggetto più costoso che esce dal magazzino, e una voce
+// sottintesa è una voce che prima o poi qualcuno non prepara.
+// ===========================================================
+const DERMOGRAFI = [
+  { chiave: "tekna", etichetta: "Dermografo Tekna", cercaNome: /dermografo.*tekna/i },
+  { chiave: "horus", etichetta: "Dermografo Horus", cercaNome: /dermografo.*horus/i },
+];
+function etichettaDermografo(valore) {
+  if (!valore) return null;
+  if (valore === "nessuno") return "Nessun dermografo";
+  return DERMOGRAFI.find((d) => d.chiave === valore)?.etichetta || valore;
+}
+// il prodotto di magazzino che corrisponde a un modello. Si riconosce dal
+// nome perché è così che sono stati inseriti ("Dermografo Tekna
+// Elitederma"): se un domani ne comparissero due uguali non si tira a
+// indovinare, si restituisce null e chi chiama lo dichiara mancante
+function prodottoDermografo(prodottiShop, modello) {
+  const regola = DERMOGRAFI.find((d) => d.chiave === modello);
+  if (!regola) return null;
+  const trovati = (prodottiShop || []).filter((p) => p.attivo !== false && regola.cercaNome.test(p.nome || ""));
+  return trovati.length === 1 ? trovati[0] : null;
+}
+// quanti dermografi servono per un'edizione, per modello, contando solo
+// gli allievi che ne hanno davvero chiesto uno
+function dermografiRichiestiEdizione(iscrittiEdizione) {
+  const conteggio = {};
+  (iscrittiEdizione || []).forEach((i) => {
+    if (!i.dermografo || i.dermografo === "nessuno") return;
+    conteggio[i.dermografo] = (conteggio[i.dermografo] || 0) + 1;
+  });
+  return conteggio;
+}
 // quanti kit di ciascun tipo servono per un'edizione, dedotti dalle
 // scelte reali degli iscritti (iscritti.pacchetto_kit corrisponde
 // sempre esattamente al nome di un kit_definizioni di quel corso) —
@@ -36104,8 +36190,19 @@ function totaleKitPerEdizione(iscrittiEdizione, kitDefinizioni, corsoId, riserva
 // questa edizione hanno scelto ciascun pacchetto/kit (iscritti.pacchetto_kit),
 // riusato sia nella riga del corso sia in cima a "Preparazione kit"
 function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true }) {
+  // si raggruppa per kit E dermografo insieme: chi prepara deve leggere in
+  // una riga sola cosa mettere nella scatola. "3 kit Pro" con il
+  // dermografo sottinteso è esattamente il modo in cui un dermografo non
+  // viene messo — o ne viene messo uno di troppo
   const conteggio = {};
-  iscrittiEdizione.forEach((i) => { if (i.pacchetto_kit) conteggio[i.pacchetto_kit] = (conteggio[i.pacchetto_kit] || 0) + 1; });
+  iscrittiEdizione.forEach((i) => {
+    if (!i.pacchetto_kit) return;
+    const suffisso = i.dermografo === "nessuno" ? " (senza dermografo)"
+      : i.dermografo ? ` + ${etichettaDermografo(i.dermografo)}`
+      : "";
+    const chiave = `${i.pacchetto_kit}${suffisso}`;
+    conteggio[chiave] = (conteggio[chiave] || 0) + 1;
+  });
   const voci = Object.entries(conteggio).sort((a, b) => b[1] - a[1]);
   if (voci.length === 0) return null;
   const totale = voci.reduce((s, [, n]) => s + n, 0);
@@ -36625,6 +36722,30 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 
     const deltaPerProdotto = {}; // prodotto_id -> variazione da applicare a giacenza (positivo = restituire, negativo = togliere)
     const nuovoScarico = {};
+
+    // dermografi: non stanno in nessuna distinta, li porta la scheda di
+    // ogni allievo. Stessa regola dei kit — si applica solo la differenza
+    // rispetto a quanto già scaricato, così un iscritto che cambia modello
+    // restituisce l'uno e prende l'altro invece di sommarsi
+    const dermografiRichiesti = dermografiRichiestiEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id));
+    const dermografiScaricati = stato.scarico_dermografi || {};
+    const nuovoScaricoDermografi = {};
+    const dermografiSenzaProdotto = [];
+    new Set([...Object.keys(dermografiRichiesti), ...Object.keys(dermografiScaricati)]).forEach((modello) => {
+      const target = dermografiRichiesti[modello] || 0;
+      const giaScaricato = dermografiScaricati[modello] || 0;
+      const delta = target - giaScaricato;
+      if (delta !== 0) {
+        const prodotto = prodottoDermografo(prodottiShop, modello);
+        if (!prodotto) { dermografiSenzaProdotto.push(etichettaDermografo(modello)); return; }
+        deltaPerProdotto[prodotto.id] = (deltaPerProdotto[prodotto.id] || 0) - delta;
+      }
+      if (target > 0) nuovoScaricoDermografi[modello] = target;
+    });
+    if (dermografiSenzaProdotto.length) {
+      window.alert(`Non trovo in magazzino: ${dermografiSenzaProdotto.join(", ")}.\n\nControlla che il prodotto esista in anagrafica con quel nome. Il resto del kit non è stato scaricato.`);
+      return false;
+    }
     new Set([...Object.keys(richiesti), ...Object.keys(scaricoAttuale)]).forEach((kitId) => {
       const target = richiesti[kitId] || 0;
       const giaScaricato = scaricoAttuale[kitId] || 0;
@@ -36708,7 +36829,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       window.alert("Scarico kit interrotto a metà — " + erroreScaricoKit + "\n\nControlla le giacenze in Gestione magazzino prima di riprovare.");
       return false;
     }
-    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati });
+    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: nuovoScarico, accessori_scaricati: accessoriScaricatiAggiornati, scarico_dermografi: nuovoScaricoDermografi });
     return true;
   }
   // ricarica in stock esattamente quanto è registrato come
@@ -36744,7 +36865,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
         if (prodotto) await muoviStock(prodotto, delta, { origine: "kit_corso", nota: "Prodotti rientrati dal corso", riferimento: corsoData.id });
       }
     }
-    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {} });
+    await salvaCampiEdizione(corsoData.id, { scarico_per_kit: {}, accessori_scaricati: {}, scarico_dermografi: {} });
   }
   async function ripristinaKitRientro(corsoData) {
     await ripristinaMagazzinoDaScarico(corsoData);
