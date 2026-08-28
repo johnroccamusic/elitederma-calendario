@@ -34595,6 +34595,40 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     ricarica(["categorie_prodotti"]);
   }
 
+  // "solo magazzino" non è un'opzione da spuntare: è il fatto che la
+  // categoria non esiste su WooCommerce. Per toglierle quella condizione
+  // bisogna crearla davvero sul sito e attaccare il codice che ne torna
+  // alla scheda che c'è già — l'edge function "crea" fa sempre una riga
+  // nuova, quindi il doppione appena nato va riassorbito qui
+  async function pubblicaCategoriaSulloShop() {
+    if (!categoriaForm || categoriaForm.wooCategoryId != null) return;
+    const cat = categorieTutte.find((c) => c.id === categoriaForm.id);
+    const padre = cat?.categoria_padre_id ? categorieTutte.find((c) => c.id === cat.categoria_padre_id) : null;
+    if (padre && padre.woo_category_id == null) {
+      window.alert(`Prima va pubblicata la categoria che la contiene ("${padre.nome}"): sullo shop una sotto-categoria non può stare sotto una categoria che non esiste.`);
+      return;
+    }
+    if (!window.confirm(`Pubblicare "${categoriaForm.nome}" sullo shop online?\n\nLa categoria verrà creata su WooCommerce. I prodotti che contiene NON vanno online da soli: ognuno resta come sta finché non lo pubblichi tu.`)) return;
+    setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
+    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", {
+      body: { azione: "crea", nome: categoriaForm.nome.trim(), descrizione: categoriaForm.descrizione || undefined, immagineUrl: categoriaForm.immagineUrl || undefined, categoriaPadreId: cat?.categoria_padre_id || undefined },
+    });
+    if (error || data?.errore) { setSalvando(false); setMsgErrore("Pubblicazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+    const nuova = data?.categoria;
+    if (nuova?.id && nuova.id !== categoriaForm.id) {
+      // il codice del sito passa alla scheda vera, il doppione sparisce
+      await supabase.from("categorie_prodotti").update({ categoria_padre_id: categoriaForm.id }).eq("categoria_padre_id", nuova.id);
+      const { error: erroreDelete } = await supabase.from("categorie_prodotti").delete().eq("id", nuova.id);
+      if (erroreDelete) { setSalvando(false); setMsgErrore("Categoria creata sullo shop, ma è rimasta una scheda doppia: " + erroreDelete.message); return; }
+      const { error: erroreCodice } = await supabase.from("categorie_prodotti").update({ woo_category_id: nuova.woo_category_id }).eq("id", categoriaForm.id);
+      if (erroreCodice) { setSalvando(false); setMsgErrore("Categoria creata sullo shop, ma non collegata alla scheda: " + erroreCodice.message); return; }
+    }
+    setSalvando(false);
+    setCategoriaForm((f) => ({ ...f, wooCategoryId: nuova?.woo_category_id ?? null }));
+    setMsgSuccesso("Categoria pubblicata sullo shop.");
+    ricarica(["categorie_prodotti"]);
+  }
+
   // una categoria nasce sullo shop (e quindi anche in anagrafica) oppure
   // solo in casa, per organizzare il magazzino senza comparire online
   async function creaCategoria(nome, padreId, soloMagazzino) {
@@ -35381,10 +35415,22 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           <input type="checkbox" checked={!!categoriaForm.soloOffline} onChange={(e) => setCategoriaForm((f) => ({ ...f, soloOffline: e.target.checked }))} style={{ width: 14, height: 14, marginTop: 2 }} />
           <span>Solo offline<div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>I prodotti di questa categoria non vanno mai sullo shop, nemmeno con un prezzo. Salvando, quelli già pubblicati passano in bozza.</div></span>
         </label>
-        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          {categoriaForm.wooCategoryId != null
-            ? "Categoria presente anche sullo shop: nome, descrizione e immagine si aggiornano anche là."
-            : "Categoria solo interna: non esiste sullo shop, serve a organizzare il magazzino."}
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          {categoriaForm.wooCategoryId != null ? (
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>
+              Categoria presente anche sullo shop: nome, descrizione e immagine si aggiornano anche là.
+              Per toglierla dal sito senza perderla qui, usa "Solo offline"; "Elimina" invece la cancella del tutto.
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 200px", lineHeight: 1.4 }}>
+                Categoria <b style={{ color: NAVY }}>solo magazzino</b>: non esiste sullo shop. Pubblicandola, il cliente potrà trovarla sul sito — i prodotti che contiene restano come sono finché non li pubblichi tu.
+              </div>
+              <Button variant="ghost" onClick={pubblicaCategoriaSulloShop} disabled={salvando} style={{ flexShrink: 0 }}>
+                {salvando ? "Pubblico…" : "Pubblica sullo shop"}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
