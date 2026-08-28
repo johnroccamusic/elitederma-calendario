@@ -15784,6 +15784,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // da "Assegna modelle" in Contabilità classe e qui restano invariati
   const [tipiModelle, setTipiModelle] = useState([]);
   const [pacchettoKit, setPacchettoKit] = useState("");
+  // il dermografo non sta più nel kit ma sull'iscrizione: non tutti lo
+  // prendono e i modelli sono due, e un kit per ogni combinazione avrebbe
+  // moltiplicato il catalogo a ogni opzione futura. Su una scheda nuova
+  // parte VUOTO ed è obbligatorio: una voce preselezionata verrebbe saltata
+  // senza essere vista, e passerebbe anche quando il dermografo non va dato
+  const [dermografo, setDermografo] = useState("");
   // "Corso parziale": l'iscritta non c'è tutti i giorni del corso — quando
   // spuntato, un elemento per ogni giorno del corso { numero_giorno,
   // mattina, pomeriggio }. Di default (non spuntato) l'iscritta è
@@ -16559,6 +16565,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     // sganciava le modelle raggruppate su più trattamenti
     setTipiModelle(Array.isArray(i.tipi_modelle) ? i.tipi_modelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : []);
     setPacchettoKit(i.pacchetto_kit || "");
+    setDermografo(i.dermografo || "");
     // filtra eventuali voci non numeriche: prima versione di questo campo
     // (mattina/pomeriggio per oggetto) ha lasciato dati nel vecchio formato
     // su qualche iscritto già in produzione — senza questo filtro
@@ -16673,6 +16680,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   async function persistiIscritto(strict = !modificandoId) {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
+    // richiesto solo sulle iscrizioni nuove: le storiche non vanno bloccate
+    // per un campo che quando sono state fatte non esisteva
+    if (!modificandoId && !dermografo) { setMsg("Scegli il dermografo: Tekna, Horus oppure nessuno."); return false; }
 
     const metodiMancanti = [];
     if (pagAcconto.totale !== "" && parseNum(pagAcconto.totale) !== 0 && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
@@ -16803,6 +16813,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : [],
         giorni_presenza: corsoParziale ? giorniPresenza : null,
         pacchetto_kit: pacchettoKit.trim() || null,
+        dermografo: dermografo || null,
         tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
@@ -18088,6 +18099,23 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   }}
                   opzioni={kitDefinizioni.filter((k) => k.corso_id === corso?.id)}
                 />
+              </Field>
+            </div>
+            <div style={{ flex: 1 }}>
+              {/* tre voci esplicite e nessuna preselezionata: "nessun
+                  dermografo" è una scelta come le altre, non una casella da
+                  deflaggare — le negazioni si sbagliano */}
+              <Field label="Dermografo">
+                <select
+                  value={dermografo}
+                  onChange={(e) => setDermografo(e.target.value)}
+                  style={{ ...inputStyle, ...(dermografo ? {} : { color: MUTED }) }}
+                >
+                  <option value="">— scegli —</option>
+                  <option value="tekna">Dermografo Tekna</option>
+                  <option value="horus">Dermografo Horus</option>
+                  <option value="nessuno">Nessun dermografo</option>
+                </select>
               </Field>
             </div>
             <div style={{ flex: 1 }}>
