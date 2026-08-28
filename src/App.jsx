@@ -25748,12 +25748,12 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
 // "fantasma"
 
 
-// "Nuovo prodotto": due percorsi. Con un prezzo, il prodotto va venduto
-// online — si crea davvero su WooCommerce (Edge Function
-// woo-gestisci-prodotto, già usata da Gestione Shop) e solo se riesce si
-// riflette in locale, poi si imposta lo stock iniziale. Senza prezzo
-// (materiali di consumo, arredi, altro non in vendita) resta solo
-// locale: nessuna chiamata a WooCommerce, niente riga da mantenere lì.
+// La scheda prodotto è UNA SOLA e vive nel Back Office (PaginaGestioneShop):
+// lì stanno insieme le due metà che prima erano separate — nome, foto,
+// descrizioni e categorie da un lato, prezzi, stock, natura e scorte
+// dall'altro. La modale che duplicava la seconda metà è stata rimossa il
+// 28/08/2026: due schede sullo stesso prodotto significavano due nomi
+// possibili per la stessa cosa.
 // campo numerico opzionale: vuoto significa "non impostato" (null), mai
 // zero. La differenza conta: un tempo di consegna a 0 vorrebbe dire "arriva
 // subito" e farebbe calcolare all'Advisor una data limite d'ordine falsa,
@@ -25764,628 +25764,6 @@ function interoOpzionale(testo) {
   const n = parseInt(parseNum(t), 10);
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
-function ModaleNuovoProdotto({ categorieProdotti, prodottiShop, fornitori, ricarica, onClose, onFatto, prodotto, categoriaIdIniziale, padreIniziale, aliquotaIvaDefault = 22 }) {
-  const isMobile = useIsMobile();
-  const [nome, setNome] = useState(prodotto?.nome || "");
-  const [categoriaId, setCategoriaId] = useState(categoriaIdIniziale || "");
-  // prezzo di vendita: sempre netto salvato, il lordo è calcolato (vedi
-  // BloccoPrezzoIva) — "modoVendita" dice solo cosa rappresenta il testo
-  // digitato in QUESTO momento, non cosa viene salvato
-  // il prezzo di vendita si apre sempre sul LORDO: è il numero che paga il
-  // cliente, quello che sta in testa a chi lavora e quello che si legge sul
-  // sito. Il netto resta a un clic di distanza, e lo salvato è comunque il netto
-  const [prezzo, setPrezzo] = useState(
-    prodotto?.prezzo_vendita != null
-      ? String(round2(prodotto.prezzo_vendita * (1 + (prodotto.aliquota_iva_vendita ?? aliquotaIvaDefault) / 100)))
-      : ""
-  );
-  const [modoVendita, setModoVendita] = useState("lordo");
-  const [aliquotaVendita, setAliquotaVendita] = useState(prodotto?.aliquota_iva_vendita ?? aliquotaIvaDefault);
-  const [costo, setCosto] = useState(prodotto?.costo_acquisto != null ? String(prodotto.costo_acquisto) : "");
-  const [modoAcquisto, setModoAcquisto] = useState("netto");
-  const [aliquotaAcquisto, setAliquotaAcquisto] = useState(prodotto?.aliquota_iva_acquisto ?? aliquotaIvaDefault);
-  const [qtaStock, setQtaStock] = useState(prodotto?.quantita != null ? String(prodotto.quantita) : "");
-  // scorta e riordino: la scorta minima è LO STESSO campo della lista
-  // prodotti (prodotti_shop.soglia_riordino), non un secondo campo; gli
-  // altri quattro servono all'Advisor per dire entro quando ordinare
-  const [scortaMinima, setScortaMinima] = useState(prodotto?.soglia_riordino != null ? String(prodotto.soglia_riordino) : "");
-  const [leadTime, setLeadTime] = useState(prodotto?.lead_time_giorni != null ? String(prodotto.lead_time_giorni) : "");
-  const [giorniSicurezza, setGiorniSicurezza] = useState(prodotto?.giorni_sicurezza != null ? String(prodotto.giorni_sicurezza) : "");
-  const [fornitoreId, setFornitoreId] = useState(prodotto?.fornitore_id || "");
-  const [lottoMinimo, setLottoMinimo] = useState(prodotto?.lotto_minimo_ordine != null ? String(prodotto.lotto_minimo_ordine) : "");
-  // gli stessi dati di scorta e riordino valgono quasi sempre per una
-  // famiglia intera di prodotti (tutti i pigmenti, tutti gli aghi di un
-  // fornitore): copiarli a mano prodotto per prodotto è la strada per non
-  // compilarli mai. Qui si scelgono i destinatari e si applicano in blocco
-  const [copiaAperta, setCopiaAperta] = useState(false);
-  const [filtroCopia, setFiltroCopia] = useState("");
-  const [selezionatiCopia, setSelezionatiCopia] = useState({});
-  const [applicandoCopia, setApplicandoCopia] = useState(false);
-  const [msgCopia, setMsgCopia] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-  const [soloOfflineChk, setSoloOfflineChk] = useState(!!prodotto?.solo_offline);
-  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
-
-  // natura del prodotto: di default un prodotto è "semplice" con tutti i
-  // flag attivi, esattamente come sempre — bundle/componente/variante
-  // sono eccezioni che si smarcano qui a mano (vedi migrazione
-  // 20260826150000_natura_prodotti_bundle.sql)
-  const [tipoProdotto, setTipoProdotto] = useState(prodotto?.tipo_prodotto || (padreIniziale ? "variante" : "semplice"));
-  const [contaMagazzino, setContaMagazzino] = useState(prodotto ? prodotto.conta_magazzino !== false : true);
-  const [contaIncassi, setContaIncassi] = useState(prodotto ? prodotto.conta_incassi !== false : true);
-  const [giacenzaPropria, setGiacenzaPropria] = useState(prodotto ? prodotto.giacenza_propria !== false : true);
-  const [prodottoPadreId, setProdottoPadreId] = useState(prodotto?.prodotto_padre_id || padreIniziale || "");
-  // bundle con giacenza fisica (pacco sigillato sullo scaffale, es. box di
-  // aghi da 20): stock proprio + collegamento al prodotto sfuso, vedi
-  // migrazione 20260828100000_pacchi_sigillati_sfusi.sql
-  const [bundleFisica, setBundleFisica] = useState(!!prodotto?.bundle_con_giacenza_fisica);
-  const [prodottoSfusoId, setProdottoSfusoId] = useState(prodotto?.prodotto_sfuso_id || "");
-  const [pezziConfezione, setPezziConfezione] = useState(prodotto?.pezzi_per_confezione != null ? String(prodotto.pezzi_per_confezione) : "");
-  // distinta base, solo per tipo "bundle": [{ componenteId, quantita }]
-  const [componenti, setComponenti] = useState([]);
-  useEffect(() => {
-    if (prodotto?.id && prodotto?.tipo_prodotto === "bundle") {
-      supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", prodotto.id)
-        .then(({ data }) => setComponenti((data || []).map((r) => ({ componenteId: r.componente_id, quantita: String(r.quantita_per_bundle) }))));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prodotto?.id]);
-
-  // cambiare tipo suggerisce i flag tipici del caso, ma restano modificabili
-  // a mano: es. il prodotto "vetrina" di una variante è tecnicamente
-  // "semplice" con i flag spenti a mano, non un tipo a parte
-  function cambiaTipo(nuovo) {
-    setTipoProdotto(nuovo);
-    if (nuovo === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(true); setCosto(""); }
-    else if (nuovo === "componente") { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(false); setPrezzo(""); }
-    else if (nuovo === "vetrina") {
-      // il prezzo e la giacenza stanno sulle varianti, mai sul padre: la
-      // vetrina non si vende né si conta mai da sola
-      setContaMagazzino(false); setGiacenzaPropria(false); setContaIncassi(false); setPrezzo(""); setCosto("");
-    }
-    else { setContaMagazzino(true); setGiacenzaPropria(true); setContaIncassi(true); }
-  }
-  // attivare/spegnere la giacenza fisica cambia anche i flag tipici: il
-  // box sigillato SI conta in magazzino e ha stock proprio. Spegnendola su
-  // un bundle si torna al virtuale (nessuna giacenza propria, tutto
-  // calcolato dai componenti); su un prodotto semplice invece resta un
-  // prodotto normale, che in magazzino ci sta eccome
-  function cambiaBundleFisica(attiva) {
-    setBundleFisica(attiva);
-    if (attiva) { setContaMagazzino(true); setGiacenzaPropria(true); }
-    else if (tipoProdotto === "bundle") { setContaMagazzino(false); setGiacenzaPropria(false); setCosto(""); }
-  }
-  // copia SOLO i campi compilati: quelli lasciati vuoti non vengono
-  // toccati sui prodotti scelti, altrimenti un campo che non hai mai
-  // riempito qui cancellerebbe quello che loro hanno già
-  function campiRiordinoDaCopiare() {
-    const campi = {};
-    if (String(scortaMinima).trim() !== "") campi.soglia_riordino = interoOpzionale(scortaMinima);
-    if (String(leadTime).trim() !== "") campi.lead_time_giorni = interoOpzionale(leadTime);
-    if (String(giorniSicurezza).trim() !== "") campi.giorni_sicurezza = interoOpzionale(giorniSicurezza);
-    if (fornitoreId) campi.fornitore_id = fornitoreId;
-    if (String(lottoMinimo).trim() !== "") campi.lotto_minimo_ordine = interoOpzionale(lottoMinimo);
-    return campi;
-  }
-  async function applicaRiordinoAdAltri() {
-    const ids = Object.keys(selezionatiCopia).filter((id) => selezionatiCopia[id]);
-    const campi = campiRiordinoDaCopiare();
-    if (!ids.length) { setMsgCopia("Seleziona almeno un prodotto."); return; }
-    if (!Object.keys(campi).length) { setMsgCopia("Compila almeno un dato di scorta e riordino da copiare."); return; }
-    const etichette = {
-      soglia_riordino: `soglia di riordino ${campi.soglia_riordino}`,
-      lead_time_giorni: `tempo di consegna ${campi.lead_time_giorni} giorni`,
-      giorni_sicurezza: `margine ${campi.giorni_sicurezza} giorni`,
-      fornitore_id: `fornitore "${(fornitori || []).find((f) => f.id === campi.fornitore_id)?.nome || ""}"`,
-      lotto_minimo_ordine: `lotto minimo ${campi.lotto_minimo_ordine}`,
-    };
-    const elenco = Object.keys(campi).map((k) => etichette[k]).join(", ");
-    if (!window.confirm(`Applicare ${elenco} a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}?\n\nI campi lasciati vuoti qui sopra non vengono toccati.`)) return;
-    setApplicandoCopia(true); setMsgCopia("");
-    const { error } = await supabase.from("prodotti_shop").update(campi).in("id", ids);
-    setApplicandoCopia(false);
-    if (error) { setMsgCopia("Errore: " + error.message); return; }
-    setMsgCopia(`Applicato a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}.`);
-    setSelezionatiCopia({});
-    if (ricarica) ricarica(["prodotti_shop"]);
-  }
-  function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
-  function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
-  function cambiaComponente(i, campo, valore) { setComponenti((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valore } : c))); }
-
-  const prodottiScelta = (prodottiShop || []).filter((p) => !prodotto || p.id !== prodotto.id);
-  const prodottiPerId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
-  // il costo del bundle non si scrive mai a mano: è sempre la somma di
-  // costo_unitario × quantità dei componenti, così se cambia il costo di
-  // un componente tutti i bundle che lo usano si riprezzano da soli — qui
-  // solo un'anteprima, il calcolo "vivo" per i report vive in PaginaMagazzino
-  const bundleVirtualeForm = tipoProdotto === "bundle" && !bundleFisica;
-  const costoBundleCalcolato = bundleVirtualeForm
-    ? componenti.reduce((s, c) => {
-        const comp = prodottiPerId[c.componenteId];
-        const q = parseNum(c.quantita) || 0;
-        return comp?.costo_acquisto != null ? s + comp.costo_acquisto * q : s;
-      }, 0)
-    : null;
-
-  // netto sempre canonico (vedi BloccoPrezzoIva/nettoDaLordo): per il
-  // bundle il costo non si scrive mai a mano, è la somma (già netta) dei
-  // componenti calcolata sopra
-  const costoNetto = bundleVirtualeForm
-    ? costoBundleCalcolato
-    : (costo.trim() === "" ? null : (modoAcquisto === "netto" ? parseNum(costo) : nettoDaLordo(parseNum(costo), aliquotaAcquisto)));
-  const prezzoVenditaNetto = prezzo.trim() === "" ? null : (modoVendita === "netto" ? parseNum(prezzo) : nettoDaLordo(parseNum(prezzo), aliquotaVendita));
-  const prezzoVenditaLordo = calcolaIvaELordo(prezzoVenditaNetto, aliquotaVendita).lordo;
-  // margine sempre sui netti, mai sui lordi: l'IVA non deve sporcare il
-  // confronto tra costo e ricavo
-  const margineUnitario = costoNetto != null && prezzoVenditaNetto != null ? round2(prezzoVenditaNetto - costoNetto) : null;
-  const marginePct = margineUnitario != null && prezzoVenditaNetto > 0 ? round2((margineUnitario / prezzoVenditaNetto) * 100) : null;
-
-  // salva natura + distinta base + IVA dopo che il prodotto esiste già
-  // (crea() o salva() più sotto): stesso giro per entrambi, un solo posto
-  // da mantenere. iva_verificata=true SEMPRE qui: un salvataggio esplicito
-  // dal form, anche a parità di aliquota, vale come verifica a mano —
-  // i prodotti mai passati da qui restano false (vedi migrazione)
-  async function salvaNaturaProdotto(prodottoId) {
-    // un box di pezzi sigillati non è per forza un "bundle": nell'anagrafica
-    // è quasi sempre un prodotto semplice ("Ago 3RLLT - 0,25 - Box 20 pz"),
-    // e obbligare a cambiargli natura per collegargli lo sfuso nascondeva
-    // la funzione a chi la cercava
-    const bundleConFisica = (tipoProdotto === "bundle" || tipoProdotto === "semplice") && bundleFisica;
-    const { error } = await supabase.from("prodotti_shop").update({
-      tipo_prodotto: tipoProdotto,
-      conta_magazzino: contaMagazzino,
-      conta_incassi: contaIncassi,
-      giacenza_propria: giacenzaPropria,
-      prodotto_padre_id: tipoProdotto === "variante" && prodottoPadreId ? prodottoPadreId : null,
-      // solo il bundle VIRTUALE ha costo/IVA acquisto calcolati dalla
-      // distinta: il box sigillato si compra davvero dal produttore,
-      // quindi costo e aliquota restano i suoi
-      costo_acquisto: bundleVirtualeForm ? null : costoNetto,
-      aliquota_iva_acquisto: tipoProdotto === "vetrina" || bundleVirtualeForm ? null : aliquotaAcquisto,
-      aliquota_iva_vendita: tipoProdotto === "vetrina" ? null : aliquotaVendita,
-      iva_verificata: true,
-      // scorta e riordino: partono dallo stato, che è inizializzato dal
-      // prodotto — quindi un salvataggio da una scheda dove il riquadro non
-      // è visibile riscrive gli stessi valori, non li azzera
-      soglia_riordino: interoOpzionale(scortaMinima),
-      lead_time_giorni: interoOpzionale(leadTime),
-      giorni_sicurezza: interoOpzionale(giorniSicurezza),
-      fornitore_id: fornitoreId || null,
-      lotto_minimo_ordine: interoOpzionale(lottoMinimo),
-      bundle_con_giacenza_fisica: bundleConFisica,
-      prodotto_sfuso_id: bundleConFisica && prodottoSfusoId ? prodottoSfusoId : null,
-      pezzi_per_confezione: bundleConFisica && parseNum(pezziConfezione) > 0 ? parseInt(parseNum(pezziConfezione), 10) : null,
-    }).eq("id", prodottoId);
-    if (error) return error.message;
-    if (tipoProdotto === "bundle") {
-      // il box con giacenza fisica non usa la distinta base (gli sfusi si
-      // muovono solo con "Apri confezione"): eventuali righe residue vanno
-      // pulite, altrimenti resterebbe una doppia natura ambigua
-      const { error: erroreDelete } = await supabase.from("bundle_componenti").delete().eq("bundle_id", prodottoId);
-      if (erroreDelete) return erroreDelete.message;
-      const righe = bundleVirtualeForm
-        ? componenti
-            .filter((c) => c.componenteId && parseNum(c.quantita) > 0)
-            .map((c) => ({ bundle_id: prodottoId, componente_id: c.componenteId, quantita_per_bundle: parseNum(c.quantita) }))
-        : [];
-      if (righe.length) {
-        const { error: erroreInsert } = await supabase.from("bundle_componenti").insert(righe);
-        if (erroreInsert) return erroreInsert.message;
-      }
-    }
-    return null;
-  }
-  const haPrezzo = prezzoVenditaNetto != null;
-  // "solo offline" può venire dalla categoria scelta (forzato, vale per
-  // tutti i prodotti di quella categoria) oppure impostato a mano sul
-  // singolo prodotto: anche con un prezzo, se uno dei due è attivo il
-  // prodotto non va mai su WooCommerce — il prezzo resta solo per
-  // valorizzare il magazzino fisico
-  const categoriaSoloOffline = !!(categorieProdotti || []).find((c) => c.id === categoriaId)?.solo_offline;
-  const soloOffline = categoriaSoloOffline || soloOfflineChk;
-  const vaSuWoo = haPrezzo && !soloOffline;
-
-  async function crea() {
-    if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
-    if (tipoProdotto === "variante" && !prodottoPadreId) { setMsg("Seleziona il prodotto padre (la vetrina)."); return; }
-    const stockIniziale = qtaStock === "" ? 0 : parseInt(parseNum(qtaStock), 10);
-    if (haPrezzo && !(prezzoVenditaNetto > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
-    setSalvando(true);
-    setMsg("");
-
-    if (vaSuWoo) {
-      // WooCommerce ha i prezzi IVA inclusa (confermato): manda il lordo,
-      // mai il netto, altrimenti il prezzo pubblicato sullo shop risulta
-      // scontato dell'IVA
-      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
-        body: { azione: "crea", nome: nome.trim(), prezzo: prezzoVenditaLordo, stato: "publish", categorieIds: categoriaId ? [categoriaId] : [] },
-      });
-      if (error || data?.errore) { setSalvando(false); setMsg("Errore creazione su WooCommerce: " + (data?.errore || error.message)); return; }
-      const prodottoId = data.prodottoId;
-      if (stockIniziale > 0) {
-        const { data: dataStock, error: erroreStock } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId, quantita: stockIniziale } });
-        if (erroreStock || dataStock?.errore) { setSalvando(false); setMsg(`Prodotto creato, ma la quantità non è stata impostata: ${dataStock?.errore || erroreStock.message}`); return; }
-      }
-      const erroreNatura = await salvaNaturaProdotto(prodottoId);
-      setSalvando(false);
-      if (erroreNatura) { setMsg("Prodotto creato, ma la natura/distinta base non è stata salvata: " + erroreNatura); return; }
-      onFatto();
-      return;
-    }
-
-    // nessun prezzo, oppure "solo offline": prodotto solo locale, mai su
-    // WooCommerce (il prezzo, se c'è, resta comunque salvato per
-    // valorizzare il magazzino)
-    const { data: riga, error: erroreInsert } = await supabase
-      .from("prodotti_shop")
-      .insert({ nome: nome.trim(), quantita: stockIniziale, prezzo_vendita: prezzoVenditaNetto, attivo: true, solo_offline: soloOfflineChk })
-      .select().single();
-    if (erroreInsert) { setSalvando(false); setMsg("Errore: " + erroreInsert.message); return; }
-    if (categoriaId) {
-      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert({ prodotto_id: riga.id, categoria_id: categoriaId });
-      if (erroreCat) { setSalvando(false); setMsg("Prodotto creato, ma la categoria non è stata salvata: " + erroreCat.message); return; }
-    }
-    const erroreNatura = await salvaNaturaProdotto(riga.id);
-    setSalvando(false);
-    if (erroreNatura) { setMsg("Prodotto creato, ma la natura/distinta base non è stata salvata: " + erroreNatura); return; }
-    onFatto();
-  }
-
-  // modifica di un prodotto già esistente (stessa scheda con cui è stato
-  // creato, riaperta cliccando il nome in "Dettaglio prodotti"): se il
-  // prodotto è (o deve diventare) in vendita online passa da
-  // woo-gestisci-prodotto — la stessa Edge Function usata per "crea", che
-  // qui riceve azione "modifica" se il prodotto ha già un woo_product_id,
-  // "crea" se sta passando da solo locale a online adesso — altrimenti
-  // resta un aggiornamento locale, come per un prodotto mai online
-  async function salva() {
-    if (!nome.trim()) { setMsg("Scrivi il nome del prodotto."); return; }
-    if (tipoProdotto === "variante" && !prodottoPadreId) { setMsg("Seleziona il prodotto padre (la vetrina)."); return; }
-    const stockIniziale = qtaStock === "" ? 0 : parseInt(parseNum(qtaStock), 10);
-    if (haPrezzo && !(prezzoVenditaNetto > 0)) { setMsg("Il prezzo deve essere maggiore di zero."); return; }
-    setSalvando(true);
-    setMsg("");
-
-    if (vaSuWoo) {
-      // WooCommerce ha i prezzi IVA inclusa (confermato): manda il lordo,
-      // mai il netto
-      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
-        body: {
-          azione: prodotto.woo_product_id ? "modifica" : "crea",
-          prodottoId: prodotto.id,
-          nome: nome.trim(), prezzo: prezzoVenditaLordo, stato: "publish",
-          categorieIds: categoriaId ? [categoriaId] : [],
-        },
-      });
-      if (error || data?.errore) { setSalvando(false); setMsg("Errore salvataggio su WooCommerce: " + (data?.errore || error.message)); return; }
-      const { error: erroreLocale } = await supabase.from("prodotti_shop").update({ solo_offline: soloOfflineChk }).eq("id", prodotto.id);
-      if (erroreLocale) { setSalvando(false); setMsg("Salvato su WooCommerce, ma non in locale: " + erroreLocale.message); return; }
-      const { error: erroreStock } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: prodotto.id, quantita: stockIniziale } });
-      if (erroreStock) { setSalvando(false); setMsg("Salvato, ma la quantità non è stata aggiornata: " + erroreStock.message); return; }
-      const erroreNatura = await salvaNaturaProdotto(prodotto.id);
-      setSalvando(false);
-      if (erroreNatura) { setMsg("Salvato, ma la natura/distinta base non è stata aggiornata: " + erroreNatura); return; }
-      onFatto();
-      return;
-    }
-
-    // resta (o torna) solo locale: se prima era pubblicato su WooCommerce
-    // va staccato da lì, altrimenti "Solo offline" non lo sarebbe davvero.
-    // Cancellato del tutto (nuovo codice se un giorno torna online) solo
-    // se non ha mai generato una vendita; se invece ha storico, va solo
-    // in bozza su WooCommerce per non perderlo
-    if (prodotto.woo_product_id) {
-      if ((prodotto.quantitaVenduta || 0) > 0) {
-        const { error } = await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: prodotto.id, stato: "draft" } });
-        if (error) { setSalvando(false); setMsg("Errore nel mettere il prodotto in bozza su WooCommerce: " + error.message); return; }
-      } else {
-        const { error } = await supabase.functions.invoke("woo-elimina-prodotto", { body: { prodottoId: prodotto.id } });
-        if (error) { setSalvando(false); setMsg("Errore nel cancellare il prodotto da WooCommerce: " + error.message); return; }
-      }
-    }
-    const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({
-      nome: nome.trim(), prezzo_vendita: prezzoVenditaNetto, quantita: stockIniziale, solo_offline: soloOfflineChk,
-    }).eq("id", prodotto.id);
-    if (erroreUpdate) { setSalvando(false); setMsg("Errore: " + erroreUpdate.message); return; }
-    const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", prodotto.id);
-    if (erroreRimuoviCat) { setSalvando(false); setMsg("Prodotto salvato, ma la categoria non è stata aggiornata: " + erroreRimuoviCat.message); return; }
-    if (categoriaId) {
-      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert({ prodotto_id: prodotto.id, categoria_id: categoriaId });
-      if (erroreCat) { setSalvando(false); setMsg("Prodotto salvato, ma la categoria non è stata aggiornata: " + erroreCat.message); return; }
-    }
-    const erroreNatura = await salvaNaturaProdotto(prodotto.id);
-    setSalvando(false);
-    if (erroreNatura) { setMsg("Prodotto salvato, ma la natura/distinta base non è stata aggiornata: " + erroreNatura); return; }
-    onFatto();
-  }
-
-  return (
-    <Modal title={prodotto ? "Modifica prodotto" : "Nuovo prodotto"} onClose={onClose}>
-      <Field label="Nome">
-        <input style={inputStyle} value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
-      </Field>
-      <Field label="Categoria">
-        <select style={inputStyle} value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
-          <option value="">— nessuna —</option>
-          {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.solo_offline ? " (solo offline)" : ""}</option>)}
-        </select>
-      </Field>
-      <label title={categoriaSoloOffline ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: categoriaSoloOffline ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: categoriaSoloOffline ? MUTED : NAVY, marginBottom: 10 }}>
-        <input type="checkbox" checked={soloOffline} disabled={categoriaSoloOffline} onChange={(e) => setSoloOfflineChk(e.target.checked)} style={{ width: 14, height: 14 }} />
-        Solo offline (mai su WooCommerce, anche con un prezzo)
-      </label>
-      {soloOffline && (
-        <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
-          {categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino fisico, non viene creato su WooCommerce.
-        </div>
-      )}
-      {tipoProdotto === "bundle" && costoBundleCalcolato != null && (
-        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
-          Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(costoBundleCalcolato)}</b>
-        </div>
-      )}
-      {/* Acquisto e Vendita affiancati ovunque, telefono compreso: impilati
-          allungavano la scheda al punto che il prezzo finiva fuori schermo e
-          non si riusciva a modificarlo. Una colonna sola quando il secondo
-          blocco non esiste (bundle ha solo Vendita, componente solo
-          Acquisto, vetrina nessuno dei due). */}
-      {tipoProdotto !== "vetrina" && (
-        <div style={{ display: "grid", gridTemplateColumns: bundleVirtualeForm ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
-          {!bundleVirtualeForm && (
-            <BloccoPrezzoIva
-              titolo="Acquisto"
-              inputTesto={costo} onCambiaInputTesto={setCosto}
-              modo={modoAcquisto} onCambiaModo={setModoAcquisto}
-              aliquota={aliquotaAcquisto} onCambiaAliquota={setAliquotaAcquisto}
-            />
-          )}
-          {/* il prezzo di vendita c'è anche sui componenti: "componente"
-              dice che fa parte di un kit, non che non si possa vendere —
-              gli anelli porta inchiostro stanno nei kit E sullo shop.
-              Nasconderlo rendeva il prezzo invisibile e non modificabile */}
-          {true && (
-            <BloccoPrezzoIva
-              titolo="Vendita"
-              inputTesto={prezzo} onCambiaInputTesto={setPrezzo}
-              modo={modoVendita} onCambiaModo={setModoVendita}
-              aliquota={aliquotaVendita} onCambiaAliquota={setAliquotaVendita}
-            />
-          )}
-        </div>
-      )}
-      {margineUnitario != null && (
-        <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 14, padding: "8px 12px", background: "#FBF3E4", borderRadius: 8 }}>
-          Margine (sui netti): <b>{fmtEuroIva(margineUnitario)}</b>{marginePct != null && <> — <b>{marginePct}%</b></>}
-        </div>
-      )}
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-        <div style={{ flex: isMobile ? "0 0 110px" : 1 }}>
-          <Field label="Quantità in stock">
-            <input style={{ ...inputStyle, ...(isMobile ? { padding: "7px 8px", fontSize: 12.5 } : {}), ...(giacenzaPropria ? {} : { background: "#EFEFEF", color: MUTED }) }} inputMode="numeric" value={qtaStock} onChange={(e) => setQtaStock(e.target.value)} placeholder="0" disabled={!giacenzaPropria} />
-          </Field>
-        </div>
-        <div style={{ flex: 1, minWidth: 0, ...fontBody, fontSize: isMobile ? 10.5 : 11.5, color: MUTED, lineHeight: 1.3, paddingTop: isMobile ? 20 : 18 }}>
-          {vaSuWoo
-            ? (isMobile ? "Pezzi presenti: sono gli stessi che vende lo shop online, la quantità sul sito viene riallineata a questo numero." : "Pezzi fisicamente presenti. Sono gli stessi che lo shop online vende: la quantità pubblicata su WooCommerce viene riallineata a questo numero.")
-            : (isMobile ? "Pezzi presenti. Non è in vendita online: lo stock resta interno." : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")}
-        </div>
-      </div>
-      {!giacenzaPropria && (
-        <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
-          Quantità non editabile a mano: viene calcolata (vedi sotto per i bundle) o non si applica (es. vetrina di una variante).
-        </div>
-      )}
-
-      <Field label="Natura del prodotto">
-        <select style={inputStyle} value={tipoProdotto} onChange={(e) => cambiaTipo(e.target.value)}>
-          <option value="semplice">Semplice — prodotto normale, si vende e si scarica da solo</option>
-          <option value="bundle">Bundle — kit venduto come un pezzo unico, composto da altri prodotti che vengono scaricati insieme</option>
-          <option value="componente">Componente — fa parte di un bundle, non si vende singolarmente</option>
-          <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
-          <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
-        </select>
-      </Field>
-      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={contaMagazzino} onChange={(e) => setContaMagazzino(e.target.checked)} style={{ width: 14, height: 14 }} />
-          Conta nel magazzino
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={contaIncassi} onChange={(e) => setContaIncassi(e.target.checked)} style={{ width: 14, height: 14 }} />
-          Conta negli incassi
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={giacenzaPropria} onChange={(e) => setGiacenzaPropria(e.target.checked)} style={{ width: 14, height: 14 }} />
-          Giacenza propria
-        </label>
-      </div>
-
-      {tipoProdotto === "variante" && (
-        <Field label="Prodotto padre — obbligatorio (la vetrina, es. 'Maglietta Elitederma')">
-          <select style={inputStyle} value={prodottoPadreId} onChange={(e) => setProdottoPadreId(e.target.value)}>
-            <option value="">— scegli la vetrina —</option>
-            {prodottiScelta.filter((p) => p.tipo_prodotto === "vetrina").map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-          </select>
-        </Field>
-      )}
-
-      {(tipoProdotto === "bundle" || tipoProdotto === "semplice") && (
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
-            <input type="checkbox" checked={bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
-            Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
-          </label>
-          {bundleFisica && (
-            <>
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
-                Il box ha uno stock suo (i pacchi sigillati) e il prodotto sfuso collegato ne ha un altro (i pezzi aperti): sono indipendenti, si travasano solo con l'operazione "Apri confezione" in Gestione magazzino.
-              </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <div style={{ flex: "2 1 200px" }}>
-                  <Field label="Prodotto sfuso collegato (il pezzo singolo)">
-                    <TendinaRicerca
-                      valore={prodottoSfusoId}
-                      opzioni={prodottiScelta
-                        .filter((p) => p.tipo_prodotto === "componente" || p.tipo_prodotto === "semplice")
-                        .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
-                      onCambia={setProdottoSfusoId}
-                      etichettaVuoto="— scegli il prodotto sfuso —"
-                      placeholderRicerca="Cerca prodotto…"
-                    />
-                  </Field>
-                </div>
-                <div style={{ flex: "1 1 120px" }}>
-                  <Field label="Pezzi per confezione">
-                    <input style={inputStyle} inputMode="numeric" value={pezziConfezione} onChange={(e) => setPezziConfezione(e.target.value)} placeholder="es. 20" />
-                  </Field>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {bundleVirtualeForm && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Distinta base (componenti del kit)</div>
-          {componenti.map((c, i) => (
-            <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
-              {/* una variante o una vetrina non sono componenti scaricabili di
-                  un bundle: si scaricano solo per conto proprio. L'elenco è
-                  lungo quanto il magazzino, quindi si cerca per parola */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <TendinaRicerca
-                  valore={c.componenteId}
-                  opzioni={prodottiScelta
-                    .filter((p) => p.tipo_prodotto !== "variante" && p.tipo_prodotto !== "vetrina" && p.tipo_prodotto !== "bundle")
-                    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
-                  onCambia={(valore) => cambiaComponente(i, "componenteId", valore)}
-                  etichettaVuoto="— scegli componente —"
-                  placeholderRicerca="Cerca prodotto…"
-                />
-              </div>
-              <input style={{ ...inputStyle, width: 60 }} inputMode="numeric" value={c.quantita} onChange={(e) => cambiaComponente(i, "quantita", e.target.value)} placeholder="Qtà" />
-              <button onClick={() => rimuoviComponente(i)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 18, lineHeight: 1, padding: 4 }}>×</button>
-            </div>
-          ))}
-          <button onClick={aggiungiComponente} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", width: "100%" }}>
-            + Aggiungi componente
-          </button>
-        </div>
-      )}
-
-      {giacenzaPropria && (
-        <div style={{ marginBottom: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Scorta e riordino</div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "1 1 90px", minWidth: 0 }}>
-              <Field label="Scorta minima">
-                <input style={inputStyle} inputMode="numeric" value={scortaMinima} onChange={(e) => setScortaMinima(e.target.value)} placeholder="—" />
-              </Field>
-            </div>
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Tempo di consegna (giorni)">
-                <input style={inputStyle} inputMode="numeric" value={leadTime} onChange={(e) => setLeadTime(e.target.value)} placeholder="es. 45" />
-              </Field>
-            </div>
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Margine di sicurezza (giorni)">
-                <input style={inputStyle} inputMode="numeric" value={giorniSicurezza} onChange={(e) => setGiorniSicurezza(e.target.value)} placeholder="da Impostazioni" />
-              </Field>
-            </div>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <div style={{ flex: "2 1 160px", minWidth: 0 }}>
-              <Field label="Fornitore">
-                <TendinaRicerca
-                  valore={fornitoreId}
-                  opzioni={[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
-                  onCambia={setFornitoreId}
-                  placeholderRicerca="Cerca fornitore…"
-                />
-              </Field>
-            </div>
-            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
-              <Field label="Lotto minimo d'ordine">
-                <input style={inputStyle} inputMode="numeric" value={lottoMinimo} onChange={(e) => setLottoMinimo(e.target.value)} placeholder="—" />
-              </Field>
-            </div>
-          </div>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-            Senza tempo di consegna l'Advisor non può dire entro quando ordinare questo prodotto: resta solo l'avviso "sotto scorta".
-          </div>
-
-          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 10 }}>
-            <input type="checkbox" checked={copiaAperta} onChange={(e) => { setCopiaAperta(e.target.checked); setMsgCopia(""); }} style={{ width: 14, height: 14 }} />
-            Applica questi dati anche ad altri prodotti
-          </label>
-          {copiaAperta && (() => {
-            const candidati = prodottiScelta.filter((p) => p.attivo !== false && p.giacenza_propria !== false);
-            const filtrati = filtroCopia.trim()
-              ? candidati.filter((p) => (p.nome || "").toLowerCase().includes(filtroCopia.trim().toLowerCase()))
-              : candidati;
-            const selezionati = Object.keys(selezionatiCopia).filter((id) => selezionatiCopia[id]);
-            const tuttiFiltratiSelezionati = filtrati.length > 0 && filtrati.every((p) => selezionatiCopia[p.id]);
-            return (
-              <div style={{ marginTop: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
-                <input
-                  style={{ ...inputStyle, marginBottom: 8 }} placeholder="Filtra per parola (es. pigmento, ago, matita)…"
-                  value={filtroCopia} onChange={(e) => setFiltroCopia(e.target.value)}
-                />
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6, ...fontBody, fontSize: 11.5, color: MUTED }}>
-                  <span>{filtrati.length} prodotti{selezionati.length > 0 ? ` · ${selezionati.length} selezionati` : ""}</span>
-                  <button
-                    onClick={() => setSelezionatiCopia((prev) => {
-                      const nuovo = { ...prev };
-                      filtrati.forEach((p) => { if (tuttiFiltratiSelezionati) delete nuovo[p.id]; else nuovo[p.id] = true; });
-                      return nuovo;
-                    })}
-                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-                  >
-                    {tuttiFiltratiSelezionati ? "deseleziona tutti" : "seleziona tutti i filtrati"}
-                  </button>
-                </div>
-                <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
-                  {filtrati.length === 0 ? (
-                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, padding: 10 }}>Nessun prodotto con questo filtro.</div>
-                  ) : filtrati.map((p) => (
-                    <label key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                      <input
-                        type="checkbox" checked={!!selezionatiCopia[p.id]} style={{ width: 14, height: 14, flexShrink: 0 }}
-                        onChange={(e) => setSelezionatiCopia((prev) => ({ ...prev, [p.id]: e.target.checked }))}
-                      />
-                      <span style={{ flex: 1, minWidth: 0 }}>{p.nome}</span>
-                      {(p.soglia_riordino != null || p.lead_time_giorni != null || p.fornitore_id) && (
-                        <span title="Ha già dei dati di scorta e riordino: verranno sovrascritti" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>già impostato</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-                {msgCopia && <div style={{ ...fontBody, fontSize: 12, color: msgCopia.startsWith("Errore") || msgCopia.startsWith("Seleziona") || msgCopia.startsWith("Compila") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{msgCopia}</div>}
-                <div style={{ marginTop: 8 }}>
-                  <Button onClick={applicaRiordinoAdAltri} disabled={applicandoCopia || selezionati.length === 0} style={{ width: "100%" }}>
-                    {applicandoCopia ? "Applico…" : `Applica a ${selezionati.length} prodott${selezionati.length === 1 ? "o" : "i"}`}
-                  </Button>
-                </div>
-                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>
-                  Si applicano solo i campi compilati qui sopra; quelli vuoti restano come sono sui prodotti scelti. Il prodotto aperto si salva come sempre con "Salva modifiche".
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      )}
-
-      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={prodotto ? salva : crea} disabled={salvando} style={{ width: "100%" }}>
-        {prodotto ? (salvando ? "Salvo…" : "Salva modifiche") : (salvando ? "Creo…" : "Crea prodotto")}
-      </Button>
-    </Modal>
-  );
-}
-
 // gestione delle categorie prodotto da Gestione magazzino: quelle
 // sincronizzate da WooCommerce (woo_category_id valorizzato) restano di
 // sola lettura qui, modificabili solo dalla Gestione shop — quelle create
@@ -27105,7 +26483,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, onApriBackOffice, ricarica, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, onBack, titolo = "Gestione magazzino" }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -27114,17 +26492,24 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
   const [paginaMagazzino, setPaginaMagazzino] = useState(0);
-  const [mostraNuovoProdotto, setMostraNuovoProdotto] = useState(false);
-  // cliccando il nome di un prodotto già esistente si riapre la stessa
-  // scheda con cui è stato creato (non quella completa di Gestione Shop,
-  // pensata per la scheda WooCommerce con immagini/descrizioni)
-  const [prodottoInModifica, setProdottoInModifica] = useState(null);
+  // due modi di guardare lo stesso magazzino, nella stessa pagina: la
+  // tabella (tutti i prodotti in riga, con stock e prezzi sott'occhio) e
+  // l'albero delle categorie dello shop, dove si apre la scheda completa
+  // del prodotto — l'unica scheda esistente, quella con foto e descrizioni
+  const [vistaProdotti, setVistaProdotti] = useState("elenco");
+  const [categorieMontate, setCategorieMontate] = useState(false);
+  const [aperturaScheda, setAperturaScheda] = useState(null);
+  function mostraVista(chiave) {
+    if (chiave === "categorie") setCategorieMontate(true);
+    setVistaProdotti(chiave);
+  }
+  function apriSchedaProdotto(opzioni) {
+    setAperturaScheda((prec) => ({ ...opzioni, n: (prec?.n || 0) + 1 }));
+    mostraVista("categorie");
+  }
+  const apriScheda = (p) => apriSchedaProdotto({ prodottoId: p.id });
   const [prodottoIspezionato, setProdottoIspezionato] = useState(null);
   const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null); // id del box di cui aprire confezioni, o null
-  // id della vetrina da precompilare in "Nuovo prodotto" quando si apre da
-  // "+ Aggiungi variante" — distinto da mostraNuovoProdotto perché quella
-  // apertura parte da un prodotto preciso, non da un modulo vuoto
-  const [nuovaVariantePadreId, setNuovaVariantePadreId] = useState(null);
   const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
@@ -27406,13 +26791,19 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <Button variant="ghost" onClick={onApriAdvisor}>Advisor</Button>
-            {/* stessa anagrafica, altra metà della scheda: qui si governano
-                stock, prezzi e fornitori, di là nome, foto e descrizioni.
-                Finché sono due schermate separate, almeno si raggiungono
-                l'una dall'altra senza ripassare dal menu */}
-            <Button variant="ghost" onClick={onApriBackOffice}>Back Office prodotti</Button>
+            <div style={{ display: "flex", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, overflow: "hidden", background: "#fff" }}>
+              {[{ chiave: "elenco", etichetta: "Vista a elenco" }, { chiave: "categorie", etichetta: "Vista a categorie" }].map((v) => (
+                <button
+                  key={v.chiave}
+                  onClick={() => mostraVista(v.chiave)}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 14px", border: "none", cursor: "pointer", background: vistaProdotti === v.chiave ? NAVY : "transparent", color: vistaProdotti === v.chiave ? "#fff" : NAVY }}
+                >
+                  {v.etichetta}
+                </button>
+              ))}
+            </div>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
-            <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
+            <Button variant="ghost" onClick={() => apriSchedaProdotto({ nuovo: true })}>+ Nuovo prodotto</Button>
             {/* il nome vecchio ("Sincronizza catalogo") non diceva in che
                 direzione andasse la sincronizzazione, e la direzione è una
                 sola: dal sito verso qui. Stock e prezzi non si toccano — li
@@ -27426,7 +26817,11 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
             </div>
           </div>
         </div>
-        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Magazzino fisico e shop online insieme. Clicca sul nome per modificare il prodotto, sullo stock totale per aggiornare il magazzino.</div>
+        <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>
+          {vistaProdotti === "elenco"
+            ? "Magazzino fisico e shop online insieme. Clicca sul nome per aprire la scheda del prodotto, sullo stock totale per aggiornare il magazzino."
+            : "Gli stessi prodotti ordinati per categoria dello shop. Clicca un prodotto per aprirne la scheda completa."}
+        </div>
 
         {(() => {
           const { risultato, daOrdinare, ritardi } = sintesiAdvisor;
@@ -27452,6 +26847,24 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           );
         })()}
 
+        {/* la vista a categorie si monta al primo utilizzo e poi resta
+            montata, solo nascosta: tornando all'elenco e rientrando si
+            ritrova la scheda aperta con le modifiche non ancora salvate,
+            invece di una pagina vuota */}
+        {categorieMontate && (
+        <div style={{ display: vistaProdotti === "categorie" ? "block" : "none" }}>
+          <PaginaGestioneShop
+            incorporata
+            categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
+            prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
+            fornitori={fornitori} impostazioniIva={impostazioniIva}
+            ricarica={ricarica} onBack={onBack}
+            vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
+          />
+        </div>
+        )}
+
+        {vistaProdotti === "elenco" && (<>
         <div style={{ ...cardStyle, marginBottom: 22 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
             <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
@@ -27494,7 +26907,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
                     {a.tipo === "apri_pacco" ? (
                       <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
                     ) : (
-                      <button onClick={() => setProdottoInModifica(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri scheda</button>
+                      <button onClick={() => apriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri scheda</button>
                     )}
                   </div>
                 );
@@ -27576,7 +26989,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
               </thead>
               <tbody>
                 {prodottiPaginaMagazzino.map((p) => (
-                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => setProdottoInModifica(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} />
+                  <RigaProdottoMagazzino key={p.id} prodotto={p} onApriModifica={() => apriScheda(p)} ricarica={ricarica} onApriIspezione={setProdottoIspezionato} onApriConfezione={setApriConfezioneBoxId} onElimina={eliminaProdotto} />
                 ))}
                 {prodottiOrdinati.length === 0 && (
                   <tr><td colSpan={COLONNE_MAGAZZINO.length} style={{ padding: "20px 14px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>Nessun prodotto corrisponde ai filtri.</td></tr>
@@ -27603,33 +27016,11 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, display: "inline-block" }} /> Shop Online: quantità pubblicata su WooCommerce</div>
           </div>
         </div>
+        </>)}
       </div>
 
       {apriConfezioneBoxId && (
         <ModaleApriConfezione boxId={apriConfezioneBoxId} prodottiShop={prodottiShop} onClose={() => setApriConfezioneBoxId(null)} ricarica={ricarica} />
-      )}
-      {(mostraNuovoProdotto || nuovaVariantePadreId) && (
-        <ModaleNuovoProdotto
-          categorieProdotti={categorieProdotti}
-          prodottiShop={prodottiShop}
-          padreIniziale={nuovaVariantePadreId}
-          fornitori={fornitori} ricarica={ricarica}
-          aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
-          onClose={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); }}
-          onFatto={() => { setMostraNuovoProdotto(false); setNuovaVariantePadreId(null); ricarica(["prodotti_shop"]); }}
-        />
-      )}
-      {prodottoInModifica && (
-        <ModaleNuovoProdotto
-          categorieProdotti={categorieProdotti}
-          prodottiShop={prodottiShop}
-          prodotto={prodottoInModifica}
-          categoriaIdIniziale={(prodottiCategorie || []).find((pc) => pc.prodotto_id === prodottoInModifica.id)?.categoria_id || ""}
-          fornitori={fornitori} ricarica={ricarica}
-          aliquotaIvaDefault={impostazioniIva?.aliquota_default ?? 22}
-          onClose={() => setProdottoInModifica(null)}
-          onFatto={() => { setProdottoInModifica(null); ricarica(["prodotti_shop", "prodotti_categorie"]); }}
-        />
       )}
       {prodottoIspezionato && prodottoIspezionato.isVetrina && (
         <ModaleIspezioneVetrina
@@ -27638,9 +27029,9 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           onApriVariante={(varianteId) => {
             const v = (prodottiShop || []).find((pp) => pp.id === varianteId);
             setProdottoIspezionato(null);
-            if (v) setProdottoInModifica(v);
+            if (v) apriScheda(v);
           }}
-          onAggiungiVariante={() => { setNuovaVariantePadreId(prodottoIspezionato.id); setProdottoIspezionato(null); }}
+          onAggiungiVariante={() => { const padreId = prodottoIspezionato.id; setProdottoIspezionato(null); apriSchedaProdotto({ nuovo: true, padreId }); }}
         />
       )}
       {prodottoIspezionato && !prodottoIspezionato.isVetrina && (
@@ -27650,7 +27041,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           onApriComponente={(componenteId) => {
             const comp = (prodottiShop || []).find((pp) => pp.id === componenteId);
             setProdottoIspezionato(null);
-            if (comp) setProdottoInModifica(comp);
+            if (comp) apriScheda(comp);
           }}
         />
       )}
@@ -34421,7 +33812,8 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack, apriProdottoIdIniziale, vistaIniziale }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, onBack, vistaIniziale, aperturaScheda, incorporata }) {
+  const aliquotaIvaDefault = impostazioniIva?.aliquota_default ?? 22;
   const isMobile = useIsMobile();
   const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
   const [collassate, setCollassate] = useState(() => new Set());
@@ -34435,6 +33827,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const [msgSuccesso, setMsgSuccesso] = useState("");
   const [modaleCategoria, setModaleCategoria] = useState(null);
   const [vistaMobile, setVistaMobile] = useState("albero");
+  // distinta base del bundle aperto: sta fuori da prodottoForm perché si
+  // legge da un'altra tabella (bundle_componenti) e con un suo giro
+  const [componenti, setComponenti] = useState([]);
+  // copia dei dati di scorta e riordino su più prodotti in un colpo solo
+  const [copiaAperta, setCopiaAperta] = useState(false);
+  const [filtroCopia, setFiltroCopia] = useState("");
+  const [selezionatiCopia, setSelezionatiCopia] = useState({});
+  const [applicandoCopia, setApplicandoCopia] = useState(false);
+  const [msgCopia, setMsgCopia] = useState("");
   const trascinamento = useRef(null);
 
   // due viste nettamente separate: "frontoffice" (il menu vero di
@@ -34445,7 +33846,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // e "backoffice" (l'editor completo, quello che questa pagina era per
   // intero prima) — un prodotto aperto da "Gestione magazzino" atterra
   // sempre nel back office, mai nel front office
-  const [vista, setVista] = useState(apriProdottoIdIniziale || vistaIniziale === "backoffice" ? "backoffice" : "frontoffice");
+  const [vista, setVista] = useState(aperturaScheda || vistaIniziale === "backoffice" ? "backoffice" : "frontoffice");
   const [foRootId, setFoRootId] = useState(null);
   const [foSubId, setFoSubId] = useState(null);
   const [vistaMobileFo, setVistaMobileFo] = useState("categorie");
@@ -34591,38 +33992,103 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       nome: p.nome,
       descrizioneBreve: p.descrizione_breve || "",
       descrizione: p.descrizione || "",
-      prezzo: p.prezzo_vendita != null ? String(p.prezzo_vendita) : "",
+      // il prezzo di vendita si apre sempre sul LORDO: è il numero che paga
+      // il cliente, quello che si legge sul sito e quello che sta in testa a
+      // chi lavora. Salvato resta comunque il netto (vedi BloccoPrezzoIva)
+      prezzo: p.prezzo_vendita != null
+        ? String(round2(p.prezzo_vendita * (1 + (p.aliquota_iva_vendita ?? aliquotaIvaDefault) / 100)))
+        : "",
+      modoVendita: "lordo",
+      aliquotaVendita: p.aliquota_iva_vendita ?? aliquotaIvaDefault,
+      costo: p.costo_acquisto != null ? String(p.costo_acquisto) : "",
+      modoAcquisto: "netto",
+      aliquotaAcquisto: p.aliquota_iva_acquisto ?? aliquotaIvaDefault,
       stato: p.stato || "publish",
+      soloOffline: !!p.solo_offline,
+      qtaStock: p.quantita != null ? String(p.quantita) : "",
+      tipoProdotto: p.tipo_prodotto || "semplice",
+      contaMagazzino: p.conta_magazzino !== false,
+      contaIncassi: p.conta_incassi !== false,
+      giacenzaPropria: p.giacenza_propria !== false,
+      prodottoPadreId: p.prodotto_padre_id || "",
+      bundleFisica: !!p.bundle_con_giacenza_fisica,
+      prodottoSfusoId: p.prodotto_sfuso_id || "",
+      pezziConfezione: p.pezzi_per_confezione != null ? String(p.pezzi_per_confezione) : "",
+      scortaMinima: p.soglia_riordino != null ? String(p.soglia_riordino) : "",
+      leadTime: p.lead_time_giorni != null ? String(p.lead_time_giorni) : "",
+      giorniSicurezza: p.giorni_sicurezza != null ? String(p.giorni_sicurezza) : "",
+      fornitoreId: p.fornitore_id || "",
+      lottoMinimo: p.lotto_minimo_ordine != null ? String(p.lotto_minimo_ordine) : "",
+      wooProductId: p.woo_product_id || null,
       categorieIds: categorieIdPerProdotto[p.id] || [],
       immagini: (immaginiPerProdotto[p.id] || []).map((im) => ({ chiave: im.id, url: im.url, wooImageId: im.woo_image_id })),
     });
+    setComponenti([]);
+    setCopiaAperta(false); setSelezionatiCopia({}); setMsgCopia("");
     setMsgErrore(""); setMsgSuccesso("");
     if (isMobile) setVistaMobile("dettaglio");
   }
 
-  // arrivo da "Gestione magazzino" (click sul nome di un prodotto): apre
-  // subito quel prodotto nell'editor completo. Il ref (non lo stato)
-  // ricorda quale id è già stato aperto, così un ricalcolo di
-  // prodottiShop non riapre da capo lo stesso prodotto sovrascrivendo
-  // eventuali modifiche in corso — niente callback verso il chiamante:
-  // l'unico altro modo di rientrare in questa pagina è dal menu, che
-  // azzera sempre apriProdottoIdIniziale prima di navigare
-  const prodottoApertoIniziale = useRef(null);
+  // la distinta base vive in bundle_componenti: si carica quando la scheda
+  // aperta è un bundle virtuale, e si azzera appena si cambia prodotto
   useEffect(() => {
-    if (!apriProdottoIdIniziale || prodottoApertoIniziale.current === apriProdottoIdIniziale) return;
-    const p = (prodottiShop || []).find((pp) => pp.id === apriProdottoIdIniziale);
-    if (p) { setVista("backoffice"); apriProdotto(p); prodottoApertoIniziale.current = apriProdottoIdIniziale; }
-  }, [apriProdottoIdIniziale, prodottiShop]);
+    const id = prodottoForm?.id;
+    if (!id || prodottoForm?.tipoProdotto !== "bundle") return;
+    let annullato = false;
+    supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", id)
+      .then(({ data }) => {
+        if (annullato) return;
+        setComponenti((data || []).map((r) => ({ componenteId: r.componente_id, quantita: String(r.quantita_per_bundle) })));
+      });
+    return () => { annullato = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prodottoForm?.id, prodottoForm?.tipoProdotto]);
 
-  function nuovoProdotto() {
+  // arrivo da "Gestione magazzino": apre subito la scheda richiesta — un
+  // prodotto preciso o una scheda nuova. Il ref ricorda quale richiesta è
+  // già stata servita, così un ricalcolo di prodottiShop (che avviene a
+  // ogni ricarica) non riapre da capo la scheda sovrascrivendo le
+  // modifiche in corso; il contatore nella richiesta distingue due
+  // aperture identiche di seguito
+  const aperturaServita = useRef(null);
+  useEffect(() => {
+    if (!aperturaScheda || aperturaServita.current === aperturaScheda.n) return;
+    if (aperturaScheda.prodottoId) {
+      const p = (prodottiShop || []).find((pp) => pp.id === aperturaScheda.prodottoId);
+      if (!p) return; // i prodotti non sono ancora arrivati: si riprova al prossimo giro
+      aperturaServita.current = aperturaScheda.n;
+      setVista("backoffice");
+      apriProdotto(p);
+      return;
+    }
+    aperturaServita.current = aperturaScheda.n;
+    setVista("backoffice");
+    nuovoProdotto(aperturaScheda.padreId || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aperturaScheda, prodottiShop]);
+
+  function nuovoProdotto(padreId) {
     setProdottoForm({
       id: null, nome: "", descrizioneBreve: "", descrizione: "", prezzo: "", stato: "publish",
+      modoVendita: "lordo", aliquotaVendita: aliquotaIvaDefault,
+      costo: "", modoAcquisto: "netto", aliquotaAcquisto: aliquotaIvaDefault,
+      soloOffline: false, qtaStock: "",
+      tipoProdotto: padreId ? "variante" : "semplice",
+      contaMagazzino: true, contaIncassi: true, giacenzaPropria: true,
+      prodottoPadreId: padreId || "",
+      bundleFisica: false, prodottoSfusoId: "", pezziConfezione: "",
+      scortaMinima: "", leadTime: "", giorniSicurezza: "", fornitoreId: "", lottoMinimo: "",
+      wooProductId: null,
       categorieIds: categoriaSelId ? [categoriaSelId] : [],
       immagini: [],
     });
+    setComponenti([]);
+    setCopiaAperta(false); setSelezionatiCopia({}); setMsgCopia("");
     setMsgErrore(""); setMsgSuccesso("");
     if (isMobile) setVistaMobile("dettaglio");
   }
+
+
 
   async function caricaFileSuStorage(file) {
     const estensione = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -34769,30 +34235,225 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (data?.categoria?.id) selezionaCategoria(data.categoria.id);
   }
 
+  // salva la parte del prodotto che WooCommerce non conosce: natura, flag,
+  // distinta base, IVA, scorta e riordino — e il prezzo NETTO. Quest'ultimo
+  // è importante: woo-gestisci-prodotto riscrive in locale il prezzo che il
+  // sito restituisce, cioè il LORDO, dentro un campo che è netto. Il trigger
+  // protezione_prezzo_lordo scarta solo l'eco esatta del vecchio valore, non
+  // un prezzo cambiato ora, quindi il netto giusto va riscritto qui, dopo.
+  // iva_verificata = true: un salvataggio esplicito dalla scheda vale come
+  // verifica a mano dell'aliquota
+  async function salvaDatiInterni(prodottoId, calcolo) {
+    const f = prodottoForm;
+    const bundleConFisica = (f.tipoProdotto === "bundle" || f.tipoProdotto === "semplice") && f.bundleFisica;
+    const campi = {
+      // nome, descrizioni e stato si riscrivono SEMPRE qui, anche quando il
+      // salvataggio è passato dal sito. Prima il nome locale dipendeva da
+      // quello che WooCommerce restituiva, e se il sito non lo rimandava
+      // indietro il magazzino restava col nome vecchio: due nomi per lo
+      // stesso prodotto. Adesso il valore scritto nella scheda è quello, e
+      // vale in magazzino, nel back office e sul sito
+      nome: f.nome.trim(),
+      descrizione: f.descrizione || null,
+      descrizione_breve: f.descrizioneBreve || null,
+      // se il prodotto esce dallo shop, in locale lo stato deve dire la
+      // stessa cosa che dice il sito: bozza, non "pubblicato"
+      stato: calcolo.vaSuWoo ? f.stato : (f.wooProductId ? "draft" : f.stato),
+      tipo_prodotto: f.tipoProdotto,
+      conta_magazzino: f.contaMagazzino,
+      conta_incassi: f.contaIncassi,
+      giacenza_propria: f.giacenzaPropria,
+      prodotto_padre_id: f.tipoProdotto === "variante" && f.prodottoPadreId ? f.prodottoPadreId : null,
+      // solo il bundle VIRTUALE ha costo e IVA acquisto calcolati dalla
+      // distinta: il box sigillato si compra davvero, quindi restano i suoi
+      costo_acquisto: calcolo.bundleVirtuale ? null : calcolo.costoNetto,
+      aliquota_iva_acquisto: f.tipoProdotto === "vetrina" || calcolo.bundleVirtuale ? null : f.aliquotaAcquisto,
+      aliquota_iva_vendita: f.tipoProdotto === "vetrina" ? null : f.aliquotaVendita,
+      iva_verificata: true,
+      soglia_riordino: interoOpzionale(f.scortaMinima),
+      lead_time_giorni: interoOpzionale(f.leadTime),
+      giorni_sicurezza: interoOpzionale(f.giorniSicurezza),
+      fornitore_id: f.fornitoreId || null,
+      lotto_minimo_ordine: interoOpzionale(f.lottoMinimo),
+      bundle_con_giacenza_fisica: bundleConFisica,
+      prodotto_sfuso_id: bundleConFisica && f.prodottoSfusoId ? f.prodottoSfusoId : null,
+      pezzi_per_confezione: bundleConFisica && parseNum(f.pezziConfezione) > 0 ? parseInt(parseNum(f.pezziConfezione), 10) : null,
+      solo_offline: !!f.soloOffline,
+    };
+    if (calcolo.prezzoNetto != null) campi.prezzo_vendita = calcolo.prezzoNetto;
+    const { error } = await supabase.from("prodotti_shop").update(campi).eq("id", prodottoId);
+    if (error) return error.message;
+    if (f.tipoProdotto === "bundle") {
+      // il box con giacenza fisica non usa la distinta base (gli sfusi si
+      // muovono solo con "Apri confezione"): le righe residue vanno pulite
+      const { error: erroreDelete } = await supabase.from("bundle_componenti").delete().eq("bundle_id", prodottoId);
+      if (erroreDelete) return erroreDelete.message;
+      const righe = calcolo.bundleVirtuale
+        ? componenti
+            .filter((c) => c.componenteId && parseNum(c.quantita) > 0)
+            .map((c) => ({ bundle_id: prodottoId, componente_id: c.componenteId, quantita_per_bundle: parseNum(c.quantita) }))
+        : [];
+      if (righe.length) {
+        const { error: erroreInsert } = await supabase.from("bundle_componenti").insert(righe);
+        if (erroreInsert) return erroreInsert.message;
+      }
+    }
+    return null;
+  }
+
+  // un solo salvataggio per l'intera scheda: sito (nome, descrizioni,
+  // immagini, prezzo pubblicato, stato, categorie) e magazzino (stock,
+  // natura, scorte) insieme. Prima il sito, perché è quello che può
+  // rifiutare; solo se accetta si scrive in locale
   async function salvaProdotto() {
     if (!prodottoForm) return;
-    if (!prodottoForm.nome.trim()) { setMsgErrore("Il nome del prodotto è obbligatorio."); return; }
-    const prezzoNum = parseNum(prodottoForm.prezzo);
-    if (!(prezzoNum > 0)) { setMsgErrore("Inserisci un prezzo valido, maggiore di zero."); return; }
+    const f = prodottoForm;
+    if (!f.nome.trim()) { setMsgErrore("Il nome del prodotto è obbligatorio."); return; }
+    if (f.tipoProdotto === "variante" && !f.prodottoPadreId) { setMsgErrore("Seleziona il prodotto padre (la vetrina)."); return; }
+    const calcolo = calcoloPrezzi;
+    if (calcolo.prezzoNetto != null && !(calcolo.prezzoNetto > 0)) { setMsgErrore("Il prezzo di vendita deve essere maggiore di zero."); return; }
+    const stock = String(f.qtaStock).trim() === "" ? 0 : parseInt(parseNum(f.qtaStock), 10);
     setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
-    const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
-      body: {
-        azione: prodottoForm.id ? "modifica" : "crea",
-        prodottoId: prodottoForm.id || undefined,
-        nome: prodottoForm.nome.trim(),
-        descrizioneBreve: prodottoForm.descrizioneBreve,
-        descrizione: prodottoForm.descrizione,
-        prezzo: prezzoNum,
-        stato: prodottoForm.stato,
-        categorieIds: prodottoForm.categorieIds,
-        immagini: prodottoForm.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
-      },
-    });
+
+    if (calcolo.vaSuWoo) {
+      // WooCommerce pubblica i prezzi IVA inclusa: si manda il LORDO
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
+        body: {
+          azione: f.wooProductId ? "modifica" : "crea",
+          prodottoId: f.id || undefined,
+          nome: f.nome.trim(),
+          descrizioneBreve: f.descrizioneBreve,
+          descrizione: f.descrizione,
+          prezzo: calcolo.prezzoLordo,
+          stato: f.stato,
+          categorieIds: f.categorieIds,
+          immagini: f.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
+        },
+      });
+      if (error || data?.errore) { setSalvando(false); setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
+      // woo-gestisci-prodotto, con azione "crea", inserisce SEMPRE una riga
+      // nuova in anagrafica: se il prodotto esisteva già in locale (era
+      // interno e ora va online) resterebbero due schede per lo stesso
+      // articolo, una con lo storico e una col codice del sito. Qui il
+      // doppione appena nato viene riassorbito in quello vero
+      if (f.id && data?.prodottoId && data.prodottoId !== f.id) {
+        const doppioneId = data.prodottoId;
+        const { data: doppione } = await supabase.from("prodotti_shop").select("woo_product_id").eq("id", doppioneId).single();
+        await supabase.from("prodotti_categorie").delete().eq("prodotto_id", f.id);
+        await supabase.from("prodotti_categorie").update({ prodotto_id: f.id }).eq("prodotto_id", doppioneId);
+        await supabase.from("prodotti_immagini").delete().eq("prodotto_id", f.id);
+        await supabase.from("prodotti_immagini").update({ prodotto_id: f.id }).eq("prodotto_id", doppioneId);
+        const { error: erroreDoppione } = await supabase.from("prodotti_shop").delete().eq("id", doppioneId);
+        if (erroreDoppione) { setSalvando(false); setMsgErrore("Il prodotto è online, ma è rimasta una scheda doppia da cancellare a mano: " + erroreDoppione.message); return; }
+        if (doppione?.woo_product_id) {
+          const { error: erroreCodice } = await supabase.from("prodotti_shop").update({ woo_product_id: doppione.woo_product_id }).eq("id", f.id);
+          if (erroreCodice) { setSalvando(false); setMsgErrore("Prodotto creato sul sito, ma non collegato alla scheda: " + erroreCodice.message); return; }
+        }
+      }
+      const idProdotto = f.id || data?.prodottoId;
+      if (f.giacenzaPropria && idProdotto) {
+        const { data: dataStock, error: erroreStock } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: idProdotto, quantita: stock } });
+        if (erroreStock || dataStock?.errore) { setSalvando(false); setMsgErrore("Salvato, ma la quantità non è stata aggiornata: " + (dataStock?.errore || erroreStock.message)); return; }
+      }
+      const erroreInterni = idProdotto ? await salvaDatiInterni(idProdotto, calcolo) : null;
+      setSalvando(false);
+      if (erroreInterni) { setMsgErrore("Salvato sul sito, ma i dati di magazzino no: " + erroreInterni); return; }
+      setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
+      if (!f.id && idProdotto) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: data?.wooProductId ?? prev.wooProductId }));
+      ricarica(["prodotti_shop", "prodotti_categorie", "prodotti_immagini"]);
+      return;
+    }
+
+    // niente prezzo, oppure "solo offline": prodotto solo interno. Se era
+    // pubblicato lo si mette in BOZZA su WooCommerce — mai cancellato da
+    // qui: il prodotto potrebbe avere storico di vendite e cancellarlo
+    // spezzerebbe gli ordini che lo citano
+    if (f.wooProductId) {
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: f.id, stato: "draft" } });
+      if (error || data?.errore) { setSalvando(false); setMsgErrore("Non è stato possibile togliere il prodotto dallo shop: " + (data?.errore || error.message)); return; }
+    }
+    let idProdotto = f.id;
+    if (idProdotto) {
+      const { error: erroreUpdate } = await supabase.from("prodotti_shop").update({
+        nome: f.nome.trim(),
+        descrizione: f.descrizione || null,
+        descrizione_breve: f.descrizioneBreve || null,
+        ...(f.giacenzaPropria ? { quantita: stock } : {}),
+      }).eq("id", idProdotto);
+      if (erroreUpdate) { setSalvando(false); setMsgErrore("Errore: " + erroreUpdate.message); return; }
+    } else {
+      const { data: riga, error: erroreInsert } = await supabase.from("prodotti_shop")
+        .insert({ nome: f.nome.trim(), descrizione: f.descrizione || null, descrizione_breve: f.descrizioneBreve || null, quantita: stock, attivo: true })
+        .select().single();
+      if (erroreInsert) { setSalvando(false); setMsgErrore("Errore: " + erroreInsert.message); return; }
+      idProdotto = riga.id;
+    }
+    const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", idProdotto);
+    if (erroreRimuoviCat) { setSalvando(false); setMsgErrore("Prodotto salvato, ma le categorie no: " + erroreRimuoviCat.message); return; }
+    if ((f.categorieIds || []).length) {
+      const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(f.categorieIds.map((id) => ({ prodotto_id: idProdotto, categoria_id: id })));
+      if (erroreCat) { setSalvando(false); setMsgErrore("Prodotto salvato, ma le categorie no: " + erroreCat.message); return; }
+    }
+    const erroreInterni = await salvaDatiInterni(idProdotto, calcolo);
     setSalvando(false);
-    if (error || data?.errore) { setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
-    setMsgSuccesso(prodottoForm.id ? "Prodotto salvato." : "Prodotto creato.");
-    if (!prodottoForm.id && data?.prodottoId) setProdottoForm((f) => ({ ...f, id: data.prodottoId }));
-    ricarica(["prodotti_shop"]);
+    if (erroreInterni) { setMsgErrore("Prodotto salvato, ma i dati di magazzino no: " + erroreInterni); return; }
+    setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
+    if (!f.id) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: null }));
+    ricarica(["prodotti_shop", "prodotti_categorie"]);
+  }
+
+  // gli stessi dati di scorta e riordino valgono quasi sempre per una
+  // famiglia intera di prodotti (tutti i pigmenti, tutti gli aghi di un
+  // fornitore): copiarli a mano uno per uno è la strada per non
+  // compilarli mai. Si copiano SOLO i campi compilati qui
+  function campiRiordinoDaCopiare() {
+    const f = prodottoForm || {};
+    const campi = {};
+    if (String(f.scortaMinima ?? "").trim() !== "") campi.soglia_riordino = interoOpzionale(f.scortaMinima);
+    if (String(f.leadTime ?? "").trim() !== "") campi.lead_time_giorni = interoOpzionale(f.leadTime);
+    if (String(f.giorniSicurezza ?? "").trim() !== "") campi.giorni_sicurezza = interoOpzionale(f.giorniSicurezza);
+    if (f.fornitoreId) campi.fornitore_id = f.fornitoreId;
+    if (String(f.lottoMinimo ?? "").trim() !== "") campi.lotto_minimo_ordine = interoOpzionale(f.lottoMinimo);
+    return campi;
+  }
+  async function applicaRiordinoAdAltri() {
+    const ids = Object.keys(selezionatiCopia).filter((id) => selezionatiCopia[id]);
+    const campi = campiRiordinoDaCopiare();
+    if (!ids.length) { setMsgCopia("Seleziona almeno un prodotto."); return; }
+    if (!Object.keys(campi).length) { setMsgCopia("Compila almeno un dato di scorta e riordino da copiare."); return; }
+    const etichette = {
+      soglia_riordino: `soglia di riordino ${campi.soglia_riordino}`,
+      lead_time_giorni: `tempo di consegna ${campi.lead_time_giorni} giorni`,
+      giorni_sicurezza: `margine ${campi.giorni_sicurezza} giorni`,
+      fornitore_id: `fornitore "${(fornitori || []).find((fo) => fo.id === campi.fornitore_id)?.nome || ""}"`,
+      lotto_minimo_ordine: `lotto minimo ${campi.lotto_minimo_ordine}`,
+    };
+    const elenco = Object.keys(campi).map((k) => etichette[k]).join(", ");
+    if (!window.confirm(`Applicare ${elenco} a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}?\n\nI campi lasciati vuoti qui sopra non vengono toccati.`)) return;
+    setApplicandoCopia(true); setMsgCopia("");
+    const { error } = await supabase.from("prodotti_shop").update(campi).in("id", ids);
+    setApplicandoCopia(false);
+    if (error) { setMsgCopia("Errore: " + error.message); return; }
+    setMsgCopia(`Applicato a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}.`);
+    setSelezionatiCopia({});
+    if (ricarica) ricarica(["prodotti_shop"]);
+  }
+  function aggiungiComponente() { setComponenti((prev) => [...prev, { componenteId: "", quantita: "1" }]); }
+  function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
+  function cambiaComponente(i, campo, valore) { setComponenti((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valore } : c))); }
+  function aggiornaForm(campi) { setProdottoForm((f) => ({ ...f, ...campi })); }
+  // cambiare natura suggerisce i flag tipici del caso, ma restano tutti
+  // modificabili a mano
+  function cambiaTipo(nuovo) {
+    if (nuovo === "bundle") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: true, costo: "" });
+    else if (nuovo === "componente") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false });
+    else if (nuovo === "vetrina") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: false, prezzo: "", costo: "" });
+    else aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
+  }
+  function cambiaBundleFisica(attiva) {
+    if (attiva) aggiornaForm({ bundleFisica: true, contaMagazzino: true, giacenzaPropria: true });
+    else if (prodottoForm?.tipoProdotto === "bundle") aggiornaForm({ bundleFisica: false, contaMagazzino: false, giacenzaPropria: false, costo: "" });
+    else aggiornaForm({ bundleFisica: false });
   }
 
   const paneAlbero = (
@@ -34863,6 +34524,48 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     </>
   );
 
+  // tutto quello che si deduce dai numeri della scheda: netto/lordo di
+  // acquisto e vendita, margine, costo del bundle dalla distinta, e la
+  // domanda che decide la strada del salvataggio — questo prodotto va sul
+  // sito o resta interno?
+  const prodottiScelta = (prodottiShop || []).filter((pp) => !prodottoForm?.id || pp.id !== prodottoForm.id);
+  const calcoloPrezzi = useMemo(() => {
+    const f = prodottoForm;
+    if (!f) return { prezzoNetto: null, prezzoLordo: null, costoNetto: null, bundleVirtuale: false, vaSuWoo: false };
+    const prodottiPerId = Object.fromEntries((prodottiShop || []).map((pp) => [pp.id, pp]));
+    const bundleVirtuale = f.tipoProdotto === "bundle" && !f.bundleFisica;
+    // il costo del bundle non si scrive mai a mano: è la somma dei netti
+    // dei componenti, così se cambia il costo di uno si riprezza da solo
+    const costoBundle = bundleVirtuale
+      ? componenti.reduce((tot, c) => {
+          const comp = prodottiPerId[c.componenteId];
+          const q = parseNum(c.quantita) || 0;
+          return comp?.costo_acquisto != null ? tot + comp.costo_acquisto * q : tot;
+        }, 0)
+      : null;
+    const costoNetto = bundleVirtuale
+      ? costoBundle
+      : (String(f.costo ?? "").trim() === "" ? null : (f.modoAcquisto === "netto" ? parseNum(f.costo) : nettoDaLordo(parseNum(f.costo), f.aliquotaAcquisto)));
+    const prezzoNetto = String(f.prezzo ?? "").trim() === ""
+      ? null
+      : (f.modoVendita === "netto" ? parseNum(f.prezzo) : nettoDaLordo(parseNum(f.prezzo), f.aliquotaVendita));
+    const prezzoLordo = calcolaIvaELordo(prezzoNetto, f.aliquotaVendita).lordo;
+    // margine sempre sui netti: l'IVA non deve sporcare il confronto
+    const margine = costoNetto != null && prezzoNetto != null ? round2(prezzoNetto - costoNetto) : null;
+    const marginePct = margine != null && prezzoNetto > 0 ? round2((margine / prezzoNetto) * 100) : null;
+    // "solo offline" può venire dalla categoria (vale per tutti i suoi
+    // prodotti) o dalla spunta sul singolo prodotto: in entrambi i casi
+    // il prodotto non va mai sullo shop, anche se ha un prezzo
+    const categoriaSoloOffline = (f.categorieIds || []).some((id) => (categorieProdotti || []).find((c) => c.id === id)?.solo_offline);
+    const soloOffline = categoriaSoloOffline || !!f.soloOffline;
+    return {
+      prezzoNetto, prezzoLordo, costoNetto, costoBundle, margine, marginePct,
+      bundleVirtuale, categoriaSoloOffline, soloOffline,
+      vaSuWoo: prezzoNetto != null && !soloOffline,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prodottoForm, componenti, prodottiShop, categorieProdotti]);
+
   const paneDettaglioProdotto = prodottoForm && (
     <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : "calc(100vh - 230px)", overflow: "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
@@ -34911,17 +34614,72 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       <Field label="Descrizione completa">
         <EditorRicco key={`completa-${prodottoForm.id || "nuovo"}`} value={prodottoForm.descrizione} onChange={(html) => setProdottoForm((f) => ({ ...f, descrizione: html }))} minHeight={110} />
       </Field>
+      {/* Acquisto e Vendita affiancati: il prezzo si digita in netto o in
+          lordo a scelta, ma quello salvato è sempre il netto e quello
+          pubblicato sul sito sempre il lordo */}
+      {prodottoForm.tipoProdotto !== "vetrina" && (
+        <div style={{ display: "grid", gridTemplateColumns: calcoloPrezzi.bundleVirtuale ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
+          {!calcoloPrezzi.bundleVirtuale && (
+            <BloccoPrezzoIva
+              titolo="Acquisto"
+              inputTesto={prodottoForm.costo} onCambiaInputTesto={(v) => aggiornaForm({ costo: v })}
+              modo={prodottoForm.modoAcquisto} onCambiaModo={(v) => aggiornaForm({ modoAcquisto: v })}
+              aliquota={prodottoForm.aliquotaAcquisto} onCambiaAliquota={(v) => aggiornaForm({ aliquotaAcquisto: v })}
+            />
+          )}
+          <BloccoPrezzoIva
+            titolo="Vendita"
+            inputTesto={prodottoForm.prezzo} onCambiaInputTesto={(v) => aggiornaForm({ prezzo: v })}
+            modo={prodottoForm.modoVendita} onCambiaModo={(v) => aggiornaForm({ modoVendita: v })}
+            aliquota={prodottoForm.aliquotaVendita} onCambiaAliquota={(v) => aggiornaForm({ aliquotaVendita: v })}
+          />
+        </div>
+      )}
+      {calcoloPrezzi.bundleVirtuale && calcoloPrezzi.costoBundle != null && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
+          Costo di acquisto calcolato dalla distinta base (somma dei netti dei componenti): <b style={{ color: NAVY }}>{fmtEuroIva(calcoloPrezzi.costoBundle)}</b>
+        </div>
+      )}
+      {calcoloPrezzi.margine != null && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 14, padding: "8px 12px", background: "#FBF3E4", borderRadius: 8 }}>
+          Margine (sui netti): <b>{fmtEuroIva(calcoloPrezzi.margine)}</b>{calcoloPrezzi.marginePct != null && <> — <b>{calcoloPrezzi.marginePct}%</b></>}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ flex: "1 1 140px" }}><Field label="Prezzo (€)"><input style={inputStyle} inputMode="decimal" value={prodottoForm.prezzo} onChange={(e) => setProdottoForm((f) => ({ ...f, prezzo: e.target.value }))} /></Field></div>
         <div style={{ flex: "1 1 140px" }}>
           <Field label="Disponibilità">
-            <select style={inputStyle} value={prodottoForm.stato} onChange={(e) => setProdottoForm((f) => ({ ...f, stato: e.target.value }))}>
+            <select style={inputStyle} value={prodottoForm.stato} onChange={(e) => aggiornaForm({ stato: e.target.value })}>
               <option value="publish">Pubblicato</option>
               <option value="draft">Bozza</option>
             </select>
           </Field>
         </div>
+        <div style={{ flex: "1 1 140px" }}>
+          <Field label="Quantità in stock">
+            <input
+              style={{ ...inputStyle, ...(prodottoForm.giacenzaPropria ? {} : { background: "#EFEFEF", color: MUTED }) }}
+              inputMode="numeric" value={prodottoForm.qtaStock} placeholder="0" disabled={!prodottoForm.giacenzaPropria}
+              onChange={(e) => aggiornaForm({ qtaStock: e.target.value })}
+            />
+          </Field>
+        </div>
       </div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: -6, marginBottom: 10, lineHeight: 1.35 }}>
+        {prodottoForm.giacenzaPropria
+          ? (calcoloPrezzi.vaSuWoo
+              ? "Pezzi fisicamente presenti. Sono gli stessi che lo shop online vende: la quantità pubblicata su WooCommerce viene riallineata a questo numero."
+              : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
+          : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
+      </div>
+      <label title={calcoloPrezzi.categoriaSoloOffline ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: calcoloPrezzi.categoriaSoloOffline ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: calcoloPrezzi.categoriaSoloOffline ? MUTED : NAVY, marginBottom: 10 }}>
+        <input type="checkbox" checked={calcoloPrezzi.soloOffline} disabled={calcoloPrezzi.categoriaSoloOffline} onChange={(e) => aggiornaForm({ soloOffline: e.target.checked })} style={{ width: 14, height: 14 }} />
+        Solo offline (mai su WooCommerce, anche con un prezzo)
+      </label>
+      {calcoloPrezzi.soloOffline && (
+        <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
+          {calcoloPrezzi.categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino interno. Se era pubblicato, salvando viene messo in bozza sullo shop.
+        </div>
+      )}
       {(() => {
         const { primariaId, extraIds } = categoriaPrimariaEExtra(prodottoForm.categorieIds);
         const opzioni = categorieAppiattite();
@@ -34967,6 +34725,214 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           </>
         );
       })()}
+
+      <div style={{ height: 1, background: CREAM_BORDER, margin: "18px 0 16px" }} />
+
+      <Field label="Natura del prodotto">
+        <select style={inputStyle} value={prodottoForm.tipoProdotto} onChange={(e) => cambiaTipo(e.target.value)}>
+          <option value="semplice">Semplice — prodotto normale, si vende e si scarica da solo</option>
+          <option value="bundle">Bundle — kit venduto come un pezzo unico, composto da altri prodotti che vengono scaricati insieme</option>
+          <option value="componente">Componente — fa parte di un bundle, non si vende singolarmente</option>
+          <option value="vetrina">Vetrina — prodotto padre mostrato sullo shop, la vendita avviene sulle sue varianti</option>
+          <option value="variante">Variante — una versione specifica di un prodotto vetrina (es. una taglia), è questa che si vende e si scarica</option>
+        </select>
+      </Field>
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+          <input type="checkbox" checked={prodottoForm.contaMagazzino} onChange={(e) => aggiornaForm({ contaMagazzino: e.target.checked })} style={{ width: 14, height: 14 }} />
+          Conta nel magazzino
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+          <input type="checkbox" checked={prodottoForm.contaIncassi} onChange={(e) => aggiornaForm({ contaIncassi: e.target.checked })} style={{ width: 14, height: 14 }} />
+          Conta negli incassi
+        </label>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+          <input type="checkbox" checked={prodottoForm.giacenzaPropria} onChange={(e) => aggiornaForm({ giacenzaPropria: e.target.checked })} style={{ width: 14, height: 14 }} />
+          Giacenza propria
+        </label>
+      </div>
+
+      {prodottoForm.tipoProdotto === "variante" && (
+        <Field label="Prodotto padre — obbligatorio (la vetrina, es. 'Maglietta Elitederma')">
+          <TendinaRicerca
+            valore={prodottoForm.prodottoPadreId}
+            opzioni={prodottiScelta.filter((pp) => pp.tipo_prodotto === "vetrina").sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+            onCambia={(v) => aggiornaForm({ prodottoPadreId: v })}
+            etichettaVuoto="— scegli la vetrina —"
+            placeholderRicerca="Cerca prodotto…"
+          />
+        </Field>
+      )}
+
+      {(prodottoForm.tipoProdotto === "bundle" || prodottoForm.tipoProdotto === "semplice") && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
+            <input type="checkbox" checked={prodottoForm.bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
+            Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
+          </label>
+          {prodottoForm.bundleFisica && (
+            <>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
+                Il box ha uno stock suo (i pacchi sigillati) e il prodotto sfuso collegato ne ha un altro (i pezzi aperti): sono indipendenti, si travasano solo con l'operazione "Apri confezione" in Gestione magazzino.
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ flex: "2 1 200px" }}>
+                  <Field label="Prodotto sfuso collegato (il pezzo singolo)">
+                    <TendinaRicerca
+                      valore={prodottoForm.prodottoSfusoId}
+                      opzioni={prodottiScelta
+                        .filter((pp) => pp.tipo_prodotto === "componente" || pp.tipo_prodotto === "semplice")
+                        .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                      onCambia={(v) => aggiornaForm({ prodottoSfusoId: v })}
+                      etichettaVuoto="— scegli il prodotto sfuso —"
+                      placeholderRicerca="Cerca prodotto…"
+                    />
+                  </Field>
+                </div>
+                <div style={{ flex: "1 1 120px" }}>
+                  <Field label="Pezzi per confezione">
+                    <input style={inputStyle} inputMode="numeric" value={prodottoForm.pezziConfezione} onChange={(e) => aggiornaForm({ pezziConfezione: e.target.value })} placeholder="es. 20" />
+                  </Field>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {calcoloPrezzi.bundleVirtuale && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Distinta base (componenti del kit)</div>
+          {componenti.map((c, i) => (
+            <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <TendinaRicerca
+                  valore={c.componenteId}
+                  opzioni={prodottiScelta
+                    .filter((pp) => pp.tipo_prodotto !== "variante" && pp.tipo_prodotto !== "vetrina" && pp.tipo_prodotto !== "bundle")
+                    .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                  onCambia={(valore) => cambiaComponente(i, "componenteId", valore)}
+                  etichettaVuoto="— scegli componente —"
+                  placeholderRicerca="Cerca prodotto…"
+                />
+              </div>
+              <input style={{ ...inputStyle, width: 60 }} inputMode="numeric" value={c.quantita} onChange={(e) => cambiaComponente(i, "quantita", e.target.value)} placeholder="Qtà" />
+              <button onClick={() => rimuoviComponente(i)} title="Rimuovi" style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 18, lineHeight: 1, padding: 4 }}>×</button>
+            </div>
+          ))}
+          <button onClick={aggiungiComponente} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "none", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", width: "100%" }}>
+            + Aggiungi componente
+          </button>
+        </div>
+      )}
+
+      {prodottoForm.giacenzaPropria && (
+        <div style={{ marginBottom: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Scorta e riordino</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 90px", minWidth: 0 }}>
+              <Field label="Scorta minima">
+                <input style={inputStyle} inputMode="numeric" value={prodottoForm.scortaMinima} onChange={(e) => aggiornaForm({ scortaMinima: e.target.value })} placeholder="—" />
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
+              <Field label="Tempo di consegna (giorni)">
+                <input style={inputStyle} inputMode="numeric" value={prodottoForm.leadTime} onChange={(e) => aggiornaForm({ leadTime: e.target.value })} placeholder="es. 45" />
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
+              <Field label="Margine di sicurezza (giorni)">
+                <input style={inputStyle} inputMode="numeric" value={prodottoForm.giorniSicurezza} onChange={(e) => aggiornaForm({ giorniSicurezza: e.target.value })} placeholder="da Impostazioni" />
+              </Field>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ flex: "2 1 160px", minWidth: 0 }}>
+              <Field label="Fornitore">
+                <TendinaRicerca
+                  valore={prodottoForm.fornitoreId}
+                  opzioni={[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it"))}
+                  onCambia={(v) => aggiornaForm({ fornitoreId: v })}
+                  placeholderRicerca="Cerca fornitore…"
+                />
+              </Field>
+            </div>
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
+              <Field label="Lotto minimo d'ordine">
+                <input style={inputStyle} inputMode="numeric" value={prodottoForm.lottoMinimo} onChange={(e) => aggiornaForm({ lottoMinimo: e.target.value })} placeholder="—" />
+              </Field>
+            </div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+            Senza tempo di consegna l'Advisor non può dire entro quando ordinare questo prodotto: resta solo l'avviso "sotto scorta".
+          </div>
+
+          <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginTop: 10 }}>
+            <input type="checkbox" checked={copiaAperta} onChange={(e) => { setCopiaAperta(e.target.checked); setMsgCopia(""); }} style={{ width: 14, height: 14 }} />
+            Applica questi dati anche ad altri prodotti
+          </label>
+          {copiaAperta && (() => {
+            const candidati = prodottiScelta.filter((pp) => pp.attivo !== false && pp.giacenza_propria !== false);
+            const filtrati = filtroCopia.trim()
+              ? candidati.filter((pp) => (pp.nome || "").toLowerCase().includes(filtroCopia.trim().toLowerCase()))
+              : candidati;
+            const selezionati = Object.keys(selezionatiCopia).filter((id) => selezionatiCopia[id]);
+            const tuttiFiltratiSelezionati = filtrati.length > 0 && filtrati.every((pp) => selezionatiCopia[pp.id]);
+            return (
+              <div style={{ marginTop: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
+                <input
+                  style={{ ...inputStyle, marginBottom: 8 }} placeholder="Filtra per parola (es. pigmento, ago, matita)…"
+                  value={filtroCopia} onChange={(e) => setFiltroCopia(e.target.value)}
+                />
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6, ...fontBody, fontSize: 11.5, color: MUTED }}>
+                  <span>{filtrati.length} prodotti{selezionati.length > 0 ? ` · ${selezionati.length} selezionati` : ""}</span>
+                  <button
+                    onClick={() => setSelezionatiCopia((prev) => {
+                      const nuovo = { ...prev };
+                      filtrati.forEach((pp) => { if (tuttiFiltratiSelezionati) delete nuovo[pp.id]; else nuovo[pp.id] = true; });
+                      return nuovo;
+                    })}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                  >
+                    {tuttiFiltratiSelezionati ? "deseleziona tutti" : "seleziona tutti i filtrati"}
+                  </button>
+                </div>
+                <div style={{ maxHeight: 220, overflowY: "auto", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8 }}>
+                  {filtrati.length === 0 ? (
+                    <div style={{ ...fontBody, fontSize: 12, color: MUTED, padding: 10 }}>Nessun prodotto con questo filtro.</div>
+                  ) : filtrati.map((pp) => (
+                    <label key={pp.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                      <input
+                        type="checkbox" checked={!!selezionatiCopia[pp.id]} style={{ width: 14, height: 14, flexShrink: 0 }}
+                        onChange={(e) => setSelezionatiCopia((prev) => ({ ...prev, [pp.id]: e.target.checked }))}
+                      />
+                      <span style={{ flex: 1, minWidth: 0 }}>{pp.nome}</span>
+                      {(pp.soglia_riordino != null || pp.lead_time_giorni != null || pp.fornitore_id) && (
+                        <span title="Ha già dei dati di scorta e riordino: verranno sovrascritti" style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, whiteSpace: "nowrap" }}>già impostato</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+                {msgCopia && <div style={{ ...fontBody, fontSize: 12, color: msgCopia.startsWith("Errore") || msgCopia.startsWith("Seleziona") || msgCopia.startsWith("Compila") ? "#C0392B" : "#2E7D32", marginTop: 8 }}>{msgCopia}</div>}
+                <div style={{ marginTop: 8 }}>
+                  <Button onClick={applicaRiordinoAdAltri} disabled={applicandoCopia || selezionati.length === 0} style={{ width: "100%" }}>
+                    {applicandoCopia ? "Applico…" : `Applica a ${selezionati.length} prodott${selezionati.length === 1 ? "o" : "i"}`}
+                  </Button>
+                </div>
+                <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>
+                  Si applicano solo i campi compilati qui sopra; quelli vuoti restano come sono sui prodotti scelti. Il prodotto aperto si salva come sempre con "Salva modifiche".
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {messaggi}
+      {/* la scheda è lunga: il tasto sta anche in fondo, non solo in testa */}
+      <Button onClick={salvaProdotto} disabled={salvando} style={{ width: "100%" }}>
+        {salvando ? "Salvo…" : prodottoForm.id ? "Salva modifiche" : "Crea prodotto"}
+      </Button>
     </div>
   );
 
@@ -35175,11 +35141,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     </div>
   );
 
+  // incorporata = questa pagina è il contenuto della "vista a categorie" di
+  // Gestione magazzino: titolo, breadcrumb e cornice li mette già quella,
+  // qui resterebbero doppi
   return (
-    <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-      <div style={{ maxWidth: 1500, margin: "0 auto" }}>
-        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+    <div style={incorporata ? { background: "transparent" } : { background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
+      <div style={incorporata ? {} : { maxWidth: 1500, margin: "0 auto" }}>
+        {!incorporata && <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={onBack} /></div>}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: incorporata ? "flex-end" : "space-between", gap: 10, flexWrap: "wrap", marginBottom: incorporata ? 12 : 18 }}>
+          {!incorporata && (
           <div>
             <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{vista === "backoffice" ? "Back Office prodotti" : "Shop Online"}</div>
             <div style={{ ...fontBody, fontSize: 14, color: MUTED }}>
@@ -35188,6 +35158,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 : "Struttura del negozio così come la vede il cliente: categoria → sottocategoria → prodotti."}
             </div>
           </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {vista === "backoffice" && <CampoRicerca value={ricerca} onChange={(e) => { setRicerca(e.target.value); if (isMobile) setVistaMobile("lista"); }} placeholder="Cerca prodotto…" style={{ minWidth: 220 }} />}
             <Button onClick={() => setVista(vista === "backoffice" ? "frontoffice" : "backoffice")}>
@@ -39274,13 +39245,6 @@ export default function App() {
   // click sul nome in "Gestione magazzino" (RigaProdottoMagazzino), che
   // vuole l'editor completo (immagini, descrizioni, categorie multiple)
   // invece della vecchia modale di riassortimento
-  const [prodottoDaAprireInShop, setProdottoDaAprireInShop] = useState(null);
-  // il Back Office prodotti si raggiunge da due strade: dal menu "Magazzino
-  // & shop" (e allora si apre sul Front Office e "indietro" torna al menu) e
-  // dal tasto in Gestione magazzino, che ci porta dritti al back office e
-  // deve riportare in magazzino — altrimenti si esce dove non si era entrati
-  const [ritornoGestioneShop, setRitornoGestioneShop] = useState("magazzinoshop");
-  const [gestioneShopVistaIniziale, setGestioneShopVistaIniziale] = useState(null);
   // login venditore dalla home: vanno dichiarati qui (prima dei return
   // anticipati di Gate/Caricamento più sotto), altrimenti in alcuni render
   // questi due hook non verrebbero chiamati per niente, violando le regole
@@ -40116,7 +40080,7 @@ export default function App() {
   function apriStoricoAllievi() { apriViewProtetta("storicoallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
-  function apriGestioneShop() { setProdottoDaAprireInShop(null); setRitornoGestioneShop("magazzinoshop"); setGestioneShopVistaIniziale(null); apriViewProtetta("gestioneshop"); }
+  function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
@@ -40765,12 +40729,11 @@ export default function App() {
 
       {view === "magazzino" && (
         <PaginaMagazzino
-          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
+          categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           onApriAdvisor={() => setView("advisor")}
-          onApriBackOffice={() => { setRitornoGestioneShop("magazzino"); setGestioneShopVistaIniziale("backoffice"); setView("gestioneshop"); }}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
@@ -40799,8 +40762,8 @@ export default function App() {
       {view === "gestioneshop" && (
         <PaginaGestioneShop
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView(ritornoGestioneShop)}
-          apriProdottoIdIniziale={prodottoDaAprireInShop} vistaIniziale={gestioneShopVistaIniziale}
+          prodottiImmagini={prodottiImmagini} fornitori={fornitori} impostazioniIva={impostazioniIva}
+          ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
         />
       )}
 
