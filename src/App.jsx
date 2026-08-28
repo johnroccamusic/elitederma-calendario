@@ -34539,12 +34539,39 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setProdottoForm((f) => ({ ...f, categorieIds: f.categorieIds.filter((id) => id !== categoriaId) }));
   }
 
+  // Nel menu del sito ogni voce ha un titolo PROPRIO, scritto in Aspetto →
+  // Menu: rinominare la categoria non lo tocca, e il cliente continua a
+  // leggere il vecchio nome sul tastino del menu. Qui, dopo una rinomina,
+  // si va a vedere se c'è una voce che punta a questa categoria e si offre
+  // di allinearla — chiedendo, perché il titolo del menu può essere
+  // volutamente diverso (più corto, in maiuscolo, un'abbreviazione)
+  async function allineaVoceMenu(nuovoNome, wooCategoryId) {
+    if (!wooCategoryId) return;
+    const { data, error } = await supabase.functions.invoke("wp-gestisci-menu", { body: { azione: "leggi" } });
+    if (error || data?.errore) return; // il menu è un di più: se non risponde, il salvataggio resta valido
+    const voci = Array.isArray(data?.voci) ? data.voci : [];
+    const voce = voci.find((v) => v.tipo === "taxonomy" && Number(v.oggetto_id) === Number(wooCategoryId));
+    if (!voce) return;
+    const uguali = (a, b) => String(a || "").trim().toLowerCase().replace(/[.\s]+$/, "") === String(b || "").trim().toLowerCase().replace(/[.\s]+$/, "");
+    if (uguali(voce.titolo, nuovoNome)) return;
+    if (!window.confirm(`Nel menu del sito questa categoria si chiama "${voce.titolo}".\n\nIl titolo del menu è indipendente dal nome della categoria: se non lo cambi, il cliente continuerà a leggere "${voce.titolo}" sul tastino.\n\nAggiornarlo in "${nuovoNome}"?`)) return;
+    const { data: esito, error: erroreScrittura } = await supabase.functions.invoke("wp-gestisci-menu", {
+      body: {
+        azione: "crea_modifica", menuId: data.menuId, itemId: voce.id, titolo: nuovoNome,
+        genitoreId: voce.genitore_id, ordine: voce.ordine, tipo: voce.tipo, oggettoId: voce.oggetto_id,
+      },
+    });
+    if (erroreScrittura || esito?.errore) { setMsgErrore("Categoria salvata, ma la voce di menu no: " + (esito?.errore || erroreScrittura.message)); return; }
+    setMsgSuccesso("Categoria salvata, e aggiornata anche la voce del menu.");
+  }
+
   // i due flag valgono per TUTTI i prodotti della categoria, letti come
   // "o l'uno o l'altro" insieme al flag del singolo prodotto: WooCommerce
   // non li conosce, quindi si scrivono sempre e solo in anagrafica
   async function salvaCategoria() {
     if (!categoriaForm) return;
     if (!categoriaForm.nome.trim()) { setMsgErrore("Il nome della categoria è obbligatorio."); return; }
+    const nomePrecedente = (categorieTutte.find((c) => c.id === categoriaForm.id)?.nome || "").trim();
     setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
     if (categoriaForm.wooCategoryId != null) {
       const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", {
@@ -34577,6 +34604,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setSalvando(false);
     setMsgSuccesso("Categoria salvata.");
     ricarica(["categorie_prodotti", "prodotti_shop"]);
+    if (categoriaForm.wooCategoryId != null && nomePrecedente !== categoriaForm.nome.trim()) {
+      await allineaVoceMenu(categoriaForm.nome.trim(), categoriaForm.wooCategoryId);
+    }
   }
 
   async function eliminaCategoriaCorrente() {
