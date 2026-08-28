@@ -34342,6 +34342,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       aliquotaAcquisto: p.aliquota_iva_acquisto ?? aliquotaIvaDefault,
       stato: p.stato || "publish",
       soloOffline: !!p.solo_offline,
+      nonSulPos: !!p.escludi_vendita_diretta,
       qtaStock: p.quantita != null ? String(p.quantita) : "",
       tipoProdotto: p.tipo_prodotto || "semplice",
       contaMagazzino: p.conta_magazzino !== false,
@@ -34409,7 +34410,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       id: null, nome: "", descrizioneBreve: "", descrizione: "", prezzo: "", stato: "publish",
       modoVendita: "lordo", aliquotaVendita: aliquotaIvaDefault,
       costo: "", modoAcquisto: "netto", aliquotaAcquisto: aliquotaIvaDefault,
-      soloOffline: false, qtaStock: "",
+      soloOffline: false, nonSulPos: false, qtaStock: "",
       tipoProdotto: padreId ? "variante" : "semplice",
       contaMagazzino: true, contaIncassi: true, giacenzaPropria: true,
       prodottoPadreId: padreId || "",
@@ -34699,6 +34700,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       prodotto_sfuso_id: bundleConFisica && f.prodottoSfusoId ? f.prodottoSfusoId : null,
       pezzi_per_confezione: bundleConFisica && parseNum(f.pezziConfezione) > 0 ? parseInt(parseNum(f.pezziConfezione), 10) : null,
       solo_offline: !!f.soloOffline,
+      escludi_vendita_diretta: !!f.nonSulPos,
     };
     if (calcolo.prezzoNetto != null) campi.prezzo_vendita = calcolo.prezzoNetto;
     const { error } = await supabase.from("prodotti_shop").update(campi).eq("id", prodottoId);
@@ -34987,9 +34989,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // il prodotto non va mai sullo shop, anche se ha un prezzo
     const categoriaSoloOffline = (f.categorieIds || []).some((id) => (categorieProdotti || []).find((c) => c.id === id)?.solo_offline);
     const soloOffline = categoriaSoloOffline || !!f.soloOffline;
+    // stessa regola per il POS: se lo esclude la categoria, il singolo
+    // prodotto non può rimetterci mano
+    const categoriaNonSulPos = (f.categorieIds || []).some((id) => (categorieProdotti || []).find((c) => c.id === id)?.escludi_vendita_diretta);
     return {
       prezzoNetto, prezzoLordo, costoNetto, costoBundle, margine, marginePct,
-      bundleVirtuale, categoriaSoloOffline, soloOffline,
+      bundleVirtuale, categoriaSoloOffline, soloOffline, categoriaNonSulPos, nonSulPos: categoriaNonSulPos || !!f.nonSulPos,
       vaSuWoo: prezzoNetto != null && !soloOffline,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -35111,10 +35116,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
           : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
       </div>
-      <label title={calcoloPrezzi.categoriaSoloOffline ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: calcoloPrezzi.categoriaSoloOffline ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: calcoloPrezzi.categoriaSoloOffline ? MUTED : NAVY, marginBottom: 10 }}>
-        <input type="checkbox" checked={calcoloPrezzi.soloOffline} disabled={calcoloPrezzi.categoriaSoloOffline} onChange={(e) => aggiornaForm({ soloOffline: e.target.checked })} style={{ width: 14, height: 14 }} />
-        Solo offline (mai su WooCommerce, anche con un prezzo)
-      </label>
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 10 }}>
+        <label title={calcoloPrezzi.categoriaSoloOffline ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: calcoloPrezzi.categoriaSoloOffline ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: calcoloPrezzi.categoriaSoloOffline ? MUTED : NAVY }}>
+          <input type="checkbox" checked={calcoloPrezzi.soloOffline} disabled={calcoloPrezzi.categoriaSoloOffline} onChange={(e) => aggiornaForm({ soloOffline: e.target.checked })} style={{ width: 14, height: 14 }} />
+          Solo offline (mai su WooCommerce, anche con un prezzo)
+        </label>
+        {/* le due esclusioni sono indipendenti: un prodotto può stare sullo
+            shop e non al banco (o il contrario). Come per "solo offline",
+            se lo decide la categoria qui la casella resta bloccata */}
+        <label title={calcoloPrezzi.categoriaNonSulPos ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: calcoloPrezzi.categoriaNonSulPos ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: calcoloPrezzi.categoriaNonSulPos ? MUTED : NAVY }}>
+          <input type="checkbox" checked={calcoloPrezzi.nonSulPos} disabled={calcoloPrezzi.categoriaNonSulPos} onChange={(e) => aggiornaForm({ nonSulPos: e.target.checked })} style={{ width: 14, height: 14 }} />
+          Non sul POS (non compare nella vendita al banco)
+        </label>
+      </div>
       {calcoloPrezzi.soloOffline && (
         <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
           {calcoloPrezzi.categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino interno. Se era pubblicato, salvando viene messo in bozza sullo shop.
