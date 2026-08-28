@@ -33533,7 +33533,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
   if (isMobile) {
     return (
-      <div style={{ background: "transparent", minHeight: "100vh", padding: `24px 16px ${carrello.length > 0 ? 214 : 124}px` }}>
+      {/* lo spazio in fondo tiene conto della barra del carrello, che ora
+          c'è sempre: senza, gli ultimi prodotti finirebbero sotto */}
+      <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 16px 214px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
             <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
@@ -33593,7 +33595,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ ...cardStyle, marginBottom: 0, padding: "6px 14px" }}>{elencoProdotti}</div>
         {paginazione}
 
-        {carrello.length > 0 && !carrelloEspanso && (
+        {/* la barra resta sempre appoggiata in fondo, anche a carrello
+            vuoto: è il punto fisso da cui si passa per incassare, e
+            farla comparire solo dopo il primo prodotto la rendeva una
+            cosa che appare e sparisce sotto le dita */}
+        {!carrelloEspanso && (
           <div onClick={() => setCarrelloEspanso(true)} style={{
             // appoggiata al bordo inferiore vero del dispositivo, e alta
             // abbastanza da ospitare la pasticca di navigazione dentro di
@@ -33608,13 +33614,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, cursor: "pointer", zIndex: 40,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-              <div style={{ position: "relative", width: 40, height: 40, borderRadius: 10, background: NAVY, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <div style={{ position: "relative", width: 40, height: 40, borderRadius: 10, background: carrello.length ? NAVY : "#D9D4C7", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <IconaCarrelloPos size={19} />
-                <span style={{ position: "absolute", top: -6, right: -6, background: GOLD, color: "#fff", borderRadius: "50%", width: 18, height: 18, fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{carrello.length}</span>
+                {carrello.length > 0 && (
+                  <span style={{ position: "absolute", top: -6, right: -6, background: GOLD, color: "#fff", borderRadius: "50%", width: 18, height: 18, fontSize: 10.5, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{carrello.length}</span>
+                )}
               </div>
               <div style={{ minWidth: 0 }}>
                 <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>Carrello vendita</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{carrello.length} prodott{carrello.length === 1 ? "o" : "i"} · {numeroPezziCarrello} pezz{numeroPezziCarrello === 1 ? "o" : "i"}</div>
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>
+                  {carrello.length === 0
+                    ? "vuoto — tocca un prodotto per aggiungerlo"
+                    : `${carrello.length} prodott${carrello.length === 1 ? "o" : "i"} · ${numeroPezziCarrello} pezz${numeroPezziCarrello === 1 ? "o" : "i"}`}
+                </div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
@@ -33629,11 +33641,15 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
         {carrelloEspanso && (
           <div onClick={() => setCarrelloEspanso(false)} style={{ position: "fixed", inset: 0, background: "rgba(20,20,30,0.4)", zIndex: 2100 }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, right: 0, bottom: 0, maxHeight: "46vh", display: "flex", flexDirection: "column", background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)" }}>
+            {/* si apre su tutta l'altezza utile (meno una striscia in cima
+                per capire che sotto c'è la pagina e per richiudere con un
+                tocco): a metà schermo il carrello si vedeva a pezzi e ogni
+                campo — sconto, coupon, totale — andava cercato scorrendo */}
+            <div onClick={(e) => e.stopPropagation()} style={{ position: "absolute", left: 0, right: 0, bottom: 0, top: 52, display: "flex", flexDirection: "column", background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)" }}>
               <div onClick={() => setCarrelloEspanso(false)} style={{ padding: "10px 0 2px", display: "flex", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
                 <div style={{ width: 40, height: 4, borderRadius: 2, background: CREAM_BORDER }} />
               </div>
-              <div style={{ padding: "4px 16px 14px", overflowY: "auto" }}>
+              <div style={{ padding: "4px 16px calc(env(safe-area-inset-bottom, 0px) + 20px)", overflowY: "auto", flex: 1, minHeight: 0 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                   <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
                   {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
