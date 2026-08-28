@@ -34154,6 +34154,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // distinta base del bundle aperto: sta fuori da prodottoForm perché si
   // legge da un'altra tabella (bundle_componenti) e con un suo giro
   const [componenti, setComponenti] = useState([]);
+  // salvataggi lasciati in corso con "Salva e esci": si continua a lavorare
+  // mentre WooCommerce risponde, e l'esito compare nella striscia in alto
+  const [lavoriInCorso, setLavoriInCorso] = useState([]);
+  const [lavoriFalliti, setLavoriFalliti] = useState([]);
   // copia dei dati di scorta e riordino su più prodotti in un colpo solo
   const [copiaAperta, setCopiaAperta] = useState(false);
   const [filtroCopia, setFiltroCopia] = useState("");
@@ -34705,8 +34709,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // un prezzo cambiato ora, quindi il netto giusto va riscritto qui, dopo.
   // iva_verificata = true: un salvataggio esplicito dalla scheda vale come
   // verifica a mano dell'aliquota
-  async function salvaDatiInterni(prodottoId, calcolo) {
-    const f = prodottoForm;
+  async function salvaDatiInterni(prodottoId, calcolo, formSnapshot, componentiSnapshot) {
+    const f = formSnapshot || prodottoForm;
+    const righeDistinta = componentiSnapshot || componenti;
     const bundleConFisica = (f.tipoProdotto === "bundle" || f.tipoProdotto === "semplice") && f.bundleFisica;
     const campi = {
       // nome, descrizioni e stato si riscrivono SEMPRE qui, anche quando il
@@ -34754,7 +34759,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       const { error: erroreDelete } = await supabase.from("bundle_componenti").delete().eq("bundle_id", prodottoId);
       if (erroreDelete) return erroreDelete.message;
       const righe = calcolo.bundleVirtuale
-        ? componenti
+        ? righeDistinta
             .filter((c) => c.componenteId && parseNum(c.quantita) > 0)
             .map((c) => ({ bundle_id: prodottoId, componente_id: c.componenteId, quantita_per_bundle: parseNum(c.quantita) }))
         : [];
@@ -34777,25 +34782,24 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (isMobile) setVistaMobile("lista");
   }
 
-  async function salvaProdotto(esciDopo) {
-    if (!prodottoForm) return;
-    const f = prodottoForm;
-    if (!f.nome.trim()) { setMsgErrore("Il nome del prodotto è obbligatorio."); return; }
-    if (f.tipoProdotto === "variante" && !f.prodottoPadreId) { setMsgErrore("Seleziona il prodotto padre (la vetrina)."); return; }
-    const calcolo = calcoloPrezzi;
-    if (calcolo.prezzoNetto != null && !(calcolo.prezzoNetto > 0)) { setMsgErrore("Il prezzo di vendita deve essere maggiore di zero."); return; }
+  // il salvataggio vero, staccato dalla scheda: riceve una COPIA di quello
+  // che c'era nel modulo al momento del clic e non guarda mai lo stato
+  // corrente. È la condizione per poterlo lasciare in corso mentre si apre
+  // un altro prodotto — altrimenti a metà strada si ritroverebbe i dati
+  // della scheda nuova. Non tocca nessun messaggio a schermo: restituisce
+  // com'è andata, e chi l'ha chiamato decide dove dirlo
+  async function eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot) {
     const stock = String(f.qtaStock).trim() === "" ? 0 : parseInt(parseNum(f.qtaStock), 10);
-    setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
 
     // le categorie che l'utente ha accettato di riaprire vanno riaperte
     // prima: è da lì che dipende se questo prodotto può andare sullo shop
     if ((f.sbloccaOffline || []).length) {
       const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: false }).in("id", f.sbloccaOffline);
-      if (error) { setSalvando(false); setMsgErrore("Non è stato possibile riaprire la categoria: " + error.message); return; }
+      if (error) return { errore: "Non è stato possibile riaprire la categoria: " + error.message };
     }
     if ((f.sbloccaPos || []).length) {
       const { error } = await supabase.from("categorie_prodotti").update({ escludi_vendita_diretta: false }).in("id", f.sbloccaPos);
-      if (error) { setSalvando(false); setMsgErrore("Non è stato possibile rimettere la categoria sul POS: " + error.message); return; }
+      if (error) return { errore: "Non è stato possibile rimettere la categoria sul POS: " + error.message };
     }
 
     if (calcolo.vaSuWoo) {
@@ -34813,7 +34817,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           immagini: f.immagini.map((im) => ({ url: im.url, wooImageId: im.wooImageId })),
         },
       });
-      if (error || data?.errore) { setSalvando(false); setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
+      if (error || data?.errore) return { errore: "Salvataggio non riuscito, riprova. " + (data?.errore || error.message) };
       // woo-gestisci-prodotto, con azione "crea", inserisce SEMPRE una riga
       // nuova in anagrafica: se il prodotto esisteva già in locale (era
       // interno e ora va online) resterebbero due schede per lo stesso
@@ -34827,25 +34831,20 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         await supabase.from("prodotti_immagini").delete().eq("prodotto_id", f.id);
         await supabase.from("prodotti_immagini").update({ prodotto_id: f.id }).eq("prodotto_id", doppioneId);
         const { error: erroreDoppione } = await supabase.from("prodotti_shop").delete().eq("id", doppioneId);
-        if (erroreDoppione) { setSalvando(false); setMsgErrore("Il prodotto è online, ma è rimasta una scheda doppia da cancellare a mano: " + erroreDoppione.message); return; }
+        if (erroreDoppione) return { errore: "Il prodotto è online, ma è rimasta una scheda doppia da cancellare a mano: " + erroreDoppione.message };
         if (doppione?.woo_product_id) {
           const { error: erroreCodice } = await supabase.from("prodotti_shop").update({ woo_product_id: doppione.woo_product_id }).eq("id", f.id);
-          if (erroreCodice) { setSalvando(false); setMsgErrore("Prodotto creato sul sito, ma non collegato alla scheda: " + erroreCodice.message); return; }
+          if (erroreCodice) return { errore: "Prodotto creato sul sito, ma non collegato alla scheda: " + erroreCodice.message };
         }
       }
       const idProdotto = f.id || data?.prodottoId;
       if (f.giacenzaPropria && idProdotto) {
         const { data: dataStock, error: erroreStock } = await supabase.functions.invoke("woo-aggiorna-prodotto", { body: { prodottoId: idProdotto, quantita: stock } });
-        if (erroreStock || dataStock?.errore) { setSalvando(false); setMsgErrore("Salvato, ma la quantità non è stata aggiornata: " + (dataStock?.errore || erroreStock.message)); return; }
+        if (erroreStock || dataStock?.errore) return { errore: "Salvato, ma la quantità non è stata aggiornata: " + (dataStock?.errore || erroreStock.message) };
       }
-      const erroreInterni = idProdotto ? await salvaDatiInterni(idProdotto, calcolo) : null;
-      setSalvando(false);
-      if (erroreInterni) { setMsgErrore("Salvato sul sito, ma i dati di magazzino no: " + erroreInterni); return; }
-      setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
-      if (!f.id && idProdotto) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: data?.wooProductId ?? prev.wooProductId }));
-      ricarica(["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"]);
-      if (esciDopo) chiudiSchedaProdotto();
-      return;
+      const erroreInterni = idProdotto ? await salvaDatiInterni(idProdotto, calcolo, f, componentiSnapshot) : null;
+      if (erroreInterni) return { errore: "Salvato sul sito, ma i dati di magazzino no: " + erroreInterni };
+      return { idProdotto, tabelle: ["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"] };
     }
 
     // niente prezzo, oppure "solo offline": prodotto solo interno. Se era
@@ -34854,7 +34853,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // spezzerebbe gli ordini che lo citano
     if (f.wooProductId) {
       const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: f.id, stato: "draft" } });
-      if (error || data?.errore) { setSalvando(false); setMsgErrore("Non è stato possibile togliere il prodotto dallo shop: " + (data?.errore || error.message)); return; }
+      if (error || data?.errore) return { errore: "Non è stato possibile togliere il prodotto dallo shop: " + (data?.errore || error.message) };
     }
     let idProdotto = f.id;
     if (idProdotto) {
@@ -34864,27 +34863,67 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         descrizione_breve: f.descrizioneBreve || null,
         ...(f.giacenzaPropria ? { quantita: stock } : {}),
       }).eq("id", idProdotto);
-      if (erroreUpdate) { setSalvando(false); setMsgErrore("Errore: " + erroreUpdate.message); return; }
+      if (erroreUpdate) return { errore: "Errore: " + erroreUpdate.message };
     } else {
       const { data: riga, error: erroreInsert } = await supabase.from("prodotti_shop")
         .insert({ nome: f.nome.trim(), descrizione: f.descrizione || null, descrizione_breve: f.descrizioneBreve || null, quantita: stock, attivo: true })
         .select().single();
-      if (erroreInsert) { setSalvando(false); setMsgErrore("Errore: " + erroreInsert.message); return; }
+      if (erroreInsert) return { errore: "Errore: " + erroreInsert.message };
       idProdotto = riga.id;
     }
     const { error: erroreRimuoviCat } = await supabase.from("prodotti_categorie").delete().eq("prodotto_id", idProdotto);
-    if (erroreRimuoviCat) { setSalvando(false); setMsgErrore("Prodotto salvato, ma le categorie no: " + erroreRimuoviCat.message); return; }
+    if (erroreRimuoviCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreRimuoviCat.message };
     if ((f.categorieIds || []).length) {
       const { error: erroreCat } = await supabase.from("prodotti_categorie").insert(f.categorieIds.map((id) => ({ prodotto_id: idProdotto, categoria_id: id })));
-      if (erroreCat) { setSalvando(false); setMsgErrore("Prodotto salvato, ma le categorie no: " + erroreCat.message); return; }
+      if (erroreCat) return { errore: "Prodotto salvato, ma le categorie no: " + erroreCat.message };
     }
-    const erroreInterni = await salvaDatiInterni(idProdotto, calcolo);
+    const erroreInterni = await salvaDatiInterni(idProdotto, calcolo, f, componentiSnapshot);
+    if (erroreInterni) return { errore: "Prodotto salvato, ma i dati di magazzino no: " + erroreInterni };
+    return { idProdotto, tabelle: ["prodotti_shop", "prodotti_categorie", "categorie_prodotti"] };
+  }
+
+  async function salvaProdotto(esciDopo) {
+    if (!prodottoForm) return;
+    const f = { ...prodottoForm };
+    if (!f.nome.trim()) { setMsgErrore("Il nome del prodotto è obbligatorio."); return; }
+    if (f.tipoProdotto === "variante" && !f.prodottoPadreId) { setMsgErrore("Seleziona il prodotto padre (la vetrina)."); return; }
+    const calcolo = calcoloPrezzi;
+    if (calcolo.prezzoNetto != null && !(calcolo.prezzoNetto > 0)) { setMsgErrore("Il prezzo di vendita deve essere maggiore di zero."); return; }
+    const componentiSnapshot = [...componenti];
+    setMsgErrore(""); setMsgSuccesso("");
+
+    // "Salva e esci": la scheda si chiude subito e il salvataggio prosegue
+    // per conto suo. Le chiamate a WooCommerce durano qualche secondo, e
+    // stare fermi a guardarle mentre ci sono venti prodotti da sistemare non
+    // serve a niente. L'esito arriva nella striscia in alto: se qualcosa non
+    // va, il prodotto è nominato e la scheda si riapre com'era
+    if (esciDopo) {
+      chiudiSchedaProdotto();
+      const chiave = `${f.id || "nuovo"}-${f.nome}`;
+      setLavoriInCorso((prec) => [...prec, { chiave, nome: f.nome.trim() }]);
+      eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot)
+        .then((esito) => {
+          setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
+          if (esito?.errore) {
+            setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
+            return;
+          }
+          ricarica(esito.tabelle);
+        })
+        .catch((e) => {
+          setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
+          setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: String(e?.message || e), form: f }]);
+        });
+      return;
+    }
+
+    setSalvando(true);
+    const esito = await eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot);
     setSalvando(false);
-    if (erroreInterni) { setMsgErrore("Prodotto salvato, ma i dati di magazzino no: " + erroreInterni); return; }
+    if (esito?.errore) { setMsgErrore(esito.errore); return; }
     setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
-    if (!f.id) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: null }));
-    ricarica(["prodotti_shop", "prodotti_categorie", "categorie_prodotti"]);
-    if (esciDopo) chiudiSchedaProdotto();
+    if (!f.id && esito.idProdotto) setProdottoForm((prev) => ({ ...prev, id: esito.idProdotto }));
+    ricarica(esito.tabelle);
   }
 
   // gli stessi dati di scorta e riordino valgono quasi sempre per una
@@ -35039,6 +35078,38 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         {prodottiFiltrati.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessun prodotto.</div>}
       </div>
       <button onClick={nuovoProdotto} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 8, padding: "10px 10px", cursor: "pointer", marginTop: 10 }}>+ Nuovo prodotto</button>
+    </div>
+  );
+
+  // quello che sta succedendo fuori dalla scheda: i salvataggi lasciati in
+  // corso e quelli che non sono andati. Sta in cima alla pagina, non dentro
+  // la scheda, perché riguarda prodotti che in quel momento non sono aperti
+  const strisciaLavori = (lavoriInCorso.length > 0 || lavoriFalliti.length > 0) && (
+    <div style={{ marginBottom: 12 }}>
+      {lavoriInCorso.length > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF3E4", border: `1px solid ${GOLD}55`, borderRadius: 10, padding: "8px 12px", marginBottom: 8 }}>
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: GOLD, flexShrink: 0 }} />
+          Sto salvando {lavoriInCorso.map((l) => l.nome).join(", ")}… puoi continuare a lavorare.
+        </div>
+      )}
+      {lavoriFalliti.map((l) => (
+        <div key={l.chiave} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 12.5, color: "#C0392B", background: "#FBEAEA", borderRadius: 10, padding: "8px 12px", marginBottom: 8 }}>
+          <span style={{ flex: "1 1 260px", minWidth: 0 }}><b>{l.nome}</b> non è stato salvato: {l.errore}</span>
+          <button
+            onClick={() => { setProdottoForm(l.form); setLavoriFalliti((prec) => prec.filter((x) => x.chiave !== l.chiave)); if (isMobile) setVistaMobile("dettaglio"); }}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 14, padding: "6px 12px", cursor: "pointer", flexShrink: 0 }}
+          >
+            Riapri la scheda
+          </button>
+          <button
+            onClick={() => setLavoriFalliti((prec) => prec.filter((x) => x.chiave !== l.chiave))}
+            title="Nascondi l'avviso"
+            style={{ background: "none", border: "none", cursor: "pointer", color: "#C0392B", fontSize: 16, lineHeight: 1, padding: 2, flexShrink: 0 }}
+          >
+            ×
+          </button>
+        </div>
+      ))}
     </div>
   );
 
@@ -35866,6 +35937,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           )
         ) : isMobile ? (
           <>
+            {strisciaLavori}
             {vistaMobile !== "albero" && (
               <button onClick={() => setVistaMobile(vistaMobile === "dettaglio" ? "lista" : "albero")} style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: "4px 0", marginBottom: 8, display: "flex", alignItems: "center", gap: 4 }}>
                 <IconaFrecciaSinistra size={14} /> {vistaMobile === "dettaglio" ? "Elenco prodotti" : "Struttura shop"}
@@ -35876,11 +35948,14 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             {vistaMobile === "dettaglio" && paneDettaglio}
           </>
         ) : (
+          <>
+          {strisciaLavori}
           <div style={{ display: "grid", gridTemplateColumns: `${larghezzaFoDi("boAlbero", 280)}px ${larghezzaFoDi("boLista", 340)}px minmax(0,1fr)`, gap: 16, alignItems: "start" }}>
             {paneAlbero}
             {paneLista}
             {paneDettaglio}
           </div>
+          </>
         )}
       </div>
 
