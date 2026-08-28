@@ -27105,7 +27105,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, onApriBackOffice, ricarica, onBack, titolo = "Gestione magazzino" }) {
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -27406,6 +27406,11 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, b
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
             <Button variant="ghost" onClick={onApriAdvisor}>Advisor</Button>
+            {/* stessa anagrafica, altra metà della scheda: qui si governano
+                stock, prezzi e fornitori, di là nome, foto e descrizioni.
+                Finché sono due schermate separate, almeno si raggiungono
+                l'una dall'altra senza ripassare dal menu */}
+            <Button variant="ghost" onClick={onApriBackOffice}>Back Office prodotti</Button>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
             <Button variant="ghost" onClick={() => setMostraNuovoProdotto(true)}>+ Nuovo prodotto</Button>
             {/* il nome vecchio ("Sincronizza catalogo") non diceva in che
@@ -34416,7 +34421,7 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack, apriProdottoIdIniziale }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, ricarica, onBack, apriProdottoIdIniziale, vistaIniziale }) {
   const isMobile = useIsMobile();
   const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
   const [collassate, setCollassate] = useState(() => new Set());
@@ -34440,7 +34445,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // e "backoffice" (l'editor completo, quello che questa pagina era per
   // intero prima) — un prodotto aperto da "Gestione magazzino" atterra
   // sempre nel back office, mai nel front office
-  const [vista, setVista] = useState(apriProdottoIdIniziale ? "backoffice" : "frontoffice");
+  const [vista, setVista] = useState(apriProdottoIdIniziale || vistaIniziale === "backoffice" ? "backoffice" : "frontoffice");
   const [foRootId, setFoRootId] = useState(null);
   const [foSubId, setFoSubId] = useState(null);
   const [vistaMobileFo, setVistaMobileFo] = useState("categorie");
@@ -39270,6 +39275,12 @@ export default function App() {
   // vuole l'editor completo (immagini, descrizioni, categorie multiple)
   // invece della vecchia modale di riassortimento
   const [prodottoDaAprireInShop, setProdottoDaAprireInShop] = useState(null);
+  // il Back Office prodotti si raggiunge da due strade: dal menu "Magazzino
+  // & shop" (e allora si apre sul Front Office e "indietro" torna al menu) e
+  // dal tasto in Gestione magazzino, che ci porta dritti al back office e
+  // deve riportare in magazzino — altrimenti si esce dove non si era entrati
+  const [ritornoGestioneShop, setRitornoGestioneShop] = useState("magazzinoshop");
+  const [gestioneShopVistaIniziale, setGestioneShopVistaIniziale] = useState(null);
   // login venditore dalla home: vanno dichiarati qui (prima dei return
   // anticipati di Gate/Caricamento più sotto), altrimenti in alcuni render
   // questi due hook non verrebbero chiamati per niente, violando le regole
@@ -40105,7 +40116,7 @@ export default function App() {
   function apriStoricoAllievi() { apriViewProtetta("storicoallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
-  function apriGestioneShop() { setProdottoDaAprireInShop(null); apriViewProtetta("gestioneshop"); }
+  function apriGestioneShop() { setProdottoDaAprireInShop(null); setRitornoGestioneShop("magazzinoshop"); setGestioneShopVistaIniziale(null); apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
@@ -40759,6 +40770,7 @@ export default function App() {
           corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           onApriAdvisor={() => setView("advisor")}
+          onApriBackOffice={() => { setRitornoGestioneShop("magazzino"); setGestioneShopVistaIniziale("backoffice"); setView("gestioneshop"); }}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
@@ -40787,8 +40799,8 @@ export default function App() {
       {view === "gestioneshop" && (
         <PaginaGestioneShop
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
-          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
-          apriProdottoIdIniziale={prodottoDaAprireInShop}
+          prodottiImmagini={prodottiImmagini} ricarica={fetchDati} onBack={() => setView(ritornoGestioneShop)}
+          apriProdottoIdIniziale={prodottoDaAprireInShop} vistaIniziale={gestioneShopVistaIniziale}
         />
       )}
 
