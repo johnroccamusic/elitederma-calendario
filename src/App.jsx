@@ -33819,7 +33819,7 @@ function NodoAlberoShop({ categoria, profondita, figliDi, contaProdotti, categor
             : <span style={{ width: 11, display: "inline-block" }} />}
         </button>
         <span style={{ color: categoria.woo_category_id == null ? MUTED : GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
-        <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 40, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoria.nome}</span>
+        <span style={{ ...fontBody, fontSize: 11.5, color: NAVY, flex: 1, minWidth: 40, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoria.nome}</span>
         {/* le particolarità della categoria stanno in tre pallini, non in
             tre etichette: scritte per esteso mangiavano tutto lo spazio e
             il nome — l'unica cosa che serve leggere — spariva */}
@@ -33834,7 +33834,7 @@ function NodoAlberoShop({ categoria, profondita, figliDi, contaProdotti, categor
             <span title="Non sul POS: i prodotti di questa categoria non compaiono nella vendita al banco" style={{ width: 7, height: 7, borderRadius: "50%", background: "#3B6FA0", display: "inline-block" }} />
           )}
         </span>
-        <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdotti(categoria.id)}</span>
+        <span style={{ ...fontBody, fontSize: 9.5, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdotti(categoria.id)}</span>
         <button onClick={(e) => { e.stopPropagation(); onAggiungiSotto(categoria.id); }} title="Aggiungi sotto-categoria" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: "pointer", color: MUTED, flexShrink: 0 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
         </button>
@@ -34701,21 +34701,22 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }
 
   const paneAlbero = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Struttura shop</div>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 320 }}>
+      {!isMobile && manigliaColonnaFo("boAlbero", larghezzaFoDi("boAlbero", 280))}
+      <div style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Struttura shop</div>
       <div
         onClick={() => selezionaCategoria(null)}
         style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 6px", borderRadius: 8, cursor: "pointer", marginBottom: 6, background: categoriaSelId === null ? "#FBF3E4" : "transparent", border: categoriaSelId === null ? `1px solid ${GOLD}` : "1px solid transparent" }}
       >
         <span style={{ color: NAVY, display: "flex" }}><IconaShopShop size={14} /></span>
-        <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, flex: 1 }}>Tutti i prodotti</span>
-        <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px" }}>{totaleProdottiAttivi}</span>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, flex: 1 }}>Tutti i prodotti</span>
+        <span style={{ ...fontBody, fontSize: 9.5, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px" }}>{totaleProdottiAttivi}</span>
       </div>
       <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto" }}>
         {radiciCategorie.map((c) => (
           <NodoAlberoShop key={c.id} categoria={c} profondita={0} figliDi={figliDi} contaProdotti={contaProdottiDiretti} categoriaSelId={categoriaSelId} collassate={collassate} onSeleziona={selezionaCategoria} onToggle={toggleCollassa} onAggiungiSotto={(padreId) => setModaleCategoria({ padreId })} />
         ))}
-        {radiciCategorie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna categoria. Sincronizza il catalogo da Magazzino o creane una.</div>}
+        {radiciCategorie.length === 0 && <div style={{ ...fontBody, fontSize: 11, color: MUTED, padding: "10px 4px" }}>Nessuna categoria. Sincronizza il catalogo da Magazzino o creane una.</div>}
       </div>
       {/* i pallini si spiegano anche al passaggio del mouse, ma una legenda
           in chiaro evita di doverli indovinare */}
@@ -34724,18 +34725,19 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: GOLD }} /> solo offline</span>
         <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3B6FA0" }} /> non sul POS</span>
       </div>
-      <button onClick={() => setModaleCategoria({ padreId: null })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi categoria</button>
+      <button onClick={() => setModaleCategoria({ padreId: null })} style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi categoria</button>
     </div>
   );
 
   const paneLista = (
-    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
+    <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 320 }}>
+      {!isMobile && manigliaColonnaFo("boLista", larghezzaFoDi("boLista", 340))}
+      <div style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>
         {ricerca.trim() ? "Risultati ricerca" : categoriaSelezionata ? categoriaSelezionata.nome : "Tutti i prodotti"}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
         {[{ v: "tutti", l: "Tutti" }, { v: "online", l: "Online" }, { v: "bozze", l: "Bozze" }].map((t) => (
-          <button key={t.v} onClick={() => setFiltroStato(t.v)} style={{ ...fontBody, fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 14, border: "none", background: filtroStato === t.v ? NAVY : BG, color: filtroStato === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
+          <button key={t.v} onClick={() => setFiltroStato(t.v)} style={{ ...fontBody, fontSize: 10, fontWeight: 600, padding: "5px 10px", borderRadius: 14, border: "none", background: filtroStato === t.v ? NAVY : BG, color: filtroStato === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
             {t.l} {conteggiStato[t.v]}
           </button>
         ))}
@@ -34751,13 +34753,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 {immagini.length > 1 && <span style={{ position: "absolute", bottom: -1, right: -1, ...fontBody, fontSize: 9, fontWeight: 700, color: "#fff", background: NAVY, borderRadius: 8, padding: "1px 4px" }}>{immagini.length}</span>}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
-                <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</div>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 600, color: NAVY, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.nome}</div>
+                <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</div>
               </div>
               {(() => {
                 const etichetta = !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : "Online";
                 const colori = !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : { bg: "#E6F2E8", fg: "#2E7D32" };
-                return <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>;
+                return <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>;
               })()}
             </div>
           );
@@ -35237,7 +35239,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
   const panePlaceholder = (
     <div style={{ ...cardStyle, marginBottom: 0, height: isMobile ? 200 : altezzaColonne, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 30 }}>
-      <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Seleziona una categoria o un prodotto per vederne i dettagli, oppure crea qualcosa di nuovo.</div>
+      <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>Seleziona una categoria o un prodotto per vederne i dettagli, oppure crea qualcosa di nuovo.</div>
     </div>
   );
 
@@ -35469,7 +35471,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             {vistaMobile === "dettaglio" && paneDettaglio}
           </>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "280px 340px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: `${larghezzaFoDi("boAlbero", 280)}px ${larghezzaFoDi("boLista", 340)}px minmax(0,1fr)`, gap: 16, alignItems: "start" }}>
             {paneAlbero}
             {paneLista}
             {paneDettaglio}
