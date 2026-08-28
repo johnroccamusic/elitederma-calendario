@@ -10155,6 +10155,12 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
   const [durataCorsoModifica, setDurataCorsoModifica] = useState("");
   const [giorniCorsoModifica, setGiorniCorsoModifica] = useState([]);
   const [categoriaCorso, setCategoriaCorso] = useState("");
+  // il dermografo lo prevedono i corsi di trucco permanente e trico, non
+  // laminazione, extension, gemme, henné, IKE o micro: dove non c'entra, la
+  // scheda dell'allievo non deve nemmeno chiederlo. Acceso di default: un
+  // corso nuovo lo prevede, salvo dire il contrario
+  const [prevedeDermografo, setPrevedeDermografo] = useState(true);
+  const [modPrevedeDermografo, setModPrevedeDermografo] = useState(true);
   const [modCategoriaCorso, setModCategoriaCorso] = useState("");
   const [vistaCorsiModal, setVistaCorsiModal] = useState("griglia"); // griglia | nuovo | modifica
   const [ricercaCorsi, setRicercaCorsi] = useState("");
@@ -10255,6 +10261,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     setModColoreCorso(c.colore);
     setModPostiCorso(String(c.posti_max));
     setModCategoriaCorso(c.categoria || "");
+    setModPrevedeDermografo(c.prevede_dermografo !== false);
     setDiplomaCorsoModifica(null);
     const giorniEsistenti = (corsiGiorni || []).filter((g) => g.corso_id === c.id).sort((a, b) => a.numero_giorno - b.numero_giorno);
     setDurataCorsoModifica(giorniEsistenti.length > 0 ? String(giorniEsistenti.length) : "");
@@ -10319,6 +10326,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       colore: modColoreCorso,
       posti_max: Number(modPostiCorso) || 10,
       categoria: modCategoriaCorso.trim() || null,
+      prevede_dermografo: modPrevedeDermografo,
     };
     if (diplomaCorsoModifica) {
       try {
@@ -10346,7 +10354,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
       return;
     }
     if (giorniCorsoNonValidi(giorniCorso)) { setMsg("Scegli il tipo di modella per ogni giorno che la richiede."); return; }
-    const ins = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10, categoria: categoriaCorso.trim() || null }).select("id").single();
+    const ins = await supabase.from("corsi").insert({ nome: nomeCorso.trim().toUpperCase(), colore, posti_max: Number(postiMax) || 10, categoria: categoriaCorso.trim() || null, prevede_dermografo: prevedeDermografo }).select("id").single();
     if (ins.error) { setMsg("Errore: " + ins.error.message); return; }
     const erroreGiorni = await salvaGiorniCorso(ins.data.id, giorniCorso);
     if (erroreGiorni) { setMsg("Corso aggiunto, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); }
@@ -10532,6 +10540,12 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
               <Field label="Categoria (opzionale)">
                 <input style={{ ...inputStyle, textTransform: "uppercase" }} value={categoriaCorso} onChange={(e) => setCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
               </Field>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>
+                <input type="checkbox" checked={prevedeDermografo} onChange={(e) => setPrevedeDermografo(e.target.checked)} style={{ width: 15, height: 15, marginTop: 2 }} />
+                <span>Il corso prevede dermografo
+                  <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.35 }}>Se spuntato, nella scheda di ogni allievo compare la scelta del dermografo (Tekna, Horus o nessuno).</div>
+                </span>
+              </label>
               <div style={{ display: "flex", gap: 14 }}>
                 <div style={{ flex: 1 }}>
                   <Field label="Colore">
@@ -10593,6 +10607,12 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                 <Field label="Categoria (opzionale)">
                   <input style={{ ...inputStyle, textTransform: "uppercase" }} value={modCategoriaCorso} onChange={(e) => setModCategoriaCorso(e.target.value.toUpperCase())} placeholder="es. PMU" />
                 </Field>
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginBottom: 14 }}>
+                  <input type="checkbox" checked={modPrevedeDermografo} onChange={(e) => setModPrevedeDermografo(e.target.checked)} style={{ width: 15, height: 15, marginTop: 2 }} />
+                  <span>Il corso prevede dermografo
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.35 }}>Se spuntato, nella scheda di ogni allievo compare la scelta del dermografo (Tekna, Horus o nessuno).</div>
+                  </span>
+                </label>
                 <div style={{ display: "flex", gap: 14 }}>
                   <div style={{ flex: 1 }}>
                     <Field label="Colore">
@@ -16682,7 +16702,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
     // richiesto solo sulle iscrizioni nuove: le storiche non vanno bloccate
     // per un campo che quando sono state fatte non esisteva
-    if (!modificandoId && !dermografo) { setMsg("Scegli il dermografo: Tekna, Horus oppure nessuno."); return false; }
+    if (!modificandoId && corso?.prevede_dermografo !== false && !dermografo) { setMsg("Scegli il dermografo: Tekna, Horus oppure nessuno."); return false; }
 
     const metodiMancanti = [];
     if (pagAcconto.totale !== "" && parseNum(pagAcconto.totale) !== 0 && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
@@ -16813,7 +16833,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         tipi_modelle: richiedeModelle === "si" ? tipiModelle.map((m) => ({ tipo: m.tipo || "", mattina: !!m.mattina, pomeriggio: !!m.pomeriggio, nome_modella: m.nome_modella || "", telefono_modella: m.telefono_modella || "", giorno: m.giorno ?? null, gruppo_id: m.gruppo_id ?? null })) : [],
         giorni_presenza: corsoParziale ? giorniPresenza : null,
         pacchetto_kit: pacchettoKit.trim() || null,
-        dermografo: dermografo || null,
+        dermografo: corso?.prevede_dermografo !== false ? (dermografo || null) : null,
         tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
@@ -18101,6 +18121,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 />
               </Field>
             </div>
+            {/* solo dove il dermografo fa parte del percorso (Definisci
+                corso → "Il corso prevede dermografo"): su laminazione,
+                extension, gemme, henné, IKE o micro la domanda non ha senso
+                e non va nemmeno posta */}
+            {corso?.prevede_dermografo !== false && (
             <div style={{ flex: 1 }}>
               {/* tre voci esplicite e nessuna preselezionata: "nessun
                   dermografo" è una scelta come le altre, non una casella da
@@ -18118,6 +18143,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </select>
               </Field>
             </div>
+            )}
             <div style={{ flex: 1 }}>
               <Field label="Tipo di offerta">
                 <input value={tipoOfferta} onChange={(e) => setTipoOfferta(e.target.value)} style={inputStyle} />
