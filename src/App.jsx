@@ -25268,7 +25268,122 @@ function etichettaStatoVenditaShop(stato) {
 // "pos" → "Vendite al banco" (solo vendite fatte dal POS interno) — stessa
 // struttura di pagina, filtrate a monte così le due non si mescolano mai
 // e ciascuna ha il proprio contesto/KPI puliti
+
+// dettaglio di un ordine: quello che la riga della tabella non può dire —
+// le righe di prodotto con quantità e prezzi, gli indirizzi, la spedizione,
+// lo sconto e il coupon usato. I dati anagrafici stanno già in memoria; il
+// payload originale di WooCommerce (indirizzi, coupon, spese di spedizione)
+// pesa troppo per tenerlo caricato per mille ordini, quindi si legge qui,
+// una riga sola, quando si apre la scheda
+function ModaleDettaglioOrdine({ vendita, onChiudi }) {
+  const [payload, setPayload] = useState(null);
+  const [caricando, setCaricando] = useState(false);
+  useEffect(() => {
+    if (!vendita?.id) return;
+    let annullato = false;
+    setCaricando(true);
+    supabase.from("vendite_shop").select("payload_raw, codice_coupon").eq("id", vendita.id).single()
+      .then(({ data }) => { if (!annullato) { setPayload(data || null); setCaricando(false); } });
+    return () => { annullato = true; };
+  }, [vendita?.id]);
+
+  const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
+  const grezzo = payload?.payload_raw || null;
+  const fatturazione = grezzo?.billing || null;
+  const spedizione = grezzo?.shipping || null;
+  const speseSpedizione = grezzo?.shipping_total != null ? parseNum(grezzo.shipping_total) : null;
+  const sconto = grezzo?.discount_total != null ? parseNum(grezzo.discount_total) : null;
+  const coupon = (Array.isArray(grezzo?.coupon_lines) ? grezzo.coupon_lines : []).map((c) => c.code).filter(Boolean);
+  const codiceCoupon = payload?.codice_coupon || coupon[0] || null;
+  const notaCliente = grezzo?.customer_note || null;
+  const st = STATI_VENDITA_SHOP[vendita?.stato];
+  const etichettaMovimento = { vendita: "Vendita", reso: "Reso", annullamento: "Annullato", cambio: "Cambio", omaggio: "Omaggio" }[vendita?.tipo_movimento] || "Vendita";
+
+  function indirizzo(a) {
+    if (!a) return null;
+    const nome = [a.first_name, a.last_name].filter(Boolean).join(" ");
+    const via = [a.address_1, a.address_2].filter(Boolean).join(", ");
+    const citta = [a.postcode, a.city, a.state && `(${a.state})`].filter(Boolean).join(" ");
+    return [nome, a.company, via, citta, a.country, a.phone, a.email].filter(Boolean);
+  }
+  const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
+    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
+      <span style={{ color: MUTED, minWidth: 130, flexShrink: 0 }}>{etichetta}</span>
+      <span style={{ minWidth: 0 }}>{valore}</span>
+    </div>
+  );
+
+  return (
+    <Modal title={`Ordine #${vendita?.numero_ordine || vendita?.woo_order_id || ""}`} onClose={onChiudi} maxWidth={720}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 10, padding: "3px 10px" }}>{st.etichetta}</span>}
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>{etichettaMovimento}</span>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}</span>
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Prodotti</div>
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 14 }}>
+        {righe.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 12 }}>Nessuna riga di prodotto su questo ordine.</div>
+        ) : righe.map((r, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
+            <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
+              {r.prezzo_unitario != null ? fmtEuroErp2(r.prezzo_unitario) : "—"}
+            </span>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", minWidth: 78, textAlign: "right" }}>
+              {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: BG, borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
+        {rigaInfo("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
+        {rigaInfo("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
+        {rigaInfo("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : null)}
+        {rigaInfo("Sconto", sconto != null && sconto > 0 ? `− ${fmtEuroErp2(sconto)}${codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}` : (codiceCoupon ? `coupon ${codiceCoupon}` : null))}
+        <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 6, marginTop: 4, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <span style={{ minWidth: 130, flexShrink: 0 }}>Totale</span>
+          <span>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
+        </div>
+      </div>
+
+      {rigaInfo("Cliente", vendita?.cliente_nome || null)}
+      {rigaInfo("Email", vendita?.cliente_email || fatturazione?.email || null)}
+      {rigaInfo("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title || null)}
+      {rigaInfo("Operatore", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null)}
+      {rigaInfo("Nota", vendita?.note || notaCliente || null)}
+
+      {caricando && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 10 }}>Carico gli indirizzi…</div>}
+      {!caricando && (fatturazione || spedizione) && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 14 }}>
+          {fatturazione && (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Fatturazione</div>
+              {(indirizzo(fatturazione) || []).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.45 }}>{r}</div>)}
+            </div>
+          )}
+          {spedizione && (indirizzo(spedizione) || []).length > 0 && (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Spedizione</div>
+              {(indirizzo(spedizione) || []).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.45 }}>{r}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+      {!caricando && !grezzo && (
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 12 }}>
+          Nessun dato di spedizione: questo movimento non arriva dallo shop online.
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+  const [ordineAperto, setOrdineAperto] = useState(null);
   const { ordine: ordineOrdini, cambiaOrdine: cambiaOrdineOrdini, ordina: ordinaOrdini } = useOrdinamentoTabella();
   const { ordine: ordineProdotti, cambiaOrdine: cambiaOrdineProdotti, ordina: ordinaProdotti } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
@@ -25413,7 +25528,15 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
                     const etichettaMovimento = { vendita: "Vendita", reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || "Vendita";
                     return (
                       <tr key={v.id}>
-                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>#{v.numero_ordine || v.woo_order_id}</td>
+                        <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
+                          <button
+                            onClick={() => setOrdineAperto(v)}
+                            title="Apri il dettaglio dell'ordine"
+                            style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 3 }}
+                          >
+                            #{v.numero_ordine || v.woo_order_id}
+                          </button>
+                        </td>
                         <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>
                           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#3B6FA0" : MUTED, background: v.tipo_movimento && v.tipo_movimento !== "vendita" ? "#E7EEF5" : "#EFEFEF", borderRadius: 8, padding: "3px 9px" }}>
                             {etichettaMovimento}
@@ -25493,6 +25616,8 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
           )}
         </div>
       </div>
+
+      {ordineAperto && <ModaleDettaglioOrdine vendita={ordineAperto} onChiudi={() => setOrdineAperto(null)} />}
     </div>
   );
 }
