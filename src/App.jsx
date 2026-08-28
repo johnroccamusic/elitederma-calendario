@@ -34343,6 +34343,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       stato: p.stato || "publish",
       soloOffline: !!p.solo_offline,
       nonSulPos: !!p.escludi_vendita_diretta,
+      // categorie che l'utente ha accettato di riportare online / sul POS
+      // insieme a questo prodotto (si applicano al salvataggio)
+      sbloccaOffline: [],
+      sbloccaPos: [],
       qtaStock: p.quantita != null ? String(p.quantita) : "",
       tipoProdotto: p.tipo_prodotto || "semplice",
       contaMagazzino: p.conta_magazzino !== false,
@@ -34410,7 +34414,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       id: null, nome: "", descrizioneBreve: "", descrizione: "", prezzo: "", stato: "publish",
       modoVendita: "lordo", aliquotaVendita: aliquotaIvaDefault,
       costo: "", modoAcquisto: "netto", aliquotaAcquisto: aliquotaIvaDefault,
-      soloOffline: false, nonSulPos: false, qtaStock: "",
+      soloOffline: false, nonSulPos: false, sbloccaOffline: [], sbloccaPos: [], qtaStock: "",
       tipoProdotto: padreId ? "variante" : "semplice",
       contaMagazzino: true, contaIncassi: true, giacenzaPropria: true,
       prodottoPadreId: padreId || "",
@@ -34737,6 +34741,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const stock = String(f.qtaStock).trim() === "" ? 0 : parseInt(parseNum(f.qtaStock), 10);
     setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
 
+    // le categorie che l'utente ha accettato di riaprire vanno riaperte
+    // prima: è da lì che dipende se questo prodotto può andare sullo shop
+    if ((f.sbloccaOffline || []).length) {
+      const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: false }).in("id", f.sbloccaOffline);
+      if (error) { setSalvando(false); setMsgErrore("Non è stato possibile riaprire la categoria: " + error.message); return; }
+    }
+    if ((f.sbloccaPos || []).length) {
+      const { error } = await supabase.from("categorie_prodotti").update({ escludi_vendita_diretta: false }).in("id", f.sbloccaPos);
+      if (error) { setSalvando(false); setMsgErrore("Non è stato possibile rimettere la categoria sul POS: " + error.message); return; }
+    }
+
     if (calcolo.vaSuWoo) {
       // WooCommerce pubblica i prezzi IVA inclusa: si manda il LORDO
       const { data, error } = await supabase.functions.invoke("woo-gestisci-prodotto", {
@@ -34782,7 +34797,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       if (erroreInterni) { setMsgErrore("Salvato sul sito, ma i dati di magazzino no: " + erroreInterni); return; }
       setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
       if (!f.id && idProdotto) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: data?.wooProductId ?? prev.wooProductId }));
-      ricarica(["prodotti_shop", "prodotti_categorie", "prodotti_immagini"]);
+      ricarica(["prodotti_shop", "prodotti_categorie", "prodotti_immagini", "categorie_prodotti"]);
       return;
     }
 
@@ -34821,7 +34836,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (erroreInterni) { setMsgErrore("Prodotto salvato, ma i dati di magazzino no: " + erroreInterni); return; }
     setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
     if (!f.id) setProdottoForm((prev) => ({ ...prev, id: idProdotto, wooProductId: null }));
-    ricarica(["prodotti_shop", "prodotti_categorie"]);
+    ricarica(["prodotti_shop", "prodotti_categorie", "categorie_prodotti"]);
   }
 
   // gli stessi dati di scorta e riordino valgono quasi sempre per una
@@ -34864,6 +34879,33 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   function rimuoviComponente(i) { setComponenti((prev) => prev.filter((_, idx) => idx !== i)); }
   function cambiaComponente(i, campo, valore) { setComponenti((prev) => prev.map((c, idx) => (idx === i ? { ...c, [campo]: valore } : c))); }
   function aggiornaForm(campi) { setProdottoForm((f) => ({ ...f, ...campi })); }
+  function nomiCategorie(ids) {
+    return (ids || []).map((id) => `"${(categorieProdotti || []).find((c) => c.id === id)?.nome || "?"}"`).join(", ");
+  }
+  // mettere il prodotto online quando è la categoria a tenerlo fuori non ha
+  // senso a metà: o si riapre anche la categoria, o il prodotto resterebbe
+  // invisibile pur con la scelta impostata. Quindi si chiede, e la conferma
+  // vale per tutti i prodotti di quella categoria — va detto prima
+  function scegliCanaleOnline(offline) {
+    if (!offline && calcoloPrezzi.categorieOffline?.length) {
+      const nomi = nomiCategorie(calcoloPrezzi.categorieOffline);
+      const uno = calcoloPrezzi.categorieOffline.length === 1;
+      if (!window.confirm(`${nomi} ${uno ? "è impostata" : "sono impostate"} come "solo offline": finché resta così, questo prodotto non va sullo shop.\n\nRiaprire anche ${uno ? "la categoria" : "le categorie"}? Vale per TUTTI i prodotti che ${uno ? "contiene" : "contengono"} — ognuno tornerà online se ha un prezzo e non è escluso per conto suo.`)) return;
+      aggiornaForm({ soloOffline: false, sbloccaOffline: [...new Set([...(prodottoForm.sbloccaOffline || []), ...calcoloPrezzi.categorieOffline])] });
+      return;
+    }
+    aggiornaForm({ soloOffline: offline });
+  }
+  function scegliCanalePos(fuoriPos) {
+    if (!fuoriPos && calcoloPrezzi.categorieNoPos?.length) {
+      const nomi = nomiCategorie(calcoloPrezzi.categorieNoPos);
+      const uno = calcoloPrezzi.categorieNoPos.length === 1;
+      if (!window.confirm(`${nomi} ${uno ? "è esclusa" : "sono escluse"} dal POS: finché resta così, questo prodotto non compare al banco.\n\nRimettere sul POS anche ${uno ? "la categoria" : "le categorie"}? Vale per TUTTI i prodotti che ${uno ? "contiene" : "contengono"}.`)) return;
+      aggiornaForm({ nonSulPos: false, sbloccaPos: [...new Set([...(prodottoForm.sbloccaPos || []), ...calcoloPrezzi.categorieNoPos])] });
+      return;
+    }
+    aggiornaForm({ nonSulPos: fuoriPos });
+  }
   // cambiare natura suggerisce i flag tipici del caso, ma restano tutti
   // modificabili a mano
   function cambiaTipo(nuovo) {
@@ -34987,14 +35029,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // "solo offline" può venire dalla categoria (vale per tutti i suoi
     // prodotti) o dalla spunta sul singolo prodotto: in entrambi i casi
     // il prodotto non va mai sullo shop, anche se ha un prezzo
-    const categoriaSoloOffline = (f.categorieIds || []).some((id) => (categorieProdotti || []).find((c) => c.id === id)?.solo_offline);
+    // le categorie che l'utente ha accettato di riaprire non contano più
+    // come vincolo: al salvataggio verranno riaperte davvero
+    const categorieOffline = (f.categorieIds || []).filter((id) => (categorieProdotti || []).find((c) => c.id === id)?.solo_offline && !(f.sbloccaOffline || []).includes(id));
+    const categorieNoPos = (f.categorieIds || []).filter((id) => (categorieProdotti || []).find((c) => c.id === id)?.escludi_vendita_diretta && !(f.sbloccaPos || []).includes(id));
+    const categoriaSoloOffline = categorieOffline.length > 0;
     const soloOffline = categoriaSoloOffline || !!f.soloOffline;
-    // stessa regola per il POS: se lo esclude la categoria, il singolo
-    // prodotto non può rimetterci mano
-    const categoriaNonSulPos = (f.categorieIds || []).some((id) => (categorieProdotti || []).find((c) => c.id === id)?.escludi_vendita_diretta);
+    const categoriaNonSulPos = categorieNoPos.length > 0;
     return {
       prezzoNetto, prezzoLordo, costoNetto, costoBundle, margine, marginePct,
       bundleVirtuale, categoriaSoloOffline, soloOffline, categoriaNonSulPos, nonSulPos: categoriaNonSulPos || !!f.nonSulPos,
+      categorieOffline, categorieNoPos,
       vaSuWoo: prezzoNetto != null && !soloOffline,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -35116,22 +35161,54 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               : "Pezzi fisicamente presenti. Questo prodotto non è in vendita online, quindi lo stock resta solo interno.")
           : "Quantità non editabile a mano: viene calcolata (bundle) o non si applica (vetrina di una variante)."}
       </div>
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginBottom: 10 }}>
-        <label title={calcoloPrezzi.categoriaSoloOffline ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: calcoloPrezzi.categoriaSoloOffline ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: calcoloPrezzi.categoriaSoloOffline ? MUTED : NAVY }}>
-          <input type="checkbox" checked={calcoloPrezzi.soloOffline} disabled={calcoloPrezzi.categoriaSoloOffline} onChange={(e) => aggiornaForm({ soloOffline: e.target.checked })} style={{ width: 14, height: 14 }} />
-          Solo offline (mai su WooCommerce, anche con un prezzo)
-        </label>
-        {/* le due esclusioni sono indipendenti: un prodotto può stare sullo
-            shop e non al banco (o il contrario). Come per "solo offline",
-            se lo decide la categoria qui la casella resta bloccata */}
-        <label title={calcoloPrezzi.categoriaNonSulPos ? "Forzato dalla categoria scelta" : ""} style={{ display: "flex", alignItems: "center", gap: 6, cursor: calcoloPrezzi.categoriaNonSulPos ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: calcoloPrezzi.categoriaNonSulPos ? MUTED : NAVY }}>
-          <input type="checkbox" checked={calcoloPrezzi.nonSulPos} disabled={calcoloPrezzi.categoriaNonSulPos} onChange={(e) => aggiornaForm({ nonSulPos: e.target.checked })} style={{ width: 14, height: 14 }} />
-          Non sul POS (non compare nella vendita al banco)
-        </label>
+      {/* dove si vende questo prodotto: le due scelte sono indipendenti —
+          può stare sullo shop e non al banco, o il contrario. Quando è la
+          categoria a tenerlo fuori, sceglierlo qui chiede prima il permesso
+          di riaprire anche la categoria: altrimenti la casella direbbe una
+          cosa e il prodotto resterebbe invisibile lo stesso */}
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.vaSuWoo ? { color: "#2E7D32", background: "#E3F3E5" } : { color: MUTED, background: "#EFEFEF" }) }}>
+            {calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
+          </span>
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.nonSulPos ? { color: MUTED, background: "#EFEFEF" } : { color: "#2E7D32", background: "#E3F3E5" }) }}>
+            {calcoloPrezzi.nonSulPos ? "Non sul POS" : "In vendita sul POS"}
+          </span>
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Vendita al banco (POS)</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+          {[{ v: false, l: "Sul POS" }, { v: true, l: "Non sul POS" }].map((o) => (
+            <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+              <input type="radio" name={`prod-pos-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.nonSulPos === o.v} onChange={() => scegliCanalePos(o.v)} style={{ width: 14, height: 14 }} />
+              {o.l}
+            </label>
+          ))}
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Shop online</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {[{ v: false, l: "Online" }, { v: true, l: "Offline" }].map((o) => (
+            <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+              <input type="radio" name={`prod-online-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.soloOffline === o.v} onChange={() => scegliCanaleOnline(o.v)} style={{ width: 14, height: 14 }} />
+              {o.l}
+            </label>
+          ))}
+        </div>
+        {(prodottoForm.sbloccaOffline || []).length > 0 && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 8, lineHeight: 1.4 }}>
+            Salvando, {nomiCategorie(prodottoForm.sbloccaOffline)} {(prodottoForm.sbloccaOffline || []).length === 1 ? "torna" : "tornano"} online: vale per tutti i prodotti che {(prodottoForm.sbloccaOffline || []).length === 1 ? "contiene" : "contengono"}.
+          </div>
+        )}
+        {(prodottoForm.sbloccaPos || []).length > 0 && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 6, lineHeight: 1.4 }}>
+            Salvando, {nomiCategorie(prodottoForm.sbloccaPos)} {(prodottoForm.sbloccaPos || []).length === 1 ? "torna" : "tornano"} sul POS.
+          </div>
+        )}
       </div>
       {calcoloPrezzi.soloOffline && (
         <div style={{ ...fontBody, fontSize: 12, color: GOLD, marginBottom: 10 }}>
-          {calcoloPrezzi.categoriaSoloOffline ? "Categoria solo offline: " : ""}Il prodotto resta nel magazzino interno. Se era pubblicato, salvando viene messo in bozza sullo shop.
+          Il prodotto resta nel magazzino interno. Se era pubblicato, salvando passa in bozza sullo shop.
         </div>
       )}
       {(() => {
@@ -35416,19 +35493,42 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <EditorRicco key={`cat-${categoriaForm.id}`} value={categoriaForm.descrizione} onChange={(html) => setCategoriaForm((f) => ({ ...f, descrizione: html }))} minHeight={100} />
       </Field>
 
-      {/* le due opzioni che WooCommerce non conosce: valgono per tutti i
-          prodotti della categoria e si sommano al flag del singolo
-          prodotto — se è acceso qui, là resta acceso e non modificabile */}
-      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginTop: 4 }}>
-        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Opzioni della categoria</div>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
-          <input type="checkbox" checked={!!categoriaForm.escludiVenditaDiretta} onChange={(e) => setCategoriaForm((f) => ({ ...f, escludiVenditaDiretta: e.target.checked }))} style={{ width: 14, height: 14, marginTop: 2 }} />
-          <span>Non sul POS<div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>I prodotti di questa categoria non compaiono nella vendita diretta al banco.</div></span>
-        </label>
-        <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-          <input type="checkbox" checked={!!categoriaForm.soloOffline} onChange={(e) => setCategoriaForm((f) => ({ ...f, soloOffline: e.target.checked }))} style={{ width: 14, height: 14, marginTop: 2 }} />
-          <span>Solo offline<div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>I prodotti di questa categoria non vanno mai sullo shop, nemmeno con un prezzo. Salvando, quelli già pubblicati passano in bozza.</div></span>
-        </label>
+      {/* dove si vende questa categoria, detto in chiaro: due stati sopra e
+          due scelte sotto. Valgono per tutti i prodotti che contiene e si
+          sommano alla scelta del singolo prodotto */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4, marginBottom: 10 }}>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(categoriaForm.wooCategoryId != null && !categoriaForm.soloOffline ? { color: "#2E7D32", background: "#E3F3E5" } : { color: MUTED, background: "#EFEFEF" }) }}>
+          {categoriaForm.wooCategoryId == null ? "Non pubblicata sullo shop" : categoriaForm.soloOffline ? "Sullo shop, ma prodotti offline" : "Pubblicata sullo shop"}
+        </span>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(categoriaForm.escludiVenditaDiretta ? { color: MUTED, background: "#EFEFEF" } : { color: "#2E7D32", background: "#E3F3E5" }) }}>
+          {categoriaForm.escludiVenditaDiretta ? "Non sul POS" : "In vendita sul POS"}
+        </span>
+      </div>
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Dove si vendono i prodotti di questa categoria</div>
+
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Vendita al banco (POS)</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+          {[{ v: false, l: "Sul POS" }, { v: true, l: "Non sul POS" }].map((o) => (
+            <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+              <input type="radio" name={`pos-${categoriaForm.id}`} checked={!!categoriaForm.escludiVenditaDiretta === o.v} onChange={() => setCategoriaForm((f) => ({ ...f, escludiVenditaDiretta: o.v }))} style={{ width: 14, height: 14 }} />
+              {o.l}
+            </label>
+          ))}
+        </div>
+
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Shop online</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {[{ v: false, l: "Online" }, { v: true, l: "Offline" }].map((o) => (
+            <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+              <input type="radio" name={`online-${categoriaForm.id}`} checked={!!categoriaForm.soloOffline === o.v} onChange={() => setCategoriaForm((f) => ({ ...f, soloOffline: o.v }))} style={{ width: 14, height: 14 }} />
+              {o.l}
+            </label>
+          ))}
+        </div>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.4, marginTop: 8 }}>
+          "Offline" tiene i prodotti di questa categoria fuori dallo shop anche se hanno un prezzo: salvando, quelli già pubblicati passano in bozza.
+        </div>
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
           {categoriaForm.wooCategoryId != null ? (
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>
