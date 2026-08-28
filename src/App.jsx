@@ -1779,6 +1779,21 @@ function useOrdinamentoTabella(iniziale = null) {
 }
 // intestazione di colonna cliccabile: si comporta come una <th> normale
 // (stile e contenuto passati da fuori), in più mostra la freccia
+// riquadro di sintesi (i "display" in cima alle pagine): quadrato, con
+// etichetta, numero e nota tutti centrati sui due assi. La forma fissa
+// serve a renderli confrontabili a colpo d'occhio: un numero grande e
+// uno piccolo occupano lo stesso spazio, e la riga resta ordinata anche
+// quando una nota è lunga e un'altra manca
+function RiquadroKpi({ etichetta, valore, nota, compatto, children }) {
+  return (
+    <div style={{ ...cardStyle, marginBottom: 0, aspectRatio: "1 / 1", padding: compatto ? "10px 8px" : 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 4, overflow: "hidden" }}>
+      <div style={{ ...fontBody, fontSize: compatto ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{etichetta}</div>
+      <div style={{ ...fontDisplay, fontSize: compatto ? 15 : 22, fontWeight: 700, color: NAVY }}>{valore}</div>
+      {children}
+      {nota && <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35, maxWidth: "92%" }}>{nota}</div>}
+    </div>
+  );
+}
 function ThOrdina({ campo, ordine, onOrdina, style, children, title }) {
   const attiva = ordine?.campo === campo;
   return (
@@ -25680,18 +25695,9 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
-          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
-          </div>
+          <RiquadroKpi compatto={isMobile} etichetta="Incasso netto" valore={fmtEuroErp2(kpi.incasso)} />
+          <RiquadroKpi compatto={isMobile} etichetta="Vendite" valore={kpi.vendite} />
+          <RiquadroKpi compatto={isMobile} etichetta="Pezzi (netti)" valore={kpi.pezzi} />
         </div>
 
         <TogglePerOperatoreProdotto vista={vista} onOperatore={() => setVista("operatore")} onProdotto={() => setVista("prodotto")} />
@@ -26936,9 +26942,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
   const stockTotaleGenerale = prodottiConMagazzino.reduce((s, p) => s + (p.stockTotale || 0), 0);
   const prodottiPubblicati = prodottiConMagazzino.filter((p) => pubblicatoSuShop(p));
   const stockPubblicato = prodottiPubblicati.reduce((s, p) => s + (p.stockTotale || 0), 0);
-  const valoreStimatoTotale = round2(prodottiConMagazzino.reduce((s, p) => s + (p.costo_acquisto != null && p.stockTotale != null ? p.stockTotale * p.costo_acquisto : 0), 0));
-  const unitaConCosto = prodottiConMagazzino.reduce((s, p) => s + (p.costo_acquisto != null && p.stockTotale != null ? p.stockTotale : 0), 0);
-  const costoMedio = unitaConCosto > 0 ? round2(valoreStimatoTotale / unitaConCosto) : null;
   const pctPubblicato = stockTotaleGenerale > 0 ? Math.round((stockPubblicato / stockTotaleGenerale) * 1000) / 10 : 0;
   // i pezzi che i corsi non possono toccare: la soglia di riordino di ogni
   // prodotto è riserva dello shop, non disponibilità per i kit
@@ -27104,30 +27107,29 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
           )}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Stock totale</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{stockTotaleGenerale.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>100% del totale</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>In vendita online</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{stockPubblicato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></div>
-            <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", margin: "8px 0 4px" }}>
+        {/* il valore stimato del magazzino non sta più qui: è un dato
+            economico, e vive nelle Statistiche totali vendite prodotti
+            insieme a incasso, vendite e pezzi */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
+          <RiquadroKpi
+            etichetta="Stock totale"
+            valore={<>{stockTotaleGenerale.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
+            nota="100% del totale"
+          />
+          <RiquadroKpi
+            etichetta="In vendita online"
+            valore={<>{stockPubblicato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
+            nota={`${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti`}
+          >
+            <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", width: "70%", margin: "4px 0" }}>
               <div style={{ height: "100%", width: `${pctPubblicato}%`, background: GOLD, borderRadius: 3 }} />
             </div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED }}>{pctPubblicato.toLocaleString("it-IT")}% del totale, su {prodottiPubblicati.length} prodotti</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Riservati dalla soglia</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{stockCongelato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Sotto la soglia di riordino i kit non attingono: restano allo shop</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Valore stimato totale</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(valoreStimatoTotale)}</div>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>{costoMedio != null ? `Costo medio: ${fmtEuroErp2(costoMedio)}` : "Costo medio non disponibile"}</div>
-          </div>
+          </RiquadroKpi>
+          <RiquadroKpi
+            etichetta="Riservati dalla soglia"
+            valore={<>{stockCongelato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
+            nota="Sotto la soglia di riordino i kit non attingono: restano allo shop"
+          />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
@@ -28958,6 +28960,16 @@ function PaginaResiCambioPOS({ prodottiShop, venditeShop, bundleComponenti, rica
 // una cifra di "Vendite Corsi" qui dentro (tutt'altra pagina, con le sue
 // statistiche separate)
 function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, venditori, targetVenditeProdotti, onBack, onApriTotale, onApriShop, onApriBanco, onApriAnalisi, titolo = "Statistiche Totali Vendite Prodotti" }) {
+  // valore della merce a scaffale: solo i prodotti che un magazzino ce
+  // l'hanno davvero (un bundle virtuale non è un pezzo in più, è un modo
+  // di venderne altri) e solo quelli con un costo d'acquisto inserito —
+  // gli altri non si stimano a naso, restano fuori dal conto
+  const valoreMagazzino = useMemo(() => {
+    const conMagazzino = (prodottiShop || []).filter((p) => p.attivo !== false && p.conta_magazzino !== false);
+    const valore = round2(conMagazzino.reduce((tot, p) => tot + (p.costo_acquisto != null ? (p.quantita || 0) * p.costo_acquisto : 0), 0));
+    const unita = conMagazzino.reduce((tot, p) => tot + (p.costo_acquisto != null ? (p.quantita || 0) : 0), 0);
+    return { valore, costoMedio: unita > 0 ? round2(valore / unita) : null };
+  }, [prodottiShop]);
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("30giorni");
   const range = periodo === "tutto" ? { inizio: "0000-01-01", fine: "9999-12-31" } : rangePeriodoErp(periodo);
@@ -29035,19 +29047,19 @@ function PaginaStatisticheVenditeProdotti({ venditeShop, prodottiShop, master, v
           ))}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(3, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
-          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Incasso netto</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.incasso)}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Vendite</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.vendite}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0, ...(isMobile ? { padding: "10px 8px" } : {}) }}>
-            <div style={{ ...fontBody, fontSize: isMobile ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Pezzi (netti)</div>
-            <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 22, fontWeight: 700, color: NAVY }}>{kpi.pezzi}</div>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, 1fr)" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 8 : 14, marginBottom: 28 }}>
+          <RiquadroKpi compatto={isMobile} etichetta="Incasso netto" valore={fmtEuroErp2(kpi.incasso)} />
+          <RiquadroKpi compatto={isMobile} etichetta="Vendite" valore={kpi.vendite} />
+          <RiquadroKpi compatto={isMobile} etichetta="Pezzi (netti)" valore={kpi.pezzi} />
+          {/* quanto vale la merce ferma in magazzino: non è un incasso del
+              periodo ma una fotografia di oggi — sta qui perché è l'unico
+              posto in cui i numeri economici dei prodotti stanno insieme */}
+          <RiquadroKpi
+            compatto={isMobile}
+            etichetta="Valore stimato magazzino"
+            valore={fmtEuroErp2(valoreMagazzino.valore)}
+            nota={valoreMagazzino.costoMedio != null ? `Costo medio: ${fmtEuroErp2(valoreMagazzino.costoMedio)}` : "Costo medio non disponibile"}
+          />
         </div>
 
         {targetAttivi.length > 0 && (
