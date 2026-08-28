@@ -1784,13 +1784,22 @@ function useOrdinamentoTabella(iniziale = null) {
 // serve a renderli confrontabili a colpo d'occhio: un numero grande e
 // uno piccolo occupano lo stesso spazio, e la riga resta ordinata anche
 // quando una nota è lunga e un'altra manca
-function RiquadroKpi({ etichetta, valore, nota, compatto, children }) {
+function RiquadroKpi({ etichetta, valore, nota, compatto, children, aSinistra, icona }) {
   return (
-    <div style={{ ...cardStyle, marginBottom: 0, aspectRatio: "1 / 1", padding: compatto ? "10px 8px" : 14, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", gap: 4, overflow: "hidden" }}>
+    <div style={{
+      ...cardStyle, marginBottom: 0, aspectRatio: "1 / 1", padding: compatto ? "10px 8px" : 16, position: "relative", overflow: "hidden",
+      display: "flex", flexDirection: "column", gap: 5,
+      alignItems: aSinistra ? "flex-start" : "center",
+      justifyContent: "center",
+      textAlign: aSinistra ? "left" : "center",
+    }}>
       <div style={{ ...fontBody, fontSize: compatto ? 9 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{etichetta}</div>
       <div style={{ ...fontDisplay, fontSize: compatto ? 15 : 22, fontWeight: 700, color: NAVY }}>{valore}</div>
       {children}
-      {nota && <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35, maxWidth: "92%" }}>{nota}</div>}
+      {nota && <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35, maxWidth: aSinistra ? "100%" : "92%" }}>{nota}</div>}
+      {/* l'icona è solo un segno di riconoscimento, in filigrana nell'angolo:
+          serve a distinguere i riquadri da lontano, non a essere letta */}
+      {icona && <div style={{ position: "absolute", right: 12, bottom: 10, color: CREAM_BORDER, opacity: 0.9, pointerEvents: "none" }}>{icona}</div>}
     </div>
   );
 }
@@ -26980,26 +26989,17 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
         <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={tornaIndietro} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, flexWrap: "wrap" }}>
-            <Button variant="ghost" onClick={onApriAdvisor}>Advisor</Button>
-            <div style={{ display: "flex", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, overflow: "hidden", background: "#fff" }}>
-              {[{ chiave: "elenco", etichetta: "Vista a elenco" }, { chiave: "categorie", etichetta: "Vista a categorie" }].map((v) => (
-                <button
-                  key={v.chiave}
-                  onClick={() => mostraVista(v.chiave)}
-                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "8px 14px", border: "none", cursor: "pointer", background: vistaProdotti === v.chiave ? NAVY : "transparent", color: vistaProdotti === v.chiave ? "#fff" : NAVY }}
-                >
-                  {v.etichetta}
-                </button>
-              ))}
-            </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <Button variant="ghost" onClick={onApriAdvisor}>Advisor ›</Button>
             <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
-            <Button variant="ghost" onClick={() => apriSchedaProdotto({ nuovo: true })}>+ Nuovo prodotto</Button>
+            <Button onClick={() => apriSchedaProdotto({ nuovo: true })}>+ Nuovo prodotto</Button>
             {/* il nome vecchio ("Sincronizza catalogo") non diceva in che
                 direzione andasse la sincronizzazione, e la direzione è una
                 sola: dal sito verso qui. Stock e prezzi non si toccano — li
                 decide l'app, il sito ne è lo specchio */}
-            <div style={{ textAlign: "right", maxWidth: 230 }}>
+          </div>
+            <div style={{ textAlign: "right", maxWidth: 300 }}>
               <Button variant="ghost" onClick={sincronizzaCatalogo} disabled={sincronizzando}>{sincronizzando ? "Importo dal sito…" : "Importa catalogo dal sito"}</Button>
               <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 4, lineHeight: 1.35 }}>
                 Da usare solo se hai creato un prodotto direttamente su WooCommerce: riporta indietro nomi, categorie e immagini dal sito.
@@ -27038,6 +27038,145 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
           );
         })()}
 
+        {vistaProdotti === "elenco" && (<>
+        {/* due colonne: a sinistra quello che descrive il magazzino (le tre
+            liste da sfoltire e i tre numeri di sintesi), a destra le azioni
+            da fare adesso. Prima stavano incolonnate e gli avvisi — la parte
+            che chiede un gesto — finivano sotto la piega */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 18, alignItems: "start", marginBottom: 24 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
+              {totSegnalazioni > 0 && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 10, padding: "2px 9px" }}>{totSegnalazioni}</span>}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10, marginBottom: 12 }}>
+              {[
+                { chiave: "sottoscorta", segno: "⚠️", etichetta: "Prodotti sotto scorta", n: sottoScorta.length },
+                { chiave: "fermi", segno: "⏱", etichetta: "Fermi da oltre 90 giorni", n: fermi.length },
+                { chiave: "senzacosto", segno: "📋", etichetta: "Senza costo di acquisto", n: senzaCosto.length },
+              ].map((c) => (
+                <button
+                  key={c.chiave}
+                  onClick={() => setFiltroRapido(c.chiave)}
+                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === c.chiave ? BG : "#fff", cursor: "pointer", textAlign: "left", minHeight: 96 }}
+                >
+                  <span style={{ display: "flex", alignItems: "flex-start", gap: 7, ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>
+                    <span aria-hidden="true" style={{ flexShrink: 0 }}>{c.segno}</span>{c.etichetta}
+                  </span>
+                  <span style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, textAlign: "right" }}>
+                    {c.n} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>›</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {/* il valore stimato del magazzino non sta più qui: è un dato
+                economico, e vive nelle Statistiche totali vendite prodotti */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
+              <RiquadroKpi
+                aSinistra
+                etichetta="Stock totale"
+                valore={<>{stockTotaleGenerale.toLocaleString("it-IT")}</>}
+                nota="100% del totale"
+                icona={<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M21 16V8l-9-5-9 5v8l9 5 9-5Z" /><path d="m3.3 7.3 8.7 4.9 8.7-4.9" /><path d="M12 12.2V21" /></svg>}
+              >
+                <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -2 }}>pezzi</div>
+              </RiquadroKpi>
+              <RiquadroKpi
+                aSinistra
+                etichetta="In vendita online"
+                valore={<>{stockPubblicato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
+                nota={`${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti`}
+                icona={<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="9" cy="20" r="1.4" /><circle cx="18" cy="20" r="1.4" /><path d="M2 3h3l2.6 12.4a1.6 1.6 0 0 0 1.6 1.3h8.5a1.6 1.6 0 0 0 1.6-1.3L22 7H6" /></svg>}
+              >
+                <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", width: "100%", margin: "2px 0" }}>
+                  <div style={{ height: "100%", width: `${pctPubblicato}%`, background: GOLD, borderRadius: 3 }} />
+                </div>
+              </RiquadroKpi>
+              <RiquadroKpi
+                aSinistra
+                etichetta="Riservati dalla soglia"
+                valore={<>{stockCongelato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
+                nota="Sotto la soglia di riordino i kit non attingono: restano allo shop"
+                icona={<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 22s8-3.6 8-10V5l-8-3-8 3v7c0 6.4 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></svg>}
+              />
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, marginBottom: 0 }}>
+            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
+              Avvisi ({avvisiMagazzino.length})
+            </div>
+            {avvisiMagazzino.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
+            ) : avvisiMagazzino.map((a, i) => {
+              const p = a.prodotto;
+              const stock = (p.quantita || 0);
+              const colore = a.tipo === "apri_pacco" ? "#B8860B" : "#C0392B";
+              return (
+                <div key={`${a.tipo}-${p.id}-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: "1 1 220px" }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: colore, flexShrink: 0, marginTop: 5 }} />
+                    <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, lineHeight: 1.35 }}>
+                      <b>{p.nome}</b>
+                      {a.tipo === "negativo" && <> — giacenza negativa ({p.quantita || 0}): da sistemare</>}
+                      {a.tipo === "apri_pacco" && <> — {stock} sfus{stock === 1 ? "o" : "i"} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""} · {a.box.quantita} pacc{a.box.quantita === 1 ? "o sigillato" : "hi sigillati"} disponibil{a.box.quantita === 1 ? "e" : "i"}</>}
+                      {a.tipo === "riordina" && <> — {stock} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""}{a.box ? " e nessun pacco sigillato" : ""}: riordina dal fornitore</>}
+                    </span>
+                  </div>
+                  {a.tipo === "apri_pacco" ? (
+                    <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
+                  ) : (
+                    <button onClick={() => apriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri scheda</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        </>)}
+
+        {/* titolo, scelta della vista e vista a categorie stanno fuori dai
+            due rami: sono il timone di entrambe */}
+        <div style={{ ...fontDisplay, fontSize: 24, fontWeight: 700, color: NAVY, marginBottom: 12 }}>Dettaglio prodotti</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            {/* la scelta della vista sta qui, appoggiata all'elenco che
+                governa, e non più in cima alla pagina fra i comandi */}
+            <div style={{ display: "flex", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, overflow: "hidden", background: "#fff" }}>
+              {[
+                { chiave: "elenco", etichetta: "Vista a elenco", icona: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg> },
+                { chiave: "categorie", etichetta: "Vista a categorie", icona: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg> },
+              ].map((v) => (
+                <button
+                  key={v.chiave}
+                  onClick={() => mostraVista(v.chiave)}
+                  style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 15px", border: "none", cursor: "pointer", background: vistaProdotti === v.chiave ? NAVY : "transparent", color: vistaProdotti === v.chiave ? "#fff" : NAVY }}
+                >
+                  {v.icona}{v.etichetta}
+                </button>
+              ))}
+            </div>
+            {vistaProdotti === "elenco" && (<>
+              <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
+                <option value="">Tutte le categorie</option>
+                {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+              <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
+            </>)}
+          </div>
+          {vistaProdotti === "elenco" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
+              {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
+                <button key={f.v} onClick={() => setFiltroRapido(f.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: filtroRapido === f.v ? NAVY : "transparent", color: filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                  {f.l}
+                </button>
+              ))}
+            </div>
+          </div>
+          )}
+        </div>
+
         {/* la vista a categorie si monta al primo utilizzo e poi resta
             montata, solo nascosta: tornando all'elenco e rientrando si
             ritrova la scheda aperta con le modifiche non ancora salvate,
@@ -27056,101 +27195,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
         )}
 
         {vistaProdotti === "elenco" && (<>
-        <div style={{ ...cardStyle, marginBottom: 22 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
-            <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}>
-              Da gestire oggi
-              {totSegnalazioni > 0 && <span style={{ marginLeft: 8, ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 8, padding: "2px 8px" }}>{totSegnalazioni}</span>}
-            </div>
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 10 }}>
-            <button onClick={() => setFiltroRapido("sottoscorta")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === "sottoscorta" ? BG : "#fff", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, textAlign: "left" }}>
-              <span>⚠️ Prodotti sotto scorta</span>
-              <span style={{ fontWeight: 700 }}>{sottoScorta.length} ›</span>
-            </button>
-            <button onClick={() => setFiltroRapido("fermi")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === "fermi" ? BG : "#fff", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, textAlign: "left" }}>
-              <span>⏱ Fermi da oltre 90 giorni</span>
-              <span style={{ fontWeight: 700 }}>{fermi.length} ›</span>
-            </button>
-            <button onClick={() => setFiltroRapido("senzacosto")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === "senzacosto" ? BG : "#fff", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, textAlign: "left" }}>
-              <span>📋 Senza costo di acquisto</span>
-              <span style={{ fontWeight: 700 }}>{senzaCosto.length} ›</span>
-            </button>
-          </div>
-          {avvisiMagazzino.length > 0 && (
-            <div style={{ marginTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, paddingTop: 12 }}>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Avvisi ({avvisiMagazzino.length})</div>
-              {avvisiMagazzino.map((a, i) => {
-                const p = a.prodotto;
-                const stock = (p.quantita || 0);
-                const colore = a.tipo === "apri_pacco" ? "#B8860B" : "#C0392B";
-                return (
-                  <div key={`${a.tipo}-${p.id}-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: "1 1 260px" }}>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: colore, flexShrink: 0 }} />
-                      <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
-                        <b>{p.nome}</b>
-                        {a.tipo === "negativo" && <> — giacenza negativa ({p.quantita || 0}): da sistemare</>}
-                        {a.tipo === "apri_pacco" && <> — {stock} sfus{stock === 1 ? "o" : "i"} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""} · {a.box.quantita} pacc{a.box.quantita === 1 ? "o sigillato" : "hi sigillati"} disponibil{a.box.quantita === 1 ? "e" : "i"}</>}
-                        {a.tipo === "riordina" && <> — {stock} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""}{a.box ? " e nessun pacco sigillato" : ""}: riordina dal fornitore</>}
-                      </span>
-                    </div>
-                    {a.tipo === "apri_pacco" ? (
-                      <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
-                    ) : (
-                      <button onClick={() => apriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri scheda</button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* il valore stimato del magazzino non sta più qui: è un dato
-            economico, e vive nelle Statistiche totali vendite prodotti
-            insieme a incasso, vendite e pezzi */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(3, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
-          <RiquadroKpi
-            etichetta="Stock totale"
-            valore={<>{stockTotaleGenerale.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
-            nota="100% del totale"
-          />
-          <RiquadroKpi
-            etichetta="In vendita online"
-            valore={<>{stockPubblicato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
-            nota={`${pctPubblicato.toLocaleString("it-IT")}% del totale, su ${prodottiPubblicati.length} prodotti`}
-          >
-            <div style={{ height: 5, borderRadius: 3, background: "#EFE9DC", overflow: "hidden", width: "70%", margin: "4px 0" }}>
-              <div style={{ height: "100%", width: `${pctPubblicato}%`, background: GOLD, borderRadius: 3 }} />
-            </div>
-          </RiquadroKpi>
-          <RiquadroKpi
-            etichetta="Riservati dalla soglia"
-            valore={<>{stockCongelato.toLocaleString("it-IT")} <span style={{ ...fontBody, fontSize: 13, fontWeight: 400, color: MUTED }}>pezzi</span></>}
-            nota="Sotto la soglia di riordino i kit non attingono: restano allo shop"
-          />
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Dettaglio prodotti</div>
-            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={categoriaSel} onChange={(e) => setCategoriaSel(e.target.value)}>
-              <option value="">Tutte le categorie</option>
-              {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
-            <div style={{ display: "flex", background: BG, borderRadius: 20, padding: 4, gap: 2, flexWrap: "wrap" }}>
-              {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-                <button key={f.v} onClick={() => setFiltroRapido(f.v)} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: filtroRapido === f.v ? NAVY : "transparent", color: filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
-                  {f.l}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden", marginTop: 10 }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: larghezzaTabellaMagazzino, borderCollapse: "collapse", tableLayout: "fixed" }}>
