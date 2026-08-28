@@ -33532,9 +33532,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   );
 
   if (isMobile) {
+    // lo spazio in fondo tiene conto della barra del carrello, che ora c'è
+    // sempre: senza, gli ultimi prodotti finirebbero sotto
     return (
-      {/* lo spazio in fondo tiene conto della barra del carrello, che ora
-          c'è sempre: senza, gli ultimi prodotti finirebbero sotto */}
       <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 16px 214px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 18 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
