@@ -34977,8 +34977,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 <div style={{ ...fontBody, fontSize: 10, color: MUTED }}>{prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}</div>
               </div>
               {(() => {
-                const etichetta = !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : "Online";
-                const colori = !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : { bg: "#E6F2E8", fg: "#2E7D32" };
+                // una variante senza codice del sito non è un prodotto
+                // "mancante": si vende dentro la vetrina, dirlo "Non su Woo"
+                // faceva sembrare un errore quello che è il suo modo di stare
+                const eVariante = p.tipo_prodotto === "variante" && !p.woo_product_id;
+                const etichetta = eVariante ? "Variante" : !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : "Online";
+                const colori = eVariante ? { bg: "#E7EEF5", fg: "#3B6FA0" } : !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : { bg: "#E6F2E8", fg: "#2E7D32" };
                 return <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>;
               })()}
             </div>
@@ -35036,11 +35040,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const categoriaSoloOffline = categorieOffline.length > 0;
     const soloOffline = categoriaSoloOffline || !!f.soloOffline;
     const categoriaNonSulPos = categorieNoPos.length > 0;
+    const varianteNonPubblicabile = f.tipoProdotto === "variante" && !f.wooProductId;
     return {
       prezzoNetto, prezzoLordo, costoNetto, costoBundle, margine, marginePct,
       bundleVirtuale, categoriaSoloOffline, soloOffline, categoriaNonSulPos, nonSulPos: categoriaNonSulPos || !!f.nonSulPos,
-      categorieOffline, categorieNoPos,
-      vaSuWoo: prezzoNetto != null && !soloOffline,
+      categorieOffline, categorieNoPos, varianteNonPubblicabile,
+      // una variante NON si pubblica da sola: su WooCommerce le taglie sono
+      // "variazioni" dentro il prodotto padre, non prodotti separati, e
+      // questa app sa creare solo prodotti semplici. Pubblicarla creerebbe
+      // un doppione sullo shop — una T-Shirt "Tg. L" a sé stante accanto
+      // alla T-Shirt con il menu delle taglie
+      vaSuWoo: prezzoNetto != null && !soloOffline && !varianteNonPubblicabile,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prodottoForm, componenti, prodottiShop, categorieProdotti]);
@@ -35169,7 +35179,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.vaSuWoo ? { color: "#2E7D32", background: "#E3F3E5" } : { color: MUTED, background: "#EFEFEF" }) }}>
-            {calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
+            {calcoloPrezzi.varianteNonPubblicabile ? "Sullo shop tramite la vetrina" : calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
           </span>
           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.nonSulPos ? { color: MUTED, background: "#EFEFEF" } : { color: "#2E7D32", background: "#E3F3E5" }) }}>
             {calcoloPrezzi.nonSulPos ? "Non sul POS" : "In vendita sul POS"}
@@ -35187,14 +35197,22 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
 
         <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 5 }}>Shop online</div>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {[{ v: false, l: "Online" }, { v: true, l: "Offline" }].map((o) => (
-            <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
-              <input type="radio" name={`prod-online-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.soloOffline === o.v} onChange={() => scegliCanaleOnline(o.v)} style={{ width: 14, height: 14 }} />
-              {o.l}
-            </label>
-          ))}
-        </div>
+        {calcoloPrezzi.varianteNonPubblicabile ? (
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>
+            Sullo shop questa taglia non è un prodotto a sé: il cliente la sceglie dal menu dentro la vetrina
+            {prodottoForm.prodottoPadreId ? ` "${(prodottiShop || []).find((pp) => pp.id === prodottoForm.prodottoPadreId)?.nome || ""}"` : ""}.
+            È lì che si pubblica. Qui la variante conta per magazzino, POS e scarico dei kit.
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            {[{ v: false, l: "Online" }, { v: true, l: "Offline" }].map((o) => (
+              <label key={String(o.v)} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+                <input type="radio" name={`prod-online-${prodottoForm.id || "nuovo"}`} checked={calcoloPrezzi.soloOffline === o.v} onChange={() => scegliCanaleOnline(o.v)} style={{ width: 14, height: 14 }} />
+                {o.l}
+              </label>
+            ))}
+          </div>
+        )}
         {(prodottoForm.sbloccaOffline || []).length > 0 && (
           <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 8, lineHeight: 1.4 }}>
             Salvando, {nomiCategorie(prodottoForm.sbloccaOffline)} {(prodottoForm.sbloccaOffline || []).length === 1 ? "torna" : "tornano"} online: vale per tutti i prodotti che {(prodottoForm.sbloccaOffline || []).length === 1 ? "contiene" : "contengono"}.
