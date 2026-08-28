@@ -33028,36 +33028,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [mostraStorico, setMostraStorico] = useState(false);
   const [mostraResiCambio, setMostraResiCambio] = useState(false);
   const [carrelloEspanso, setCarrelloEspanso] = useState(false); // solo mobile: carrello come foglio a comparsa dal basso
-  // trascinamento verso il basso per chiudere il carrello: quanto è stato
-  // tirato giù in questo momento (0 = fermo al suo posto)
-  const [trascinaCarrello, setTrascinaCarrello] = useState(0);
-  const gestoCarrello = useRef(null);
-  function iniziaTrascinaCarrello(e) {
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    gestoCarrello.current = { pointerId: e.pointerId, partenzaY: e.clientY, ultimoY: e.clientY, tempo: performance.now() };
-  }
-  function muoviTrascinaCarrello(e) {
-    const g = gestoCarrello.current;
-    if (!g || e.pointerId !== g.pointerId) return;
-    // solo verso il basso: tirando su il foglio resta dov'è, non si allunga
-    setTrascinaCarrello(Math.max(0, e.clientY - g.partenzaY));
-    g.ultimoY = e.clientY;
-  }
-  function fineTrascinaCarrello() {
-    const g = gestoCarrello.current;
-    gestoCarrello.current = null;
-    if (!g) return;
-    const percorso = g.ultimoY - g.partenzaY;
-    const velocita = percorso / Math.max(1, performance.now() - g.tempo); // px per ms
-    // si chiude se è stato tirato giù abbastanza, oppure con un gesto
-    // rapido anche breve — come ci si aspetta da un foglio che si scaccia
-    if (percorso > 120 || velocita > 0.6) {
-      setCarrelloEspanso(false);
-      setTrascinaCarrello(0);
-      return;
-    }
-    setTrascinaCarrello(0);  // torna al suo posto
-  }
   const [mostraMenu, setMostraMenu] = useState(false); // solo mobile: menu "⋮" con le azioni che su desktop sono tasti a testo
 
   const categorieNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
@@ -33630,7 +33600,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             farla comparire solo dopo il primo prodotto la rendeva una
             cosa che appare e sparisce sotto le dita */}
         {!carrelloEspanso && (
-          <div onClick={() => { setTrascinaCarrello(0); setCarrelloEspanso(true); }} style={{
+          <div onClick={() => setCarrelloEspanso(true)} style={{
             // appoggiata al bordo inferiore vero del dispositivo, e alta
             // abbastanza da ospitare la pasticca di navigazione dentro di
             // sé: la riga del carrello sta in alto, la pasticca galleggia
@@ -33680,34 +33650,22 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               style={{
                 position: "absolute", left: 0, right: 0, bottom: 0, top: 52, display: "flex", flexDirection: "column",
                 background: "#fff", borderRadius: "18px 18px 0 0", boxShadow: "0 -10px 28px rgba(0,0,0,0.18)",
-                transform: `translateY(${trascinaCarrello}px)`,
-                // nessuna animazione mentre il dito è giù: deve seguirlo
-                // esattamente. La transizione serve solo al ritorno
-                transition: gestoCarrello.current ? "none" : "transform 180ms ease-out",
               }}
             >
-              {/* la presa per chiudere: il tocco secco chiude, il
-                  trascinamento verso il basso accompagna il foglio giù.
-                  Il gesto vive qui e non su tutto il pannello, altrimenti
-                  scorrere l'elenco dei prodotti lo trascinerebbe via */}
-              <div
+              {/* niente gesti da indovinare: un tasto largo quanto il
+                  pannello, con la freccia e la parola. Si chiude anche
+                  toccando fuori, ma questo si vede */}
+              <button
                 onClick={() => setCarrelloEspanso(false)}
-                onPointerDown={iniziaTrascinaCarrello}
-                onPointerMove={muoviTrascinaCarrello}
-                onPointerUp={fineTrascinaCarrello}
-                onPointerCancel={fineTrascinaCarrello}
-                style={{ padding: "12px 0 6px", display: "flex", justifyContent: "center", cursor: "grab", flexShrink: 0, touchAction: "none" }}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "14px 0 12px", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer", flexShrink: 0, ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY }}
               >
-                <div style={{ width: 44, height: 5, borderRadius: 3, background: CREAM_BORDER }} />
-              </div>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                Chiudi
+              </button>
               <div style={{ padding: "4px 16px calc(env(safe-area-inset-bottom, 0px) + 20px)", overflowY: "auto", flex: 1, minHeight: 0 }}>
-                <div
-                  onPointerDown={iniziaTrascinaCarrello}
-                  onPointerMove={muoviTrascinaCarrello}
-                  onPointerUp={fineTrascinaCarrello}
-                  onPointerCancel={fineTrascinaCarrello}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, touchAction: "none" }}
-                >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                   <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
                   {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
                 </div>
