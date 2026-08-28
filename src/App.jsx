@@ -26744,7 +26744,11 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
+  useEffect(() => {
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "impostazioni_magazzino"]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const isMobile = useIsMobile();
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
@@ -27264,7 +27268,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
             categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
             prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
             fornitori={fornitori} impostazioniIva={impostazioniIva}
-            ricarica={ricarica} onBack={onBack}
+            ricarica={ricarica} assicuraTabelle={assicuraTabelle} onBack={onBack}
             vistaIniziale="backoffice" aperturaScheda={aperturaScheda}
             ricercaEsterna={ricercaProdotto} categoriaEsternaId={categoriaSel}
           />
@@ -34325,7 +34329,14 @@ function EditorRicco({ value, onChange, minHeight = 90 }) {
   );
 }
 
-function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId }) {
+function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, fornitori, impostazioniIva, ricarica, assicuraTabelle, onBack, vistaIniziale, aperturaScheda, incorporata, altezzaPannelli, ricercaEsterna, categoriaEsternaId }) {
+  // i dati che questa pagina usa davvero, dichiarati QUI e non solo nella
+  // mappa delle viste: se un domani la pagina viene incorporata altrove
+  // (è già successo), se li porta dietro invece di trovarsi liste vuote
+  useEffect(() => {
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // incorporata dentro Gestione magazzino: i pannelli non sono più alti
   // quanto lo schermo ma quanto la cornice che li ospita, e la ricerca
   // arriva dai comandi della pagina che sta sopra
@@ -40669,6 +40680,25 @@ export default function App() {
     await Promise.all(nomi.map((nome) => (CARICATORI_TABELLA[nome] ? CARICATORI_TABELLA[nome]() : Promise.resolve())));
   }
 
+  // Rete di sicurezza contro una classe di errori che non fa rumore.
+  //
+  // Ogni schermata dichiara in TABELLE_PER_VISTA cosa caricare. Quella
+  // mappa sta lontano dai componenti, e quando un pezzo di interfaccia si
+  // sposta da una pagina all'altra (è successo con la vista a categorie,
+  // portata dentro Gestione magazzino) la dichiarazione resta indietro. Il
+  // risultato non è un errore: è una lista vuota. Le immagini "sparite"
+  // erano questo — c'erano tutte, nessuno le aveva chieste.
+  //
+  // Con questa funzione la dipendenza sta DOVE viene usata: il componente
+  // dichiara al montaggio cosa gli serve, e se manca se lo carica. Le
+  // tabelle già caricate non vengono richieste di nuovo, quindi nel caso
+  // normale non costa niente.
+  function assicuraTabelle(elenco) {
+    const mancanti = (elenco || []).filter((nome) => CARICATORI_TABELLA[nome] && !tabelleCaricate.has(nome));
+    if (!mancanti.length) return;
+    fetchDati(mancanti).then(() => setTabelleCaricate((prev) => new Set([...prev, ...mancanti])));
+  }
+
   // ordine/cartelle/colonne dei tasti (GrigliaTasti): aggiornamento
   // ottimista subito in locale, poi upsert su Supabase — una riga per
   // pagina, stesso schema già in uso per impostazioni_layout_iscrizioni.
@@ -41828,7 +41858,7 @@ export default function App() {
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
-          onApriAdvisor={() => setView("advisor")}
+          onApriAdvisor={() => setView("advisor")} assicuraTabelle={assicuraTabelle}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
@@ -41858,7 +41888,7 @@ export default function App() {
         <PaginaGestioneShop
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie}
           prodottiImmagini={prodottiImmagini} fornitori={fornitori} impostazioniIva={impostazioniIva}
-          ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          ricarica={fetchDati} assicuraTabelle={assicuraTabelle} onBack={() => setView("magazzinoshop")}
         />
       )}
 
