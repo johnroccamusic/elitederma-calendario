@@ -40745,7 +40745,10 @@ export default function App() {
     venditealbanco: ["vendite_shop"],
     omaggi: ["vendite_shop"],
     prodottiusatikit: ["corsi", "corsi_date", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "prodotti_shop"],
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    // "prodotti_immagini" serve da quando la vista a categorie (con le foto
+    // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
+    // senza, entrando da qui le immagini risultavano sparite pur essendoci
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "impostazioni_magazzino", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
