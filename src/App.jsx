@@ -34652,7 +34652,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       // distinta: il box sigillato si compra davvero, quindi restano i suoi
       costo_acquisto: calcolo.bundleVirtuale ? null : calcolo.costoNetto,
       aliquota_iva_acquisto: f.tipoProdotto === "vetrina" || calcolo.bundleVirtuale ? null : f.aliquotaAcquisto,
-      aliquota_iva_vendita: f.tipoProdotto === "vetrina" ? null : f.aliquotaVendita,
+      // l'aliquota di vendita vale anche per la vetrina: senza, il prezzo
+      // mostrato sullo shop non saprebbe più tornare da netto a lordo
+      aliquota_iva_vendita: f.aliquotaVendita,
       iva_verificata: true,
       soglia_riordino: interoOpzionale(f.scortaMinima),
       lead_time_giorni: interoOpzionale(f.leadTime),
@@ -34831,7 +34833,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   function cambiaTipo(nuovo) {
     if (nuovo === "bundle") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: true, costo: "" });
     else if (nuovo === "componente") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: false });
-    else if (nuovo === "vetrina") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: false, prezzo: "", costo: "" });
+    else if (nuovo === "vetrina") aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: false, giacenzaPropria: false, contaIncassi: false, costo: "" });
     else aggiornaForm({ tipoProdotto: nuovo, contaMagazzino: true, giacenzaPropria: true, contaIncassi: true });
   }
   function cambiaBundleFisica(attiva) {
@@ -35010,9 +35012,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       {/* Acquisto e Vendita affiancati: il prezzo si digita in netto o in
           lordo a scelta, ma quello salvato è sempre il netto e quello
           pubblicato sul sito sempre il lordo */}
-      {prodottoForm.tipoProdotto !== "vetrina" && (
-        <div style={{ display: "grid", gridTemplateColumns: calcoloPrezzi.bundleVirtuale ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
-          {!calcoloPrezzi.bundleVirtuale && (
+      {/* anche la vetrina ha un prezzo: è quello che il cliente legge sullo
+          shop prima di scegliere la taglia. Nasconderlo qui voleva dire non
+          poterlo più correggere — e, peggio, che salvando la scheda il
+          prodotto risultava "senza prezzo" e finiva in bozza sul sito.
+          Il costo d'acquisto no: la vetrina non si compra, si comprano le
+          sue varianti */}
+      {true && (
+        <div style={{ display: "grid", gridTemplateColumns: calcoloPrezzi.bundleVirtuale || prodottoForm.tipoProdotto === "vetrina" ? "1fr" : "1fr 1fr", gap: isMobile ? 8 : 12, marginBottom: isMobile ? 10 : 14 }}>
+          {!calcoloPrezzi.bundleVirtuale && prodottoForm.tipoProdotto !== "vetrina" && (
             <BloccoPrezzoIva
               titolo="Acquisto"
               inputTesto={prodottoForm.costo} onCambiaInputTesto={(v) => aggiornaForm({ costo: v })}
@@ -35021,11 +35029,16 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             />
           )}
           <BloccoPrezzoIva
-            titolo="Vendita"
+            titolo={prodottoForm.tipoProdotto === "vetrina" ? "Prezzo mostrato sullo shop" : "Vendita"}
             inputTesto={prodottoForm.prezzo} onCambiaInputTesto={(v) => aggiornaForm({ prezzo: v })}
             modo={prodottoForm.modoVendita} onCambiaModo={(v) => aggiornaForm({ modoVendita: v })}
             aliquota={prodottoForm.aliquotaVendita} onCambiaAliquota={(v) => aggiornaForm({ aliquotaVendita: v })}
           />
+        </div>
+      )}
+      {prodottoForm.tipoProdotto === "vetrina" && (
+        <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: -6, marginBottom: 12, lineHeight: 1.35 }}>
+          È il prezzo che il cliente vede sulla pagina del prodotto prima di scegliere la variante. L'incasso vero viene registrato sulla variante venduta.
         </div>
       )}
       {calcoloPrezzi.bundleVirtuale && calcoloPrezzi.costoBundle != null && (
