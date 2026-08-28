@@ -1729,6 +1729,69 @@ function TendinaRicerca({ valore, opzioni, onCambia, etichettaVuoto = "— nessu
 // ---------- helper per i calcoli di imponibile/IVA/totale ----------
 const PREZZO_MODELLA = 60;
 
+// ===========================================================
+// ORDINAMENTO DELLE TABELLE
+//
+// Ogni elenco a colonne si riordina cliccando l'intestazione: primo clic
+// crescente, secondo decrescente, terzo si torna all'ordine naturale
+// della pagina (che spesso vuol dire qualcosa — le date in ordine di
+// calendario, i prodotti per venduto). Il confronto capisce da solo che
+// tipo di dato ha davanti: numeri per grandezza, date in ordine di
+// calendario, testo in ordine alfabetico italiano (accenti compresi), e
+// i vuoti sempre in fondo, in salita come in discesa.
+// ===========================================================
+function confrontaPerOrdinamento(a, b) {
+  const vuotoA = a == null || a === "";
+  const vuotoB = b == null || b === "";
+  if (vuotoA && vuotoB) return 0;
+  if (vuotoA) return 1;   // i vuoti finiscono in fondo comunque si ordini
+  if (vuotoB) return -1;
+  if (typeof a === "boolean" || typeof b === "boolean") return (a ? 1 : 0) - (b ? 1 : 0);
+  if (a instanceof Date || b instanceof Date) return new Date(a).getTime() - new Date(b).getTime();
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  return String(a).localeCompare(String(b), "it", { sensitivity: "base", numeric: true });
+}
+// stato + comandi dell'ordinamento di una tabella. `iniziale` è l'ordine
+// di partenza ({ campo, direzione }) oppure null per l'ordine naturale
+function useOrdinamentoTabella(iniziale = null) {
+  const [ordine, setOrdine] = useState(iniziale);
+  function cambiaOrdine(campo) {
+    setOrdine((prec) => {
+      if (prec?.campo !== campo) return { campo, direzione: "asc" };
+      if (prec.direzione === "asc") return { campo, direzione: "desc" };
+      return iniziale && iniziale.campo === campo ? null : null;
+    });
+  }
+  // valori = { nomeCampo: (riga, indice) => valore da confrontare }
+  function ordina(righe, valori) {
+    if (!ordine || !valori?.[ordine.campo]) return righe || [];
+    const estrai = valori[ordine.campo];
+    const segno = ordine.direzione === "asc" ? 1 : -1;
+    return [...(righe || [])]
+      .map((r, i) => ({ r, i }))
+      .sort((x, y) => {
+        const cmp = confrontaPerOrdinamento(estrai(x.r, x.i), estrai(y.r, y.i));
+        return cmp !== 0 ? cmp * segno : x.i - y.i;  // parità: resta l'ordine di partenza
+      })
+      .map((x) => x.r);
+  }
+  return { ordine, cambiaOrdine, ordina };
+}
+// intestazione di colonna cliccabile: si comporta come una <th> normale
+// (stile e contenuto passati da fuori), in più mostra la freccia
+function ThOrdina({ campo, ordine, onOrdina, style, children, title }) {
+  const attiva = ordine?.campo === campo;
+  return (
+    <th
+      onClick={campo ? () => onOrdina(campo) : undefined}
+      title={title || (campo ? "Ordina per questa colonna" : undefined)}
+      style={{ ...style, cursor: campo ? "pointer" : (style?.cursor || "default"), userSelect: "none", ...(attiva ? { color: NAVY } : {}) }}
+    >
+      {children}
+      {attiva && <span style={{ marginLeft: 4 }}>{ordine.direzione === "asc" ? "▲" : "▼"}</span>}
+    </th>
+  );
+}
 function round2(n) {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
@@ -3669,6 +3732,7 @@ function Statistiche({ onBack, onApriVenditori, onApriStatisticheMaster, onApriP
 // elenco delle iscrizioni più recenti, raggruppate per giorno di
 // inserimento (campo "ts" dell'iscritto), più recenti in cima
 function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -3697,21 +3761,30 @@ function UltimeIscrizioni({ corsi, location, corsiDate, iscritti, onApriIscritto
   const celStyle = { padding: "8px 12px", borderBottom: bordoV, borderRight: bordoV };
   const thStyle = { ...celStyle, ...fontBody, fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG };
 
+  const valoriOrdinamento = {
+    tutor: (i) => i.tutor || "",
+    corso: (i) => { const cd = cdById[i.corso_data_id]; return (cd ? corsoById[cd.corso_id]?.nome : "") || ""; },
+    pacchetto: (i) => i.pacchetto_kit || "",
+    citta: (i) => { const cd = cdById[i.corso_data_id]; return (cd ? locById[cd.location_id]?.nome : "") || ""; },
+    data: (i) => cdById[i.corso_data_id]?.data_inizio || "",
+    importo: (i) => (i.totale_pattuito != null ? Number(i.totale_pattuito) : null),
+  };
+
   const tabella = (lista) => (
     <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
       <table style={{ borderCollapse: "collapse", width: "100%" }}>
         <thead>
           <tr>
-            <th style={thStyle}>Tutor</th>
-            <th style={thStyle}>Tipo di corso</th>
-            <th style={thStyle}>Pacchetto/Kit</th>
-            <th style={thStyle}>Città</th>
-            <th style={thStyle}>Data del corso</th>
-            <th style={{ ...thStyle, borderRight: "none" }}>Importo pattuito</th>
+            <ThOrdina campo="tutor" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Tutor</ThOrdina>
+            <ThOrdina campo="corso" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Tipo di corso</ThOrdina>
+            <ThOrdina campo="pacchetto" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Pacchetto/Kit</ThOrdina>
+            <ThOrdina campo="citta" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Città</ThOrdina>
+            <ThOrdina campo="data" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Data del corso</ThOrdina>
+            <ThOrdina campo="importo" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, borderRight: "none" }}>Importo pattuito</ThOrdina>
           </tr>
         </thead>
         <tbody>
-          {lista.map((i) => {
+          {ordina(lista, valoriOrdinamento).map((i) => {
             const cd = cdById[i.corso_data_id];
             const corso = cd ? corsoById[cd.corso_id] : null;
             const loc = cd ? locById[cd.location_id] : null;
@@ -4254,6 +4327,7 @@ function trovaIscrittoStessaPersona(iscritti, personaRif, corsoDataId) {
 // riga per riga: non serve più aprire la scheda dell'iscritto
 function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDaVerificare, onApriIscritto, onApriSchedeAffiancate, ricarica, onBack }) {
   const isMobile = useIsMobile();
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isPortrait = useIsPortrait();
   // telefono in verticale: la tabella (tante colonne) diventa illeggibile,
   // quindi ogni pagamento si mostra come scheda con i campi disposti su due
@@ -4330,6 +4404,20 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
           });
         };
 
+        // l'ordinamento agisce dentro ciascun gruppo (Acconti, Saldi…):
+        // i gruppi restano al loro posto, cambia l'ordine delle loro righe.
+        // Il primo dei "coinvolti" è quello mostrato in cima alla cella
+        const valoriAcconti = {
+          citta: (a) => calcolaCoinvolti(a)[0]?.loc?.nome || "",
+          corso: (a) => calcolaCoinvolti(a)[0]?.corso?.nome || "",
+          dataCorso: (a) => calcolaCoinvolti(a)[0]?.cd?.data_inizio || "",
+          allievo: (a) => { const i = calcolaCoinvolti(a)[0]?.iscritto; return i ? `${i.cognome || ""} ${i.nome || ""}`.trim() : ""; },
+          venditore: (a) => a.venditore_nome || "",
+          dataPag: (a) => a.data_pagamento || "",
+          importo: (a) => a.importo ?? null,
+          metodo: (a) => a.metodo || "",
+        };
+
         const azioniRiga = (a) => tab === "attesa" && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <button onClick={() => approva(a)} disabled={approvandoId === a.id} style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 24, padding: "12px 28px", cursor: approvandoId === a.id ? "default" : "pointer" }}>
@@ -4394,21 +4482,21 @@ function PaginaVerificaAcconti({ corsi, location, corsiDate, iscritti, accontiDa
                 <thead>
                   <tr>
                     <th style={{ ...thStyle, width: "9%" }}>Tipologia</th>
-                    <th style={{ ...thStyle, width: "7%" }}>Città</th>
-                    <th style={{ ...thStyle, width: "9%" }}>Corso</th>
-                    <th style={{ ...thStyle, width: "7%" }}>Data corso</th>
-                    <th style={{ ...thStyle, width: "12%" }}>Allievo</th>
-                    <th style={{ ...thStyle, width: "7%" }}>Venditore</th>
-                    <th style={{ ...thStyle, width: "6%" }}>Data pag.</th>
-                    <th style={{ ...thStyle, width: "6%" }}>Importo</th>
-                    <th style={{ ...thStyle, width: "6%" }}>Metodo</th>
+                    <ThOrdina campo="citta" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "7%" }}>Città</ThOrdina>
+                    <ThOrdina campo="corso" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "9%" }}>Corso</ThOrdina>
+                    <ThOrdina campo="dataCorso" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "7%" }}>Data corso</ThOrdina>
+                    <ThOrdina campo="allievo" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "12%" }}>Allievo</ThOrdina>
+                    <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "7%" }}>Venditore</ThOrdina>
+                    <ThOrdina campo="dataPag" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "6%" }}>Data pag.</ThOrdina>
+                    <ThOrdina campo="importo" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "6%" }}>Importo</ThOrdina>
+                    <ThOrdina campo="metodo" ordine={ordine} onOrdina={cambiaOrdine} style={{ ...thStyle, width: "6%" }}>Metodo</ThOrdina>
                     <th style={{ ...thStyle, width: "8%" }}>Nota</th>
                     <th style={{ ...thStyle, width: "4%" }}>File</th>
                     <th style={{ ...thStyle, width: "19%", borderRight: "none" }}></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {gruppi.map((g) => g.righe.map((a, idx) => {
+                  {gruppi.map((g) => ordina(g.righe, valoriAcconti).map((a, idx) => {
                   const coinvolti = calcolaCoinvolti(a);
                   const celStackStyle = { ...celStyle, ...fontBody, fontSize: 10, color: NAVY };
                   return (
@@ -4534,6 +4622,7 @@ function esportaCsvStatisticaVenditori(righeCorsi, colonneVenditori) {
 }
 
 function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCategorie, costiSottocategorie, categorieGruppi, ricarica, onBack, titolo = "Statistiche venditori" }) {
+  const { ordine: ordineMatrice, cambiaOrdine: cambiaOrdineMatrice, ordina: ordinaMatrice } = useOrdinamentoTabella();
   // periodo di default: mese corrente (stessa convenzione di "Ultimo
   // mese" nella scheda personale del venditore) — così le classifiche
   // qui sotto mostrano subito dati utili senza dover scegliere un filtro
@@ -4882,7 +4971,10 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
                 <thead>
                   <tr>
                     {colonne.map((c, i) => (
-                      <th key={c.chiave} style={{ ...thStyle, position: "relative", borderRight: i === colonne.length - 1 ? "none" : bordoV, textAlign: c.venditore ? "center" : "left" }}>
+                      <ThOrdina
+                        key={c.chiave} campo={c.chiave} ordine={ordineMatrice} onOrdina={cambiaOrdineMatrice}
+                        style={{ ...thStyle, position: "relative", borderRight: i === colonne.length - 1 ? "none" : bordoV, textAlign: c.venditore ? "center" : "left" }}
+                      >
                         {c.venditore ? (
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, textTransform: "none" }}>
                             <div style={{ width: 26, height: 26, borderRadius: "50%", border: `1.5px solid ${GOLD}`, color: NAVY, ...fontBody, fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", background: "#fff" }}>
@@ -4901,12 +4993,17 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
                           onPointerCancel={fineRidimensionamento}
                           style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
                         />
-                      </th>
+                      </ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {righeCorsi.map((r) => (
+                  {ordinaMatrice(righeCorsi, {
+                    corso: (r) => r.nome || "",
+                    totale: (r) => r.totale ?? null,
+                    // ogni colonna venditore ordina per le sue chiusure
+                    ...Object.fromEntries(colonneVenditori.map((v) => [v.id, (r) => r.perVenditore[v.id] || 0])),
+                  }).map((r) => (
                     <tr key={r.nome}>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(r.nome)}</td>
                       <td style={{ ...celStyle, ...fontBody, fontSize: 13, color: NAVY, fontWeight: 700 }}>{r.totale}</td>
@@ -6115,6 +6212,7 @@ function rangeRiepilogoPos(periodo, customDa, customA) {
 // Prodotti" in ERP, riservata all'admin), con filtro periodo, in ordine
 // cronologico di default
 function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto, venditeShop, onBack }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("mese");
   const [customDa, setCustomDa] = useState("");
@@ -6179,13 +6277,18 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
               <thead>
                 <tr>
-                  {["Data", "Tipo", "Prodotti", "Totale"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "data", l: "Data" }, { c: "tipo", l: "Tipo" }, { c: "prodotti", l: "Prodotti" }, { c: "totale", l: "Totale" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {righe.map((v) => {
+                {ordina(righe, {
+                  data: (v) => v.data_ordine || "",
+                  tipo: (v) => v.tipo_movimento || "",
+                  prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                  totale: (v) => (v.totale != null ? Number(v.totale) : null),
+                }).map((v) => {
                   const b = badgeTipo[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
                   return (
                     <tr key={v.id}>
@@ -8516,6 +8619,16 @@ function ModaleModelleAssegnate({ slotList, slotDaTrovare, ctx, ricarica, onClos
 // dashboard "Fabbisogno, scadenze e assegnazioni": card riepilogo, filtri,
 // priorità prossimi 15 giorni, riepilogo per città, tabella completa
 function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, apriDataModelle }) {
+  // l'elenco resta diviso per mese: cliccando una colonna si riordina
+  // dentro ogni mese, non fra mesi diversi — il calendario resta leggibile
+  const { ordine: ordineTab, cambiaOrdine: cambiaOrdineTab, ordina: ordinaTab } = useOrdinamentoTabella();
+  const valoriModelle = {
+    citta: (e) => e.cittaNome || "",
+    data: (e) => e.dataInizio || "",
+    corso: (e) => e.corsoNome || "",
+    richieste: (e) => e.richieste ?? null,
+    daTrovare: (e) => e.daTrovare ?? null,
+  };
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const [ricerca, setRicerca] = useState("");
@@ -8713,12 +8826,12 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
               <thead>
                 <tr style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>
-                  <th style={{ padding: "0 8px 8px 0" }}>Città</th>
-                  <th style={{ padding: "0 8px 8px 0" }}>Data</th>
-                  <th style={{ padding: "0 8px 8px 0" }}>Corso</th>
+                  <ThOrdina campo="citta" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0" }}>Città</ThOrdina>
+                  <ThOrdina campo="data" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0" }}>Data</ThOrdina>
+                  <ThOrdina campo="corso" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0" }}>Corso</ThOrdina>
                   <th style={{ padding: "0 8px 8px 0" }}>Tipologie richieste</th>
-                  <th style={{ padding: "0 8px 8px 0", textAlign: "right" }}>Richieste</th>
-                  <th style={{ padding: "0 0 8px 0", textAlign: "right" }}>Da trovare</th>
+                  <ThOrdina campo="richieste" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 8px 8px 0", textAlign: "right" }}>Richieste</ThOrdina>
+                  <ThOrdina campo="daTrovare" ordine={ordineTab} onOrdina={cambiaOrdineTab} style={{ padding: "0 0 8px 0", textAlign: "right" }}>Da trovare</ThOrdina>
                 </tr>
               </thead>
               <tbody>
@@ -8729,7 +8842,7 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
                         {gruppo.etichetta}
                       </td>
                     </tr>
-                    {gruppo.edizioni.map((e) => (
+                    {ordinaTab(gruppo.edizioni, valoriModelle).map((e) => (
                       <tr key={e.corsoDataId} onClick={() => apriEdizione(e)} style={{ cursor: "pointer", borderTop: `1px solid ${CREAM_BORDER}` }}>
                         <td style={{ padding: "10px 8px 10px 0", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{e.cittaNome.toUpperCase()}</td>
                         <td style={{ padding: "10px 8px", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{fmtDataCompatta(e.dataInizio, e.dataFine).toUpperCase()}</td>
@@ -9471,7 +9584,14 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
     return esistente || { id: null, chiave_sistema: def.chiave, nome: def.nome, password: def.passwordDefault, permessi: def.permessiDefault };
   });
   const righeNominali = utentiApp.filter((u) => !u.chiave_sistema);
-  const righe = [...righeSistema, ...righeNominali];
+  // le righe di sistema restano in testa nell'ordine naturale; cliccando
+  // un'intestazione si riordina tutto l'elenco
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
+  const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || "";
+  const righe = ordina([...righeSistema, ...righeNominali], {
+    nome: (u) => u.nome || "",
+    venditore: (u) => nomeVenditore(u.venditore_id),
+  });
   const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
 
   // nome e password si salvano già da soli quando si esce dal campo; questo
@@ -9506,9 +9626,9 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820 }}>
             <thead>
               <tr>
-                <th style={thStyle}>Nome utente</th>
+                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome utente</ThOrdina>
                 <th style={thStyle}>Password</th>
-                <th style={thStyle}>Venditore collegato</th>
+                <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato</ThOrdina>
                 <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario</th>
                 {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
@@ -9643,7 +9763,12 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
 // un'agenda abbinata, la trova tra le agende del tasto "Agenda"
 function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
   const isMobile = useIsMobile();
-  const masterOrdinate = master.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
+  const nomeVenditore = (id) => (venditori || []).find((v) => v.id === id)?.nome || "";
+  const masterOrdinate = ordina(master, {
+    nome: (m) => m.nome || "",
+    venditore: (m) => nomeVenditore(m.venditore_id),
+  });
   const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
   return (
     <div style={{ marginBottom: 28 }}>
@@ -9662,9 +9787,9 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 500 + (TASTI_HOME.length - 1 + agende.length) * 140 }}>
             <thead>
               <tr>
-                <th style={thStyle}>Nome master</th>
+                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome master</ThOrdina>
                 <th style={thStyle}>Password</th>
-                <th style={thStyle}>Venditore collegato</th>
+                <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato</ThOrdina>
                 {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
               </tr>
@@ -9763,7 +9888,8 @@ function RigaTabellaVenditore({ venditore, agende, ricarica }) {
 // i tasti qui spuntati — esattamente come un utente nominale
 function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
   const isMobile = useIsMobile();
-  const venditoriOrdinati = venditori.slice().sort((a, b) => a.nome.localeCompare(b.nome));
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
+  const venditoriOrdinati = ordina(venditori, { nome: (v) => v.nome || "" });
   const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
   return (
     <div style={{ marginBottom: 28 }}>
@@ -9782,7 +9908,7 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
           <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + TASTI_HOME.length * 140 + agende.length * 140 }}>
             <thead>
               <tr>
-                <th style={thStyle}>Nome venditore</th>
+                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome venditore</ThOrdina>
                 <th style={thStyle}>Password</th>
                 {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
@@ -13725,6 +13851,13 @@ const ICONA_CESTINO_PATH = <><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1
 // useZoomScheda), sotto una certa soglia si passa a righe impilate in
 // verticale che si adattano da sole a qualunque schermo
 function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
+  // i corsi restano raggruppati per mese: l'ordinamento agisce dentro
+  // ciascun mese, altrimenti il calendario perderebbe il suo filo
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
+  const valoriDate = {
+    data: (cd) => cd.data_inizio || "",
+    capienza: (cd) => cd.posti_max ?? null,
+  };
   const isMobile = useIsMobile();
   const numeroColonne = mostraColonnaSede ? 5 : 4;
   const gruppi = Object.keys(mesi).sort().map((chiaveMese) => {
@@ -13760,8 +13893,8 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
           {mostraColonnaSede && (
             <th style={{ textAlign: "left", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Sede</th>
           )}
-          <th style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Data</th>
-          <th style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Capienza</th>
+          <ThOrdina campo="data" ordine={ordine} onOrdina={cambiaOrdine} style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Data</ThOrdina>
+          <ThOrdina campo="capienza" ordine={ordine} onOrdina={cambiaOrdine} style={{ textAlign: "center", padding: "0 10px 12px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Capienza</ThOrdina>
           <th style={{ textAlign: "right", padding: "0 0 12px 10px", ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Azioni</th>
         </tr>
       </thead>
@@ -13776,7 +13909,7 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
                 </div>
               </td>
             </tr>
-            {voci.map((cd, i) => renderRiga(cd, i === 0, false))}
+            {ordina(voci, valoriDate).map((cd, i) => renderRiga(cd, i === 0, false))}
           </React.Fragment>
         ))}
       </tbody>
@@ -20600,6 +20733,13 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
 // carichi, quindi non è possibile un vero "IVA a credito del periodo" —
 // deciso esplicitamente con l'utente, vedi commit)
 function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione, onBack, titolo = "Gestione IVA" }) {
+  const { ordine: ordineV, cambiaOrdine: cambiaOrdineV, ordina: ordinaV } = useOrdinamentoTabella();
+  const { ordine: ordineA, cambiaOrdine: cambiaOrdineA, ordina: ordinaA } = useOrdinamentoTabella();
+  const valoriIva = {
+    aliquota: (r) => (r.aliquota != null ? Number(r.aliquota) : null),
+    imponibile: (r) => r.imponibile ?? null,
+    imposta: (r) => r.imposta ?? null,
+  };
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("mese");
   const [customDa, setCustomDa] = useState(dataOggiStr());
@@ -20735,12 +20875,12 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead><tr>
-                  <th style={{ textAlign: "left", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Aliquota</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imponibile</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imposta</th>
+                  <ThOrdina campo="aliquota" ordine={ordineV} onOrdina={cambiaOrdineV} style={{ textAlign: "left", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Aliquota</ThOrdina>
+                  <ThOrdina campo="imponibile" ordine={ordineV} onOrdina={cambiaOrdineV} style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imponibile</ThOrdina>
+                  <ThOrdina campo="imposta" ordine={ordineV} onOrdina={cambiaOrdineV} style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imposta</ThOrdina>
                 </tr></thead>
                 <tbody>
-                  {perAliquotaVendite.map((r) => (
+                  {ordinaV(perAliquotaVendite, valoriIva).map((r) => (
                     <tr key={r.aliquota ?? "sconosciuta"} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
                       <td style={{ padding: "6px", color: NAVY, fontWeight: 600 }}>{r.aliquota != null ? `${r.aliquota}%` : "Sconosciuta"}</td>
                       <td style={{ padding: "6px", textAlign: "right", color: NAVY }}>{fmtEuroIva(r.imponibile)}</td>
@@ -20758,12 +20898,12 @@ function PaginaGestioneIva({ venditeShop, prodottiShop, vociShopClassificazione,
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
                 <thead><tr>
-                  <th style={{ textAlign: "left", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Aliquota</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imponibile</th>
-                  <th style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imposta</th>
+                  <ThOrdina campo="aliquota" ordine={ordineA} onOrdina={cambiaOrdineA} style={{ textAlign: "left", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Aliquota</ThOrdina>
+                  <ThOrdina campo="imponibile" ordine={ordineA} onOrdina={cambiaOrdineA} style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imponibile</ThOrdina>
+                  <ThOrdina campo="imposta" ordine={ordineA} onOrdina={cambiaOrdineA} style={{ textAlign: "right", padding: "4px 6px", color: MUTED, fontSize: 11 }}>Imposta</ThOrdina>
                 </tr></thead>
                 <tbody>
-                  {perAliquotaAcquisti.map((r) => (
+                  {ordinaA(perAliquotaAcquisti, valoriIva).map((r) => (
                     <tr key={r.aliquota} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
                       <td style={{ padding: "6px", color: NAVY, fontWeight: 600 }}>{r.aliquota}%</td>
                       <td style={{ padding: "6px", textAlign: "right", color: NAVY }}>{fmtEuroIva(r.imponibile)}</td>
@@ -21203,6 +21343,7 @@ function DettaglioClienteShop({ cliente }) {
 // voci ancora da classificare (contano come prodotto finché qualcuno
 // non le smista in Classificazione voci di vendita)
 function SezioneClassificaProdottiShop({ classifica, onApriClassificazioneVoci }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const { classificaProdotti, classificaCorsi, vociNonClassificateDistinte } = classifica;
   const totaleIncassoCorsi = classificaCorsi.reduce((a, r) => a + r.incasso, 0);
   const totaleIncassoProdotti = classificaProdotti.reduce((a, r) => a + r.incasso, 0);
@@ -21213,15 +21354,15 @@ function SezioneClassificaProdottiShop({ classifica, onApriClassificazioneVoci }
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "#F7F5EF" }}>
-              <th style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>Nome</th>
-              <th style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "right" }}>Quantità</th>
-              <th style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "right" }}>Incasso</th>
+              <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left" }}>Nome</ThOrdina>
+              <ThOrdina campo="quantita" ordine={ordine} onOrdina={cambiaOrdine} style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "right" }}>Quantità</ThOrdina>
+              <ThOrdina campo="incasso" ordine={ordine} onOrdina={cambiaOrdine} style={{ padding: "10px 12px", ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "right" }}>Incasso</ThOrdina>
             </tr>
           </thead>
           <tbody>
             {righe.length === 0 ? (
               <tr><td colSpan={3} style={{ padding: "14px 12px", ...fontBody, fontSize: 13, color: MUTED, textAlign: "center" }}>{etichettaVuoto}</td></tr>
-            ) : righe.map((r) => (
+            ) : ordina(righe, { nome: (r) => r.nome || "", quantita: (r) => r.quantita ?? null, incasso: (r) => r.incasso ?? null }).map((r) => (
               <tr key={r.nome}>
                 <td style={{ padding: "9px 12px", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}` }}>{r.nome}</td>
                 <td style={{ padding: "9px 12px", ...fontBody, fontSize: 13, color: NAVY, borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "right" }}>{r.quantita}</td>
@@ -21378,6 +21519,7 @@ async function generaCodiceReferralUnivoco(nome) {
 }
 
 function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, corsi, corsiDate, location, regoleReferralAutomatico, venditeShop, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, ricarica, onBack, titolo = "Genera Coupon" }) {
+  const { ordine: ordineClassifica, cambiaOrdine: cambiaOrdineClassifica, ordina: ordinaClassifica } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("manuale");
   const [codice, setCodice] = useState("");
@@ -22017,13 +22159,17 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 420 }}>
                     <thead>
                       <tr>
-                        {["Master", "Punti", "Valore venduto"].map((th) => (
-                          <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                        {[{ c: "master", l: "Master" }, { c: "punti", l: "Punti" }, { c: "euro", l: "Valore venduto" }].map((th) => (
+                          <ThOrdina key={th.c} campo={th.c} ordine={ordineClassifica} onOrdina={cambiaOrdineClassifica} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {classificaPunti.map((r) => (
+                      {ordinaClassifica(classificaPunti, {
+                        master: (r) => r.master?.nome || "",
+                        punti: (r) => r.punti ?? null,
+                        euro: (r) => r.euro ?? null,
+                      }).map((r) => (
                         <tr key={r.master.id}>
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{toTitleCase(r.master.nome)}</td>
                           <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: r.punti < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{r.punti}</td>
@@ -22047,6 +22193,7 @@ function PaginaGeneraCoupon({ coupon, categorieProdotti, prodottiShop, master, c
 // (si trova ora in "Inserimento costi e ricavi") e meno il click sulla
 // card "Costi operativi" (qui è solo un KPI, la vista dedicata non c'è più)
 function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, costiCategorie, entrateManuali }) {
+  const { ordine: ordineSedi, cambiaOrdine: cambiaOrdineSedi, ordina: ordinaSedi } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("anno");
   const [sedeSel, setSedeSel] = useState("");
@@ -22272,13 +22419,18 @@ function SezioneAnalisiAndamento({ corsi, location, corsiDate, iscritti, spese, 
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      {["Sede", "Ricavi", "Utile", "Riempimento", "Trend"].map((th) => (
-                        <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                      {[{ c: "sede", l: "Sede" }, { c: "ricavi", l: "Ricavi" }, { c: "utile", l: "Utile" }, { c: "riempimento", l: "Riempimento" }, { c: null, l: "Trend" }].map((th) => (
+                        <ThOrdina key={th.l} campo={th.c} ordine={ordineSedi} onOrdina={cambiaOrdineSedi} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {righeSedi.map((r) => (
+                    {ordinaSedi(righeSedi, {
+                      sede: (r) => r.location?.nome || "",
+                      ricavi: (r) => r.ricavi ?? null,
+                      utile: (r) => r.utile ?? null,
+                      riempimento: (r) => r.riempimentoMedio ?? null,
+                    }).map((r) => (
                       <tr key={r.location.id}>
                         <td style={{ padding: "10px 8px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -25093,6 +25245,8 @@ function etichettaStatoVenditaShop(stato) {
 // struttura di pagina, filtrate a monte così le due non si mescolano mai
 // e ciascuna ha il proprio contesto/KPI puliti
 function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (origine === "pos" ? "Vendite al banco" : "Vendite Shop Online") }) {
+  const { ordine: ordineOrdini, cambiaOrdine: cambiaOrdineOrdini, ordina: ordinaOrdini } = useOrdinamentoTabella();
+  const { ordine: ordineProdotti, cambiaOrdine: cambiaOrdineProdotti, ordina: ordinaProdotti } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
   const [statoSel, setStatoSel] = useState("");
@@ -25212,15 +25366,24 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {["Ordine", "Tipo", "Data", "Cliente", "Stato", "Imponibile", "IVA", "Totale"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "ordine", l: "Ordine" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "cliente", l: "Cliente" }, { c: "stato", l: "Stato" }, { c: "imponibile", l: "Imponibile" }, { c: "iva", l: "IVA" }, { c: "totale", l: "Totale" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordineOrdini} onOrdina={cambiaOrdineOrdini} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {venditeFiltrate
-                  .slice()
-                  .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""))
+                {ordinaOrdini(
+                  venditeFiltrate.slice().sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || "")),
+                  {
+                    ordine: (v) => Number(v.numero_ordine || v.woo_order_id) || (v.numero_ordine || ""),
+                    tipo: (v) => v.tipo_movimento || "vendita",
+                    data: (v) => v.data_ordine || "",
+                    cliente: (v) => v.cliente_nome || v.cliente_email || "",
+                    stato: (v) => v.stato || "",
+                    imponibile: (v) => (v.totale != null && v.totale_iva != null ? v.totale - v.totale_iva : null),
+                    iva: (v) => v.totale_iva ?? null,
+                    totale: (v) => v.totale ?? null,
+                  })
                   .map((v) => {
                     const st = STATI_VENDITA_SHOP[v.stato];
                     const etichettaMovimento = { vendita: "Vendita", reso: "Reso", annullamento: "Annullato", cambio: "Cambio" }[v.tipo_movimento] || "Vendita";
@@ -25269,13 +25432,19 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
               <thead>
                 <tr>
-                  {["Prodotto", "Quantità", "N. ordini", "Ricavo", "Prezzo medio"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "prodotto", l: "Prodotto" }, { c: "quantita", l: "Quantità" }, { c: "nOrdini", l: "N. ordini" }, { c: "ricavo", l: "Ricavo" }, { c: "prezzoMedio", l: "Prezzo medio" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordineProdotti} onOrdina={cambiaOrdineProdotti} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {prodottiAggregati.slice(0, 20).map((p, i) => (
+                {ordinaProdotti(prodottiAggregati.slice(0, 20), {
+                  prodotto: (pr) => pr.nome || "",
+                  quantita: (pr) => pr.quantita ?? null,
+                  nOrdini: (pr) => pr.nOrdini ?? null,
+                  ricavo: (pr) => pr.ricavo ?? null,
+                  prezzoMedio: (pr) => pr.prezzoMedio ?? null,
+                }).map((p, i) => (
                   <tr key={p.nome}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
                       {i === 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: GOLD, marginRight: 8 }} />}
@@ -25338,6 +25507,7 @@ function TogglePerOperatoreProdotto({ vista, onOperatore, onProdotto }) {
 // colonne una tabella vera non ci sta nella larghezza dello schermo e
 // obbliga allo swipe laterale, che qui non vogliamo
 function TabellaOperatoriVenditeProdotti({ righe, isMobile, messaggioVuoto }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   return (
     <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
       {isMobile ? (
@@ -25360,13 +25530,18 @@ function TabellaOperatoriVenditeProdotti({ righe, isMobile, messaggioVuoto }) {
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
             <thead>
               <tr>
-                {["Nome", "Ruolo", "Incasso netto", "Pezzi netti"].map((th) => (
-                  <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                {[{ c: "nome", l: "Nome" }, { c: "ruolo", l: "Ruolo" }, { c: "incasso", l: "Incasso netto" }, { c: "pezzi", l: "Pezzi netti" }].map((th) => (
+                  <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {righe.map((o) => (
+              {ordina(righe, {
+                nome: (o) => o.nome || "",
+                ruolo: (o) => o.tipo || "",
+                incasso: (o) => o.incasso ?? null,
+                pezzi: (o) => o.pezzi ?? null,
+              }).map((o) => (
                 <tr key={`${o.tipo}:${o.id}`}>
                   <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{o.nome ? toTitleCase(o.nome) : "—"}</td>
                   <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: MUTED, whiteSpace: "nowrap" }}>{o.tipo === "master" ? "Master" : o.tipo === "venditore" ? "Venditore" : "Utente"}</td>
@@ -25385,6 +25560,7 @@ function TabellaOperatoriVenditeProdotti({ righe, isMobile, messaggioVuoto }) {
   );
 }
 function TabellaProdottiVenditeProdotti({ righe, isMobile, messaggioVuoto, piePagina }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   return (
     <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
       {isMobile ? (
@@ -25402,13 +25578,17 @@ function TabellaProdottiVenditeProdotti({ righe, isMobile, messaggioVuoto, piePa
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
             <thead>
               <tr>
-                {["Prodotto", "Pezzi netti", "Ricavo netto"].map((th) => (
-                  <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                {[{ c: "prodotto", l: "Prodotto" }, { c: "pezzi", l: "Pezzi netti" }, { c: "ricavo", l: "Ricavo netto" }].map((th) => (
+                  <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {righe.map((p) => (
+              {ordina(righe, {
+                prodotto: (pr) => pr.nome || "",
+                pezzi: (pr) => pr.pezzi ?? null,
+                ricavo: (pr) => pr.ricavo ?? null,
+              }).map((p) => (
                 <tr key={p.nome}>
                   <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
                   <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.pezzi}</td>
@@ -25548,6 +25728,8 @@ function PaginaStatisticheVenditeCanale({ venditeShop, origine, onBack, onApriTo
 // "omaggio", totale sempre zero) — qui interessa solo cosa e quanto è
 // stato regalato, non un incasso che non esiste
 function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
+  const { ordine: ordineOmaggiProd, cambiaOrdine: cambiaOrdineOmaggiProd, ordina: ordinaOmaggiProd } = useOrdinamentoTabella();
+  const { ordine: ordineOmaggiReg, cambiaOrdine: cambiaOrdineOmaggiReg, ordina: ordinaOmaggiReg } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("tutto");
 
@@ -25600,13 +25782,13 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
               <thead>
                 <tr>
-                  {["Prodotto", "Pezzi regalati"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "prodotto", l: "Prodotto" }, { c: "quantita", l: "Pezzi regalati" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordineOmaggiProd} onOrdina={cambiaOrdineOmaggiProd} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {righeProdotti.map((p) => (
+                {ordinaOmaggiProd(righeProdotti, { prodotto: (pr) => pr.nome || "", quantita: (pr) => pr.quantita ?? null }).map((p) => (
                   <tr key={p.nome}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{p.nome}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{p.quantita}</td>
@@ -25626,15 +25808,20 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
               <thead>
                 <tr>
-                  {["Data", "Operatore", "Prodotti", "Nota"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "data", l: "Data" }, { c: "operatore", l: "Operatore" }, { c: "prodotti", l: "Prodotti" }, { c: "nota", l: "Nota" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordineOmaggiReg} onOrdina={cambiaOrdineOmaggiReg} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {omaggiFiltrati
-                  .slice()
-                  .sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""))
+                {ordinaOmaggiReg(
+                  omaggiFiltrati.slice().sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || "")),
+                  {
+                    data: (v) => v.data_ordine || "",
+                    operatore: (v) => v.operatore_nome || "",
+                    prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                    nota: (v) => v.note || "",
+                  })
                   .map((v) => (
                     <tr key={v.id}>
                       <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{v.data_ordine ? fmtData(v.data_ordine.slice(0, 10)) : "—"}</td>
@@ -25660,6 +25847,7 @@ function PaginaOmaggi({ venditeShop, ricarica, onBack, titolo = "Omaggi" }) {
 // semplicemente materiale didattico/consumo distribuito) — somma
 // quantitaInviataPerProdotto su tutte le edizioni del periodo scelto
 function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, prodottiShop, onBack, titolo = "Prodotti usati per i kit" }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("annoscolastico");
   const oggi = new Date();
@@ -25712,13 +25900,13 @@ function PaginaProdottiUsatiKit({ corsi, corsiDate, kitDefinizioni, corsiKitProd
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
               <thead>
                 <tr>
-                  {["Prodotto", "Pezzi usati nei kit"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "prodotto", l: "Prodotto" }, { c: "pezzi", l: "Pezzi usati nei kit" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {righe.map((r) => (
+                {ordina(righe, { prodotto: (r) => r.nome || "", pezzi: (r) => r.quantita ?? r.pezzi ?? null }).map((r) => (
                   <tr key={r.nome}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{r.nome}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>{r.quantita}</td>
@@ -27068,6 +27256,8 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
 // attrezzature usa "location_id,tipo,riferimento", non il corso: la
 // stessa riga si aggiorna comunque)
 function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocategorie, inventarioSede, magazzinoLocaleConsumabili, ricarica }) {
+  const { ordine: ordineCons, cambiaOrdine: cambiaOrdineCons, ordina: ordinaCons } = useOrdinamentoTabella();
+  const { ordine: ordineAttr, cambiaOrdine: cambiaOrdineAttr, ordina: ordinaAttr } = useOrdinamentoTabella();
   const [ricercaConsumabile, setRicercaConsumabile] = useState("");
   const [ricercaAttrezzatura, setRicercaAttrezzatura] = useState("");
   const labelStyleInv = { ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 };
@@ -27161,13 +27351,18 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr style={{ background: "#FAF8F2" }}>
-                  {["Prodotto", "Unità di misura", "Q.tà in magazzino", "Livello di utilizzo", "Azioni"].map((et, i) => (
-                    <th key={et} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 4 ? "right" : "left", padding: "10px 14px", whiteSpace: "nowrap" }}>{et}</th>
+                  {[{ c: "prodotto", l: "Prodotto" }, { c: "unita", l: "Unità di misura" }, { c: "quantita", l: "Q.tà in magazzino" }, { c: "livello", l: "Livello di utilizzo" }, { c: null, l: "Azioni" }].map((et, i) => (
+                    <ThOrdina key={et.l} campo={et.c} ordine={ordineCons} onOrdina={cambiaOrdineCons} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 4 ? "right" : "left", padding: "10px 14px", whiteSpace: "nowrap" }}>{et.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {consumabiliVisti.map((r) => {
+                {ordinaCons(consumabiliVisti, {
+                  prodotto: (r) => prodottiShop.find((pp) => pp.id === r.prodotto_id)?.nome || "",
+                  unita: (r) => r.unita_misura || "",
+                  quantita: (r) => r.quantita ?? null,
+                  livello: (r) => r.livello_utilizzo || "",
+                }).map((r) => {
                   const nomeProdotto = prodottiShop.find((p) => p.id === r.prodotto_id)?.nome || "—";
                   const unita = prodottiShop.find((p) => p.id === r.prodotto_id)?.unita_misura;
                   return (
@@ -27247,13 +27442,16 @@ function PannelloInventarioMagazzino({ locationId, prodottiShop, costiSottocateg
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
               <thead>
                 <tr style={{ background: "#FAF8F2" }}>
-                  {["Prodotto", "Q.tà in magazzino", "Azioni"].map((et, i) => (
-                    <th key={et} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 2 ? "right" : "left", padding: "10px 14px", whiteSpace: "nowrap" }}>{et}</th>
+                  {[{ c: "prodotto", l: "Prodotto" }, { c: "quantita", l: "Q.tà in magazzino" }, { c: null, l: "Azioni" }].map((et, i) => (
+                    <ThOrdina key={et.l} campo={et.c} ordine={ordineAttr} onOrdina={cambiaOrdineAttr} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: i === 2 ? "right" : "left", padding: "10px 14px", whiteSpace: "nowrap" }}>{et.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {attrezzatureQui.map((r) => {
+                {ordinaAttr(attrezzatureQui, {
+                  prodotto: (r) => attrezzatureCatalogo.find((c) => c.id === r.riferimento)?.nome || "",
+                  quantita: (r) => r.quantita ?? null,
+                }).map((r) => {
                   const sc = attrezzatureCatalogo.find((c) => c.id === r.riferimento);
                   return (
                     <tr key={r.id} style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -28927,6 +29125,7 @@ function rangeStatisticheMaster(periodo) {
 // operatore_tipo "master" (i venditori hanno la propria pagina già in
 // Statistiche Vendite Prodotti, qui si guarda solo il lato master)
 function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVenditeProdotti, onBack, titolo = "Statistiche Master" }) {
+  const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [periodo, setPeriodo] = useState("mese");
   const range = rangeStatisticheMaster(periodo);
@@ -28988,13 +29187,18 @@ function PaginaStatisticheMaster({ venditeShop, prodottiShop, master, targetVend
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 480 }}>
               <thead>
                 <tr>
-                  {["Master", "Incasso netto", "Pezzi netti", "Vendite"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "master", l: "Master" }, { c: "incasso", l: "Incasso netto" }, { c: "pezzi", l: "Pezzi netti" }, { c: "vendite", l: "Vendite" }].map((th) => (
+                    <ThOrdina key={th.c} campo={th.c} ordine={ordine} onOrdina={cambiaOrdine} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {righeMaster.map((m) => (
+                {ordina(righeMaster, {
+                  master: (m) => m.nome || "",
+                  incasso: (m) => m.incasso ?? null,
+                  pezzi: (m) => m.pezzi ?? null,
+                  vendite: (m) => m.vendite ?? null,
+                }).map((m) => (
                   <tr key={m.id}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>{m.nome ? toTitleCase(m.nome) : "—"}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: m.incasso < 0 ? "#C0392B" : NAVY, whiteSpace: "nowrap" }}>{fmtEuroErp2(m.incasso)}</td>
@@ -31588,6 +31792,7 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
 // paginazione: stesso stile del resto dell'app, tutto già in memoria e
 // filtrato/ordinato nel browser
 function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, titolo = "CRM / Allievi" }) {
+  const { ordine: ordineCrm, cambiaOrdine: cambiaOrdineCrm, ordina: ordinaCrm } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
@@ -31898,8 +32103,8 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
           <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
             <thead>
               <tr>
-                {[["", "3%"], ["Allievo", "13%"], ["Email", "15%"], ["Telefono", "9%"], ["Città di res.", "9%"], ["Regione di res.", "9%"], ["Città corso", "9%"], ["Corsi", "14%"], ["Data acq.", "8%"], ["Azioni", "6%"]].map(([h, w], i) => (
-                  <th key={i} style={{ width: w, padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</th>
+                {[[null, "", "3%"], ["allievo", "Allievo", "13%"], ["email", "Email", "15%"], ["telefono", "Telefono", "9%"], ["cittaRes", "Città di res.", "9%"], ["regioneRes", "Regione di res.", "9%"], ["cittaCorso", "Città corso", "9%"], ["corsi", "Corsi", "14%"], ["dataAcq", "Data acq.", "8%"], [null, "Azioni", "6%"]].map(([campo, h, w], i) => (
+                  <ThOrdina key={i} campo={campo} ordine={ordineCrm} onOrdina={cambiaOrdineCrm} style={{ width: w, padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</ThOrdina>
                 ))}
               </tr>
             </thead>
@@ -31907,7 +32112,16 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
               {risultati.length === 0 && (
                 <tr><td colSpan={10} style={{ padding: "24px 14px", textAlign: "center", ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo trovato con questi filtri.</td></tr>
               )}
-              {risultati.map((a) => (
+              {ordinaCrm(risultati, {
+                allievo: (a) => `${a.cognome || ""} ${a.nome || ""}`.trim(),
+                email: (a) => a.email || "",
+                telefono: (a) => a.telefono || "",
+                cittaRes: (a) => a.cittaProvenienza || "",
+                regioneRes: (a) => a.regioneProvenienza || "",
+                cittaCorso: (a) => (a.cittaCorso || []).join(", "),
+                corsi: (a) => (a.corsi || []).length,
+                dataAcq: (a) => a.dataAcquisto || "",
+              }).map((a) => (
                 <tr key={a.chiave} style={{ borderBottom: `1px solid ${CREAM_BORDER}` }}>
                   <td style={{ padding: "5px 6px" }}>
                     <input type="checkbox" checked={selezionati.has(a.chiave)} onChange={() => toggleRiga(a.chiave)} style={{ width: 14, height: 14 }} />
@@ -32379,6 +32593,7 @@ function PaginaStoricoAllievi({ storicoAllievi, corsi, iscritti, corsiDate, loca
 // "Analisi Magazzino" insieme alle vendite online, senza duplicare la
 // logica di aggregazione già esistente
 function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, venditeShop, corsiDate, corsi, location, iscritti, coupon, bundleComponenti, ricarica, onBack, utenteLoggato, venditoreLoggato, targetVenditeProdotti, ruoloUtente, titolo = "POS Vendita diretta" }) {
+  const { ordine: ordineStorico, cambiaOrdine: cambiaOrdineStorico, ordina: ordinaStorico } = useOrdinamentoTabella();
   const prodottiPerId = useMemo(() => Object.fromEntries((prodottiShop || []).map((p) => [p.id, p])), [prodottiShop]);
   // Resi/Annullamenti/Cambio: autorizzati solo all'amministratore/
   // programmatore — chi entra con la propria password di master o
@@ -32685,13 +32900,21 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
                 <thead>
                   <tr>
-                    {["Vendita", "Tipo", "Data", "Operatore", "Prodotti", "Metodo", "Totale"].map((th) => (
-                      <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                    {[{ c: "vendita", l: "Vendita" }, { c: "tipo", l: "Tipo" }, { c: "data", l: "Data" }, { c: "operatore", l: "Operatore" }, { c: "prodotti", l: "Prodotti" }, { c: "metodo", l: "Metodo" }, { c: "totale", l: "Totale" }].map((th) => (
+                      <ThOrdina key={th.c} campo={th.c} ordine={ordineStorico} onOrdina={cambiaOrdineStorico} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {venditePos.map((v) => {
+                  {ordinaStorico(venditePos, {
+                    vendita: (v) => Number(v.numero_ordine) || (v.numero_ordine || ""),
+                    tipo: (v) => v.tipo_movimento || "vendita",
+                    data: (v) => v.data_ordine || "",
+                    operatore: (v) => v.operatore_nome || "",
+                    prodotti: (v) => (Array.isArray(v.prodotti) ? v.prodotti : []).map((pr) => pr.nome).join(", "),
+                    metodo: (v) => v.metodo_pagamento || "",
+                    totale: (v) => v.totale ?? null,
+                  }).map((v) => {
                     const badgeTipo = { vendita: { l: "Vendita", c: "#2E7D32", s: "#E3F3E5" }, reso: { l: "Reso", c: "#B8860B", s: "#FBF1D9" }, annullamento: { l: "Annullato", c: "#C0392B", s: "#FBE4E1" }, cambio: { l: "Cambio", c: "#3B6FA0", s: "#E7EEF5" }, omaggio: { l: "Omaggio", c: GOLD, s: "#FBF1D9" } }[v.tipo_movimento] || { l: v.tipo_movimento, c: MUTED, s: "#EFEFEF" };
                     return (
                       <tr key={v.id}>
@@ -36186,6 +36409,7 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
 // chi vende non ha il prodotto fisicamente con sé al corso (§10) — "Da
 // evadere" e "Evase" sono lo stesso fetch, filtrato solo per stato
 function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack, ricarica }) {
+  const { ordine: ordineSped, cambiaOrdine: cambiaOrdineSped, ordina: ordinaSped } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const [tab, setTab] = useState("daevadere"); // daevadere | evase
   const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
@@ -36227,13 +36451,19 @@ function PaginaSpedizioniPos({ spedizioniPos, corsi, corsiDate, location, onBack
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {["Corso", "Destinatario", "Indirizzo", "Prodotti", tab === "daevadere" ? "" : "Spedita il"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "corso", l: "Corso" }, { c: "destinatario", l: "Destinatario" }, { c: "indirizzo", l: "Indirizzo" }, { c: "prodotti", l: "Prodotti" }, { c: tab === "daevadere" ? null : "spedita", l: tab === "daevadere" ? "" : "Spedita il" }].map((th) => (
+                    <ThOrdina key={th.l || "azione"} campo={th.c} ordine={ordineSped} onOrdina={cambiaOrdineSped} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {righe.map((s) => (
+                {ordinaSped(righe, {
+                  corso: (sp) => etichettaCorso(sp) || "",
+                  destinatario: (sp) => sp.destinatario_nome || "",
+                  indirizzo: (sp) => [sp.indirizzo, sp.cap, sp.citta].filter(Boolean).join(", "),
+                  prodotti: (sp) => (Array.isArray(sp.prodotti) ? sp.prodotti : []).map((pr) => pr.nome).join(", "),
+                  spedita: (sp) => sp.spedito_il || "",
+                }).map((s) => (
                   <tr key={s.id}>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY }}>{etichettaCorso(s)}</td>
                     <td style={{ padding: "12px 14px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{s.destinatario_nome}</td>
@@ -37352,6 +37582,7 @@ function SezioneAnalisiCosti({
   onApriModificaSpesa,
 }) {
   const isMobile = useIsMobile();
+  const { ordine: ordineCosti, cambiaOrdine: cambiaOrdineCosti, ordina: ordinaCosti } = useOrdinamentoTabella();
   const [periodo, setPeriodo] = useState("anno");
   const [customDa, setCustomDa] = useState(dataOggiStr());
   const [customA, setCustomA] = useState(dataOggiStr());
@@ -37594,13 +37825,17 @@ function SezioneAnalisiCosti({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
               <thead>
                 <tr>
-                  {["Categoria", "Importo", "Incidenza", "Ricorrente", "Riducibilità", "Azione"].map((th) => (
-                    <th key={th} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th}</th>
+                  {[{ c: "categoria", l: "Categoria" }, { c: "importo", l: "Importo" }, { c: "incidenza", l: "Incidenza" }, { c: null, l: "Ricorrente" }, { c: null, l: "Riducibilità" }, { c: null, l: "Azione" }].map((th) => (
+                    <ThOrdina key={th.l} campo={th.c} ordine={ordineCosti} onOrdina={cambiaOrdineCosti} style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", padding: "10px 14px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap" }}>{th.l}</ThOrdina>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {kpi.categorieOrdinate.slice(0, 10).map((c, i) => {
+                {ordinaCosti(kpi.categorieOrdinate.slice(0, 10), {
+                  categoria: (c) => c.categoria?.nome || "",
+                  importo: (c) => c.totale ?? null,
+                  incidenza: (c) => c.totale ?? null,
+                }).map((c, i) => {
                   const vociCategoria = kpi.vociIncluse.filter((v) => v.spesa.categoria_id === c.categoria.id);
                   const nRicorrenti = vociCategoria.filter((v) => v.spesa.ricorrente_occasionale === "ricorrente").length;
                   const nRiducibiliAlta = vociCategoria.filter((v) => v.spesa.riducibilita === "alta").length;
