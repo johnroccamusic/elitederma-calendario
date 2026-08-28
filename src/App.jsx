@@ -26443,8 +26443,8 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     <tr>
       <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
         <span
-          title={p.woo_product_id && p.stato !== "draft" ? "Pubblicato sullo shop online" : "Solo magazzino: non è sullo shop online"}
-          style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato !== "draft" ? "#2E7D32" : "#CBC6B8" }}
+          title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
+          style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
         />
         <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
       </td>
@@ -27792,7 +27792,10 @@ function pianoScarico(prodotto, quantita, { sogliaInvalicabile = false } = {}) {
 // dire tutti sì (ha un id WooCommerce, non è una bozza, non è marcato solo
 // offline). Tenerlo derivato evita una quarta verità che si disallinea
 function pubblicatoSuShop(p) {
-  return !!p?.woo_product_id && p?.stato !== "draft" && !p?.solo_offline;
+  // "privato" su WooCommerce vuol dire che il prodotto esiste sul sito ma
+  // lo vede solo chi è dentro come amministratore: per il cliente non è in
+  // vendita, esattamente come una bozza
+  return !!p?.woo_product_id && p?.stato === "publish" && !p?.solo_offline;
 }
 // UNICO punto dell'app che scrive lo stock. Rilegge il valore vero prima
 // di applicare il delta (non si fida di quello in memoria, che può essere
@@ -34276,7 +34279,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // (che di default è "publish" anche per un prodotto mai spedito a
   // WooCommerce): altrimenti un prodotto solo offline risulta "Online"
   // qui solo perché nessuno ha mai cambiato quel campo
-  function isOnlineWoo(p) { return !!p.woo_product_id && p.stato !== "draft"; }
+  function isOnlineWoo(p) { return !!p.woo_product_id && p.stato === "publish"; }
 
   const prodottiFiltrati = prodottiBase
     .filter((p) => !ricerca.trim() || p.nome.toLowerCase().includes(ricerca.trim().toLowerCase()))
@@ -34600,7 +34603,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     // cosa e il sito ne mostrerebbe un'altra. Mai cancellati: in bozza,
     // perché possono avere uno storico di vendite dietro
     if (categoriaForm.soloOffline) {
-      const daStaccare = (prodottiShop || []).filter((pp) => (categorieIdPerProdotto[pp.id] || []).includes(categoriaForm.id) && pp.woo_product_id && pp.stato !== "draft");
+      const daStaccare = (prodottiShop || []).filter((pp) => (categorieIdPerProdotto[pp.id] || []).includes(categoriaForm.id) && pp.woo_product_id && pp.stato === "publish");
       for (const pp of daStaccare) {
         await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: pp.id, stato: "draft" } });
       }
@@ -35001,7 +35004,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         {ricerca.trim() ? "Risultati ricerca" : categoriaSelezionata ? categoriaSelezionata.nome : "Tutti i prodotti"}
       </div>
       <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
-        {[{ v: "tutti", l: "Tutti" }, { v: "online", l: "Online" }, { v: "bozze", l: "Bozze" }].map((t) => (
+        {[{ v: "tutti", l: "Tutti" }, { v: "online", l: "Online" }, { v: "bozze", l: "Non online" }].map((t) => (
           <button key={t.v} onClick={() => setFiltroStato(t.v)} style={{ ...fontBody, fontSize: 10, fontWeight: 600, padding: "5px 10px", borderRadius: 14, border: "none", background: filtroStato === t.v ? NAVY : BG, color: filtroStato === t.v ? "#fff" : NAVY, cursor: "pointer" }}>
             {t.l} {conteggiStato[t.v]}
           </button>
@@ -35026,8 +35029,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 // "mancante": si vende dentro la vetrina, dirlo "Non su Woo"
                 // faceva sembrare un errore quello che è il suo modo di stare
                 const eVariante = p.tipo_prodotto === "variante" && !p.woo_product_id;
-                const etichetta = eVariante ? "Variante" : !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : "Online";
-                const colori = eVariante ? { bg: "#E7EEF5", fg: "#3B6FA0" } : !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : { bg: "#E6F2E8", fg: "#2E7D32" };
+                const etichetta = eVariante ? "Variante" : !p.woo_product_id ? "Non su Woo" : p.stato === "draft" ? "Bozza" : p.stato === "private" ? "Privato" : "Online";
+                const colori = eVariante ? { bg: "#E7EEF5", fg: "#3B6FA0" } : !p.woo_product_id ? { bg: "#EFEFEF", fg: MUTED } : p.stato === "draft" ? { bg: "#F4EEDB", fg: "#8A6D1D" } : p.stato === "private" ? { bg: "#E7EEF5", fg: "#3B6FA0" } : { bg: "#E6F2E8", fg: "#2E7D32" };
                 return <span style={{ ...fontBody, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: colori.bg, color: colori.fg, flexShrink: 0 }}>{etichetta}</span>;
               })()}
             </div>
@@ -35193,8 +35196,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <div style={{ flex: "1 1 140px" }}>
           <Field label="Disponibilità">
+            {/* gli stessi stati di WooCommerce: pubblicato lo vedono tutti,
+                privato solo chi entra nel sito da amministratore (utile per
+                preparare un prodotto o tenerlo fuori catalogo senza
+                perderlo), bozza non è nemmeno pubblicato */}
             <select style={inputStyle} value={prodottoForm.stato} onChange={(e) => aggiornaForm({ stato: e.target.value })}>
               <option value="publish">Pubblicato</option>
+              <option value="private">Privato</option>
               <option value="draft">Bozza</option>
             </select>
           </Field>
@@ -35223,8 +35231,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           cosa e il prodotto resterebbe invisibile lo stesso */}
       <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.vaSuWoo ? { color: "#2E7D32", background: "#E3F3E5" } : { color: MUTED, background: "#EFEFEF" }) }}>
-            {calcoloPrezzi.varianteNonPubblicabile ? "Sullo shop tramite la vetrina" : calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.vaSuWoo && prodottoForm.stato !== "private" ? { color: "#2E7D32", background: "#E3F3E5" } : prodottoForm.stato === "private" ? { color: "#3B6FA0", background: "#E7EEF5" } : { color: MUTED, background: "#EFEFEF" }) }}>
+            {calcoloPrezzi.varianteNonPubblicabile
+              ? "Sullo shop tramite la vetrina"
+              : prodottoForm.stato === "private" && calcoloPrezzi.vaSuWoo
+                ? "Sul sito, ma privato"
+                : calcoloPrezzi.vaSuWoo ? "In vendita sullo shop" : "Non sullo shop"}
           </span>
           <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, borderRadius: 10, padding: "4px 11px", ...(calcoloPrezzi.nonSulPos ? { color: MUTED, background: "#EFEFEF" } : { color: "#2E7D32", background: "#E3F3E5" }) }}>
             {calcoloPrezzi.nonSulPos ? "Non sul POS" : "In vendita sul POS"}
@@ -35643,7 +35655,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // tassonomia WooCommerce, che da sola non basta: il menu reale mischia
   // vere categorie prodotto, pagine costruite col page builder e link
   // personalizzati senza nessuna categoria dietro ----------
-  function foIsOnline(p) { return !!p.woo_product_id && p.stato !== "draft"; }
+  function foIsOnline(p) { return !!p.woo_product_id && p.stato === "publish"; }
   const menuPerGenitore = useMemo(() => {
     const mappa = {};
     (menuVoci || []).forEach((v) => { (mappa[v.genitore_id] ||= []).push(v); });

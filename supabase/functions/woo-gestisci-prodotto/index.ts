@@ -48,6 +48,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// gli stati di WooCommerce che l'app usa: pubblicato (lo vedono tutti),
+// privato (il prodotto esiste sul sito ma lo vede solo chi entra da
+// amministratore) e bozza. Qualunque altro valore diventa "publish":
+// meglio un prodotto in vendita di uno sparito per un refuso
+function statoValido(stato: unknown): string {
+  return stato === "draft" || stato === "private" ? stato : "publish";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -135,7 +143,7 @@ Deno.serve(async (req) => {
       const payloadWoo: Record<string, unknown> = {
         name: nome.trim(),
         regular_price: String(prezzo),
-        status: stato === "draft" ? "draft" : "publish",
+        status: statoValido(stato),
       };
       if (descrizione != null) payloadWoo.description = descrizione;
       if (descrizioneBreve != null) payloadWoo.short_description = descrizioneBreve;
@@ -192,7 +200,7 @@ Deno.serve(async (req) => {
       if (!(prezzo > 0)) return new Response(JSON.stringify({ errore: "Il prezzo deve essere maggiore di zero" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       payloadWoo.regular_price = String(prezzo);
     }
-    if (stato != null) payloadWoo.status = stato === "draft" ? "draft" : "publish";
+    if (stato != null) payloadWoo.status = statoValido(stato);
     if (categorieIds !== undefined) {
       const categorieWooIds = await wooIdsDiCategorie(categorieIds);
       payloadWoo.categories = categorieWooIds.map((id) => ({ id }));
