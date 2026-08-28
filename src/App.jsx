@@ -25967,143 +25967,12 @@ function interoOpzionale(testo) {
   const n = parseInt(parseNum(t), 10);
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
-// gestione delle categorie prodotto da Gestione magazzino: quelle
-// sincronizzate da WooCommerce (woo_category_id valorizzato) restano di
-// sola lettura qui, modificabili solo dalla Gestione shop — quelle create
-// da qui invece sono locali (woo_category_id null), mai mandate online,
-// utili per organizzare il solo magazzino interno
-function ModaleGestioneCategorieMagazzino({ categorieProdotti, prodottiShop, onClose, ricarica }) {
-  const [ricerca, setRicerca] = useState("");
-  const [nomeNuova, setNomeNuova] = useState("");
-  const [inModificaId, setInModificaId] = useState(null);
-  const [nomeModifica, setNomeModifica] = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
-  const categorieViste = ricerca.trim()
-    ? categorieOrdinate.filter((c) => c.nome.toLowerCase().includes(ricerca.trim().toLowerCase()))
-    : categorieOrdinate;
-
-  async function creaCategoria() {
-    if (!nomeNuova.trim()) return;
-    setSalvando(true); setMsg("");
-    const { error } = await supabase.from("categorie_prodotti").insert({ nome: nomeNuova.trim(), woo_category_id: null });
-    setSalvando(false);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setNomeNuova("");
-    ricarica(["categorie_prodotti"]);
-  }
-  function apriModifica(c) { setInModificaId(c.id); setNomeModifica(c.nome); }
-  async function salvaModifica(id) {
-    if (!nomeModifica.trim()) return;
-    const { error } = await supabase.from("categorie_prodotti").update({ nome: nomeModifica.trim() }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setInModificaId(null);
-    ricarica(["categorie_prodotti"]);
-  }
-  async function eliminaCategoria(c) {
-    if (!window.confirm(`Eliminare la categoria "${c.nome}"? I prodotti che la usano restano, solo senza questa categoria.`)) return;
-    const { error } = await supabase.from("categorie_prodotti").delete().eq("id", c.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["categorie_prodotti"]);
-  }
-  // il flag sulla categoria flagga automaticamente TUTTI i prodotti che
-  // ci appartengono (letto come OR fra categoria e prodotto ovunque nel
-  // codice, vedi prodottiVendibili nel POS e ModaleNuovoProdotto): quando
-  // è attivo qui, il flag del singolo prodotto in Gestione magazzino
-  // resta forzato a "true" e non modificabile; disattivandolo qui si
-  // torna a poterlo impostare prodotto per prodotto
-  async function toggleEsclusaVenditaDiretta(c) {
-    const { error } = await supabase.from("categorie_prodotti").update({ escludi_vendita_diretta: !c.escludi_vendita_diretta }).eq("id", c.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["categorie_prodotti"]);
-  }
-  // categorie locali (mai su Woo) che restano sempre offline: un
-  // prodotto creato in questa categoria non viene mai spedito a
-  // WooCommerce, anche con un prezzo — il prezzo resta solo per
-  // valorizzare il magazzino. Quando si attiva qui, stacca subito anche
-  // i prodotti di questa categoria che fossero già pubblicati su
-  // WooCommerce da prima (stessa regola del singolo prodotto in
-  // Gestione magazzino: cancellato se non ha mai venduto nulla,
-  // altrimenti solo messo in bozza per non perdere lo storico)
-  async function toggleSoloOffline(c) {
-    const nuovoValore = !c.solo_offline;
-    const { error } = await supabase.from("categorie_prodotti").update({ solo_offline: nuovoValore }).eq("id", c.id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    if (nuovoValore) {
-      const daStaccare = (prodottiShop || []).filter((p) => (p.categorieIds || []).includes(c.id) && p.woo_product_id);
-      for (const p of daStaccare) {
-        if ((p.quantitaVenduta || 0) > 0) {
-          await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: p.id, stato: "draft" } });
-        } else {
-          await supabase.functions.invoke("woo-elimina-prodotto", { body: { prodottoId: p.id } });
-        }
-      }
-    }
-    ricarica(["categorie_prodotti", "prodotti_shop"]);
-  }
-
-  return (
-    <Modal title="Gestisci categorie" onClose={onClose} maxWidth={560}>
-      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>
-        Le categorie provenienti dallo shop online sono di sola lettura qui: si modificano solo da Gestione shop. Quelle create qui restano locali, solo per organizzare il magazzino.
-      </div>
-      <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca categoria…" style={{ marginBottom: 14 }} />
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <input style={{ ...inputStyle, flex: 1 }} value={nomeNuova} onChange={(e) => setNomeNuova(e.target.value)} placeholder="Nome nuova categoria…" onKeyDown={(e) => e.key === "Enter" && creaCategoria()} />
-        <Button onClick={creaCategoria} disabled={salvando || !nomeNuova.trim()} style={{ flexShrink: 0 }}>{salvando ? "Creo…" : "Crea"}</Button>
-      </div>
-      {msg && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-
-      <div style={{ maxHeight: 360, overflowY: "auto" }}>
-        {categorieViste.length === 0 ? (
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, textAlign: "center", padding: "20px 0" }}>Nessuna categoria trovata.</div>
-        ) : categorieViste.map((c) => {
-          const dalloShop = c.woo_category_id != null;
-          return (
-            <div key={c.id} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-              {inModificaId === c.id ? (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input style={{ ...inputStyle, flex: 1 }} autoFocus value={nomeModifica} onChange={(e) => setNomeModifica(e.target.value)} onKeyDown={(e) => e.key === "Enter" && salvaModifica(c.id)} />
-                  <Button onClick={() => salvaModifica(c.id)} style={{ flexShrink: 0 }}>Salva</Button>
-                  <Button variant="ghost" onClick={() => setInModificaId(null)} style={{ flexShrink: 0 }}>Annulla</Button>
-                </div>
-              ) : (
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ flex: 1, ...fontBody, fontSize: 13.5, color: NAVY }}>{c.nome}</span>
-                  <label title="Esclude i prodotti di questa categoria dalla vendita diretta (POS e shop online)" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
-                    <input type="checkbox" checked={!!c.escludi_vendita_diretta} onChange={() => toggleEsclusaVenditaDiretta(c)} style={{ width: 13, height: 13 }} />
-                    Non sul POS
-                  </label>
-                  {!dalloShop && (
-                    <label title="I prodotti di questa categoria non vengono mai spediti a WooCommerce, anche con un prezzo: il prezzo resta solo per valorizzare il magazzino" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11, color: MUTED, whiteSpace: "nowrap" }}>
-                      <input type="checkbox" checked={!!c.solo_offline} onChange={() => toggleSoloOffline(c)} style={{ width: 13, height: 13 }} />
-                      Solo offline
-                    </label>
-                  )}
-                  {dalloShop ? (
-                    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: GOLD, background: "#FBF1D9", borderRadius: 8, padding: "3px 8px", whiteSpace: "nowrap" }} title="Modificabile solo da Gestione shop">Dallo shop</span>
-                  ) : (
-                    <>
-                      <button onClick={() => apriModifica(c)} title="Rinomina" style={{ background: "none", border: "none", color: NAVY, cursor: "pointer", display: "flex", padding: 4 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_MATITA_PATH}</svg>
-                      </button>
-                      <button onClick={() => eliminaCategoria(c)} title="Elimina" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", display: "flex", padding: 4 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{ICONA_CESTINO_PATH}</svg>
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </Modal>
-  );
-}
+// Le categorie prodotto si governano in un posto solo: l'albero della
+// "Vista a categorie" (PaginaGestioneShop). Lì convivono quelle dello
+// shop e quelle di sola casa, con le opzioni "Non sul POS" e "Solo
+// offline". La modale che le gestiva a parte da Gestione magazzino è
+// stata rimossa il 28/08/2026: creando una categoria di qua non
+// compariva di là, ed erano due elenchi per la stessa cosa.
 
 // colonne ordinabili della tabella dettaglio, e direzione di default al
 // primo click su ciascuna (stile Windows Explorer): testo parte
@@ -26713,7 +26582,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
   const apriScheda = (p) => apriSchedaProdotto({ prodottoId: p.id });
   const [prodottoIspezionato, setProdottoIspezionato] = useState(null);
   const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null); // id del box di cui aprire confezioni, o null
-  const [mostraGestioneCategorie, setMostraGestioneCategorie] = useState(false);
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
 
@@ -26992,7 +26860,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <Button variant="ghost" onClick={onApriAdvisor}>Advisor ›</Button>
-            <Button variant="ghost" onClick={() => setMostraGestioneCategorie(true)}>Gestisci categorie</Button>
+            <Button variant="ghost" onClick={() => mostraVista("categorie")}>Gestisci categorie</Button>
             <Button onClick={() => apriSchedaProdotto({ nuovo: true })}>+ Nuovo prodotto</Button>
             {/* il nome vecchio ("Sincronizza catalogo") non diceva in che
                 direzione andasse la sincronizzazione, e la direzione è una
@@ -27277,13 +27145,6 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
             setProdottoIspezionato(null);
             if (comp) apriScheda(comp);
           }}
-        />
-      )}
-      {mostraGestioneCategorie && (
-        <ModaleGestioneCategorieMagazzino
-          categorieProdotti={categorieProdotti}
-          onClose={() => setMostraGestioneCategorie(false)}
-          ricarica={ricarica}
         />
       )}
     </div>
@@ -33952,8 +33813,19 @@ function NodoAlberoShop({ categoria, profondita, figliDi, contaProdotti, categor
             ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ transform: collassato ? "rotate(-90deg)" : "none" }}><polyline points="6 9 12 15 18 9" /></svg>
             : <span style={{ width: 11, display: "inline-block" }} />}
         </button>
-        <span style={{ color: GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
+        <span style={{ color: categoria.woo_category_id == null ? MUTED : GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
         <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoria.nome}</span>
+        {/* una categoria che non esiste sullo shop va detta: altrimenti si
+            aspetta di trovarla sul sito e non c'è */}
+        {categoria.woo_category_id == null && (
+          <span title="Categoria solo interna: non esiste sullo shop" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: BG, borderRadius: 8, padding: "1px 6px", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.3 }}>solo magazzino</span>
+        )}
+        {categoria.solo_offline && (
+          <span title="I prodotti di questa categoria non vanno mai sullo shop" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: GOLD, flexShrink: 0 }}>offline</span>
+        )}
+        {categoria.escludi_vendita_diretta && (
+          <span title="I prodotti di questa categoria non compaiono nel POS" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#3B6FA0", flexShrink: 0 }}>no POS</span>
+        )}
         <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdotti(categoria.id)}</span>
         <button onClick={(e) => { e.stopPropagation(); onAggiungiSotto(categoria.id); }} title="Aggiungi sotto-categoria" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: "pointer", color: MUTED, flexShrink: 0 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -33968,14 +33840,23 @@ function NodoAlberoShop({ categoria, profondita, figliDi, contaProdotti, categor
 
 function ModaleNuovaCategoriaShop({ padreNome, onClose, onCrea, salvando }) {
   const [nome, setNome] = useState("");
+  const [soloMagazzino, setSoloMagazzino] = useState(false);
   return (
     <Modal title={padreNome ? `Nuova sotto-categoria di "${padreNome}"` : "Nuova categoria"} onClose={onClose}>
       <Field label="Nome categoria">
-        <input style={inputStyle} autoFocus value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && nome.trim() && onCrea(nome)} />
+        <input style={inputStyle} autoFocus value={nome} onChange={(e) => setNome(e.target.value)} onKeyDown={(e) => e.key === "Enter" && nome.trim() && onCrea(nome, soloMagazzino)} />
       </Field>
+      {/* di norma una categoria nasce anche sullo shop: è lì che il
+          cliente la incontra. "Solo magazzino" serve per le famiglie di
+          articoli che online non esistono (consumabili, arredi, materiale
+          di scorta) e che servono solo a tenere in ordine il magazzino */}
+      <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 6 }}>
+        <input type="checkbox" checked={soloMagazzino} onChange={(e) => setSoloMagazzino(e.target.checked)} style={{ width: 14, height: 14 }} />
+        Solo magazzino (non creare la categoria sullo shop)
+      </label>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 6 }}>
         <Button variant="ghost" onClick={onClose}>Annulla</Button>
-        <Button onClick={() => onCrea(nome)} disabled={salvando || !nome.trim()}>{salvando ? "Creo…" : "Crea categoria"}</Button>
+        <Button onClick={() => onCrea(nome, soloMagazzino)} disabled={salvando || !nome.trim()}>{salvando ? "Creo…" : "Crea categoria"}</Button>
       </div>
     </Modal>
   );
@@ -34195,12 +34076,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     });
   }, []);
 
-  // questa pagina è il catalogo WooCommerce: le categorie create in
-  // "Gestisci categorie" (Magazzino) sono locali, mai spedite a Woo, e
-  // non devono comparire qui — altrimenti sembrano "sullo shop" quando
-  // non lo sono affatto (vedi anche isOnlineWoo più sotto)
+  // le categorie sono UNA COSA SOLA per magazzino, back office e front
+  // office: qui si vedono tutte, comprese quelle che vivono solo in casa
+  // (woo_category_id nullo), marcate "solo magazzino" perché non si
+  // scambino per categorie dello shop. categorieAttive resta la lista
+  // delle sole categorie WooCommerce: serve al Front Office, che ragiona
+  // sugli id del sito e non saprebbe cosa farsene di una categoria locale
   const categorieAttive = (categorieProdotti || []).filter((c) => c.woo_category_id != null);
-  const figliDi = useMemo(() => costruisciAlberoCategorie(categorieAttive), [categorieAttive]);
+  const categorieTutte = categorieProdotti || [];
+  const figliDi = useMemo(() => costruisciAlberoCategorie(categorieTutte), [categorieTutte]);
   const radiciCategorie = figliDi["_root"] || [];
 
   const contaProdottiDiretti = (categoriaId) => (prodottiCategorie || []).filter((pc) => pc.categoria_id === categoriaId).length;
@@ -34218,7 +34102,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     return mappa;
   }, [prodottiImmagini]);
 
-  const categoriaSelezionata = categorieAttive.find((c) => c.id === categoriaSelId) || null;
+  const categoriaSelezionata = categorieTutte.find((c) => c.id === categoriaSelId) || null;
   const totaleProdottiAttivi = (prodottiShop || []).filter((p) => p.attivo !== false).length;
 
   // la ricerca testuale è globale (ignora la categoria selezionata), utile
@@ -34256,8 +34140,13 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setCategoriaSelId(id);
     setProdottoForm(null);
     setMsgErrore(""); setMsgSuccesso("");
-    const cat = categorieAttive.find((c) => c.id === id);
-    setCategoriaForm(cat ? { id: cat.id, nome: cat.nome, descrizione: cat.descrizione || "", immagineUrl: cat.immagine_url || "" } : null);
+    const cat = categorieTutte.find((c) => c.id === id);
+    setCategoriaForm(cat ? {
+      id: cat.id, nome: cat.nome, descrizione: cat.descrizione || "", immagineUrl: cat.immagine_url || "",
+      wooCategoryId: cat.woo_category_id ?? null,
+      escludiVenditaDiretta: !!cat.escludi_vendita_diretta,
+      soloOffline: !!cat.solo_offline,
+    } : null);
     if (isMobile) setVistaMobile("lista");
   }
 
@@ -34459,7 +34348,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // (es. "Aghi" + "Aghi Universali"). Le altre restano "extra": pochi
   // prodotti (es. "Diluente") devono davvero comparire in più punti
   function categoriaPrimariaEExtra(ids) {
-    const primariaId = ids.find((id) => !!categorieAttive.find((c) => c.id === id)?.categoria_padre_id) || ids[0] || null;
+    const primariaId = ids.find((id) => !!categorieTutte.find((c) => c.id === id)?.categoria_padre_id) || ids[0] || null;
     return { primariaId, extraIds: ids.filter((id) => id !== primariaId) };
   }
   function impostaCategoriaPrimaria(nuovoId) {
@@ -34476,16 +34365,44 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     setProdottoForm((f) => ({ ...f, categorieIds: f.categorieIds.filter((id) => id !== categoriaId) }));
   }
 
+  // i due flag valgono per TUTTI i prodotti della categoria, letti come
+  // "o l'uno o l'altro" insieme al flag del singolo prodotto: WooCommerce
+  // non li conosce, quindi si scrivono sempre e solo in anagrafica
   async function salvaCategoria() {
     if (!categoriaForm) return;
+    if (!categoriaForm.nome.trim()) { setMsgErrore("Il nome della categoria è obbligatorio."); return; }
     setSalvando(true); setMsgErrore(""); setMsgSuccesso("");
-    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", {
-      body: { azione: "modifica", categoriaId: categoriaForm.id, nome: categoriaForm.nome, descrizione: categoriaForm.descrizione, immagineUrl: categoriaForm.immagineUrl },
-    });
+    if (categoriaForm.wooCategoryId != null) {
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", {
+        body: { azione: "modifica", categoriaId: categoriaForm.id, nome: categoriaForm.nome, descrizione: categoriaForm.descrizione, immagineUrl: categoriaForm.immagineUrl },
+      });
+      if (error || data?.errore) { setSalvando(false); setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
+    } else {
+      // categoria di sola casa: niente da mandare al sito
+      const { error } = await supabase.from("categorie_prodotti").update({
+        nome: categoriaForm.nome.trim(), descrizione: categoriaForm.descrizione || null, immagine_url: categoriaForm.immagineUrl || null,
+      }).eq("id", categoriaForm.id);
+      if (error) { setSalvando(false); setMsgErrore("Salvataggio non riuscito, riprova. " + error.message); return; }
+    }
+    const { error: erroreFlag } = await supabase.from("categorie_prodotti").update({
+      escludi_vendita_diretta: !!categoriaForm.escludiVenditaDiretta,
+      solo_offline: !!categoriaForm.soloOffline,
+    }).eq("id", categoriaForm.id);
+    if (erroreFlag) { setSalvando(false); setMsgErrore("Categoria salvata, ma non le opzioni: " + erroreFlag.message); return; }
+    // "solo offline" acceso adesso: i prodotti di questa categoria già
+    // pubblicati vanno tolti dallo shop, altrimenti il flag direbbe una
+    // cosa e il sito ne mostrerebbe un'altra. Mai cancellati: in bozza,
+    // perché possono avere uno storico di vendite dietro
+    if (categoriaForm.soloOffline) {
+      const daStaccare = (prodottiShop || []).filter((pp) => (categorieIdPerProdotto[pp.id] || []).includes(categoriaForm.id) && pp.woo_product_id && pp.stato !== "draft");
+      for (const pp of daStaccare) {
+        await supabase.functions.invoke("woo-gestisci-prodotto", { body: { azione: "modifica", prodottoId: pp.id, stato: "draft" } });
+      }
+      if (daStaccare.length) await supabase.from("prodotti_shop").update({ stato: "draft" }).in("id", daStaccare.map((pp) => pp.id));
+    }
     setSalvando(false);
-    if (error || data?.errore) { setMsgErrore("Salvataggio non riuscito, riprova. " + (data?.errore || error.message)); return; }
     setMsgSuccesso("Categoria salvata.");
-    ricarica(["categorie_prodotti"]);
+    ricarica(["categorie_prodotti", "prodotti_shop"]);
   }
 
   async function eliminaCategoriaCorrente() {
@@ -34496,22 +34413,41 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       : `Eliminare la categoria "${categoriaForm.nome}"?`;
     if (!window.confirm(messaggio)) return;
     setSalvando(true); setMsgErrore("");
-    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", { body: { azione: "elimina", categoriaId: categoriaForm.id } });
-    setSalvando(false);
-    if (error || data?.errore) { window.alert("Eliminazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+    if (categoriaForm.wooCategoryId != null) {
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", { body: { azione: "elimina", categoriaId: categoriaForm.id } });
+      setSalvando(false);
+      if (error || data?.errore) { window.alert("Eliminazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+    } else {
+      const { error } = await supabase.from("categorie_prodotti").delete().eq("id", categoriaForm.id);
+      setSalvando(false);
+      if (error) { window.alert("Eliminazione non riuscita, riprova. " + error.message); return; }
+    }
     setCategoriaSelId(null); setCategoriaForm(null);
     ricarica(["categorie_prodotti"]);
   }
 
-  async function creaCategoria(nome, padreId) {
+  // una categoria nasce sullo shop (e quindi anche in anagrafica) oppure
+  // solo in casa, per organizzare il magazzino senza comparire online
+  async function creaCategoria(nome, padreId, soloMagazzino) {
     if (!nome.trim()) return;
     setSalvando(true);
-    const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", { body: { azione: "crea", nome: nome.trim(), categoriaPadreId: padreId || undefined } });
-    setSalvando(false);
-    if (error || data?.errore) { window.alert("Creazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+    let nuovaId = null;
+    if (soloMagazzino) {
+      const { data, error } = await supabase.from("categorie_prodotti")
+        .insert({ nome: nome.trim(), woo_category_id: null, categoria_padre_id: padreId || null })
+        .select().single();
+      setSalvando(false);
+      if (error) { window.alert("Creazione non riuscita, riprova. " + error.message); return; }
+      nuovaId = data?.id || null;
+    } else {
+      const { data, error } = await supabase.functions.invoke("woo-gestisci-categoria", { body: { azione: "crea", nome: nome.trim(), categoriaPadreId: padreId || undefined } });
+      setSalvando(false);
+      if (error || data?.errore) { window.alert("Creazione non riuscita, riprova. " + (data?.errore || error.message)); return; }
+      nuovaId = data?.categoria?.id || null;
+    }
     setModaleCategoria(null);
     await ricarica(["categorie_prodotti"]);
-    if (data?.categoria?.id) selezionaCategoria(data.categoria.id);
+    if (nuovaId) selezionaCategoria(nuovaId);
   }
 
   // salva la parte del prodotto che WooCommerce non conosce: natura, flag,
@@ -35240,6 +35176,26 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       <Field label="Descrizione">
         <EditorRicco key={`cat-${categoriaForm.id}`} value={categoriaForm.descrizione} onChange={(html) => setCategoriaForm((f) => ({ ...f, descrizione: html }))} minHeight={100} />
       </Field>
+
+      {/* le due opzioni che WooCommerce non conosce: valgono per tutti i
+          prodotti della categoria e si sommano al flag del singolo
+          prodotto — se è acceso qui, là resta acceso e non modificabile */}
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginTop: 4 }}>
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Opzioni della categoria</div>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
+          <input type="checkbox" checked={!!categoriaForm.escludiVenditaDiretta} onChange={(e) => setCategoriaForm((f) => ({ ...f, escludiVenditaDiretta: e.target.checked }))} style={{ width: 14, height: 14, marginTop: 2 }} />
+          <span>Non sul POS<div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>I prodotti di questa categoria non compaiono nella vendita diretta al banco.</div></span>
+        </label>
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+          <input type="checkbox" checked={!!categoriaForm.soloOffline} onChange={(e) => setCategoriaForm((f) => ({ ...f, soloOffline: e.target.checked }))} style={{ width: 14, height: 14, marginTop: 2 }} />
+          <span>Solo offline<div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>I prodotti di questa categoria non vanno mai sullo shop, nemmeno con un prezzo. Salvando, quelli già pubblicati passano in bozza.</div></span>
+        </label>
+        <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 10, paddingTop: 8, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          {categoriaForm.wooCategoryId != null
+            ? "Categoria presente anche sullo shop: nome, descrizione e immagine si aggiornano anche là."
+            : "Categoria solo interna: non esiste sullo shop, serve a organizzare il magazzino."}
+        </div>
+      </div>
     </div>
   );
 
@@ -35487,9 +35443,9 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 
       {modaleCategoria && (
         <ModaleNuovaCategoriaShop
-          padreNome={modaleCategoria.padreId ? categorieAttive.find((c) => c.id === modaleCategoria.padreId)?.nome : null}
+          padreNome={modaleCategoria.padreId ? categorieTutte.find((c) => c.id === modaleCategoria.padreId)?.nome : null}
           onClose={() => setModaleCategoria(null)}
-          onCrea={(nome) => creaCategoria(nome, modaleCategoria.padreId)}
+          onCrea={(nome, soloMagazzino) => creaCategoria(nome, modaleCategoria.padreId, soloMagazzino)}
           salvando={salvando}
         />
       )}
