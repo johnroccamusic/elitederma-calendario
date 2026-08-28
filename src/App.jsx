@@ -35550,8 +35550,8 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
           {categoriaForm.wooCategoryId != null ? (
             <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.4 }}>
-              Categoria presente anche sullo shop: nome, descrizione e immagine si aggiornano anche là.
-              Per toglierla dal sito senza perderla qui, usa "Solo offline"; "Elimina" invece la cancella del tutto.
+              Categoria presente anche sullo shop. <b style={{ color: NAVY }}>Il nome scritto qui vince su quello del sito</b>: se qualcuno lo cambia su WooCommerce, qui non cambia nulla e al primo Salva il sito torna com'è scritto qui. Per prendere invece il nome dal sito serve "Importa catalogo dal sito", in Gestione magazzino.
+              Per toglierla dal sito senza perderla qui, usa "Offline"; "Elimina" invece la cancella del tutto.
             </div>
           ) : (
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
