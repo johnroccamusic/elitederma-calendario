@@ -172,6 +172,28 @@ const COLORE_DOMENICA = "#F2F2F2"; // grigio molto chiaro, indice 6 = D
 // le viste calendario (altrimenti le barre dei corsi diventano illeggibili
 // su schermi stretti, dato che lo spazio orizzontale per giorno si riduce
 // molto ma il testo resterebbe alla stessa dimensione)
+// L'app aperta dall'icona sulla schermata home (PWA) occupa TUTTO lo
+// schermo, orologio e Dynamic Island compresi: senza uno spazio in cima
+// la prima riga di ogni schermata finisce sotto l'isola. Aperta invece
+// dentro Safari, quello spazio lo tiene già il browser con la sua barra, e
+// aggiungerne altro lascerebbe solo una fascia vuota.
+//
+// iOS dovrebbe dire da sé quanto serve (env(safe-area-inset-top)), ma in
+// modalità "black-translucent" — quella che fa arrivare lo sfondo fin
+// sotto l'orologio — non è affidabile: a volte riporta un valore troppo
+// piccolo e la pagina risale sotto la barra di stato. Qui si prende il
+// maggiore fra quello che dichiara iOS e una misura sicura.
+function useAppDaSchermataHome() {
+  const [installata, setInstallata] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia?.("(display-mode: standalone)");
+    const controlla = () => setInstallata(window.navigator?.standalone === true || mq?.matches === true);
+    controlla();
+    mq?.addEventListener?.("change", controlla);
+    return () => mq?.removeEventListener?.("change", controlla);
+  }, []);
+  return installata;
+}
 function useIsMobile(breakpoint = 700) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth <= breakpoint);
   useEffect(() => {
@@ -40423,6 +40445,7 @@ export default function App() {
     try { return JSON.parse(sessionStorage.getItem("edc_utente") || "null"); } catch { return null; }
   });
   const isMobile = useIsMobile();
+  const appDaSchermataHome = useAppDaSchermataHome();
   const [view, setView] = useState("home");
   const [provenienzaVenditeShop, setProvenienzaVenditeShop] = useState("magazzinoshop");
   // prodotto da aprire subito in "Gestione shop": valorizzato solo dal
@@ -41449,7 +41472,13 @@ export default function App() {
   })();
 
   return (
-    <div style={{ ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh", paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: isMobile ? 16 : 0 }}>
+    // questo contenitore avvolge OGNI schermata dell'app: lo spazio in
+    // cima vale quindi ovunque, non solo in home
+    <div style={{
+      ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh",
+      paddingTop: appDaSchermataHome ? "max(env(safe-area-inset-top, 0px), 54px)" : "env(safe-area-inset-top, 0px)",
+      paddingBottom: isMobile ? 16 : 0,
+    }}>
       {!isMobile && (
         <div
           style={{
