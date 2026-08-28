@@ -19,12 +19,20 @@ export function mappaOrdine(ordine: any): Record<string, unknown> | null {
 
   const nome = [ordine.billing?.first_name, ordine.billing?.last_name].filter(Boolean).join(" ").trim();
 
+  // oltre al nome (che cambia nel tempo e non basta a riconoscere il
+  // prodotto) si tiene quello che WooCommerce dice di certo: il codice del
+  // prodotto, quello della variazione e lo SKU. Sono la chiave per
+  // scaricare il magazzino anche quando il nome sul sito è diverso da
+  // quello in anagrafica
   const prodotti = Array.isArray(ordine.line_items)
     ? ordine.line_items.map((voce: any) => ({
         nome: voce.name || null,
         quantita: voce.quantity ?? null,
         prezzo_unitario: voce.price != null ? Number(voce.price) : null,
         totale_riga: voce.total != null ? parseFloat(voce.total) : null,
+        woo_product_id: voce.product_id ?? null,
+        woo_variation_id: voce.variation_id ? voce.variation_id : null,
+        sku: voce.sku || null,
       }))
     : [];
 
@@ -144,20 +152,51 @@ export async function applicaMovimentoBundle(supabase: any, prodotti: any[], dir
   return bundleToccati;
 }
 
-// prodotti NON bundle venduti online: da quando lo stock è uno solo e la
-// fonte di verità è l'app, l'ordine va scalato anche qui — prima bastava
-// che WooCommerce scalasse il suo e il sync riallineasse il locale, ma il
-// sync non importa più lo stock. Il nome è la chiave, come ovunque
-// nell'app; il floor a zero evita di scrivere un negativo se il sito ha
-// venduto più pezzi di quanti ne risultino qui
+// riconosce a quale riga di anagrafica corrisponde una riga d'ordine.
+// Il nome da solo non basta: cambia sul sito senza che l'app lo sappia
+// ("Ago 1RLMT" contro "Ago 1RL MT"), e per le taglie WooCommerce manda il
+// nome della variazione ("T-Shirt EliteDerma - XXL") che non è quello del
+// prodotto in anagrafica. Si prova in ordine di affidabilità: variazione,
+// SKU, codice prodotto, nome esatto, nome senza spazi e punteggiatura.
+async function trovaProdottoDaRiga(supabase: any, riga: any) {
+  const perCodice = async (colonna: string, valore: any) => {
+    if (!valore) return null;
+    const { data } = await supabase.from("prodotti_shop").select("id, tipo_prodotto, quantita").eq(colonna, valore).maybeSingle();
+    return data || null;
+  };
+  const variazione = await perCodice("woo_variation_id", riga?.woo_variation_id);
+  if (variazione) return variazione;
+  if (riga?.sku) {
+    const { data } = await supabase.from("prodotti_shop").select("id, tipo_prodotto, quantita").eq("sku", riga.sku).maybeSingle();
+    if (data) return data;
+  }
+  // il codice prodotto vale solo per le righe non variabili: su una taglia
+  // punterebbe alla vetrina, che non ha giacenza propria
+  if (!riga?.woo_variation_id) {
+    const prodotto = await perCodice("woo_product_id", riga?.woo_product_id);
+    if (prodotto) return prodotto;
+  }
+  const nome = String(riga?.nome || "").trim();
+  if (!nome) return null;
+  const { data: perNome } = await supabase.from("prodotti_shop").select("id, tipo_prodotto, quantita").ilike("nome", nome).maybeSingle();
+  if (perNome) return perNome;
+  // ultima spiaggia: stesso nome a meno di spazi e punteggiatura
+  const scarnifica = (t: string) => t.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const cercato = scarnifica(nome);
+  const { data: candidati } = await supabase.from("prodotti_shop").select("id, nome, tipo_prodotto, quantita").eq("attivo", true);
+  const trovati = (candidati || []).filter((c: any) => scarnifica(String(c.nome || "")) === cercato);
+  return trovati.length === 1 ? trovati[0] : null;  // se sono due, meglio non indovinare
+}
+
 export async function applicaMovimentoProdottiSemplici(supabase: any, prodotti: any[], direzione: 1 | -1): Promise<Set<string>> {
   const toccati = new Set<string>();
   for (const riga of prodotti || []) {
     const nome = String(riga?.nome || "").trim();
     const quantita = Number(riga?.quantita) || 0;
-    if (!nome || !quantita) continue;
-    const { data: prodotto } = await supabase.from("prodotti_shop").select("id, tipo_prodotto, quantita").ilike("nome", nome).maybeSingle();
-    if (!prodotto || prodotto.tipo_prodotto === "bundle") continue;
+    if (!quantita) continue;
+    const prodotto = await trovaProdottoDaRiga(supabase, riga);
+    if (!prodotto) { console.error(`"${nome}": nessun prodotto in anagrafica, magazzino NON scaricato`); continue; }
+    if (prodotto.tipo_prodotto === "bundle") continue;
     const delta = direzione * quantita;
     const nuova = (prodotto.quantita || 0) + delta;
     if (nuova < 0) console.error(`"${nome}": lo stock andrebbe a ${nuova}, portato a 0`);
