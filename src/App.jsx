@@ -27895,9 +27895,20 @@ async function muoviStock(prodotto, delta, { origine, nota = null, riferimento =
 // propria e scarica i suoi componenti, tutto il resto scarica se stesso
 function righeScarico(prodotto, quantita, bundleComponenti, prodottiPerId) {
   if (!prodotto) return [];
+  // bundle virtuale: non esiste per conto suo, escono solo i suoi pezzi
   if (bundleVirtuale(prodotto)) {
     return righeBundleCon(prodotto.id, bundleComponenti, prodottiPerId)
       .map((r) => ({ prodotto: r.prodotto, quantita: quantita * r.quantitaPerBundle }));
+  }
+  // prodotto che si porta dietro del materiale (il dermografo e il suo
+  // manuale): esce LUI, e insieme a lui quello che lo accompagna. La
+  // distinta qui non dice di cosa è fatto, dice cosa parte insieme
+  if (prodotto.componenti_accompagnano) {
+    return [
+      { prodotto, quantita },
+      ...righeBundleCon(prodotto.id, bundleComponenti, prodottiPerId)
+        .map((r) => ({ prodotto: r.prodotto, quantita: quantita * r.quantitaPerBundle })),
+    ];
   }
   return [{ prodotto, quantita }];
 }
@@ -34463,6 +34474,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       giacenzaPropria: p.giacenza_propria !== false,
       prodottoPadreId: p.prodotto_padre_id || "",
       bundleFisica: !!p.bundle_con_giacenza_fisica,
+      componentiAccompagnano: !!p.componenti_accompagnano,
       prodottoSfusoId: p.prodotto_sfuso_id || "",
       pezziConfezione: p.pezzi_per_confezione != null ? String(p.pezzi_per_confezione) : "",
       scortaMinima: p.soglia_riordino != null ? String(p.soglia_riordino) : "",
@@ -34484,7 +34496,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // aperta è un bundle virtuale, e si azzera appena si cambia prodotto
   useEffect(() => {
     const id = prodottoForm?.id;
-    if (!id || prodottoForm?.tipoProdotto !== "bundle") return;
+    if (!id || (prodottoForm?.tipoProdotto !== "bundle" && !prodottoForm?.componentiAccompagnano)) return;
     let annullato = false;
     supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", id)
       .then(({ data }) => {
@@ -34527,7 +34539,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       tipoProdotto: padreId ? "variante" : "semplice",
       contaMagazzino: true, contaIncassi: true, giacenzaPropria: true,
       prodottoPadreId: padreId || "",
-      bundleFisica: false, prodottoSfusoId: "", pezziConfezione: "",
+      bundleFisica: false, componentiAccompagnano: false, prodottoSfusoId: "", pezziConfezione: "",
       scortaMinima: "", leadTime: "", giorniSicurezza: "", fornitoreId: "", lottoMinimo: "",
       wooProductId: null,
       categorieIds: categoriaSelId ? [categoriaSelId] : [],
@@ -34847,6 +34859,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       fornitore_id: f.fornitoreId || null,
       lotto_minimo_ordine: interoOpzionale(f.lottoMinimo),
       bundle_con_giacenza_fisica: bundleConFisica,
+      componenti_accompagnano: !!f.componentiAccompagnano,
       prodotto_sfuso_id: bundleConFisica && f.prodottoSfusoId ? f.prodottoSfusoId : null,
       pezzi_per_confezione: bundleConFisica && parseNum(f.pezziConfezione) > 0 ? parseInt(parseNum(f.pezziConfezione), 10) : null,
       solo_offline: !!f.soloOffline,
@@ -34855,12 +34868,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (calcolo.prezzoNetto != null) campi.prezzo_vendita = calcolo.prezzoNetto;
     const { error } = await supabase.from("prodotti_shop").update(campi).eq("id", prodottoId);
     if (error) return error.message;
-    if (f.tipoProdotto === "bundle") {
+    if (f.tipoProdotto === "bundle" || f.componentiAccompagnano) {
       // il box con giacenza fisica non usa la distinta base (gli sfusi si
       // muovono solo con "Apri confezione"): le righe residue vanno pulite
       const { error: erroreDelete } = await supabase.from("bundle_componenti").delete().eq("bundle_id", prodottoId);
       if (erroreDelete) return erroreDelete.message;
-      const righe = calcolo.bundleVirtuale
+      const righe = calcolo.bundleVirtuale || f.componentiAccompagnano
         ? righeDistinta
             .filter((c) => c.componenteId && parseNum(c.quantita) > 0)
             .map((c) => ({ bundle_id: prodottoId, componente_id: c.componenteId, quantita_per_bundle: parseNum(c.quantita) }))
@@ -35549,6 +35562,15 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
             <input type="checkbox" checked={prodottoForm.bundleFisica} onChange={(e) => cambiaBundleFisica(e.target.checked)} style={{ width: 14, height: 14 }} />
             Confezione con giacenza fisica (pacchi sigillati sullo scaffale)
           </label>
+          {/* il caso del dermografo col suo manuale: il prodotto esiste per
+              conto suo e ha i suoi pezzi, ma quando esce ne porta con sé
+              altri. Diverso dal bundle, che i pezzi propri non li ha */}
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", ...fontBody, fontSize: 12.5, color: NAVY, marginBottom: 8 }}>
+            <input type="checkbox" checked={!!prodottoForm.componentiAccompagnano} onChange={(e) => aggiornaForm({ componentiAccompagnano: e.target.checked })} style={{ width: 14, height: 14, marginTop: 2 }} />
+            <span>Si porta dietro altro materiale
+              <div style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.35 }}>Il prodotto ha i suoi pezzi in magazzino e, quando esce, escono anche quelli elencati qui sotto (es. il manuale del dermografo).</div>
+            </span>
+          </label>
           {prodottoForm.bundleFisica && (
             <>
               <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
@@ -35579,9 +35601,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         </div>
       )}
 
-      {calcoloPrezzi.bundleVirtuale && (
+      {(calcoloPrezzi.bundleVirtuale || prodottoForm.componentiAccompagnano) && (
         <div style={{ marginBottom: 14 }}>
-          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>Distinta base (componenti del kit)</div>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, marginBottom: 6 }}>
+            {prodottoForm.componentiAccompagnano ? "Materiale che accompagna il prodotto" : "Distinta base (componenti del kit)"}
+          </div>
           {componenti.map((c, i) => (
             <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6, alignItems: "center" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -36649,7 +36673,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, inventarioSede, prodottiApertiMagazzino, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, bundleComponenti, inventarioSede, prodottiApertiMagazzino, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -36788,12 +36812,18 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // prodotto è il pezzo sfuso di un box sigillato, la mossa non è
     // comprare: è aprire una confezione (azione fisica che qualcuno deve
     // compiere davvero, mai automatica)
+    // ogni riga passa da righeScarico: un prodotto che si porta dietro del
+    // materiale (il dermografo col suo manuale) fa uscire anche quello,
+    // senza doverlo ricordare a mano nella distinta di ogni kit
+    const prodottiPerIdLog = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
     const righeKit = [];
     Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
       if (delta >= 0) return;
       const prodotto = prodottiShop.find((p) => p.id === prodottoId);
       if (!prodotto || prodotto.conta_magazzino === false) return;
-      righeKit.push({ prodotto, quantita: -delta });
+      righeScarico(prodotto, -delta, bundleComponenti, prodottiPerIdLog).forEach((r) => {
+        if (r.prodotto && r.prodotto.conta_magazzino !== false) righeKit.push(r);
+      });
     });
     const pianiKit = preparaScarichi(righeKit, {
       // qui la scorta minima NON si supera nemmeno con una conferma: la
@@ -41865,7 +41895,7 @@ export default function App() {
       {view === "logisticaprodotti" && (
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} inventarioSede={inventarioSede}
+          corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} inventarioSede={inventarioSede}
           prodottiApertiMagazzino={prodottiApertiMagazzino}
           onApriMagazziniLocali={apriMagazziniLocali}
           ricarica={fetchDati} onBack={() => setView("home")}
