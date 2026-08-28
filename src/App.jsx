@@ -28284,6 +28284,38 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
+
+  // dermografi da controllare a mano. Due casi, tenuti distinti perché
+  // vogliono due gesti diversi:
+  //   - "da scegliere": corso futuro che prevede il dermografo, allievo
+  //     senza scelta — sono le iscrizioni fatte prima che il campo
+  //     esistesse, e finché restano vuote non generano fabbisogno;
+  //   - "da verificare": la scelta dice una cosa e il nome del pacchetto
+  //     ne dice un'altra ("KIT PRO DERMOGRAFO HORUS" con scritto Tekna,
+  //     "senza dermografo" con un modello scelto). Uno dei due è vecchio,
+  //     e solo chi ha venduto sa quale
+  const dermografiDaControllare = useMemo(() => {
+    const corsoPerData = Object.fromEntries((corsiDate || []).map((cd) => [cd.id, (corsi || []).find((c) => c.id === cd.corso_id)]));
+    const daScegliere = [];
+    const daVerificare = [];
+    (iscritti || []).forEach((i) => {
+      const cd = (corsiDate || []).find((d) => d.id === i.corso_data_id);
+      if (!cd || (cd.data_inizio || "") < oggi) return;   // solo corsi ancora da fare
+      const corso = corsoPerData[i.corso_data_id];
+      if (!corso || corso.prevede_dermografo === false) return;
+      const nome = `${i.nome || ""} ${i.cognome || ""}`.trim() || "senza nome";
+      const riga = { iscrittoId: i.id, nome, corso: corso.nome, data: cd.data_inizio, pacchetto: i.pacchetto_kit || "—", scelta: i.dermografo };
+      if (!i.dermografo) { daScegliere.push(riga); return; }
+      const etichettaPacchetto = String(i.pacchetto_kit || "").toLowerCase();
+      const diceHorus = /horus/.test(etichettaPacchetto);
+      const diceSenza = /senza *derm|no derm/.test(etichettaPacchetto);
+      if (diceHorus && i.dermografo !== "horus") daVerificare.push({ ...riga, motivo: "il pacchetto dice Horus" });
+      else if (diceSenza && i.dermografo !== "nessuno") daVerificare.push({ ...riga, motivo: "il pacchetto dice senza dermografo" });
+    });
+    const perData = (a, b) => String(a.data).localeCompare(String(b.data));
+    return { daScegliere: daScegliere.sort(perData), daVerificare: daVerificare.sort(perData) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iscritti, corsiDate, corsi, oggi]);
   const [sceltaKit, setSceltaKit] = useState({});   // chiave gruppo -> kit scelto
   const [salvandoGruppo, setSalvandoGruppo] = useState(null);
   const [raggruppaLead, setRaggruppaLead] = useState("categoria"); // categoria | fornitore
@@ -28540,6 +28572,63 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* i dermografi da sistemare a mano: l'Advisor non indovina al posto
+          di chi ha venduto, elenca e lascia il gesto a chi sa */}
+      {(dermografiDaControllare.daScegliere.length > 0 || dermografiDaControllare.daVerificare.length > 0) && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8D9A0` }}>
+          <div style={titoloBlocco}>
+            Dermografi da sistemare ({dermografiDaControllare.daScegliere.length + dermografiDaControllare.daVerificare.length} iscritti)
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
+            Solo corsi ancora da fare che prevedono il dermografo. Clicca il nome per aprire la scheda dell'allievo e scegliere; da lì il tasto "indietro" riporta qui.
+          </div>
+
+          {dermografiDaControllare.daVerificare.length > 0 && (
+            <div style={{ marginBottom: dermografiDaControllare.daScegliere.length ? 14 : 0 }}>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
+                Da verificare ({dermografiDaControllare.daVerificare.length})
+              </div>
+              {dermografiDaControllare.daVerificare.map((r) => (
+                <div key={r.iscrittoId} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  <button
+                    onClick={() => onApriIscritto && onApriIscritto(r.iscrittoId)}
+                    title="Apri la scheda dell'allievo"
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}
+                  >
+                    {r.nome}
+                  </button>
+                  <span style={{ color: MUTED }}>{r.corso} · {fmtData(r.data)}</span>
+                  <span>scelto <b>{etichettaDermografo(r.scelta)}</b>, ma {r.motivo} <span style={{ color: MUTED }}>("{r.pacchetto}")</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {dermografiDaControllare.daScegliere.length > 0 && (
+            <div>
+              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
+                Ancora da scegliere ({dermografiDaControllare.daScegliere.length})
+              </div>
+              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
+                Finché restano vuoti non contano nel fabbisogno: nessun dermografo verrà preparato per loro.
+              </div>
+              {dermografiDaControllare.daScegliere.map((r) => (
+                <div key={r.iscrittoId} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  <button
+                    onClick={() => onApriIscritto && onApriIscritto(r.iscrittoId)}
+                    title="Apri la scheda dell'allievo"
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}
+                  >
+                    {r.nome}
+                  </button>
+                  <span style={{ color: MUTED }}>{r.corso} · {fmtData(r.data)} · {r.pacchetto}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
