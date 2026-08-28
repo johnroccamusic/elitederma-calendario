@@ -27056,7 +27056,7 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
         <div style={{ ...cardStyle, padding: 14, marginTop: 10, marginBottom: 22, display: vistaProdotti === "categorie" ? "block" : "none" }}>
           <PaginaGestioneShop
             incorporata
-            altezzaPannelli="min(68vh, 640px)"
+            altezzaPannelli="auto"
             categorieProdotti={categorieProdotti} prodottiShop={prodottiShop}
             prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
             fornitori={fornitori} impostazioniIva={impostazioniIva}
@@ -33819,18 +33819,21 @@ function NodoAlberoShop({ categoria, profondita, figliDi, contaProdotti, categor
             : <span style={{ width: 11, display: "inline-block" }} />}
         </button>
         <span style={{ color: categoria.woo_category_id == null ? MUTED : GOLD, display: "flex", flexShrink: 0 }}><IconaCartellaShop size={14} /></span>
-        <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoria.nome}</span>
-        {/* una categoria che non esiste sullo shop va detta: altrimenti si
-            aspetta di trovarla sul sito e non c'è */}
-        {categoria.woo_category_id == null && (
-          <span title="Categoria solo interna: non esiste sullo shop" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: BG, borderRadius: 8, padding: "1px 6px", flexShrink: 0, textTransform: "uppercase", letterSpacing: 0.3 }}>solo magazzino</span>
-        )}
-        {categoria.solo_offline && (
-          <span title="I prodotti di questa categoria non vanno mai sullo shop" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: GOLD, flexShrink: 0 }}>offline</span>
-        )}
-        {categoria.escludi_vendita_diretta && (
-          <span title="I prodotti di questa categoria non compaiono nel POS" style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: "#3B6FA0", flexShrink: 0 }}>no POS</span>
-        )}
+        <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, flex: 1, minWidth: 40, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{categoria.nome}</span>
+        {/* le particolarità della categoria stanno in tre pallini, non in
+            tre etichette: scritte per esteso mangiavano tutto lo spazio e
+            il nome — l'unica cosa che serve leggere — spariva */}
+        <span style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }}>
+          {categoria.woo_category_id == null && (
+            <span title="Solo magazzino: questa categoria non esiste sullo shop" style={{ width: 7, height: 7, borderRadius: "50%", background: MUTED, display: "inline-block" }} />
+          )}
+          {categoria.solo_offline && (
+            <span title="Solo offline: i prodotti di questa categoria non vanno mai sullo shop" style={{ width: 7, height: 7, borderRadius: "50%", background: GOLD, display: "inline-block" }} />
+          )}
+          {categoria.escludi_vendita_diretta && (
+            <span title="Non sul POS: i prodotti di questa categoria non compaiono nella vendita al banco" style={{ width: 7, height: 7, borderRadius: "50%", background: "#3B6FA0", display: "inline-block" }} />
+          )}
+        </span>
         <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px", flexShrink: 0 }}>{contaProdotti(categoria.id)}</span>
         <button onClick={(e) => { e.stopPropagation(); onAggiungiSotto(categoria.id); }} title="Aggiungi sotto-categoria" style={{ background: "none", border: "none", padding: 2, display: "flex", cursor: "pointer", color: MUTED, flexShrink: 0 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
@@ -33981,7 +33984,12 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // incorporata dentro Gestione magazzino: i pannelli non sono più alti
   // quanto lo schermo ma quanto la cornice che li ospita, e la ricerca
   // arriva dai comandi della pagina che sta sopra
+  // "auto" = i pannelli prendono l'altezza che serve al loro contenuto,
+  // senza barra di scorrimento interna: si scorre la pagina, come per
+  // qualunque altro elenco. L'altezza fissa serve solo alla pagina a sé
+  // stante, dove le tre colonne devono stare tutte nello schermo
   const altezzaColonne = altezzaPannelli || "calc(100vh - 230px)";
+  const colonneLibere = altezzaColonne === "auto";
   const aliquotaIvaDefault = impostazioniIva?.aliquota_default ?? 22;
   const isMobile = useIsMobile();
   const [categoriaSelId, setCategoriaSelId] = useState(null); // null = "Tutti i prodotti"
@@ -34703,11 +34711,18 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
         <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, flex: 1 }}>Tutti i prodotti</span>
         <span style={{ ...fontBody, fontSize: 11, color: MUTED, background: BG, borderRadius: 10, padding: "1px 7px" }}>{totaleProdottiAttivi}</span>
       </div>
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto" }}>
         {radiciCategorie.map((c) => (
           <NodoAlberoShop key={c.id} categoria={c} profondita={0} figliDi={figliDi} contaProdotti={contaProdottiDiretti} categoriaSelId={categoriaSelId} collassate={collassate} onSeleziona={selezionaCategoria} onToggle={toggleCollassa} onAggiungiSotto={(padreId) => setModaleCategoria({ padreId })} />
         ))}
         {radiciCategorie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna categoria. Sincronizza il catalogo da Magazzino o creane una.</div>}
+      </div>
+      {/* i pallini si spiegano anche al passaggio del mouse, ma una legenda
+          in chiaro evita di doverli indovinare */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", ...fontBody, fontSize: 10.5, color: MUTED, marginTop: 10 }}>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: MUTED }} /> solo magazzino</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: GOLD }} /> solo offline</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: "#3B6FA0" }} /> non sul POS</span>
       </div>
       <button onClick={() => setModaleCategoria({ padreId: null })} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "9px 10px", cursor: "pointer", marginTop: 10 }}>+ Aggiungi categoria</button>
     </div>
@@ -34725,7 +34740,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           </button>
         ))}
       </div>
-      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "flex", flexDirection: "column", gap: 6 }}>
         {prodottiFiltrati.map((p) => {
           const immagini = immaginiPerProdotto[p.id] || [];
           const selezionato = prodottoForm?.id === p.id;
@@ -34803,7 +34818,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   }, [prodottoForm, componenti, prodottiShop, categorieProdotti]);
 
   const paneDettaglioProdotto = prodottoForm && (
-    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: "auto" }}>
+    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: colonneLibere ? "visible" : "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{prodottoForm.id ? "Modifica prodotto" : "Nuovo prodotto"}</div>
         <Button onClick={salvaProdotto} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
@@ -35173,7 +35188,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   );
 
   const paneDettaglioCategoria = !prodottoForm && categoriaForm && (
-    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: "auto" }}>
+    <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: colonneLibere ? "visible" : "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>Categoria</div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -35338,7 +35353,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const paneFoCategorie = (
     <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>Menu (voce principale)</div>
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto" }}>
         {caricandoMenu && menuVoci === null && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Carico il menu da WordPress…</div>}
         {erroreMenu && <div style={{ ...fontBody, fontSize: 12, color: "#C0392B", padding: "10px 4px" }}>{erroreMenu}</div>}
         {menuRadici.map((v, i) => rigaVoceMenu(v, foRootId === v.id, foSelezionaRoot, i, menuRadici.length))}
@@ -35354,7 +35369,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   const paneFoSotto = (
     <div style={{ ...cardStyle, padding: 14, marginBottom: 0, display: "flex", flexDirection: "column", position: "relative", height: isMobile ? "auto" : altezzaColonne, minHeight: isMobile ? undefined : 400 }}>
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>{foRootSelezionata ? foRootSelezionata.titolo : "Sotto-voce"}</div>
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto" }}>
         {!foRootId && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli prima una voce a sinistra.</div>}
         {foRootId && foFiglie.length === 0 && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Nessuna sotto-voce: guarda la colonna Prodotti a destra (se è una categoria reale).</div>}
         {foFiglie.map((v, i) => rigaVoceMenu(v, foSubId === v.id, foSelezionaSub, i, foFiglie.length))}
@@ -35371,7 +35386,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10 }}>
         {foSubSelezionata ? foSubSelezionata.titolo : foRootSelezionata ? foRootSelezionata.titolo : "Prodotti"}
       </div>
-      <div style={{ flex: 1, overflow: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+      <div style={{ flex: 1, overflow: colonneLibere ? "visible" : "auto", display: "flex", flexDirection: "column", gap: 6 }}>
         {!foFoglia && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>Scegli una voce per vedere i prodotti che il cliente trova lì.</div>}
         {foFoglia && foFoglia.tipo !== "taxonomy" && (
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "10px 4px" }}>
