@@ -34585,7 +34585,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // aperta è un bundle virtuale, e si azzera appena si cambia prodotto
   useEffect(() => {
     const id = prodottoForm?.id;
-    if (!id || (prodottoForm?.tipoProdotto !== "bundle" && !prodottoForm?.componentiAccompagnano)) return;
+    if (!id) return;
     let annullato = false;
     supabase.from("bundle_componenti").select("componente_id, quantita_per_bundle").eq("bundle_id", id)
       .then(({ data }) => {
@@ -35687,6 +35687,39 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* righe di distinta rimaste su un prodotto che non è né un bundle né
+          un prodotto accompagnato: non fanno niente, ma restano scritte e
+          non si vedono da nessuna parte. Una spunta sbagliata basterebbe a
+          farle scattare, quindi la scheda le mostra e permette di toglierle */}
+      {!calcoloPrezzi.bundleVirtuale && !prodottoForm.componentiAccompagnano && componenti.length > 0 && (
+        <div style={{ marginBottom: 14, border: `1px solid #E8A0A0`, borderRadius: 10, padding: 12, background: "#FDF6F5" }}>
+          <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", marginBottom: 6 }}>Distinta rimasta senza uso</div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.4, marginBottom: 8 }}>
+            Questo prodotto è "{prodottoForm.tipoProdotto}" e non porta con sé altro materiale, quindi queste righe non vengono applicate a nessuno scarico. Restano però scritte: spuntando una delle due caselle qui sopra tornerebbero attive.
+          </div>
+          {componenti.map((c, i) => {
+            const comp = (prodottiShop || []).find((pp) => pp.id === c.componenteId);
+            return (
+              <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, padding: "3px 0" }}>
+                {c.quantita} × <b>{comp?.nome || "prodotto non trovato"}</b>
+              </div>
+            );
+          })}
+          <button
+            onClick={async () => {
+              if (!window.confirm(`Cancellare queste righe di distinta da "${prodottoForm.nome}"?\n\nNon vengono applicate oggi, ma restano scritte e potrebbero tornare attive per errore.`)) return;
+              const { error } = await supabase.from("bundle_componenti").delete().eq("bundle_id", prodottoForm.id);
+              if (error) { setMsgErrore("Non è stato possibile cancellarle: " + error.message); return; }
+              setComponenti([]);
+              setMsgSuccesso("Righe di distinta rimosse.");
+            }}
+            style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: "#C0392B", border: "none", borderRadius: 14, padding: "6px 12px", cursor: "pointer", marginTop: 8 }}
+          >
+            Cancella queste righe
+          </button>
         </div>
       )}
 
