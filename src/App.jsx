@@ -690,8 +690,12 @@ function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
 // il bianco sono le aperture — finestre, portone, croci sui pallet.
 function IconaTileGestioneMagazzino({ size = 44 }) {
   const nero = "#111111";
+  // cinque punti più grande di quanto la griglia dei tasti chiede: essendo
+  // disegnata a pieni, alla stessa misura delle icone a tratto sembrava
+  // più piccola di loro
+  const lato = size + 5;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none">
       {/* tetto a capanna: banda spessa, sporgente oltre i muri */}
       <path d="M13.9 4 22.6 7.6v1.9L13.9 5.9 5.2 9.5V7.6z" fill={nero} />
 
