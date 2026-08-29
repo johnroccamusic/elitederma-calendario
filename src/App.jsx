@@ -34962,6 +34962,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       giorniSicurezza: p.giorni_sicurezza != null ? String(p.giorni_sicurezza) : "",
       fornitoreId: p.fornitore_id || "",
       lottoMinimo: p.lotto_minimo_ordine != null ? String(p.lotto_minimo_ordine) : "",
+      quantitaRiordino: p.quantita_riordino != null ? String(p.quantita_riordino) : "",
       wooProductId: p.woo_product_id || null,
       categorieIds: categorieIdPerProdotto[p.id] || [],
       immagini: (immaginiPerProdotto[p.id] || []).map((im) => ({ chiave: im.id, url: im.url, wooImageId: im.woo_image_id })),
@@ -35020,7 +35021,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       contaMagazzino: true, contaIncassi: true, giacenzaPropria: true,
       prodottoPadreId: padreId || "",
       bundleFisica: false, componentiAccompagnano: false, prodottoSfusoId: "", pezziConfezione: "",
-      scortaMinima: "", leadTime: "", giorniSicurezza: "", fornitoreId: "", lottoMinimo: "",
+      scortaMinima: "", leadTime: "", giorniSicurezza: "", fornitoreId: "", lottoMinimo: "", quantitaRiordino: "",
       wooProductId: null,
       categorieIds: categoriaSelId ? [categoriaSelId] : [],
       immagini: [],
@@ -35338,6 +35339,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       giorni_sicurezza: interoOpzionale(f.giorniSicurezza),
       fornitore_id: f.fornitoreId || null,
       lotto_minimo_ordine: interoOpzionale(f.lottoMinimo),
+      quantita_riordino: interoOpzionale(f.quantitaRiordino),
       bundle_con_giacenza_fisica: bundleConFisica,
       componenti_accompagnano: !!f.componentiAccompagnano,
       prodotto_sfuso_id: bundleConFisica && f.prodottoSfusoId ? f.prodottoSfusoId : null,
@@ -35532,6 +35534,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     if (String(f.giorniSicurezza ?? "").trim() !== "") campi.giorni_sicurezza = interoOpzionale(f.giorniSicurezza);
     if (f.fornitoreId) campi.fornitore_id = f.fornitoreId;
     if (String(f.lottoMinimo ?? "").trim() !== "") campi.lotto_minimo_ordine = interoOpzionale(f.lottoMinimo);
+    if (String(f.quantitaRiordino ?? "").trim() !== "") campi.quantita_riordino = interoOpzionale(f.quantitaRiordino);
     return campi;
   }
   async function applicaRiordinoAdAltri() {
@@ -35545,6 +35548,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
       giorni_sicurezza: `margine ${campi.giorni_sicurezza} giorni`,
       fornitore_id: `fornitore "${(fornitori || []).find((fo) => fo.id === campi.fornitore_id)?.nome || ""}"`,
       lotto_minimo_ordine: `lotto minimo ${campi.lotto_minimo_ordine}`,
+      quantita_riordino: `quantità di riordino ${campi.quantita_riordino}`,
     };
     const elenco = Object.keys(campi).map((k) => etichette[k]).join(", ");
     if (!window.confirm(`Applicare ${elenco} a ${ids.length} prodott${ids.length === 1 ? "o" : "i"}?\n\nI campi lasciati vuoti qui sopra non vengono toccati.`)) return;
@@ -36177,6 +36181,17 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
                 <input style={inputStyle} inputMode="numeric" value={prodottoForm.lottoMinimo} onChange={(e) => aggiornaForm({ lottoMinimo: e.target.value })} placeholder="—" />
               </Field>
             </div>
+            {/* quanti pezzi si prendono di abitudine: è il numero con cui
+                l'Advisor preparerà la bozza d'ordine al fornitore. Diverso
+                dal lotto minimo, che è il paletto imposto da lui */}
+            <div style={{ flex: "1 1 110px", minWidth: 0 }}>
+              <Field label="Quantità di riordino">
+                <input style={inputStyle} inputMode="numeric" value={prodottoForm.quantitaRiordino} onChange={(e) => aggiornaForm({ quantitaRiordino: e.target.value })} placeholder="—" />
+              </Field>
+            </div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
+            <b>Quantità di riordino</b>: i pezzi che ordini di solito di questo prodotto. Serve a preparare l'ordine al fornitore già compilato; il lotto minimo resta il limite sotto cui non si può scendere.
           </div>
           <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
             Senza tempo di consegna l'Advisor non può dire entro quando ordinare questo prodotto: resta solo l'avviso "sotto scorta".
