@@ -25771,6 +25771,22 @@ function ModaleDettaglioOrdine({ vendita, onChiudi }) {
 }
 
 // ---------- Ordini in arrivo (spedizioni dello shop online) ----------
+// data con l'anno a due cifre: nella scheda di un pacco l'anno per esteso
+// occupa spazio e non dice niente di più
+function fmtDataBreve(d) {
+  const [y, m, g] = String(d || "").split("-");
+  return y ? `${g}/${m}/${y.slice(2)}` : "—";
+}
+// un dato del cliente dentro una pastiglia: in fila prendono una riga sola
+// invece di quattro, e restano leggibili perché ognuna è un riquadro a sé
+function pastiglia(etichetta, valore) {
+  if (valore == null || valore === "") return null;
+  return (
+    <span style={{ ...fontBody, fontSize: 12, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>
+      <span style={{ fontWeight: 700 }}>{etichetta}:</span> {valore}
+    </span>
+  );
+}
 // una riga di prodotto da mettere nel pacco: si spunta quando il pezzo è
 // stato preso dallo scaffale e la riga diventa verde. La spunta non vive
 // nel browser di chi la mette (tabella righe_preparate_spedizione): un
@@ -25873,15 +25889,30 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 
   return (
     <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+      {/* intestazione essenziale: il numero e la data. Lo stato non serve
+          ripeterlo qui, lo dicono i sei tasti in fondo alla scheda */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY }}>
           Ordine #{vendita?.numero_ordine || vendita?.woo_order_id}
         </div>
-        {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 10, padding: "3px 10px" }}>{st.etichetta}</span>}
-        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
-          {vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}
+        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>
+          {vendita?.data_ordine ? fmtDataBreve(vendita.data_ordine.slice(0, 10)) : "—"}
         </span>
       </div>
+
+      {/* i dati del cliente su una riga di pastiglie: erano una colonna di
+          quattro righe che spingeva in basso gli indirizzi */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {pastiglia("Cliente", vendita?.cliente_nome)}
+        {pastiglia("Email", vendita?.cliente_email || fatturazione?.email)}
+        {pastiglia("Sped.", metodoSpedizione)}
+        {pastiglia("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title)}
+      </div>
+      {notaCliente && (
+        <div style={{ ...fontBody, fontSize: 12, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "5px 8px", marginBottom: 8 }}>
+          <b>Nota del cliente:</b> {notaCliente}
+        </div>
+      )}
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
         <div style={{ minWidth: 0 }}>
@@ -25924,16 +25955,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         </div>
 
         <div style={{ minWidth: 0 }}>
-          {rigaInfo("Cliente", vendita?.cliente_nome || null)}
-          {rigaInfo("Email", vendita?.cliente_email || fatturazione?.email || null)}
-          {rigaInfo("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title || null)}
-          {rigaInfo("Spedizione", metodoSpedizione)}
-          {notaCliente && (
-            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "6px 8px", marginTop: 6 }}>
-              <b>Nota del cliente:</b> {notaCliente}
-            </div>
-          )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
             {indirizzo(spedizione).length > 0 && (
               <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
                 <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Spedizione</div>
@@ -25981,15 +26003,20 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
 
   return (
     <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY }}>
           Vendita al banco
         </div>
-        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: spedita ? "#2E7D32" : "#B8860B", background: spedita ? "#E3F3E5" : "#FBF1D9", borderRadius: 10, padding: "3px 10px" }}>
-          {spedita ? "Spedita" : "Da spedire"}
-        </span>
-        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>POS</span>
-        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{spedizione?.ts ? fmtData(spedizione.ts.slice(0, 10)) : "—"}</span>
+        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "2px 8px" }}>POS</span>
+        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>{spedizione?.ts ? fmtDataBreve(spedizione.ts.slice(0, 10)) : "—"}</span>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+        {pastiglia("Cliente", spedizione?.destinatario_nome || vendita?.cliente_nome)}
+        {pastiglia("Email", iscritto?.email || vendita?.cliente_email)}
+        {pastiglia("Tel.", iscritto?.telefono)}
+        {pastiglia("Corso", corso ? `${corso}${sede ? ` · ${sede}` : ""}` : null)}
+        {pastiglia("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null)}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
@@ -26033,14 +26060,9 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         </div>
 
         <div style={{ minWidth: 0 }}>
-          {rigaInfo("Cliente", spedizione?.destinatario_nome || vendita?.cliente_nome || null)}
-          {rigaInfo("Email", iscritto?.email || vendita?.cliente_email || null)}
-          {rigaInfo("Telefono", iscritto?.telefono || null)}
-          {rigaInfo("Corso", corso ? `${corso}${sede ? ` · ${sede}` : ""}` : null)}
-          {rigaInfo("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null)}
           {indirizzo.length > 0 && (
-            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10, marginTop: 10 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Spedizione</div>
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
+              <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Spedizione</div>
               {indirizzo.map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
             </div>
           )}
