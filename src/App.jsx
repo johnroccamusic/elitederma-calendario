@@ -37793,6 +37793,15 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   // il contenuto" richiesto esplicitamente
   async function incolla() {
     if (!kitCopiato || kitCopiato.id === kit.id) return;
+    // sostituire non è aggiungere: quello che c'era qui dentro sparisce, e
+    // su un pacchetto da trenta righe è un lavoro che non torna indietro.
+    // La conferma dice i due numeri, così si vede subito se si sta
+    // incollando sul pacchetto sbagliato
+    const quante = prodottiKit.length;
+    const messaggio = quante > 0
+      ? `Sostituire il contenuto di "${kit.nome}"?\n\nLe ${quante} righe che ci sono adesso vengono tolte e rimpiazzate dalle ${kitCopiato.prodotti.length} copiate. Gli accessori didattica non si toccano.`
+      : `Incollare ${kitCopiato.prodotti.length} prodotti in "${kit.nome}"?`;
+    if (!window.confirm(messaggio)) return;
     const { error: erroreDelete } = await supabase.from("corsi_kit_prodotti").delete().eq("kit_id", kit.id).eq("tipo", "kit");
     if (erroreDelete) { window.alert("Errore: " + erroreDelete.message); return; }
     if (kitCopiato.prodotti.length > 0) {
