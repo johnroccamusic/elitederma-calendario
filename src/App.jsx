@@ -15341,7 +15341,8 @@ const AREA_MADRE_VISTA = {
   statistichevenditeprodotti: ["statistiche"],
   statisticamaster: ["statistiche"],
   classificazionevocishop: ["magazzinoshop"],
-  crmshop: ["magazzinoshop"],
+  crmshop: ["crmallievi"],
+  crmallievielenco: ["crmallievi"],
   generacoupon: ["magazzinoshop"],
   venditeshop: ["magazzinoshop"],
   venditealbanco: ["magazzinoshop"],
@@ -21100,7 +21101,7 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
-function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriCrmShop, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
+function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -21123,7 +21124,6 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
             { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
-            { chiave: "crmshop", title: "CRM Shop Online", descrizione: "Clienti dello shop: ordini, spesa, carrello medio.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
             { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto per lo shop online.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
           ]}
         />
@@ -21621,7 +21621,7 @@ function PaginaCrmShop({ venditeShop, vociShopClassificazione, onApriClassificaz
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div style={{ marginBottom: 6 }}>
-          <TastoLivelloPrecedente titolo={clienteAperto ? "CRM Shop Online" : "Gestione magazzino e shop"} onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} />
+          <TastoLivelloPrecedente titolo={clienteAperto ? "CRM Shop Online" : "CRM"} onClick={clienteAperto ? () => setChiaveAperta(null) : onBack} />
         </div>
 
         {clienteAperto ? (
@@ -26325,6 +26325,32 @@ function TabellaStoricoSpedizioni({ voci, onApriOrdine, isMobile }) {
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+// hub d'ingresso del CRM: gli allievi dei corsi da una parte, i clienti
+// dello shop dall'altra. Sono due anagrafiche diverse — chi compra un
+// corso e chi compra un prodotto — ma si guardano con la stessa domanda
+// in testa, ed è giusto che stiano dietro allo stesso tasto
+function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "CRM" }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Chi ha comprato da noi: gli allievi dei corsi e i clienti dello shop.</div>
+        <GrigliaTasti
+          pagina="crm" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={2}
+          definizioni={[
+            { chiave: "crmallievielenco", title: "CRM Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso.", Icona: IconaGruppoTeam, attivo: true, onClick: onApriCrmAllievi },
+            { chiave: "crmshop", title: "CRM Shop Online", descrizione: "Clienti dello shop: ordini, spesa, carrello medio.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
+          ]}
+        />
       </div>
     </div>
   );
@@ -41986,7 +42012,8 @@ export default function App() {
     gestioneassistenti: ["assistente", "corsi", "corsi_date", "assistente_corsi", "corsi_date_docenti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionehotel: ["hotel", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     gestionelocation: ["location", "citta", "costi_categorie", "costi_sottocategorie"],
-    crmallievi: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
+    crmallievi: [],
+    crmallievielenco: ["iscritti", "allievi_crm", "corsi", "corsi_date", "location"],
     storicoallievi: ["storico_allievi", "corsi", "iscritti", "corsi_date", "location"],
     statisticavenditori: ["corsi", "corsi_date", "iscritti", "venditori", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
     ultimeiscrizioni: ["corsi", "location", "corsi_date", "iscritti"],
@@ -42381,6 +42408,7 @@ export default function App() {
   function apriGestioneHotel() { setView("gestionehotel"); }
   function apriGestioneLocation() { setView("gestionelocation"); }
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
+  function apriCrmAllieviElenco() { apriViewProtetta("crmallievielenco"); }
   function apriStoricoAllievi() { apriViewProtetta("storicoallievi"); }
   function apriMagazzino() { apriViewProtetta("magazzino"); }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
@@ -42931,7 +42959,6 @@ export default function App() {
           onApriProdottiUsatiKit={apriProdottiUsatiKit}
           onApriOmaggi={apriOmaggi}
           onApriClassificazioneVoci={apriClassificazioneVoci}
-          onApriCrmShop={apriCrmShop}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
           numeroAvvisiMagazzino={calcolaAvvisiMagazzino(prodottiShop).length}
@@ -42959,7 +42986,7 @@ export default function App() {
       )}
 
       {view === "crmshop" && (
-        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("magazzinoshop")} titolo={etichettaTasto("magazzinoshop", "crmshop", "CRM Shop Online")} />
+        <PaginaCrmShop venditeShop={venditeShopConPayloadRaw} vociShopClassificazione={vociShopClassificazione} onApriClassificazioneVoci={apriClassificazioneVoci} onBack={() => setView("crmallievi")} titolo={etichettaTasto("crm", "crmshop", "CRM Shop Online")} />
       )}
 
       {view === "generacoupon" && (
@@ -43378,11 +43405,23 @@ export default function App() {
       )}
 
       {view === "crmallievi" && (
+        <PaginaCrmHub
+          onBack={() => setView("home")}
+          onApriCrmAllievi={apriCrmAllieviElenco}
+          onApriCrmShop={apriCrmShop}
+          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.crm?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("crm", { ordine: o })}
+          colonneTasti={layoutTasti.crm?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("crm", { colonne: n })}
+          etichetteTasti={layoutTasti.crm?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("crm", chiave, testo)}
+          titolo={etichettaTasto("home", "crmallievi", "CRM")}
+        />
+      )}
+
+      {view === "crmallievielenco" && (
         <PaginaCrmAllievi
           iscritti={iscritti} allieviCrm={allieviCrm} corsi={corsi} corsiDate={corsiDate} location={location}
-          ricarica={fetchDati} onBack={() => setView("home")}
+          ricarica={fetchDati} onBack={() => setView("crmallievi")}
           onApriStoricoAllievi={apriStoricoAllievi}
-          titolo={etichettaTasto("home", "crmallievi", "CRM / Allievi")}
+          titolo={etichettaTasto("crm", "crmallievielenco", "CRM Allievi")}
         />
       )}
 
