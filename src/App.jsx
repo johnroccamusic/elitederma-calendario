@@ -5605,6 +5605,12 @@ function SezioneDateCorsi({
       )}
       </div>
 
+      {/* la chiave lega l'elenco al testo cercato: ad ogni ricerca diversa il
+          sottoalbero viene ricreato da zero. È la garanzia definitiva contro
+          quello che si vedeva — contatore aggiornato e sotto l'elenco di
+          prima — perché su nodi nuovi il browser non ha niente di vecchio da
+          lasciare a video */}
+      <div key={`elenco:${ricercaDate}`}>
       {vistaDateModo === "elenco" ? (
         <DateRaggruppatePerCitta
           corsi={corsi} location={location} cronologico={cronologicoHome}
@@ -5619,6 +5625,7 @@ function SezioneDateCorsi({
         // restano di sola consultazione)
         <Calendario corsi={corsi} location={location} corsiDate={corsiDateFiltrate} iscritti={iscritti} master={master} onApriData={onApriData} onBack={() => setVistaDateModo("elenco")} ricarica={ricarica} fontScaleBarre={fontScale} scrollMarginTop={stickyControlli ? altezzaControlliSticky : undefined} spostabile={!!onEdit} />
       )}
+      </div>
     </div>
   );
 }
