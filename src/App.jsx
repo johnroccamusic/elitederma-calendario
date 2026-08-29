@@ -25821,12 +25821,25 @@ function RigaProdottoDaPreparare({ riga, primo, preso, onSegna, mostraPrezzo = f
 // sito. Sono gli stessi di woo-stato-ordine: qui si sceglie, là si scrive.
 const STATI_ORDINE_SHOP = ["completed", "processing", "on-hold", "pending", "cancelled", "refunded"];
 
-// un tasto quadrato di stato, nello stile delle fasi di logistica: quello
-// attuale è colorato e spuntato, gli altri sono bianchi e cliccabili
+// Il colore che prende il tasto quando l'ordine si trova in quello stato.
+// Non è decorazione: chi guarda la pagina da lontano deve capire come sta
+// l'ordine dal colore, prima di leggere. Verde va bene, giallo si sta
+// lavorando, arancione è fermo, rosso è annullato, celeste è tornato
+// indietro coi soldi. Gli altri cinque tasti restano crema, spenti.
+const COLORI_STATO_ORDINE = {
+  completed: { sfondo: "#E3F3E5", bordo: "#2E7D32", testo: "#2E7D32" },
+  processing: { sfondo: "#FCF3D4", bordo: "#E0A72B", testo: "#D2731A" },
+  "on-hold": { sfondo: "#FBEADD", bordo: "#D2691E", testo: "#C2620E" },
+  pending: { sfondo: "#FBEADD", bordo: "#D2691E", testo: "#C2620E" },
+  cancelled: { sfondo: "#FBE4E1", bordo: "#C0392B", testo: "#C0392B" },
+  refunded: { sfondo: "#E1EFFA", bordo: "#2E6FA3", testo: "#2E6FA3" },
+};
+// un tasto di stato, nello stile delle fasi di logistica: quello attuale è
+// acceso nel suo colore e spuntato, gli altri sono crema e cliccabili
 function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
   const st = STATI_VENDITA_SHOP[stato] || { etichetta: stato, colore: MUTED, sfondo: "#fff" };
   const attivo = stato === attuale;
-  const negativo = stato === "cancelled" || stato === "refunded";
+  const acceso = COLORI_STATO_ORDINE[stato] || { sfondo: "#E3F3E5", bordo: "#2E7D32", testo: "#2E7D32" };
   return (
     <button
       onClick={attivo || occupato ? undefined : onClick}
@@ -25837,13 +25850,11 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
         lineHeight: 1.15, overflowWrap: "break-word",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
         opacity: occupato ? 0.5 : 1,
-        // lo stato in cui l'ordine si trova si accende, gli altri sono le
-        // caselle di crema in cui lo si può spostare. Acceso è verde quando
-        // l'ordine è vivo, rosso quando è annullato o rimborsato: quello
-        // non è un traguardo, ed è giusto che si veda da lontano
-        background: attivo ? (negativo ? "#FBE4E1" : "#E3F3E5") : BG_CHIARO,
-        border: `1px solid ${attivo ? (negativo ? "#C0392B" : "#2E7D32") : "#D9CDB4"}`,
-        color: attivo ? (negativo ? "#C0392B" : "#2E7D32") : "#8A7355",
+        // lo stato in cui l'ordine si trova si accende nel suo colore, gli
+        // altri sono le caselle di crema in cui lo si può spostare
+        background: attivo ? acceso.sfondo : BG_CHIARO,
+        border: `1px solid ${attivo ? acceso.bordo : "#D9CDB4"}`,
+        color: attivo ? acceso.testo : "#8A7355",
       }}
     >
       <span style={{ fontSize: 12, lineHeight: 1 }}>{attivo ? "✓" : "○"}</span>
