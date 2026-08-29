@@ -14281,14 +14281,14 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 10, rowGap: 2, minWidth: 0 }}>
         {allieviRiga.map((i) => {
           const etichetta = toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim());
-          const stile = { ...fontDisplay, fontSize: dimensione, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap" };
+          const stile = { ...fontDisplay, fontSize: dimensione, fontWeight: 400, color: "#C0392B", whiteSpace: "nowrap" };
           if (!onApriIscritto) return <span key={i.id} style={stile}>{etichetta}</span>;
           return (
             <button
               key={i.id}
               onClick={(e) => { e.stopPropagation(); onApriIscritto(i); }}
               title="Apri la scheda dell'allievo"
-              style={{ ...stile, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+              style={{ ...stile, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left", textDecoration: "underline", textUnderlineOffset: 2 }}
             >
               {etichetta}
             </button>
