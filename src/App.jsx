@@ -26016,7 +26016,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "10px 0 5px" }}>Stato dell'ordine sul sito</div>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "20px 0 6px" }}>Stato dell'ordine sul sito</div>
       <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
         {STATI_ORDINE_SHOP.map((stato) => (
           <TastoStatoOrdine key={stato} stato={stato} attuale={vendita?.stato} occupato={occupato} onClick={() => onCambiaStato(vendita, stato)} />
@@ -26110,7 +26110,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "10px 0 5px" }}>Stato della spedizione</div>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "20px 0 6px" }}>Stato della spedizione</div>
       <div style={{ display: "flex", gap: 6, alignItems: "stretch", maxWidth: 320 }}>
         <div style={{
           ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
