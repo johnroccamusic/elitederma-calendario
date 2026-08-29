@@ -33060,6 +33060,7 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
 function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, titolo = "CRM / Allievi" }) {
   const { ordine: ordineCrm, cambiaOrdine: cambiaOrdineCrm, ordina: ordinaCrm } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
+  const portrait = useIsPortrait();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -33244,6 +33245,40 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   const badgeVariazione = (perc) => (
     <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: perc >= 0 ? "#2E7D32" : "#C0392B" }}>{perc >= 0 ? "+" : ""}{perc}%</span>
   );
+
+  // Questa pagina è una tabella da nove colonne: su un telefono in
+  // verticale non ci sta, e rimpicciolire il testo fino a farcelo stare
+  // vorrebbe dire renderlo illeggibile. Il web non può girare lo schermo da
+  // solo — nessun browser lo consente fuori dalla modalità a tutto schermo,
+  // e su iPhone nemmeno lì — quindi si chiede: finché il telefono è dritto
+  // la pagina mostra solo l'invito a ruotarlo, e appena è coricato compare
+  // tutto. L'Indietro resta, per non intrappolare chi è entrato per sbaglio.
+  if (isMobile && portrait) {
+    return (
+      <div style={{ background: "transparent", minHeight: "100vh", padding: "20px 16px 60px" }}>
+        <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
+        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: "36px 20px", textAlign: "center", marginTop: 40 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
+            <svg width="86" height="86" viewBox="0 0 24 24" fill="none">
+              {/* il telefono si corica da solo, avanti e indietro: è il
+                  gesto da fare, non un'icona da interpretare */}
+              <style>{`@keyframes ruotaTelefonoCrm { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }`}</style>
+              <g style={{ transformOrigin: "12px 12px", animation: "ruotaTelefonoCrm 2.4s ease-in-out infinite alternate" }}>
+                <rect x="7.2" y="2.6" width="9.6" height="18.8" rx="1.8" stroke={NAVY} strokeWidth="1.6" />
+                <path d="M10.6 5.1h2.8" stroke={NAVY} strokeWidth="1.3" strokeLinecap="round" />
+                <rect x="8.9" y="7.4" width="6.2" height="9.4" rx="0.6" fill={GOLD} />
+                <circle cx="12" cy="19.2" r="0.9" fill={NAVY} />
+              </g>
+            </svg>
+          </div>
+          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Ruota il telefono</div>
+          <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.45, maxWidth: 320, margin: "0 auto" }}>
+            L'anagrafica allievi è una tabella larga: coricando il telefono ci sta tutta e si legge senza rimpicciolire niente.
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
