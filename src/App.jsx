@@ -25857,7 +25857,7 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
       onClick={attivo || occupato ? undefined : onClick}
       title={attivo ? "Stato attuale" : `Porta l'ordine in "${st.etichetta}"`}
       style={{
-        ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "7px 4px",
+        ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px",
         cursor: attivo || occupato ? "default" : "pointer", textAlign: "center", flex: 1, minWidth: 0,
         lineHeight: 1.15, overflowWrap: "break-word",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
@@ -25869,7 +25869,7 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
         color: attivo ? acceso.testo : "#8A7355",
       }}
     >
-      <span style={{ fontSize: 12, lineHeight: 1 }}>{attivo ? "✓" : "○"}</span>
+      <span style={{ fontSize: 13, lineHeight: 1 }}>{attivo ? "✓" : "○"}</span>
       <span>{st.etichetta}</span>
     </button>
   );
@@ -26095,7 +26095,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
       <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "10px 0 5px" }}>Stato della spedizione</div>
       <div style={{ display: "flex", gap: 6, alignItems: "stretch", maxWidth: 320 }}>
         <div style={{
-          ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "7px 4px", textAlign: "center", flex: 1, minWidth: 0,
+          ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
           lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
           background: spedita ? BG_CHIARO : "#E3F3E5", border: `1px solid ${spedita ? "#D9CDB4" : "#2E7D32"}`, color: spedita ? "#8A7355" : "#2E7D32",
         }}>
@@ -26106,7 +26106,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
           onClick={spedita || occupato ? undefined : onSegnaSpedita}
           title={spedita ? "Già spedita" : "Segna il pacco come partito"}
           style={{
-            ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "7px 4px", textAlign: "center", flex: 1, minWidth: 0,
+            ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
             lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
             cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
             background: spedita ? "#E3F3E5" : BG_CHIARO, border: `1px solid ${spedita ? "#2E7D32" : "#D9CDB4"}`, color: spedita ? "#2E7D32" : "#8A7355",
