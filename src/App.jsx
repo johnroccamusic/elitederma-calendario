@@ -748,6 +748,25 @@ function IconaTileSmistaVoci({ size = 44, color = NAVY }) {
     </svg>
   );
 }
+// il capannone con le casse impilate dentro: i magazzini esterni sono
+// posti veri, con dentro roba vera. Prima condivideva il camion con la
+// Logistica, che però è il trasporto — un'altra cosa
+function IconaTileMagazziniEsterni({ size = 44 }) {
+  const nero = "#111111";
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* il profilo del capannone: tetto a capanna e due montanti, pieno */}
+      <path d="M12 2 1.6 6.6V22h4.2V9.4h12.4V22h4.2V6.6z" fill={nero} />
+      {/* le casse, impilate a scaletta come nell'originale */}
+      <rect x="7.2" y="10.6" width="4" height="3.6" fill={nero} />
+      <rect x="7.2" y="15" width="4" height="3.4" fill={nero} />
+      <rect x="11.9" y="15" width="4" height="3.4" fill={nero} />
+      <rect x="7.2" y="19.1" width="4" height="2.9" fill={nero} />
+      <rect x="11.9" y="19.1" width="4" height="2.9" fill={nero} />
+      <rect x="16.6" y="19.1" width="3.6" height="2.9" fill={nero} />
+    </svg>
+  );
+}
 // la lente: guardare i prodotti uno per uno, giacenze e movimenti. Nera,
 // con l'impugnatura piena e inclinata e il riflesso sul vetro
 function IconaTileVerificaVoci({ size = 44 }) {
@@ -20841,7 +20860,7 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
           pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriMagazzino, badge: numeroAvvisiMagazzino },
-            { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileLogistica, attivo: true, onClick: onApriMagazziniEsterni },
+            { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileMagazziniEsterni, attivo: true, onClick: onApriMagazziniEsterni },
             { chiave: "gestioneshop", title: "Gestione shop", descrizione: "Gestisci prodotti, ordini, clienti e impostazioni dello shop.", Icona: IconaTileGestioneShop, attivo: true, onClick: onApriGestioneShop },
             { chiave: "venditeshop", title: "Vendite Shop Online", descrizione: "Ordini e performance dello shop online WooCommerce.", Icona: IconaTileVenditeShop, attivo: true, onClick: onApriVenditeShop },
             { chiave: "venditealbanco", title: "Vendite al banco", descrizione: "Tutte le vendite fatte con il POS interno.", Icona: IconaTilePos, attivo: true, onClick: onApriVenditeAlBanco },
