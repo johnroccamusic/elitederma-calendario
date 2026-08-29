@@ -26022,6 +26022,11 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
   }, [soloShop, spedizioniPos, vista]);
   const ordini = useMemo(() => voci.filter((v) => v.tipo === "woo").map((v) => v.vendita), [voci]);
 
+  // gli stati cambiano anche da fuori (dal sito, o da un collega): questa
+  // pagina serve a sapere cosa spedire ADESSO, quindi ad ogni apertura
+  // rilegge ordini e spedizioni invece di fidarsi di quanto era in memoria
+  useEffect(() => { ricarica(["vendite_shop", "spedizioni_pos"]); }, []);
+
   // indirizzi, spedizione e coupon stanno in payload_raw, che non si tiene
   // in memoria per migliaia di ordini: si legge solo per quelli a video
   useEffect(() => {
@@ -33714,19 +33719,59 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // registrata ma genera un ordine per la sede (spedizioni_pos)
   const [spedizioneAttiva, setSpedizioneAttiva] = useState(false);
   const [spedIscrittoId, setSpedIscrittoId] = useState("");
-  const [spedDestinatario, setSpedDestinatario] = useState("");
+  const [spedNome, setSpedNome] = useState("");
+  const [spedCognome, setSpedCognome] = useState("");
   const [spedIndirizzo, setSpedIndirizzo] = useState("");
+  const [spedCivico, setSpedCivico] = useState("");
   const [spedCitta, setSpedCitta] = useState("");
   const [spedCap, setSpedCap] = useState("");
+  const [spedProvincia, setSpedProvincia] = useState("");
+  // la fattura si chiede prima di compilare: i quattro campi che servono
+  // solo a lei restano nascosti finché non è spuntata, e diventano
+  // obbligatori appena lo è
+  const [spedRichiedeFattura, setSpedRichiedeFattura] = useState(false);
+  const [spedDitta, setSpedDitta] = useState("");
+  const [spedPiva, setSpedPiva] = useState("");
+  const [spedCodDest, setSpedCodDest] = useState("");
+  const [spedPec, setSpedPec] = useState("");
+  const spedDestinatario = `${spedNome.trim()} ${spedCognome.trim()}`.trim();
+  // quali caselle sono ancora vuote: serve sia a bloccare la conferma sia
+  // a dire quali, invece del solo "completare i dati"
+  const campiClienteMancanti = (() => {
+    if (!spedizioneAttiva) return [];
+    const mancanti = [
+      [spedNome, "Nome"], [spedCognome, "Cognome"], [spedIndirizzo, "Indirizzo"], [spedCivico, "Civico"],
+      [spedCap, "CAP"], [spedCitta, "Città"], [spedProvincia, "Provincia"],
+    ].filter(([v]) => !String(v || "").trim()).map(([, etichetta]) => etichetta);
+    if (spedRichiedeFattura) {
+      mancanti.push(...[
+        [spedDitta, "Nome ditta"], [spedPiva, "P. IVA"], [spedCodDest, "Cod. Dest."], [spedPec, "PEC"],
+      ].filter(([v]) => !String(v || "").trim()).map(([, etichetta]) => etichetta));
+    }
+    return mancanti;
+  })();
   const iscrittiCorsoPos = corsoPosSel ? (iscritti || []).filter((i) => i.corso_data_id === corsoPosSel.id) : [];
   function selezionaIscrittoSped(iscrittoId) {
     setSpedIscrittoId(iscrittoId);
     const isc = iscrittiCorsoPos.find((i) => i.id === iscrittoId);
     if (isc) {
-      setSpedDestinatario(`${isc.nome || ""} ${isc.cognome || ""}`.trim());
-      setSpedIndirizzo(isc.fattura_indirizzo ? `${isc.fattura_indirizzo}${isc.fattura_civico ? " " + isc.fattura_civico : ""}` : "");
-      setSpedCitta(isc.fattura_citta || "");
-      setSpedCap(isc.fattura_cap || "");
+      // si prende quello che l'iscrizione ha già: l'indirizzo di residenza
+      // se c'è, altrimenti quello di fatturazione. Il resto lo completa chi
+      // sta vendendo — sono i campi senza i quali il pacco non parte
+      setSpedNome(toTitleCase(isc.nome || ""));
+      setSpedCognome(toTitleCase(isc.cognome || ""));
+      setSpedIndirizzo(isc.indirizzo_residenza || isc.fattura_indirizzo || "");
+      setSpedCivico(isc.fattura_civico || "");
+      setSpedCitta(toTitleCase(isc.citta_residenza || isc.fattura_citta || ""));
+      setSpedCap(isc.cap_residenza || isc.fattura_cap || "");
+      setSpedProvincia((isc.fattura_prov || "").toUpperCase());
+      if (isc.richiede_fattura) {
+        setSpedRichiedeFattura(true);
+        setSpedDitta(isc.fattura_ditta || "");
+        setSpedPiva(isc.fattura_piva || "");
+        setSpedCodDest(isc.fattura_cod_dest || "");
+        setSpedPec(isc.fattura_pec || "");
+      }
     }
   }
 
@@ -33835,7 +33880,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   function svuotaCarrello() { setCarrello([]); }
   function nuovaVendita() {
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setCouponValore(""); setCouponAttivo(null); setMetodoPagamento("pos"); setNote(""); setMsg("");
-    setSpedizioneAttiva(false); setSpedIscrittoId(""); setSpedDestinatario(""); setSpedIndirizzo(""); setSpedCitta(""); setSpedCap("");
+    setSpedizioneAttiva(false); setSpedIscrittoId("");
+    setSpedNome(""); setSpedCognome(""); setSpedIndirizzo(""); setSpedCivico(""); setSpedCitta(""); setSpedCap(""); setSpedProvincia("");
+    setSpedRichiedeFattura(false); setSpedDitta(""); setSpedPiva(""); setSpedCodDest(""); setSpedPec("");
     setOmaggioAttivo(false);
   }
 
@@ -33856,7 +33903,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (carrello.length === 0) { setMsg("Il carrello è vuoto."); return; }
     if (!operatore) { setMsg("Nessun operatore identificato: esci e rientra con il tuo account prima di vendere."); return; }
     if (omaggioAttivo && !note.trim()) { setMsg("Scrivi una nota per motivare l'omaggio: è obbligatoria."); return; }
-    if (spedizioneAttiva && !spedDestinatario.trim()) { setMsg("Indica il destinatario della spedizione."); return; }
+    if (campiClienteMancanti.length > 0) { setMsg(`Completare i dati cliente: ${campiClienteMancanti.join(", ")}.`); return; }
     // scarico in due tempi: prima si verifica TUTTO il carrello (magazzino
     // fisico, poi shop online fino alla scorta minima — vedi
     // preparaScarichi), solo dopo si scrive. Un bundle virtuale non ha
@@ -33907,10 +33954,19 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         vendita_id: venditaCreata.id,
         corso_data_id: corsoPosSel?.id || null,
         iscritto_id: spedIscrittoId || null,
-        destinatario_nome: spedDestinatario.trim(),
+        destinatario_nome: spedDestinatario,
+        nome: spedNome.trim(),
+        cognome: spedCognome.trim(),
         indirizzo: spedIndirizzo.trim() || null,
+        civico: spedCivico.trim() || null,
         citta: spedCitta.trim() || null,
         cap: spedCap.trim() || null,
+        provincia: spedProvincia.trim().toUpperCase() || null,
+        richiede_fattura: spedRichiedeFattura,
+        fattura_ditta: spedRichiedeFattura ? spedDitta.trim() : null,
+        fattura_piva: spedRichiedeFattura ? spedPiva.trim() : null,
+        fattura_cod_dest: spedRichiedeFattura ? spedCodDest.trim() : null,
+        fattura_pec: spedRichiedeFattura ? spedPec.trim() : null,
         prodotti: prodottiRiga,
       });
       if (erroreSped) { setSalvando(false); setMsg("Vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message); ricarica(["prodotti_shop", "vendite_shop"]); return; }
@@ -34117,17 +34173,45 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               </Field>
             </div>
           )}
-          <div style={{ marginBottom: 8 }}>
-            <Field label="Destinatario"><input style={inputStyle} value={spedDestinatario} onChange={(e) => setSpedDestinatario(e.target.value)} /></Field>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Nome"><input style={inputStyle} value={spedNome} onChange={(e) => setSpedNome(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Cognome"><input style={inputStyle} value={spedCognome} onChange={(e) => setSpedCognome(e.target.value)} /></Field></div>
           </div>
-          <div style={{ marginBottom: 8 }}>
-            <Field label="Indirizzo"><input style={inputStyle} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Indirizzo"><input style={inputStyle} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field label="Civico"><input style={inputStyle} value={spedCivico} onChange={(e) => setSpedCivico(e.target.value)} /></Field></div>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
+            <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
+            <div style={{ width: 74 }}><Field label="Prov."><input style={{ ...inputStyle, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
           </div>
-          <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti.</div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 8px" }}>
+            <input id="pos-fattura" type="checkbox" checked={spedRichiedeFattura} onChange={(e) => setSpedRichiedeFattura(e.target.checked)} style={{ width: 16, height: 16 }} />
+            <label htmlFor="pos-fattura" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Richiede fattura</label>
+          </div>
+          {spedRichiedeFattura && (
+            <>
+              <div style={{ marginBottom: 8 }}>
+                <Field label="Nome ditta"><input style={inputStyle} value={spedDitta} onChange={(e) => setSpedDitta(e.target.value)} /></Field>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <div style={{ flex: 1 }}><Field label="P. IVA"><input style={inputStyle} value={spedPiva} onChange={(e) => setSpedPiva(e.target.value)} /></Field></div>
+                <div style={{ flex: 1 }}><Field label="Cod. Dest."><input style={{ ...inputStyle, textTransform: "uppercase" }} value={spedCodDest} onChange={(e) => setSpedCodDest(e.target.value.toUpperCase())} /></Field></div>
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <Field label="PEC"><input style={inputStyle} inputMode="email" value={spedPec} onChange={(e) => setSpedPec(e.target.value)} /></Field>
+              </div>
+            </>
+          )}
+
+          {campiClienteMancanti.length > 0 && (
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 6 }}>
+              Completare i dati cliente: {campiClienteMancanti.join(", ")}.
+            </div>
+          )}
+          <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 6 }}>Genera un ordine di spedizione visibile in Logistica prodotti → Ordini in arrivo.</div>
         </div>
       )}
 
