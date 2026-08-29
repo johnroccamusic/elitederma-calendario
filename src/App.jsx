@@ -37704,7 +37704,7 @@ function RigaDivisorePacchetto({ kit, ricarica, onDragStart, onDragOver, onDrop,
     </div>
   );
 }
-function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia }) {
+function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDragOver, onDrop, onDragEnd, trascinando, evidenziatoBersaglio, kitApertoId, onImpostaAperto, kitCopiato, onCopia, onDuplicato }) {
   const [nome, setNome] = useState(kit.nome);
   const [ricercaKit, setRicercaKit] = useState("");
   const [mostraRicercaKit, setMostraRicercaKit] = useState(false);
@@ -37738,6 +37738,31 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     await query;
     ricarica(["kit_definizioni", "iscritti"]);
   }
+  // duplica il pacchetto con tutto il suo contenuto e lo mette subito
+  // sotto l'originale: i kit si somigliano quasi sempre fra loro, e
+  // rifare a mano venti righe di prodotti per cambiarne due è il modo in
+  // cui nascono le distinte sbagliate
+  async function duplica() {
+    const nomeCopia = `${kit.nome} copia`;
+    // fa spazio: tutti i pacchetti che stanno sotto scalano di uno, così
+    // la copia entra esattamente alla riga successiva
+    const posizione = (kit.ordine || 0) + 1;
+    const { data: creato, error } = await supabase
+      .from("kit_definizioni")
+      .insert({ nome: nomeCopia, corso_id: kit.corso_id || null, ordine: posizione, tipo: kit.tipo || "kit" })
+      .select().single();
+    if (error) { window.alert("Non è stato possibile duplicare: " + error.message); return; }
+
+    // il contenuto: prodotti del kit e accessori, con le stesse quantità
+    if (righe.length > 0) {
+      const copie = righe.map((r) => ({ kit_id: creato.id, prodotto_id: r.prodotto_id, tipo: r.tipo, quantita: r.quantita, corso_id: r.corso_id || null }));
+      const { error: erroreRighe } = await supabase.from("corsi_kit_prodotti").insert(copie);
+      if (erroreRighe) { window.alert(`Pacchetto duplicato, ma il contenuto no: ${erroreRighe.message}`); ricarica(["kit_definizioni", "corsi_kit_prodotti"]); return; }
+    }
+    if (onDuplicato) await onDuplicato(creato.id, posizione);
+    ricarica(["kit_definizioni", "corsi_kit_prodotti"]);
+  }
+
   async function elimina() {
     if (!window.confirm(`Eliminare il pacchetto "${kit.nome}"?\n\nSulle iscrizioni che lo hanno già scelto il nome resta scritto — è la traccia di cosa era stato venduto — ma segnalato come "non più in elenco": quegli allievi non porteranno nessun prodotto in preparazione finché non gli assegni un altro pacchetto.`)) return;
     const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
@@ -37828,6 +37853,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         {kitApertoId != null && !aperto && kitCopiato && kitCopiato.id !== kit.id && (
           <button onClick={incolla} style={pillBtn}>Incolla</button>
         )}
+        <button onClick={duplica} title="Crea una copia di questo pacchetto, con lo stesso contenuto" style={pillBtn}>Duplica</button>
         <button onClick={() => { setMostraRicercaKit((v) => !v); onImpostaAperto(kit.id); }} style={pillBtn}>+ Prodotto</button>
         <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
@@ -38001,6 +38027,15 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
   // drop, riassegna un "ordine" progressivo a tutti i pacchetti della
   // sezione secondo la nuova sequenza — stesso pattern già in uso per
   // riordinare le immagini prodotto in "Gestione shop"
+  // dopo una duplicazione: la copia ha preso la posizione subito sotto
+  // l'originale, quindi tutti quelli che stavano da lì in giù scalano di
+  // uno. Senza, la copia finirebbe a pari merito con un altro pacchetto e
+  // l'ordine dipenderebbe dal nome
+  async function spostaSottoOriginale(idCopia, posizione) {
+    const daSpostare = pacchetti.filter((k) => k.id !== idCopia && (k.ordine || 0) >= posizione);
+    if (!daSpostare.length) return;
+    await Promise.all(daSpostare.map((k) => supabase.from("kit_definizioni").update({ ordine: (k.ordine || 0) + 1 }).eq("id", k.id)));
+  }
   function iniziaTrascinamento(idOrigine) {
     trascinamentoRef.current = idOrigine;
     setTrascinatoId(idOrigine);
@@ -38091,6 +38126,7 @@ function SezioneCorsoPacchetti({ corso, pacchetti, corsiKitProdotti, corsi, prod
             trascinando={trascinatoId === k.id}
             evidenziatoBersaglio={trascinatoId != null && trascinatoId !== k.id && trascinatoSuId === k.id}
             kitApertoId={kitApertoId} onImpostaAperto={onImpostaAperto} kitCopiato={kitCopiato} onCopia={onCopia}
+            onDuplicato={spostaSottoOriginale}
           />
         )
       ))}
