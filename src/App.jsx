@@ -25779,7 +25779,7 @@ function RigaProdottoDaPreparare({ riga, primo, preso, onSegna, mostraPrezzo = f
   return (
     <label
       style={{
-        display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", cursor: "pointer",
         borderTop: primo ? "none" : `1px solid ${CREAM_BORDER}`,
         background: preso ? "#E3F3E5" : "transparent",
       }}
@@ -25788,7 +25788,7 @@ function RigaProdottoDaPreparare({ riga, primo, preso, onSegna, mostraPrezzo = f
         type="checkbox"
         checked={preso}
         onChange={(e) => onSegna(e.target.checked)}
-        style={{ width: 20, height: 20, flexShrink: 0, accentColor: "#2E7D32", cursor: "pointer" }}
+        style={{ width: 17, height: 17, flexShrink: 0, accentColor: "#2E7D32", cursor: "pointer" }}
       />
       <span style={{ ...fontBody, fontSize: 13, color: preso ? "#2E7D32" : NAVY, fontWeight: preso ? 700 : 400, flex: 1, minWidth: 0 }}>{riga?.nome || "—"}</span>
       <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: preso ? "#2E7D32" : NAVY, whiteSpace: "nowrap" }}>×{riga?.quantita ?? 1}</span>
@@ -25816,9 +25816,9 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
       onClick={attivo || occupato ? undefined : onClick}
       title={attivo ? "Stato attuale" : `Porta l'ordine in "${st.etichetta}"`}
       style={{
-        ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px",
+        ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "7px 4px",
         cursor: attivo || occupato ? "default" : "pointer", textAlign: "center", flex: 1, minWidth: 0,
-        lineHeight: 1.2, overflowWrap: "break-word", aspectRatio: "1 / 1",
+        lineHeight: 1.15, overflowWrap: "break-word",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
         opacity: occupato ? 0.5 : 1,
         // lo stato in cui l'ordine si trova si accende, gli altri sono le
@@ -25859,16 +25859,16 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
     return [nome, a.company, via, citta, a.country, a.phone, a.email].filter(Boolean);
   }
   const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
-    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
-      <span style={{ color: MUTED, minWidth: 110, flexShrink: 0 }}>{etichetta}</span>
+    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12, color: NAVY, padding: "1px 0" }}>
+      <span style={{ color: MUTED, minWidth: 96, flexShrink: 0 }}>{etichetta}</span>
       <span style={{ minWidth: 0 }}>{valore}</span>
     </div>
   );
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? 14 : 18, marginBottom: 16, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 20, fontWeight: 700, color: NAVY }}>
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY }}>
           Ordine #{vendita?.numero_ordine || vendita?.woo_order_id}
         </div>
         {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 10, padding: "3px 10px" }}>{st.etichetta}</span>}
@@ -25877,7 +25877,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         </span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 12 : 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
             <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Prodotti</span>
@@ -25887,7 +25887,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
               </span>
             )}
           </div>
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
             {righe.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
             ) : righe.map((r, i) => (
@@ -25898,7 +25898,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
               />
             ))}
           </div>
-          <div style={{ background: BG, borderRadius: 10, padding: "8px 10px" }}>
+          <div style={{ background: BG, borderRadius: 10, padding: "6px 9px" }}>
             {rigaInfo("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
             {rigaInfo("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
             {rigaInfo("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : (metodoSpedizione ? "gratuita" : null))}
@@ -25920,17 +25920,17 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
               <b>Nota del cliente:</b> {notaCliente}
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, marginTop: 8 }}>
             {indirizzo(spedizione).length > 0 && (
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Spedizione</div>
-                {indirizzo(spedizione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{r}</div>)}
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
+                <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Spedizione</div>
+                {indirizzo(spedizione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
               </div>
             )}
             {fatturazione && (
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
-                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Fatturazione</div>
-                {indirizzo(fatturazione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{r}</div>)}
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
+                <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Fatturazione</div>
+                {indirizzo(fatturazione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
               </div>
             )}
           </div>
@@ -25940,7 +25940,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "14px 0 6px" }}>Stato dell'ordine sul sito</div>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "10px 0 5px" }}>Stato dell'ordine sul sito</div>
       <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
         {STATI_ORDINE_SHOP.map((stato) => (
           <TastoStatoOrdine key={stato} stato={stato} attuale={vendita?.stato} occupato={occupato} onClick={() => onCambiaStato(vendita, stato)} />
@@ -25959,17 +25959,17 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
   const quantiPresi = righe.filter((_, i) => presi[i]).length;
   const spedita = spedizione?.stato === "spedito";
   const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
-    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
-      <span style={{ color: MUTED, minWidth: 110, flexShrink: 0 }}>{etichetta}</span>
+    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12, color: NAVY, padding: "1px 0" }}>
+      <span style={{ color: MUTED, minWidth: 96, flexShrink: 0 }}>{etichetta}</span>
       <span style={{ minWidth: 0 }}>{valore}</span>
     </div>
   );
   const indirizzo = [spedizione?.destinatario_nome, spedizione?.indirizzo, [spedizione?.cap, spedizione?.citta].filter(Boolean).join(" ")].filter(Boolean);
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? 14 : 18, marginBottom: 16, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 20, fontWeight: 700, color: NAVY }}>
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY }}>
           Vendita al banco
         </div>
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: spedita ? "#2E7D32" : "#B8860B", background: spedita ? "#E3F3E5" : "#FBF1D9", borderRadius: 10, padding: "3px 10px" }}>
@@ -25979,7 +25979,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{spedizione?.ts ? fmtData(spedizione.ts.slice(0, 10)) : "—"}</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 12 : 18 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
             <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Prodotti</span>
@@ -25989,7 +25989,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
               </span>
             )}
           </div>
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
             {righe.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
             ) : righe.map((r, i) => (
@@ -26000,7 +26000,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
             ))}
           </div>
           {vendita && (
-            <div style={{ background: BG, borderRadius: 10, padding: "8px 10px" }}>
+            <div style={{ background: BG, borderRadius: 10, padding: "6px 9px" }}>
               {rigaInfo("Ordine", `#${vendita.numero_ordine || "—"}`)}
               {rigaInfo("Pagamento", vendita.metodo_pagamento || null)}
               <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 5, marginTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
@@ -26020,17 +26020,17 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
           {indirizzo.length > 0 && (
             <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10, marginTop: 10 }}>
               <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Spedizione</div>
-              {indirizzo.map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{r}</div>)}
+              {indirizzo.map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
             </div>
           )}
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "14px 0 6px" }}>Stato della spedizione</div>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "10px 0 5px" }}>Stato della spedizione</div>
       <div style={{ display: "flex", gap: 6, alignItems: "stretch", maxWidth: 320 }}>
         <div style={{
-          ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px", textAlign: "center", flex: 1, minWidth: 0,
-          lineHeight: 1.2, aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+          ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "7px 4px", textAlign: "center", flex: 1, minWidth: 0,
+          lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
           background: spedita ? BG_CHIARO : "#E3F3E5", border: `1px solid ${spedita ? "#D9CDB4" : "#2E7D32"}`, color: spedita ? "#8A7355" : "#2E7D32",
         }}>
           <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
@@ -26040,8 +26040,8 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
           onClick={spedita || occupato ? undefined : onSegnaSpedita}
           title={spedita ? "Già spedita" : "Segna il pacco come partito"}
           style={{
-            ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px", textAlign: "center", flex: 1, minWidth: 0,
-            lineHeight: 1.2, aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+            ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 9, padding: "7px 4px", textAlign: "center", flex: 1, minWidth: 0,
+            lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
             cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
             background: spedita ? "#E3F3E5" : BG_CHIARO, border: `1px solid ${spedita ? "#2E7D32" : "#D9CDB4"}`, color: spedita ? "#2E7D32" : "#8A7355",
           }}
