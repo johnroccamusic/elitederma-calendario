@@ -25781,23 +25781,14 @@ function fmtDataBreve(d) {
 // invece di quattro, e restano leggibili perché ognuna è un riquadro a sé.
 //
 // Le pastiglie hanno misura fissa (due larghe per nome ed email, due
-// strette per spedizione e pagamento): a rimpicciolirsi è il testo, non il
-// riquadro — così le schede di ordini diversi restano allineate fra loro
-// invece di ballare a seconda di quanto è lungo il cognome del cliente.
-function fontPastiglia(testo, largo) {
-  const n = String(testo || "").length;
-  const soglie = largo ? [30, 38, 46, 56] : [18, 23, 28, 34];
-  if (n <= soglie[0]) return 12;
-  if (n <= soglie[1]) return 11;
-  if (n <= soglie[2]) return 10;
-  if (n <= soglie[3]) return 9;
-  return 8.5;
-}
-function pastiglia(etichetta, valore, largo = true) {
-  const testo = `${etichetta}: ${valore || "—"}`;
+// strette per spedizione e pagamento) e tutte lo stesso corpo di testo:
+// così le schede di ordini diversi restano allineate fra loro invece di
+// ballare a seconda di quanto è lungo il cognome del cliente. Nei rari
+// casi in cui un testo non ci sta, finisce con i puntini.
+function pastiglia(etichetta, valore) {
   return (
     <span style={{
-      ...fontBody, fontSize: fontPastiglia(testo, largo), color: valore ? NAVY : MUTED,
+      ...fontBody, fontSize: 12, color: valore ? NAVY : MUTED,
       background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
       padding: "0 9px", height: 30, display: "flex", alignItems: "center",
       whiteSpace: "nowrap", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
@@ -25937,8 +25928,8 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 8 }}>
         {pastiglia("Cliente", vendita?.cliente_nome)}
         {pastiglia("Email", vendita?.cliente_email || fatturazione?.email)}
-        {pastiglia("Sped.", metodoSpedizione, false)}
-        {pastiglia("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title, false)}
+        {pastiglia("Sped.", metodoSpedizione)}
+        {pastiglia("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title)}
       </div>
       {notaCliente && (
         <div style={{ ...fontBody, fontSize: 12, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "5px 8px", marginBottom: 8 }}>
@@ -26046,8 +26037,8 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 8 }}>
         {pastiglia("Cliente", spedizione?.destinatario_nome || vendita?.cliente_nome)}
         {pastiglia("Email", iscritto?.email || vendita?.cliente_email)}
-        {pastiglia("Tel.", iscritto?.telefono, false)}
-        {pastiglia("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null, false)}
+        {pastiglia("Tel.", iscritto?.telefono)}
+        {pastiglia("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null)}
         {corso && pastiglia("Corso", `${corso}${sede ? ` · ${sede}` : ""}`)}
       </div>
 
