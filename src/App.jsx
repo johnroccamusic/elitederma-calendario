@@ -14324,7 +14324,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
               <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {toTitleCase(corso?.nome || "?")}
               </div>
-              {nomiTrovati(13)}
+              {nomiTrovati(11.5)}
             </div>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
               {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
@@ -14350,7 +14350,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                 <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
                 {sottotitoloSoloMaster}
               </div>
-              {nomiTrovati(17)}
+              {nomiTrovati(15)}
             </div>
           </td>
           {mostraCitta && (
