@@ -25943,7 +25943,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 
       {/* i dati del cliente su una riga di pastiglie: erano una colonna di
           quattro righe che spingeva in basso gli indirizzi */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 16 }}>
         <Pastiglia etichetta={"Cliente"} valore={vendita?.cliente_nome} />
         <Pastiglia etichetta={"Email"} valore={vendita?.cliente_email || fatturazione?.email} />
         <Pastiglia etichetta={"Sped."} valore={metodoSpedizione} />
@@ -26052,7 +26052,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>{spedizione?.ts ? fmtDataBreve(spedizione.ts.slice(0, 10)) : "—"}</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 16 }}>
         <Pastiglia etichetta={"Cliente"} valore={spedizione?.destinatario_nome || vendita?.cliente_nome} />
         <Pastiglia etichetta={"Email"} valore={iscritto?.email || vendita?.cliente_email} />
         <Pastiglia etichetta={"Tel."} valore={iscritto?.telefono} />
