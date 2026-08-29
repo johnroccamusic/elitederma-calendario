@@ -28861,7 +28861,11 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
             Finché restano così valgono come <b>nessun kit</b>: il loro fabbisogno non entra nella previsione. Scegli il kit giusto e il calcolo si aggiorna da solo.
           </div>
           {gruppiDaAssegnare.map((g) => {
-            const kitDelCorso = (kitDefinizioni || []).filter((k) => k.corso_id === g.corsoId);
+            // stesso ordine (e stessi divisori) della pagina "Gestisci kit":
+            // chi sceglie qui ha in testa quell'elenco, non l'alfabeto
+            const kitDelCorso = (kitDefinizioni || [])
+              .filter((k) => k.corso_id === g.corsoId)
+              .sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || (a.nome || "").localeCompare(b.nome || "", "it"));
             return (
               <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
                 <div style={{ ...fontBody, fontSize: 13.5, color: NAVY, marginBottom: 6 }}>
@@ -28892,7 +28896,11 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                     onChange={(e) => setSceltaKit((prev) => ({ ...prev, [g.chiave]: e.target.value }))}
                   >
                     <option value="">— scegli il kit giusto —</option>
-                    {kitDelCorso.map((k) => <option key={k.id} value={k.id}>{k.nome}</option>)}
+                    {kitDelCorso.map((k) => (
+                      k.tipo === "divisore"
+                        ? <option key={k.id} value="" disabled>──────────</option>
+                        : <option key={k.id} value={k.id}>{k.nome}</option>
+                    ))}
                     <option value="__nessuno">Nessun kit (cancella il testo)</option>
                   </select>
                   <Button
@@ -28902,7 +28910,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                     {salvandoGruppo === g.chiave ? "Assegno…" : `Applica a ${g.iscritti.length}`}
                   </Button>
                 </div>
-                {kitDelCorso.length === 0 && (
+                {kitDelCorso.filter((k) => k.tipo !== "divisore").length === 0 && (
                   <div style={{ ...fontBody, fontSize: 11.5, color: "#C0392B", marginTop: 6 }}>
                     Questo corso non ha nessun kit configurato: creane uno in Impostazioni → Tipologie di kit.
                   </div>
