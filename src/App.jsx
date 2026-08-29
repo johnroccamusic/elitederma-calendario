@@ -682,29 +682,40 @@ function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// il capannone con il camion davanti e i pallet accatastati: il magazzino
-// è il posto dove la merce arriva, si impila e riparte
+// Il capannone con il camion davanti e i pallet accatastati: il magazzino
+// è il posto dove la merce arriva, si impila e riparte.
+//
+// Disegnata a pieni, non a contorni come le altre icone dei tasti: qui
+// serve la stessa figura netta dell'originale, dove il nero è la massa e
+// il bianco sono le aperture — finestre, portone, croci sui pallet.
 function IconaTileGestioneMagazzino({ size = 44 }) {
   const nero = "#111111";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* tetto sporgente e corpo del capannone, con la fila di finestrelle */}
-      <path d="M13.4 2 4.6 6.1v1.8l8.8-3.9 8.8 3.9V6.1z" fill={nero} />
-      <path d="M6.6 7.6h13.6V20h-2.1V11.2H6.6z" fill={nero} />
-      <rect x="8.2" y="8.8" width="1.5" height="1.1" fill="#fff" />
-      <rect x="10.6" y="8.8" width="1.5" height="1.1" fill="#fff" />
-      <rect x="13" y="8.8" width="1.5" height="1.1" fill="#fff" />
-      <rect x="15.4" y="8.8" width="1.5" height="1.1" fill="#fff" />
-      {/* i pallet: casse con la croce, impilate a scaletta */}
-      <path d="M9.9 11.6h3.4v3.2H9.9zM13.7 11.6h3.4v3.2h-3.4zM9.9 15.2h3.4v3.2H9.9zM13.7 15.2h3.4v3.2h-3.4z" fill={nero} />
-      <path d="M9.9 11.6l3.4 3.2M13.3 11.6l-3.4 3.2M13.7 11.6l3.4 3.2M17.1 11.6l-3.4 3.2M9.9 15.2l3.4 3.2M13.3 15.2l-3.4 3.2M13.7 15.2l3.4 3.2M17.1 15.2l-3.4 3.2" stroke="#fff" strokeWidth="0.55" />
-      {/* il camion, davanti a sinistra */}
-      <path d="M3.4 14.2h5.1v5.2H1.4v-3l1.1-1.3h0.9z" fill={nero} />
-      <path d="M2.2 15.6h1.1v1.2H1.6z" fill="#fff" />
-      <circle cx="3.3" cy="20.1" r="1.4" fill={nero} />
-      <circle cx="7.4" cy="20.1" r="1.4" fill={nero} />
-      <circle cx="3.3" cy="20.1" r="0.5" fill="#fff" />
-      <circle cx="7.4" cy="20.1" r="0.5" fill="#fff" />
+      {/* tetto a capanna: banda spessa, sporgente oltre i muri */}
+      <path d="M13.9 4 22.6 7.6v1.9L13.9 5.9 5.2 9.5V7.6z" fill={nero} />
+
+      {/* il muro, cornice del portone: fascia alta e i due montanti */}
+      <path d="M6.6 8.1h14.6v2.9H6.6z" fill={nero} />
+      <path d="M6.6 11h2.1v7.9H6.6zM19.1 11h2.1v7.9h-2.1z" fill={nero} />
+
+      {/* le finestre: cinque tagli bianchi nella fascia alta */}
+      <path d="M8.6 8.6h1.4v1.1H8.6zM11 8.6h1.4v1.1H11zM13.4 8.6h1.4v1.1h-1.4zM15.8 8.6h1.4v1.1h-1.4zM18.2 8.6h1.4v1.1h-1.4z" fill="#fff" />
+
+      {/* i pallet nel portone: tre file di casse con la croce */}
+      <path d="M10.6 11.2h2.57v2.54h-2.57zM10.6 13.74h2.57v2.54h-2.57zM10.6 16.29h2.57v2.54h-2.57zM13.17 11.2h2.57v2.54h-2.57zM13.17 13.74h2.57v2.54h-2.57zM13.17 16.29h2.57v2.54h-2.57zM15.73 11.2h2.57v2.54h-2.57zM15.73 13.74h2.57v2.54h-2.57zM15.73 16.29h2.57v2.54h-2.57z" fill={nero} />
+      <path d="M10.6 11.2l2.57 2.54M13.17 11.2l-2.57 2.54M10.6 13.74l2.57 2.54M13.17 13.74l-2.57 2.54M10.6 16.29l2.57 2.54M13.17 16.29l-2.57 2.54M13.17 11.2l2.57 2.54M15.74 11.2l-2.57 2.54M13.17 13.74l2.57 2.54M15.74 13.74l-2.57 2.54M13.17 16.29l2.57 2.54M15.74 16.29l-2.57 2.54M15.73 11.2l2.57 2.54M18.3 11.2l-2.57 2.54M15.73 13.74l2.57 2.54M18.3 13.74l-2.57 2.54M15.73 16.29l2.57 2.54M18.3 16.29l-2.57 2.54" stroke="#fff" strokeWidth="0.4" />
+
+      {/* il camion davanti: cassone con gli spigoli superiori smussati,
+          cabina bassa col parabrezza, telaio e due ruote */}
+      <path d="M4.2 13.1h6.9v3.9H4.2z" fill={nero} />
+      <path d="M1.3 15.2l1-1.3h1.9v3.1H1.3z" fill={nero} />
+      <path d="M1.9 14.6h1.3v1.2H1.5z" fill="#fff" />
+      <path d="M1.3 17h9.8v1.3H1.3z" fill={nero} />
+      <circle cx="3.4" cy="19" r="1.2" fill={nero} />
+      <circle cx="9" cy="19" r="1.2" fill={nero} />
+      <circle cx="3.4" cy="19" r="0.42" fill="#fff" />
+      <circle cx="9" cy="19" r="0.42" fill="#fff" />
     </svg>
   );
 }
