@@ -1449,8 +1449,13 @@ function TileHome({
       {!attivo && (
         <span style={{ position: "absolute", top: isMobile ? 10 : 16, right: isMobile ? 8 : 18, ...fontBody, fontSize: isMobile ? 8 : 10.5, fontWeight: 600, color: MUTED, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: isMobile ? "2px 8px" : "3px 10px" }}>Non attivo</span>
       )}
+      {/* il pallino rosso lampeggia: sta su un tasto che si guarda di
+          sfuggita passando, e fermo si confonde con il resto della pagina */}
       {attivo && badge > 0 && (
-        <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: isMobile ? 6 : 14, right: isMobile ? 6 : 16, ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: isMobile ? 18 : 22, height: isMobile ? 18 : 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" }}>{badge}</span>
+        <>
+          <style>{`@keyframes lampeggiaBadgeTasto { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }`}</style>
+          <span title={`${badge} avvis${badge === 1 ? "o" : "i"} da gestire`} style={{ position: "absolute", top: isMobile ? 6 : 14, right: isMobile ? 6 : 16, ...fontBody, fontSize: isMobile ? 10 : 12, fontWeight: 700, color: "#fff", background: "#C0392B", borderRadius: 20, minWidth: isMobile ? 18 : 22, height: isMobile ? 18 : 22, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px", animation: "lampeggiaBadgeTasto 1.1s ease-in-out infinite" }}>{badge}</span>
+        </>
       )}
       {ricca ? (
         <>
