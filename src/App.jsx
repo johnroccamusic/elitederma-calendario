@@ -25970,7 +25970,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
               <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
             </div>
             {sconto != null && sconto > 0 && (
-              <div style={{ flexBasis: "100%", ...fontBody, fontSize: 12, color: "#C0392B", fontWeight: 700, paddingTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flexBasis: "100%", ...fontBody, fontSize: 12, color: "#C0392B", fontWeight: 700, marginTop: 7, paddingTop: 7, borderTop: `1px solid ${CREAM_BORDER}` }}>
                 Sconto − {fmtEuroErp2(sconto)}{codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}
               </div>
             )}
