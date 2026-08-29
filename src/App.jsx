@@ -36666,6 +36666,11 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
 // l'ordine va sempre rispettato, non si salta avanti né si torna
 // indietro: cliccarla fa avanzare alla fase successiva
 function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA }) {
+  // da mobile le fasi stanno in fila e ognuna prende la stessa frazione di
+  // riga: legandole a un quadrato restano tutte uguali qualunque sia la
+  // lunghezza dell'etichetta, invece di allungarsi a seconda di quante
+  // righe di testo servono
+  const isMobile = useIsMobile();
   const idx = fasi.findIndex((f) => f.chiave === fase.chiave);
   const idxCorrente = indiceFaseLogistica(fasi, faseCorrente);
   const stato = idx < idxCorrente ? "fatto" : idx === idxCorrente ? "corrente" : "futuro";
@@ -36680,10 +36685,21 @@ function PillaFaseLogistica({ fase, faseCorrente, onClick, fasi = FASI_LOGISTICA
     <button
       onClick={cliccabile ? onClick : undefined}
       title={cliccabile ? undefined : "Rispetta l'ordine delle fasi"}
-      style={{ ...fontBody, fontSize: 11, fontWeight: 700, borderRadius: 10, padding: "9px 6px", cursor: cliccabile ? "pointer" : "default", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.25, overflowWrap: "break-word", wordBreak: "break-word", ...stile }}
+      style={{
+        ...fontBody, fontSize: isMobile ? 10 : 11, fontWeight: 700, borderRadius: 10, padding: isMobile ? "4px 3px" : "9px 6px",
+        cursor: cliccabile ? "pointer" : "default", textAlign: "center", flex: 1, minWidth: 0, lineHeight: 1.2,
+        overflowWrap: "break-word",
+        // da desktop lo spezzaparola serve (le colonne sono strette e
+        // fisse); nel quadrato di mobile no, e senza le parole non si
+        // rompono più a metà ("consegna re")
+        ...(isMobile
+          ? { aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden" }
+          : { wordBreak: "break-word" }),
+        ...stile,
+      }}
     >
-      <div style={{ fontSize: 13, marginBottom: 3 }}>{stato === "fatto" ? "✓" : stato === "corrente" ? "!" : "○"}</div>
-      {etichetta}
+      <div style={{ fontSize: isMobile ? 12 : 13, marginBottom: isMobile ? 0 : 3, lineHeight: 1 }}>{stato === "fatto" ? "✓" : stato === "corrente" ? "!" : "○"}</div>
+      <span>{etichetta}</span>
     </button>
   );
 }
