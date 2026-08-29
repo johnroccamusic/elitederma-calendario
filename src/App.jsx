@@ -35310,38 +35310,37 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const componentiSnapshot = [...componenti];
     setMsgErrore(""); setMsgSuccesso("");
 
-    // "Salva e esci": la scheda si chiude subito e il salvataggio prosegue
-    // per conto suo. Le chiamate a WooCommerce durano qualche secondo, e
-    // stare fermi a guardarle mentre ci sono venti prodotti da sistemare non
-    // serve a niente. L'esito arriva nella striscia in alto: se qualcosa non
-    // va, il prodotto è nominato e la scheda si riapre com'era
-    if (esciDopo) {
-      chiudiSchedaProdotto();
-      const chiave = `${f.id || "nuovo"}-${f.nome}`;
-      setLavoriInCorso((prec) => [...prec, { chiave, nome: f.nome.trim() }]);
-      eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot)
-        .then((esito) => {
-          setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
-          if (esito?.errore) {
-            setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
-            return;
-          }
-          ricarica(esito.tabelle);
-        })
-        .catch((e) => {
-          setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
-          setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: String(e?.message || e), form: f }]);
+    // Il salvataggio passa da WooCommerce e dura qualche secondo: nessuno
+    // dei due tasti sta fermo ad aspettarlo. "Salva" lascia la scheda
+    // aperta e va avanti per conto suo, "Salva e esci" la chiude subito.
+    // In entrambi i casi l'esito arriva nella striscia in alto: se
+    // qualcosa non va, il prodotto è nominato e la scheda si riapre com'era
+    if (esciDopo) chiudiSchedaProdotto();
+    const chiave = `${f.id || "nuovo"}-${f.nome}-${Date.now()}`;
+    setLavoriInCorso((prec) => [...prec, { chiave, nome: f.nome.trim() }]);
+    eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot)
+      .then((esito) => {
+        setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
+        if (esito?.errore) {
+          setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: esito.errore, form: f }]);
+          return;
+        }
+        // il messaggio nella scheda solo se è ancora aperta SULLO STESSO
+        // prodotto: nel frattempo si può averne aperto un altro, e un
+        // "salvato" sulla scheda sbagliata è peggio di nessun messaggio
+        setProdottoForm((prev) => {
+          if (!prev) return prev;
+          const stessoProdotto = f.id ? prev.id === f.id : prev.id == null && prev.nome === f.nome;
+          if (!stessoProdotto) return prev;
+          setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
+          return f.id ? prev : { ...prev, id: esito.idProdotto };
         });
-      return;
-    }
-
-    setSalvando(true);
-    const esito = await eseguiSalvataggioProdotto(f, calcolo, componentiSnapshot);
-    setSalvando(false);
-    if (esito?.errore) { setMsgErrore(esito.errore); return; }
-    setMsgSuccesso(f.id ? "Prodotto salvato." : "Prodotto creato.");
-    if (!f.id && esito.idProdotto) setProdottoForm((prev) => ({ ...prev, id: esito.idProdotto }));
-    ricarica(esito.tabelle);
+        ricarica(esito.tabelle);
+      })
+      .catch((e) => {
+        setLavoriInCorso((prec) => prec.filter((l) => l.chiave !== chiave));
+        setLavoriFalliti((prec) => [...prec, { chiave, nome: f.nome.trim(), errore: String(e?.message || e), form: f }]);
+      });
   }
 
   // gli stessi dati di scorta e riordino valgono quasi sempre per una
@@ -35596,7 +35595,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     <div style={{ ...cardStyle, padding: 18, marginBottom: 0, height: isMobile ? "auto" : altezzaColonne, overflow: colonneLibere ? "visible" : "auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY }}>{prodottoForm.id ? "Modifica prodotto" : "Nuovo prodotto"}</div>
-        <Button onClick={() => salvaProdotto(false)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+        <Button onClick={() => salvaProdotto(false)}>Salva</Button>
       </div>
       {messaggi}
       <Field label="Immagini prodotto">
@@ -36072,10 +36071,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
           "Salva e esci" serve a chi sistema molti prodotti di fila: salva e
           torna all'elenco, senza dover richiudere a mano */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Button onClick={() => salvaProdotto(false)} disabled={salvando} style={{ flex: "1 1 200px" }}>
-          {salvando ? "Salvo…" : prodottoForm.id ? "Salva modifiche" : "Crea prodotto"}
+        <Button onClick={() => salvaProdotto(false)} style={{ flex: "1 1 200px" }}>
+          {prodottoForm.id ? "Salva modifiche" : "Crea prodotto"}
         </Button>
-        <Button variant="ghost" onClick={() => salvaProdotto(true)} disabled={salvando} style={{ flex: "1 1 160px" }}>
+        <Button variant="ghost" onClick={() => salvaProdotto(true)} style={{ flex: "1 1 160px" }}>
           Salva e esci
         </Button>
       </div>
