@@ -208,6 +208,29 @@ function useIsMobile(breakpoint = 700) {
 // una tabella molto larga va spezzata in schede a due colonne (telefono in
 // verticale, tutto leggibile) oppure può restare su una riga sola (telefono
 // in orizzontale, dove c'è più larghezza)
+// Disegna il contenuto coricato di 90 gradi, dentro un riquadro grande
+// quanto lo schermo girato: chi apre la pagina col telefono dritto vede
+// tutto ruotato e gira il telefono, che è l'unico modo — il browser non
+// può ruotare lo schermo per conto suo. Quando "attivo" è falso non fa
+// niente: rende i figli così come sono.
+function ContenitoreCoricato({ attivo, children }) {
+  if (!attivo) return children;
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100dvh", overflow: "hidden" }}>
+      <div
+        style={{
+          position: "absolute", top: 0, left: 0,
+          width: "100dvh", height: "100dvw",
+          transform: "translateX(100dvw) rotate(90deg)", transformOrigin: "top left",
+          overflowY: "auto", WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function useIsPortrait() {
   const [portrait, setPortrait] = useState(() => (typeof window === "undefined" ? true : window.innerHeight >= window.innerWidth));
   useEffect(() => {
@@ -33315,41 +33338,15 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
     <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: perc >= 0 ? "#2E7D32" : "#C0392B" }}>{perc >= 0 ? "+" : ""}{perc}%</span>
   );
 
-  // Questa pagina è una tabella da nove colonne: su un telefono in
-  // verticale non ci sta, e rimpicciolire il testo fino a farcelo stare
-  // vorrebbe dire renderlo illeggibile. Il web non può girare lo schermo da
-  // solo — nessun browser lo consente fuori dalla modalità a tutto schermo,
-  // e su iPhone nemmeno lì — quindi si chiede: finché il telefono è dritto
-  // la pagina mostra solo l'invito a ruotarlo, e appena è coricato compare
-  // tutto. L'Indietro resta, per non intrappolare chi è entrato per sbaglio.
-  if (isMobile && portrait) {
-    return (
-      <div style={{ background: "transparent", minHeight: "100vh", padding: "20px 16px 60px" }}>
-        <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
-        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: "36px 20px", textAlign: "center", marginTop: 40 }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 18 }}>
-            <svg width="86" height="86" viewBox="0 0 24 24" fill="none">
-              {/* il telefono si corica da solo, avanti e indietro: è il
-                  gesto da fare, non un'icona da interpretare */}
-              <style>{`@keyframes ruotaTelefonoCrm { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }`}</style>
-              <g style={{ transformOrigin: "12px 12px", animation: "ruotaTelefonoCrm 2.4s ease-in-out infinite alternate" }}>
-                <rect x="7.2" y="2.6" width="9.6" height="18.8" rx="1.8" stroke={NAVY} strokeWidth="1.6" />
-                <path d="M10.6 5.1h2.8" stroke={NAVY} strokeWidth="1.3" strokeLinecap="round" />
-                <rect x="8.9" y="7.4" width="6.2" height="9.4" rx="0.6" fill={GOLD} />
-                <circle cx="12" cy="19.2" r="0.9" fill={NAVY} />
-              </g>
-            </svg>
-          </div>
-          <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Ruota il telefono</div>
-          <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, lineHeight: 1.45, maxWidth: 320, margin: "0 auto" }}>
-            L'anagrafica allievi è una tabella larga: coricando il telefono ci sta tutta e si legge senza rimpicciolire niente.
-          </div>
-        </div>
-      </div>
-    );
-  }
 
+  // La tabella ha nove colonne: su un telefono in verticale non ci sta, e
+  // rimpicciolire fino a farcela stare la renderebbe illeggibile. Il web
+  // non può girare lo schermo da solo (nessun browser lo consente fuori
+  // dalla modalità a tutto schermo, e su iPhone nemmeno lì), quindi si
+  // gira il contenuto: la pagina viene disegnata coricata e chi la apre
+  // ruota il telefono per leggerla. Torna dritta appena il telefono lo è.
   return (
+    <ContenitoreCoricato attivo={isMobile && portrait}>
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
@@ -33567,6 +33564,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
         </Modal>
       )}
     </div>
+    </ContenitoreCoricato>
   );
 }
 
