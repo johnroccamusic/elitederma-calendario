@@ -25753,6 +25753,36 @@ function ModaleDettaglioOrdine({ vendita, onChiudi }) {
 }
 
 // ---------- Ordini in arrivo (spedizioni dello shop online) ----------
+// una riga di prodotto da mettere nel pacco: si spunta quando il pezzo è
+// stato preso dallo scaffale e la riga diventa verde. La spunta non vive
+// nel browser di chi la mette (tabella righe_preparate_spedizione): un
+// pacco lo può finire un'altra persona, o si riprende il giorno dopo
+function RigaProdottoDaPreparare({ riga, primo, preso, onSegna, mostraPrezzo = false }) {
+  return (
+    <label
+      style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", cursor: "pointer",
+        borderTop: primo ? "none" : `1px solid ${CREAM_BORDER}`,
+        background: preso ? "#E3F3E5" : "transparent",
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={preso}
+        onChange={(e) => onSegna(e.target.checked)}
+        style={{ width: 20, height: 20, flexShrink: 0, accentColor: "#2E7D32", cursor: "pointer" }}
+      />
+      <span style={{ ...fontBody, fontSize: 13, color: preso ? "#2E7D32" : NAVY, fontWeight: preso ? 700 : 400, flex: 1, minWidth: 0 }}>{riga?.nome || "—"}</span>
+      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: preso ? "#2E7D32" : NAVY, whiteSpace: "nowrap" }}>×{riga?.quantita ?? 1}</span>
+      {mostraPrezzo && (
+        <span style={{ ...fontBody, fontSize: 12.5, color: preso ? "#2E7D32" : MUTED, whiteSpace: "nowrap", minWidth: 70, textAlign: "right" }}>
+          {riga?.totale_riga != null ? fmtEuroErp2(riga.totale_riga) : "—"}
+        </span>
+      )}
+    </label>
+  );
+}
+
 // I sei stati che WooCommerce accetta, nell'ordine in cui li mostra il
 // sito. Sono gli stessi di woo-stato-ordine: qui si sceglie, là si scrive.
 const STATI_ORDINE_SHOP = ["completed", "processing", "on-hold", "pending", "cancelled", "refunded"];
@@ -25762,6 +25792,7 @@ const STATI_ORDINE_SHOP = ["completed", "processing", "on-hold", "pending", "can
 function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
   const st = STATI_VENDITA_SHOP[stato] || { etichetta: stato, colore: MUTED, sfondo: "#fff" };
   const attivo = stato === attuale;
+  const negativo = stato === "cancelled" || stato === "refunded";
   return (
     <button
       onClick={attivo || occupato ? undefined : onClick}
@@ -25772,9 +25803,13 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
         lineHeight: 1.2, overflowWrap: "break-word", aspectRatio: "1 / 1",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
         opacity: occupato ? 0.5 : 1,
-        background: attivo ? st.sfondo : "#fff",
-        border: `1px solid ${attivo ? st.colore : CREAM_BORDER}`,
-        color: attivo ? st.colore : MUTED,
+        // lo stato in cui l'ordine si trova si accende, gli altri sono le
+        // caselle di crema in cui lo si può spostare. Acceso è verde quando
+        // l'ordine è vivo, rosso quando è annullato o rimborsato: quello
+        // non è un traguardo, ed è giusto che si veda da lontano
+        background: attivo ? (negativo ? "#FBE4E1" : "#E3F3E5") : BG_CHIARO,
+        border: `1px solid ${attivo ? (negativo ? "#C0392B" : "#2E7D32") : "#D9CDB4"}`,
+        color: attivo ? (negativo ? "#C0392B" : "#2E7D32") : "#8A7355",
       }}
     >
       <span style={{ fontSize: 12, lineHeight: 1 }}>{attivo ? "✓" : "○"}</span>
@@ -25786,8 +25821,9 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
 // la "nuvola" di un ordine: data, riepilogo, cliente, indirizzi e i tasti
 // di stato. È lo stesso contenuto della scheda dettaglio di Vendite Shop,
 // disposto per essere letto mentre si prepara il pacco
-function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile }) {
+function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
+  const quantiPresi = righe.filter((_, i) => presi[i]).length;
   const fatturazione = grezzo?.billing || null;
   const spedizione = grezzo?.shipping || null;
   const speseSpedizione = grezzo?.shipping_total != null ? parseNum(grezzo.shipping_total) : null;
@@ -25825,18 +25861,23 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile }
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 12 : 18 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Prodotti</div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Prodotti</span>
+            {righe.length > 0 && (
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === righe.length ? "#2E7D32" : MUTED }}>
+                {quantiPresi === righe.length ? "tutto preso" : `${quantiPresi} di ${righe.length} presi`}
+              </span>
+            )}
+          </div>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
             {righe.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
             ) : righe.map((r, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
-                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", minWidth: 70, textAlign: "right" }}>
-                  {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
-                </span>
-              </div>
+              <RigaProdottoDaPreparare
+                key={i} riga={r} indice={i} primo={i === 0}
+                preso={!!presi[i]} onSegna={(valore) => onSegnaRiga(i, valore)}
+                mostraPrezzo
+              />
             ))}
           </div>
           <div style={{ background: BG, borderRadius: 10, padding: "8px 10px" }}>
@@ -25895,8 +25936,9 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile }
 // shop, ma i dati del cliente arrivano da quanto scritto al banco
 // (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito — c'è solo
 // da dire se il pacco è partito
-function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, occupato, isMobile }) {
+function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
+  const quantiPresi = righe.filter((_, i) => presi[i]).length;
   const spedita = spedizione?.stato === "spedito";
   const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
     <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
@@ -25921,15 +25963,22 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 12 : 18 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Prodotti</div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Prodotti</span>
+            {righe.length > 0 && (
+              <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === righe.length ? "#2E7D32" : MUTED }}>
+                {quantiPresi === righe.length ? "tutto preso" : `${quantiPresi} di ${righe.length} presi`}
+              </span>
+            )}
+          </div>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
             {righe.length === 0 ? (
               <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
             ) : righe.map((r, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
-              </div>
+              <RigaProdottoDaPreparare
+                key={i} riga={r} indice={i} primo={i === 0}
+                preso={!!presi[i]} onSegna={(valore) => onSegnaRiga(i, valore)}
+              />
             ))}
           </div>
           {vendita && (
@@ -25964,9 +26013,9 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         <div style={{
           ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px", textAlign: "center", flex: 1, minWidth: 0,
           lineHeight: 1.2, aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-          background: spedita ? "#fff" : "#FBF1D9", border: `1px solid ${spedita ? CREAM_BORDER : "#B8860B"}`, color: spedita ? MUTED : "#B8860B",
+          background: spedita ? BG_CHIARO : "#E3F3E5", border: `1px solid ${spedita ? "#D9CDB4" : "#2E7D32"}`, color: spedita ? "#8A7355" : "#2E7D32",
         }}>
-          <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "○" : "!"}</span>
+          <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
           <span>Da spedire</span>
         </div>
         <button
@@ -25976,7 +26025,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
             ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px", textAlign: "center", flex: 1, minWidth: 0,
             lineHeight: 1.2, aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
             cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
-            background: spedita ? "#E3F3E5" : "#fff", border: `1px solid ${spedita ? "#2E7D32" : CREAM_BORDER}`, color: spedita ? "#2E7D32" : MUTED,
+            background: spedita ? "#E3F3E5" : BG_CHIARO, border: `1px solid ${spedita ? "#2E7D32" : "#D9CDB4"}`, color: spedita ? "#2E7D32" : "#8A7355",
           }}
         >
           <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
@@ -25996,6 +26045,7 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
   const [vista, setVista] = useState("dagestire"); // dagestire | storico
   const [payloadPerId, setPayloadPerId] = useState({});
   const [cambiando, setCambiando] = useState(null);
+  const [ordineAperto, setOrdineAperto] = useState(null);
 
   const venditaPerId = useMemo(() => Object.fromEntries((venditeShop || []).map((v) => [v.id, v])), [venditeShop]);
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
@@ -26016,16 +26066,59 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
       .map((v) => ({ tipo: "woo", chiave: `w${v.id}`, data: v.data_ordine || "", vendita: v }));
     const daPos = (spedizioniPos || [])
       .filter((sp) => (vista === "dagestire" ? sp.stato === "da_spedire" : sp.stato === "spedito"))
-      .map((sp) => ({ tipo: "pos", chiave: `p${sp.id}`, data: sp.ts || "", spedizione: sp }));
+      .map((sp) => ({ tipo: "pos", chiave: `p${sp.id}`, data: sp.ts || "", spedizione: sp, vendita: sp.vendita_id ? venditaPerId[sp.vendita_id] : null }));
     const tutte = [...daShop, ...daPos].sort((a, b) => String(b.data).localeCompare(String(a.data)));
-    return vista === "storico" ? tutte.slice(0, 40) : tutte;
-  }, [soloShop, spedizioniPos, vista]);
+    return vista === "storico" ? tutte.slice(0, 200) : tutte;
+  }, [soloShop, spedizioniPos, vista, venditaPerId]);
   const ordini = useMemo(() => voci.filter((v) => v.tipo === "woo").map((v) => v.vendita), [voci]);
 
   // gli stati cambiano anche da fuori (dal sito, o da un collega): questa
   // pagina serve a sapere cosa spedire ADESSO, quindi ad ogni apertura
   // rilegge ordini e spedizioni invece di fidarsi di quanto era in memoria
   useEffect(() => { ricarica(["vendite_shop", "spedizioni_pos"]); }, []);
+
+  // le righe già prese dallo scaffale: stanno su una tabella loro perché
+  // chi prepara un pacco non è sempre chi lo chiude
+  const [righePrese, setRighePrese] = useState({});
+  useEffect(() => {
+    let annullato = false;
+    supabase.from("righe_preparate_spedizione").select("*").then(({ data }) => {
+      if (annullato) return;
+      const mappa = {};
+      (data || []).forEach((r) => {
+        const chiave = r.vendita_id ? `w${r.vendita_id}` : `p${r.spedizione_pos_id}`;
+        if (!mappa[chiave]) mappa[chiave] = {};
+        mappa[chiave][r.indice_riga] = true;
+      });
+      setRighePrese(mappa);
+    });
+    return () => { annullato = true; };
+  }, []);
+
+  // spunta ottimista: la riga diventa verde subito, e se il salvataggio
+  // fallisce torna com'era invece di raccontare una bugia a chi prepara
+  async function segnaRigaPresa(voce, indice, preso) {
+    const chiave = voce.chiave;
+    setRighePrese((prev) => {
+      const dellaVoce = { ...(prev[chiave] || {}) };
+      if (preso) dellaVoce[indice] = true; else delete dellaVoce[indice];
+      return { ...prev, [chiave]: dellaVoce };
+    });
+    const riferimento = voce.tipo === "woo" ? { vendita_id: voce.vendita.id } : { spedizione_pos_id: voce.spedizione.id };
+    const colonna = voce.tipo === "woo" ? "vendita_id" : "spedizione_pos_id";
+    const valore = voce.tipo === "woo" ? voce.vendita.id : voce.spedizione.id;
+    const { error } = preso
+      ? await supabase.from("righe_preparate_spedizione").insert({ ...riferimento, indice_riga: indice })
+      : await supabase.from("righe_preparate_spedizione").delete().eq(colonna, valore).eq("indice_riga", indice);
+    if (error) {
+      setRighePrese((prev) => {
+        const dellaVoce = { ...(prev[chiave] || {}) };
+        if (preso) delete dellaVoce[indice]; else dellaVoce[indice] = true;
+        return { ...prev, [chiave]: dellaVoce };
+      });
+      window.alert("La spunta non è stata salvata: " + error.message);
+    }
+  }
 
   // indirizzi, spedizione e coupon stanno in payload_raw, che non si tiene
   // in memoria per migliaia di ordini: si legge solo per quelli a video
@@ -26094,7 +26187,9 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
           </TabPillola>
         </div>
 
-        {voci.length === 0 ? (
+        {vista === "storico" ? (
+          <TabellaStoricoSpedizioni voci={voci} onApriOrdine={setOrdineAperto} isMobile={isMobile} />
+        ) : voci.length === 0 ? (
           <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
             {vista === "dagestire"
               ? "Niente da spedire in questo momento: nessun ordine dello shop in lavorazione e nessuna spedizione dal banco in attesa."
@@ -26102,11 +26197,6 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
           </div>
         ) : (
           <>
-            {vista === "storico" && (
-              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
-                Le ultime {voci.length} spedizioni chiuse, dalla più recente.
-              </div>
-            )}
             {voci.map((voce) => {
               if (voce.tipo === "woo") {
                 return (
@@ -26116,6 +26206,8 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
                     grezzo={payloadPerId[voce.vendita.id] || null}
                     occupato={cambiando === voce.vendita.id}
                     onCambiaStato={cambiaStato}
+                    presi={righePrese[voce.chiave] || {}}
+                    onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
                     isMobile={isMobile}
                   />
                 );
@@ -26132,12 +26224,91 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
                   iscritto={sp.iscritto_id ? iscrittoById[sp.iscritto_id] : null}
                   occupato={cambiando === sp.id}
                   onSegnaSpedita={() => segnaSpeditaPos(sp)}
+                  presi={righePrese[voce.chiave] || {}}
+                  onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
                   isMobile={isMobile}
                 />
               );
             })}
           </>
         )}
+        {ordineAperto && <ModaleDettaglioOrdine vendita={ordineAperto} onChiudi={() => setOrdineAperto(null)} />}
+      </div>
+    </div>
+  );
+}
+
+// lo storico non è fatto per essere letto pacco per pacco: serve a
+// ritrovare un ordine e vedere com'è finito, quindi è la stessa tabella
+// di Vendite Shop. Il numero apre la scheda completa
+function TabellaStoricoSpedizioni({ voci, onApriOrdine, isMobile }) {
+  if (voci.length === 0) {
+    return (
+      <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
+        Nessuna spedizione chiusa da mostrare.
+      </div>
+    );
+  }
+  const cella = { padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" };
+  const intestazione = { padding: "10px 12px", ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", whiteSpace: "nowrap" };
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, overflow: "hidden" }}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
+          <thead>
+            <tr>
+              <th style={intestazione}>Ordine</th>
+              <th style={intestazione}>Tipo</th>
+              <th style={intestazione}>Data</th>
+              <th style={intestazione}>Cliente</th>
+              <th style={intestazione}>Stato</th>
+              <th style={{ ...intestazione, textAlign: "right" }}>Imponibile</th>
+              <th style={{ ...intestazione, textAlign: "right" }}>IVA</th>
+              <th style={{ ...intestazione, textAlign: "right" }}>Totale</th>
+            </tr>
+          </thead>
+          <tbody>
+            {voci.map((voce) => {
+              const woo = voce.tipo === "woo";
+              const v = woo ? voce.vendita : voce.vendita;
+              const sp = voce.spedizione;
+              const st = woo ? STATI_VENDITA_SHOP[voce.vendita.stato] : { etichetta: "Spedita", colore: "#2E7D32", sfondo: "#E3F3E5" };
+              return (
+                <tr key={voce.chiave}>
+                  <td style={cella}>
+                    {woo ? (
+                      <button
+                        onClick={() => onApriOrdine(voce.vendita)}
+                        style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2 }}
+                      >
+                        #{voce.vendita.numero_ordine || voce.vendita.woo_order_id}
+                      </button>
+                    ) : (
+                      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>#{v?.numero_ordine || "—"}</span>
+                    )}
+                  </td>
+                  <td style={cella}>
+                    <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>
+                      {woo ? "Shop" : "Banco"}
+                    </span>
+                  </td>
+                  <td style={cella}>{voce.data ? fmtData(String(voce.data).slice(0, 10)) : "—"}</td>
+                  <td style={{ ...cella, whiteSpace: "normal", minWidth: 160 }}>
+                    {woo ? (voce.vendita.cliente_nome || "—") : (sp?.destinatario_nome || v?.cliente_nome || "—")}
+                  </td>
+                  <td style={cella}>
+                    <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st?.colore || MUTED, background: st?.sfondo || "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>
+                      {st?.etichetta || "—"}
+                    </span>
+                  </td>
+                  <td style={{ ...cella, textAlign: "right" }}>{v?.totale_imponibile != null ? fmtEuroErp2(v.totale_imponibile) : "—"}</td>
+                  <td style={{ ...cella, textAlign: "right" }}>{v?.totale_iva != null ? fmtEuroErp2(v.totale_iva) : "—"}</td>
+                  <td style={{ ...cella, textAlign: "right", fontWeight: 700 }}>{v?.totale != null ? fmtEuroErp2(v.totale) : "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
