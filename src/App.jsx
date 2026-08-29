@@ -25771,62 +25771,66 @@ function ModaleDettaglioOrdine({ vendita, onChiudi }) {
 }
 
 // ---------- Ordini in arrivo (spedizioni dello shop online) ----------
-// data con l'anno a due cifre: nella scheda di un pacco l'anno per esteso
-// occupa spazio e non dice niente di più
-function fmtDataBreve(d) {
-  const [y, m, g] = String(d || "").split("-");
-  return y ? `${g}/${m}/${y.slice(2)}` : "—";
+// le righe di un indirizzo WooCommerce, nell'ordine in cui si scrivono su
+// una busta
+function indirizzoOrdine(a) {
+  if (!a) return [];
+  const nome = [a.first_name, a.last_name].filter(Boolean).join(" ");
+  const via = [a.address_1, a.address_2].filter(Boolean).join(", ");
+  const citta = [a.postcode, a.city, a.state && `(${a.state})`].filter(Boolean).join(" ");
+  return [nome, a.company, via, citta, a.country, a.phone, a.email].filter(Boolean);
 }
-// un dato del cliente dentro una pastiglia: in fila prendono una riga sola
-// invece di quattro, e restano leggibili perché ognuna è un riquadro a sé.
-//
-// Le pastiglie hanno misura fissa (due larghe per nome ed email, due
-// strette per spedizione e pagamento) e tutte lo stesso corpo di testo:
-// così le schede di ordini diversi restano allineate fra loro invece di
-// ballare a seconda di quanto è lungo il cognome del cliente. Nei rari
-// casi in cui un testo non ci sta, finisce con i puntini.
-function Pastiglia({ etichetta, valore }) {
-  const rif = React.useRef(null);
-  // si misura il testo davvero disegnato e, solo se sborda, si scende di
-  // mezzo punto alla volta fino a farlo entrare. Niente puntini: un
-  // indirizzo email troncato non serve a nessuno, e niente soglie sulla
-  // lunghezza — quelle rimpicciolivano anche testi che ci stavano benissimo
-  React.useLayoutEffect(() => {
-    const nodo = rif.current;
-    if (!nodo) return undefined;
-    function adatta() {
-      let dim = 12;
-      nodo.style.fontSize = `${dim}px`;
-      while (dim > 8 && nodo.scrollWidth > nodo.clientWidth) {
-        dim -= 0.5;
-        nodo.style.fontSize = `${dim}px`;
-      }
-    }
-    adatta();
-    window.addEventListener("resize", adatta);
-    return () => window.removeEventListener("resize", adatta);
-  });
+
+// uno dei quattro dati del cliente in cima alla scheda: icona a sinistra,
+// etichetta piccola sopra e il dato sotto. Misura fissa, così le schede di
+// ordini diversi restano allineate fra loro
+function RiquadroDatoCliente({ Icona, etichetta, valore }) {
   return (
-    <span style={{
-      background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
-      padding: "0 9px", height: 30, display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden",
-    }}>
-      <span ref={rif} style={{ ...fontBody, fontSize: 12, color: valore ? NAVY : MUTED, display: "block", width: "100%", whiteSpace: "nowrap", overflow: "hidden" }}>
-        <span style={{ fontWeight: 700 }}>{etichetta}:</span> {valore || "—"}
-      </span>
-    </span>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px", minWidth: 0 }}>
+      <span style={{ color: MUTED, flexShrink: 0, display: "flex" }}><Icona size={20} color={MUTED} /></span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 1 }}>{etichetta}</div>
+        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: valore ? NAVY : MUTED, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{valore || "—"}</div>
+      </div>
+    </div>
   );
 }
+
+// un indirizzo (spedizione o fatturazione) nel suo riquadro
+function RiquadroIndirizzo({ Icona, titolo, righe }) {
+  if (!righe || righe.length === 0) return null;
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+        <Icona size={15} color={MUTED} />
+        <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</span>
+      </div>
+      {righe.map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5, wordBreak: "break-word" }}>{r}</div>)}
+    </div>
+  );
+}
+
+// una casella della fascia dei totali: etichetta sopra, numero sotto,
+// separata dalla successiva da una linea sottile
+function CellaTotale({ etichetta, valore, forte = false, primo = false }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, textAlign: "center", padding: "0 6px", borderLeft: primo ? "none" : `1px solid ${CREAM_BORDER}` }}>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: forte ? 17 : 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{valore}</div>
+    </div>
+  );
+}
+
 // una riga di prodotto da mettere nel pacco: si spunta quando il pezzo è
 // stato preso dallo scaffale e la riga diventa verde. La spunta non vive
 // nel browser di chi la mette (tabella righe_preparate_spedizione): un
 // pacco lo può finire un'altra persona, o si riprende il giorno dopo
-function RigaProdottoDaPreparare({ riga, primo, preso, onSegna, mostraPrezzo = false }) {
+function RigaProdottoDaPreparare({ riga, preso, onSegna, mostraPrezzo = false }) {
   return (
     <label
       style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", cursor: "pointer",
-        borderTop: primo ? "none" : `1px solid ${CREAM_BORDER}`,
+        display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", cursor: "pointer",
+        borderTop: `1px solid ${CREAM_BORDER}`,
         background: preso ? "#E3F3E5" : "transparent",
       }}
     >
@@ -25837,9 +25841,9 @@ function RigaProdottoDaPreparare({ riga, primo, preso, onSegna, mostraPrezzo = f
         style={{ width: 17, height: 17, flexShrink: 0, accentColor: "#2E7D32", cursor: "pointer" }}
       />
       <span style={{ ...fontBody, fontSize: 13, color: preso ? "#2E7D32" : NAVY, fontWeight: preso ? 700 : 400, flex: 1, minWidth: 0 }}>{riga?.nome || "—"}</span>
-      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: preso ? "#2E7D32" : NAVY, whiteSpace: "nowrap" }}>×{riga?.quantita ?? 1}</span>
+      <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: preso ? "#2E7D32" : NAVY, whiteSpace: "nowrap", width: 34, textAlign: "right" }}>×{riga?.quantita ?? 1}</span>
       {mostraPrezzo && (
-        <span style={{ ...fontBody, fontSize: 12.5, color: preso ? "#2E7D32" : MUTED, whiteSpace: "nowrap", minWidth: 70, textAlign: "right" }}>
+        <span style={{ ...fontBody, fontSize: 12.5, color: preso ? "#2E7D32" : MUTED, whiteSpace: "nowrap", width: 66, textAlign: "right" }}>
           {riga?.totale_riga != null ? fmtEuroErp2(riga.totale_riga) : "—"}
         </span>
       )}
@@ -25893,9 +25897,10 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
   );
 }
 
-// la "nuvola" di un ordine: data, riepilogo, cliente, indirizzi e i tasti
-// di stato. È lo stesso contenuto della scheda dettaglio di Vendite Shop,
-// disposto per essere letto mentre si prepara il pacco
+// la "nuvola" di un ordine dello shop: intestazione, i quattro dati del
+// cliente in riquadri con icona, l'elenco dei prodotti da spuntare mentre
+// si prepara il pacco, gli indirizzi e la fascia dei totali. In fondo i
+// tasti di stato, che scrivono sul sito.
 function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
   const quantiPresi = righe.filter((_, i) => presi[i]).length;
@@ -25908,116 +25913,84 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
   const notaCliente = grezzo?.customer_note || null;
   const st = STATI_VENDITA_SHOP[vendita?.stato];
 
-  function indirizzo(a) {
-    if (!a) return [];
-    const nome = [a.first_name, a.last_name].filter(Boolean).join(" ");
-    const via = [a.address_1, a.address_2].filter(Boolean).join(", ");
-    const citta = [a.postcode, a.city, a.state && `(${a.state})`].filter(Boolean).join(" ");
-    return [nome, a.company, via, citta, a.country, a.phone, a.email].filter(Boolean);
-  }
-  const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
-    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12, color: NAVY, padding: "1px 0" }}>
-      <span style={{ color: MUTED, minWidth: 96, flexShrink: 0 }}>{etichetta}</span>
-      <span style={{ minWidth: 0 }}>{valore}</span>
-    </div>
-  );
-  const voceTotale = (etichetta, valore) => valore == null || valore === "" ? null : (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-      <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>{etichetta}</span>
-      <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{valore}</span>
-    </div>
-  );
-
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
-      {/* intestazione essenziale: il numero e la data. Lo stato non serve
-          ripeterlo qui, lo dicono i sei tasti in fondo alla scheda */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY }}>
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 12, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>
           Ordine #{vendita?.numero_ordine || vendita?.woo_order_id}
         </div>
-        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>
-          {vendita?.data_ordine ? fmtDataBreve(vendita.data_ordine.slice(0, 10)) : "—"}
+        {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 20, padding: "3px 12px" }}>{st.etichetta}</span>}
+        <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+          {vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}
         </span>
       </div>
 
-      {/* i dati del cliente su una riga di pastiglie: erano una colonna di
-          quattro righe che spingeva in basso gli indirizzi */}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 16 }}>
-        <Pastiglia etichetta={"Cliente"} valore={vendita?.cliente_nome} />
-        <Pastiglia etichetta={"Email"} valore={vendita?.cliente_email || fatturazione?.email} />
-        <Pastiglia etichetta={"Sped."} valore={metodoSpedizione} />
-        <Pastiglia etichetta={"Pagamento"} valore={vendita?.metodo_pagamento || grezzo?.payment_method_title} />
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1.15fr 1.15fr 1fr 1fr", gap: 8, marginBottom: 18 }}>
+        <RiquadroDatoCliente Icona={IconaPersonaSemplice} etichetta="Cliente" valore={vendita?.cliente_nome} />
+        <RiquadroDatoCliente Icona={IconaBustaErp} etichetta="Email" valore={vendita?.cliente_email || fatturazione?.email} />
+        <RiquadroDatoCliente Icona={IconaTileLogistica} etichetta="Spedizione" valore={metodoSpedizione} />
+        <RiquadroDatoCliente Icona={IconaCartaPos} etichetta="Pagamento" valore={vendita?.metodo_pagamento || grezzo?.payment_method_title} />
       </div>
       {notaCliente && (
-        <div style={{ ...fontBody, fontSize: 12, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "5px 8px", marginBottom: 8 }}>
+        <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 10, padding: "7px 10px", marginBottom: 14 }}>
           <b>Nota del cliente:</b> {notaCliente}
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.25fr 1fr", gap: isMobile ? 14 : 18 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Prodotti</span>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Prodotti {righe.length > 0 ? `(${righe.length})` : ""}
+            </span>
             {righe.length > 0 && (
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === righe.length ? "#2E7D32" : MUTED }}>
                 {quantiPresi === righe.length ? "tutto preso" : `${quantiPresi} di ${righe.length} presi`}
               </span>
             )}
           </div>
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: BG, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <span style={{ width: 17, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>Prodotto</span>
+              <span style={{ width: 34, textAlign: "right" }}>Q.tà</span>
+              <span style={{ width: 66, textAlign: "right" }}>Importo</span>
+            </div>
             {righe.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 12 }}>Nessuna riga di prodotto.</div>
             ) : righe.map((r, i) => (
               <RigaProdottoDaPreparare
-                key={i} riga={r} indice={i} primo={i === 0}
+                key={i} riga={r} indice={i}
                 preso={!!presi[i]} onSegna={(valore) => onSegnaRiga(i, valore)}
                 mostraPrezzo
               />
             ))}
           </div>
-          {/* i quattro numeri su una riga sola: uno sotto l'altro erano
-              quattro righe di altezza per quattro cifre. Sconto e coupon,
-              quando ci sono, vanno a capo da soli */}
-          <div style={{ background: BG, borderRadius: 10, padding: "7px 10px", display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "3px 16px" }}>
-            {voceTotale("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
-            {voceTotale("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
-            {voceTotale("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : (metodoSpedizione ? "gratuita" : null))}
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 6 }}>
-              <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Totale</span>
-              <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
-            </div>
+
+          {/* i totali in una fascia sola, divisi da linee sottili: quattro
+              numeri che si leggono in fila invece di quattro righe */}
+          <div style={{ background: BG, borderRadius: 12, padding: "10px 4px", display: "flex", alignItems: "stretch", flexWrap: "wrap" }}>
+            <CellaTotale primo etichetta="Imponibile" valore={vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : "—"} />
+            <CellaTotale etichetta="IVA" valore={vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : "—"} />
+            <CellaTotale etichetta="Spedizione" valore={speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : "gratuita"} />
+            <CellaTotale etichetta="Totale" valore={vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"} forte />
             {sconto != null && sconto > 0 && (
-              <div style={{ flexBasis: "100%", ...fontBody, fontSize: 12, color: "#C0392B", fontWeight: 700, marginTop: 7, paddingTop: 7, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ flexBasis: "100%", textAlign: "center", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
                 Sconto − {fmtEuroErp2(sconto)}{codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}
               </div>
             )}
           </div>
         </div>
 
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8 }}>
-            {indirizzo(spedizione).length > 0 && (
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
-                <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Spedizione</div>
-                {indirizzo(spedizione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
-              </div>
-            )}
-            {fatturazione && (
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
-                <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Fatturazione</div>
-                {indirizzo(fatturazione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
-              </div>
-            )}
-          </div>
-          {!grezzo && (
-            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>Carico gli indirizzi…</div>
-          )}
+        <div style={{ minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, alignContent: "start" }}>
+          <RiquadroIndirizzo Icona={IconaTileLogistica} titolo="Spedizione" righe={indirizzoOrdine(spedizione)} />
+          <RiquadroIndirizzo Icona={IconaRicevutaErp} titolo="Fatturazione" righe={indirizzoOrdine(fatturazione)} />
+          {!grezzo && <div style={{ ...fontBody, fontSize: 12, color: MUTED }}>Carico gli indirizzi…</div>}
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "20px 0 6px" }}>Stato dell'ordine sul sito</div>
-      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato dell'ordine sul sito</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
         {STATI_ORDINE_SHOP.map((stato) => (
           <TastoStatoOrdine key={stato} stato={stato} attuale={vendita?.stato} occupato={occupato} onClick={() => onCambiaStato(vendita, stato)} />
         ))}
@@ -26026,98 +25999,96 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
   );
 }
 
-// la "nuvola" di una spedizione nata dal POS: stessa forma di quella dello
-// shop, ma i dati del cliente arrivano da quanto scritto al banco
-// (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito — c'è solo
-// da dire se il pacco è partito
+// la "nuvola" di una spedizione nata dal POS: stessa impaginazione di
+// quella dello shop, ma i dati del cliente arrivano da quanto scritto al
+// banco (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito —
+// c'è solo da dire se il pacco è partito
 function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
   const quantiPresi = righe.filter((_, i) => presi[i]).length;
   const spedita = spedizione?.stato === "spedito";
-  const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
-    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12, color: NAVY, padding: "1px 0" }}>
-      <span style={{ color: MUTED, minWidth: 96, flexShrink: 0 }}>{etichetta}</span>
-      <span style={{ minWidth: 0 }}>{valore}</span>
-    </div>
-  );
-  const indirizzo = [spedizione?.destinatario_nome, spedizione?.indirizzo, [spedizione?.cap, spedizione?.citta].filter(Boolean).join(" ")].filter(Boolean);
+  const righeIndirizzo = [
+    spedizione?.destinatario_nome,
+    [spedizione?.indirizzo, spedizione?.civico].filter(Boolean).join(" "),
+    [spedizione?.cap, spedizione?.citta, spedizione?.provincia && `(${spedizione.provincia})`].filter(Boolean).join(" "),
+    iscritto?.telefono,
+  ].filter(Boolean);
+  const righeFattura = spedizione?.richiede_fattura ? [
+    spedizione?.fattura_ditta,
+    spedizione?.fattura_piva && `P. IVA ${spedizione.fattura_piva}`,
+    spedizione?.fattura_cod_dest && `Cod. Dest. ${spedizione.fattura_cod_dest}`,
+    spedizione?.fattura_pec,
+  ].filter(Boolean) : [];
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-        <div style={{ ...fontDisplay, fontSize: isMobile ? 15 : 17, fontWeight: 700, color: NAVY }}>
-          Vendita al banco
-        </div>
-        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "2px 8px" }}>POS</span>
-        <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>{spedizione?.ts ? fmtDataBreve(spedizione.ts.slice(0, 10)) : "—"}</span>
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 12, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>Vendita al banco</div>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: spedita ? "#2E7D32" : "#D2731A", background: spedita ? "#E3F3E5" : "#FCF3D4", borderRadius: 20, padding: "3px 12px" }}>
+          {spedita ? "Spedita" : "Da spedire"}
+        </span>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 20, padding: "3px 12px" }}>POS</span>
+        <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{spedizione?.ts ? fmtData(spedizione.ts.slice(0, 10)) : "—"}</span>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 16 }}>
-        <Pastiglia etichetta={"Cliente"} valore={spedizione?.destinatario_nome || vendita?.cliente_nome} />
-        <Pastiglia etichetta={"Email"} valore={iscritto?.email || vendita?.cliente_email} />
-        <Pastiglia etichetta={"Tel."} valore={iscritto?.telefono} />
-        <Pastiglia etichetta={"Venduto da"} valore={vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null} />
-        {corso && <Pastiglia etichetta="Corso" valore={`${corso}${sede ? ` · ${sede}` : ""}`} />}
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1.15fr 1.15fr 1fr 1fr", gap: 8, marginBottom: 18 }}>
+        <RiquadroDatoCliente Icona={IconaPersonaSemplice} etichetta="Cliente" valore={spedizione?.destinatario_nome || vendita?.cliente_nome} />
+        <RiquadroDatoCliente Icona={IconaBustaErp} etichetta="Email" valore={iscritto?.email || vendita?.cliente_email} />
+        <RiquadroDatoCliente Icona={IconaTileCorsi} etichetta="Corso" valore={corso ? `${corso}${sede ? ` · ${sede}` : ""}` : null} />
+        <RiquadroDatoCliente Icona={IconaCartaPos} etichetta="Venduto da" valore={vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.25fr 1fr", gap: isMobile ? 14 : 18 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4 }}>Prodotti</span>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 7 }}>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              Prodotti {righe.length > 0 ? `(${righe.length})` : ""}
+            </span>
             {righe.length > 0 && (
               <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: quantiPresi === righe.length ? "#2E7D32" : MUTED }}>
                 {quantiPresi === righe.length ? "tutto preso" : `${quantiPresi} di ${righe.length} presi`}
               </span>
             )}
           </div>
-          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 8 }}>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 12px", background: BG, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              <span style={{ width: 17, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>Prodotto</span>
+              <span style={{ width: 34, textAlign: "right" }}>Q.tà</span>
+            </div>
             {righe.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 12 }}>Nessuna riga di prodotto.</div>
             ) : righe.map((r, i) => (
               <RigaProdottoDaPreparare
-                key={i} riga={r} indice={i} primo={i === 0}
+                key={i} riga={r} indice={i}
                 preso={!!presi[i]} onSegna={(valore) => onSegnaRiga(i, valore)}
               />
             ))}
           </div>
+
           {vendita && (
-            <div style={{ background: BG, borderRadius: 10, padding: "7px 10px", display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "3px 16px" }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Ordine</span>
-                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>#{vendita.numero_ordine || "—"}</span>
-              </div>
-              {vendita.metodo_pagamento && (
-                <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                  <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Pagamento</span>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{vendita.metodo_pagamento}</span>
-                </div>
-              )}
-              <div style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 6 }}>
-                <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Totale</span>
-                <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{vendita.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
-              </div>
+            <div style={{ background: BG, borderRadius: 12, padding: "10px 4px", display: "flex", alignItems: "stretch" }}>
+              <CellaTotale primo etichetta="Ordine" valore={`#${vendita.numero_ordine || "—"}`} />
+              <CellaTotale etichetta="Pagamento" valore={vendita.metodo_pagamento || "—"} />
+              <CellaTotale etichetta="Totale" valore={vendita.totale != null ? fmtEuroErp2(vendita.totale) : "—"} forte />
             </div>
           )}
         </div>
 
-        <div style={{ minWidth: 0 }}>
-          {indirizzo.length > 0 && (
-            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 8 }}>
-              <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 3 }}>Spedizione</div>
-              {indirizzo.map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>{r}</div>)}
-            </div>
-          )}
+        <div style={{ minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 10, alignContent: "start" }}>
+          <RiquadroIndirizzo Icona={IconaTileLogistica} titolo="Spedizione" righe={righeIndirizzo} />
+          <RiquadroIndirizzo Icona={IconaRicevutaErp} titolo="Fatturazione" righe={righeFattura} />
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "20px 0 6px" }}>Stato della spedizione</div>
-      <div style={{ display: "flex", gap: 6, alignItems: "stretch", maxWidth: 320 }}>
+      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato della spedizione</div>
+      <div style={{ display: "flex", gap: 8, alignItems: "stretch", maxWidth: 360 }}>
         <div style={{
           ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
           lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-          background: spedita ? BG_CHIARO : "#E3F3E5", border: `1px solid ${spedita ? "#D9CDB4" : "#2E7D32"}`, color: spedita ? "#8A7355" : "#2E7D32",
+          background: spedita ? BG_CHIARO : "#FCF3D4", border: `1px solid ${spedita ? "#D9CDB4" : "#E0A72B"}`, color: spedita ? "#8A7355" : "#D2731A",
         }}>
-          <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
+          <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
           <span>Da spedire</span>
         </div>
         <button
@@ -26130,7 +26101,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
             background: spedita ? "#E3F3E5" : BG_CHIARO, border: `1px solid ${spedita ? "#2E7D32" : "#D9CDB4"}`, color: spedita ? "#2E7D32" : "#8A7355",
           }}
         >
-          <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
+          <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
           <span>Spedita</span>
         </button>
       </div>
