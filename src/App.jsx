@@ -1758,10 +1758,12 @@ function Button({ children, onClick, variant = "primary", style = {}, disabled }
 // etichette hanno lunghezze diverse (una va a capo su due righe, un'altra
 // no), i campi sotto risultano sfalsati; passandola, tutte le etichette
 // della riga riservano la stessa altezza e i campi tornano allineati
-function Field({ label, children, minLabelHeight }) {
+// "compatto": etichetta e margini ridotti, per le file di filtri che da
+// mobile devono stare tutte su una riga
+function Field({ label, children, minLabelHeight, compatto = false }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
+    <div style={{ marginBottom: compatto ? 8 : 14 }}>
+      <div style={{ ...fontBody, fontSize: compatto ? 8.5 : 12, color: MUTED, marginBottom: compatto ? 3 : 5, textTransform: "uppercase", letterSpacing: compatto ? 0.2 : 0.5, lineHeight: 1.15, minHeight: minLabelHeight, display: minLabelHeight ? "flex" : undefined, alignItems: minLabelHeight ? "flex-end" : undefined }}>{label}</div>
       {children}
     </div>
   );
@@ -33075,6 +33077,9 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   const [hintSvuotata, setHintSvuotata] = useState(false);
   const [dettaglioChiave, setDettaglioChiave] = useState(null);
   const [mostraNuovoAllievo, setMostraNuovoAllievo] = useState(false);
+  // i quattro filtri in fila su un telefono: testo piccolo e poco fiato ai
+  // lati, altrimenti "Tutte" non ci starebbe dentro alla tendina
+  const stileFiltroCrm = isMobile ? { ...inputStyle, fontSize: 10.5, padding: "8px 4px" } : inputStyle;
   const [mostraComunicazione, setMostraComunicazione] = useState(false);
   const [menuAzioniAperto, setMenuAzioniAperto] = useState(false);
   const [menuRigaAperto, setMenuRigaAperto] = useState(null);
@@ -33268,37 +33273,41 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
           <CampoRicerca value={ricerca} onChange={(e) => cambiaRicerca(e.target.value)} placeholder="Cerca per nome, email, telefono…" />
         </div>
 
+        {/* da mobile i quattro filtri stanno tutti sulla stessa riga: sono
+            una cosa sola da leggere, e su due righe la pagina si allungava
+            senza motivo. Etichette accorciate e testo più piccolo, o in
+            quattro colonne non ci starebbero */}
         <div style={{
-          display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
-          gap: 10, flexWrap: isMobile ? undefined : "wrap", alignItems: "flex-end", marginBottom: 16,
+          display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? "repeat(4, 1fr)" : undefined,
+          gap: isMobile ? 5 : 10, flexWrap: isMobile ? undefined : "wrap", alignItems: "flex-end", marginBottom: 16,
         }}>
           <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
-            <Field label="Città provenienza">
-              <select style={inputStyle} value={filtroCittaProv} onChange={(e) => cambiaFiltroCittaProv(e.target.value)}>
+            <Field compatto={isMobile} label={isMobile ? "Città prov." : "Città provenienza"}>
+              <select style={stileFiltroCrm} value={filtroCittaProv} onChange={(e) => cambiaFiltroCittaProv(e.target.value)}>
                 <option value="">Tutte</option>
                 {opzioniCittaProv.map((c) => <option key={c} value={c}>{toTitleCase(c)}</option>)}
               </select>
             </Field>
           </div>
           <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
-            <Field label="Regione provenienza">
-              <select style={inputStyle} value={filtroRegioneProv} onChange={(e) => cambiaFiltroRegioneProv(e.target.value)}>
+            <Field compatto={isMobile} label={isMobile ? "Regione" : "Regione provenienza"}>
+              <select style={stileFiltroCrm} value={filtroRegioneProv} onChange={(e) => cambiaFiltroRegioneProv(e.target.value)}>
                 <option value="">Tutte</option>
                 {opzioniRegioneProv.map((r) => <option key={r} value={r}>{toTitleCase(r)}</option>)}
               </select>
             </Field>
           </div>
           <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
-            <Field label="Città corso frequentato">
-              <select style={inputStyle} value={filtroCittaCorso} onChange={(e) => cambiaFiltroCittaCorso(e.target.value)}>
+            <Field compatto={isMobile} label={isMobile ? "Città corso" : "Città corso frequentato"}>
+              <select style={stileFiltroCrm} value={filtroCittaCorso} onChange={(e) => cambiaFiltroCittaCorso(e.target.value)}>
                 <option value="">Tutte</option>
                 {opzioniCittaCorso.map((c) => <option key={c} value={c}>{toTitleCase(c)}</option>)}
               </select>
             </Field>
           </div>
           <div style={isMobile ? {} : { flex: "1 1 160px", minWidth: 140 }}>
-            <Field label="Corso acquistato">
-              <select style={inputStyle} value={filtroCorso} onChange={(e) => cambiaFiltroCorso(e.target.value)}>
+            <Field compatto={isMobile} label={isMobile ? "Corso" : "Corso acquistato"}>
+              <select style={stileFiltroCrm} value={filtroCorso} onChange={(e) => cambiaFiltroCorso(e.target.value)}>
                 <option value="">Tutti</option>
                 {opzioniCorso.map((c) => <option key={c.id} value={c.id}>{toTitleCase(c.nome)}</option>)}
               </select>
@@ -33363,12 +33372,17 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
           </div>
         )}
 
-        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "0 0 14px 14px", marginBottom: 30 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}>
+        {/* da mobile la tabella non si comprime più per stare nei 390 px: a
+            nove colonne ogni cella diventava un francobollo e il testo andava
+            a capo quattro volte. Ora ha una larghezza minima vera, scorre in
+            orizzontale, e ogni riga è una riga sola — testo più piccolo e
+            troncato con i puntini dove non ci sta */}
+        <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: "0 0 14px 14px", marginBottom: 30, WebkitOverflowScrolling: "touch" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed", ...(isMobile ? { minWidth: 860 } : {}) }}>
             <thead>
               <tr>
                 {[[null, "", "3%"], ["allievo", "Allievo", "13%"], ["email", "Email", "15%"], ["telefono", "Telefono", "9%"], ["cittaRes", "Città di res.", "9%"], ["regioneRes", "Regione di res.", "9%"], ["cittaCorso", "Città corso", "9%"], ["corsi", "Corsi", "14%"], ["dataAcq", "Data acq.", "8%"], [null, "Azioni", "6%"]].map(([campo, h, w], i) => (
-                  <ThOrdina key={i} campo={campo} ordine={ordineCrm} onOrdina={cambiaOrdineCrm} style={{ width: w, padding: "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</ThOrdina>
+                  <ThOrdina key={i} campo={campo} ordine={ordineCrm} onOrdina={cambiaOrdineCrm} style={{ width: w, padding: isMobile ? "5px 4px" : "6px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: isMobile ? 9 : 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h}</ThOrdina>
                 ))}
               </tr>
             </thead>
@@ -33390,14 +33404,14 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
                   <td style={{ padding: "5px 6px" }}>
                     <input type="checkbox" checked={selezionati.has(a.chiave)} onChange={() => toggleRiga(a.chiave)} style={{ width: 14, height: 14 }} />
                   </td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, cursor: "pointer", wordBreak: "break-word" }} onClick={() => setDettaglioChiave(a.chiave)}>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10.5 : 12, fontWeight: 700, color: NAVY, cursor: "pointer", ...(isMobile ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : { wordBreak: "break-word" }) }} onClick={() => setDettaglioChiave(a.chiave)}>
                     {toTitleCase(a.nome)} {toTitleCase(a.cognome)}
                   </td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: a.email ? NAVY : MUTED, wordBreak: "break-word" }}>{a.email || "—"}</td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, wordBreak: "break-word" }}>{a.telefono || "—"}</td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: a.cittaProvenienza ? NAVY : MUTED, wordBreak: "break-word" }}>{a.cittaProvenienza ? toTitleCase(a.cittaProvenienza) : "—"}</td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: a.regioneProvenienza ? NAVY : MUTED, wordBreak: "break-word" }}>{a.regioneProvenienza ? toTitleCase(a.regioneProvenienza) : "—"}</td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, wordBreak: "break-word" }}>{a.cittaCorso.map(toTitleCase).join(", ") || "—"}</td>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10 : 11.5, color: a.email ? NAVY : MUTED, ...(isMobile ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : { wordBreak: "break-word" }) }}>{a.email || "—"}</td>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10 : 11.5, color: NAVY, ...(isMobile ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : { wordBreak: "break-word" }) }}>{a.telefono || "—"}</td>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10 : 11.5, color: a.cittaProvenienza ? NAVY : MUTED, ...(isMobile ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : { wordBreak: "break-word" }) }}>{a.cittaProvenienza ? toTitleCase(a.cittaProvenienza) : "—"}</td>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10 : 11.5, color: a.regioneProvenienza ? NAVY : MUTED, ...(isMobile ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : { wordBreak: "break-word" }) }}>{a.regioneProvenienza ? toTitleCase(a.regioneProvenienza) : "—"}</td>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10 : 11.5, color: NAVY, ...(isMobile ? { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } : { wordBreak: "break-word" }) }}>{a.cittaCorso.map(toTitleCase).join(", ") || "—"}</td>
                   <td style={{ padding: "5px 6px" }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "flex-start" }}>
                       {a.corsi.map((c) => (
@@ -33405,7 +33419,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
                       ))}
                     </div>
                   </td>
-                  <td style={{ padding: "5px 6px", ...fontBody, fontSize: 11.5, color: NAVY, whiteSpace: "nowrap" }}>{a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "—"}</td>
+                  <td style={{ padding: isMobile ? "4px 4px" : "5px 6px", ...fontBody, fontSize: isMobile ? 10 : 11.5, color: NAVY, whiteSpace: "nowrap" }}>{a.dataAcquisto ? fmtData(a.dataAcquisto.slice(0, 10)) : "—"}</td>
                   <td style={{ padding: "5px 6px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
                       <button onClick={() => setDettaglioChiave(a.chiave)} title="Apri dettaglio" style={{ background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 3, display: "flex" }}>
@@ -42186,6 +42200,27 @@ export default function App() {
   }, []);
 
 
+  // quanti pacchi aspettano: gli ordini dello shop in lavorazione più le
+  // spedizioni vendute al banco non ancora partite. È il numero rosso sul
+  // tasto, in home e dentro il bivio della logistica.
+  //
+  // Si conta sul database invece di guardare le tabelle in memoria: la
+  // home non carica né gli ordini né le spedizioni (sono migliaia di
+  // righe per un numero solo), e senza questo il pallino sarebbe rimasto
+  // a zero fino a quando non si fosse aperta un'altra pagina
+  const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
+  useEffect(() => {
+    if (!ok || (view !== "home" && view !== "logisticaprodotti")) return undefined;
+    let annullato = false;
+    Promise.all([
+      supabase.from("vendite_shop").select("id", { count: "exact", head: true }).eq("stato", "processing").not("woo_order_id", "is", null),
+      supabase.from("spedizioni_pos").select("id", { count: "exact", head: true }).eq("stato", "da_spedire"),
+    ]).then(([ordini, spedizioni]) => {
+      if (!annullato) setPacchiDaSpedire((ordini.count || 0) + (spedizioni.count || 0));
+    });
+    return () => { annullato = true; };
+  }, [ok, view]);
+
   if (!ok) return <div style={{ ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh", paddingTop: "env(safe-area-inset-top, 0px)" }}><Gate onOk={(ruolo, utente) => {
     setRuoloUtente(ruolo);
     setUtenteLoggato(utente);
@@ -42417,26 +42452,6 @@ export default function App() {
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
   function apriPos() { apriViewProtetta("pos"); }
-  // quanti pacchi aspettano: gli ordini dello shop in lavorazione più le
-  // spedizioni vendute al banco non ancora partite. È il numero rosso sul
-  // tasto, in home e dentro il bivio della logistica.
-  //
-  // Si conta sul database invece di guardare le tabelle in memoria: la
-  // home non carica né gli ordini né le spedizioni (sono migliaia di
-  // righe per un numero solo), e senza questo il pallino sarebbe rimasto
-  // a zero fino a quando non si fosse aperta un'altra pagina
-  const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
-  useEffect(() => {
-    if (!ok || (view !== "home" && view !== "logisticaprodotti")) return undefined;
-    let annullato = false;
-    Promise.all([
-      supabase.from("vendite_shop").select("id", { count: "exact", head: true }).eq("stato", "processing").not("woo_order_id", "is", null),
-      supabase.from("spedizioni_pos").select("id", { count: "exact", head: true }).eq("stato", "da_spedire"),
-    ]).then(([ordini, spedizioni]) => {
-      if (!annullato) setPacchiDaSpedire((ordini.count || 0) + (spedizioni.count || 0));
-    });
-    return () => { annullato = true; };
-  }, [ok, view]);
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
   function apriOrdiniInArrivo() { apriViewProtetta("ordiniinarrivo"); }
