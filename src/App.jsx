@@ -682,14 +682,29 @@ function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-function IconaTileGestioneMagazzino({ size = 44, color = NAVY }) {
+// il capannone con il camion davanti e i pallet accatastati: il magazzino
+// è il posto dove la merce arriva, si impila e riparte
+function IconaTileGestioneMagazzino({ size = 44 }) {
+  const nero = "#111111";
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3.5 11.5L12 4l8.5 7.5" />
-      <path d="M5.2 10v10.5h13.6V10" />
-      <rect x="8.4" y="14.6" width="3.2" height="3.2" rx="0.5" />
-      <rect x="12.5" y="15.7" width="3.2" height="3.2" rx="0.5" stroke={GOLD} />
-      <rect x="12.5" y="11.6" width="3.2" height="3.2" rx="0.5" stroke={GOLD} />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* tetto sporgente e corpo del capannone, con la fila di finestrelle */}
+      <path d="M13.4 2 4.6 6.1v1.8l8.8-3.9 8.8 3.9V6.1z" fill={nero} />
+      <path d="M6.6 7.6h13.6V20h-2.1V11.2H6.6z" fill={nero} />
+      <rect x="8.2" y="8.8" width="1.5" height="1.1" fill="#fff" />
+      <rect x="10.6" y="8.8" width="1.5" height="1.1" fill="#fff" />
+      <rect x="13" y="8.8" width="1.5" height="1.1" fill="#fff" />
+      <rect x="15.4" y="8.8" width="1.5" height="1.1" fill="#fff" />
+      {/* i pallet: casse con la croce, impilate a scaletta */}
+      <path d="M9.9 11.6h3.4v3.2H9.9zM13.7 11.6h3.4v3.2h-3.4zM9.9 15.2h3.4v3.2H9.9zM13.7 15.2h3.4v3.2h-3.4z" fill={nero} />
+      <path d="M9.9 11.6l3.4 3.2M13.3 11.6l-3.4 3.2M13.7 11.6l3.4 3.2M17.1 11.6l-3.4 3.2M9.9 15.2l3.4 3.2M13.3 15.2l-3.4 3.2M13.7 15.2l3.4 3.2M17.1 15.2l-3.4 3.2" stroke="#fff" strokeWidth="0.55" />
+      {/* il camion, davanti a sinistra */}
+      <path d="M3.4 14.2h5.1v5.2H1.4v-3l1.1-1.3h0.9z" fill={nero} />
+      <path d="M2.2 15.6h1.1v1.2H1.6z" fill="#fff" />
+      <circle cx="3.3" cy="20.1" r="1.4" fill={nero} />
+      <circle cx="7.4" cy="20.1" r="1.4" fill={nero} />
+      <circle cx="3.3" cy="20.1" r="0.5" fill="#fff" />
+      <circle cx="7.4" cy="20.1" r="0.5" fill="#fff" />
     </svg>
   );
 }
@@ -734,20 +749,6 @@ function IconaTileClassificazioneVoci({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// smistamento: una riga che si divide in due strade — è esattamente quello
-// che si fa in "Classificazione voci di vendita", separare i prodotti dai
-// corsi. Prima condivideva il cartellino con la Gestione IVA, e due tasti
-// con la stessa icona non si distinguono
-function IconaTileSmistaVoci({ size = 44, color = NAVY }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 12h5.5l3.5-5h4" />
-      <path d="M8.5 12l3.5 5h4" stroke={GOLD} />
-      <circle cx="19" cy="7" r="2" />
-      <circle cx="19" cy="17" r="2" stroke={GOLD} />
-    </svg>
-  );
-}
 // il capannone con le casse impilate dentro: i magazzini esterni sono
 // posti veri, con dentro roba vera. Prima condivideva il camion con la
 // Logistica, che però è il trasporto — un'altra cosa
@@ -767,8 +768,9 @@ function IconaTileMagazziniEsterni({ size = 44 }) {
     </svg>
   );
 }
-// la lente: guardare i prodotti uno per uno, giacenze e movimenti. Nera,
-// con l'impugnatura piena e inclinata e il riflesso sul vetro
+// la lente del tasto "Classificazione voci di vendita": classificare le
+// voci vuol dire andarle a guardare una per una. Nera, con l'impugnatura
+// piena e inclinata e il riflesso sul vetro
 function IconaTileVerificaVoci({ size = 44 }) {
   const nero = "#111111";
   return (
@@ -20859,14 +20861,14 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
         <GrigliaTasti
           pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
-            { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriMagazzino, badge: numeroAvvisiMagazzino },
+            { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileGestioneMagazzino, attivo: true, onClick: onApriMagazzino, badge: numeroAvvisiMagazzino },
             { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileMagazziniEsterni, attivo: true, onClick: onApriMagazziniEsterni },
             { chiave: "gestioneshop", title: "Gestione shop", descrizione: "Gestisci prodotti, ordini, clienti e impostazioni dello shop.", Icona: IconaTileGestioneShop, attivo: true, onClick: onApriGestioneShop },
             { chiave: "venditeshop", title: "Vendite Shop Online", descrizione: "Ordini e performance dello shop online WooCommerce.", Icona: IconaTileVenditeShop, attivo: true, onClick: onApriVenditeShop },
             { chiave: "venditealbanco", title: "Vendite al banco", descrizione: "Tutte le vendite fatte con il POS interno.", Icona: IconaTilePos, attivo: true, onClick: onApriVenditeAlBanco },
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
-            { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileSmistaVoci, attivo: true, onClick: onApriClassificazioneVoci },
+            { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
             { chiave: "crmshop", title: "CRM Shop Online", descrizione: "Clienti dello shop: ordini, spesa, carrello medio.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
             { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto per lo shop online.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
             { chiave: "gestioneiva", title: "Gestione IVA", descrizione: "IVA su acquisti e vendite, per aliquota e per prodotto.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriGestioneIva },
