@@ -5333,6 +5333,10 @@ function SezioneDateCorsi({
   // sopravvivono all'andata e ritorno da una scheda. Se non arrivano, il
   // componente usa i propri, come ha sempre fatto
   ricercaEsterna, setRicercaEsterna, tabEsterna, setTabEsterna, modoEsterno, setModoEsterno,
+  // opzionale: apre la scheda di un singolo allievo. Lo passa solo chi può
+  // entrarci (Gestione corsi); dove manca, i nomi trovati restano scritti
+  // ma non cliccabili
+  onApriIscritto,
 }) {
   const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
@@ -5393,6 +5397,10 @@ function SezioneDateCorsi({
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
 
   const numeroInProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
+  // quando la ricerca centra il nome di un allievo, la sua riga va segnata:
+  // il corso da solo non basta a capire perché è comparso, e soprattutto si
+  // vuole entrare nella sua scheda senza aprire la classe e cercarlo a occhio
+  const allieviTrovatiPerData = {};
   const corsiDateFiltrate = corsiDate.filter((cd) => {
     if (vistaDateTab === "programmazione" ? cd.data_fine < oggiStr : cd.data_fine >= oggiStr) return false;
     if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
@@ -5400,15 +5408,26 @@ function SezioneDateCorsi({
     if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
     const termini = ricercaDate.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (termini.length === 0) return true;
-    const nomiAllievi = iscritti.filter((i) => i.corso_data_id === cd.id).map((i) => `${i.nome} ${i.cognome}`);
+    const iscrittiData = iscritti.filter((i) => i.corso_data_id === cd.id);
+    const nomiAllievi = iscrittiData.map((i) => `${i.nome} ${i.cognome}`);
     const mesiCd = [cd.data_inizio, cd.data_fine].filter(Boolean).map((d) => MESI[parseInt(d.slice(5, 7), 10) - 1]);
     const anniCd = [cd.data_inizio, cd.data_fine].filter(Boolean).map((d) => d.slice(0, 4));
-    const testo = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome, ...nomiAllievi, ...mesiCd, ...anniCd]
+    const testoCorso = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome, ...mesiCd, ...anniCd]
       .filter(Boolean).join(" ").toLowerCase();
+    const testo = [testoCorso, ...nomiAllievi].filter(Boolean).join(" ").toLowerCase();
     // ogni termine digitato deve trovarsi da qualche parte nel testo
     // (in qualunque ordine): "mei milano" trova Mei anche se sta in un
     // campo diverso da "milano" (es. nome allievo + città)
-    return termini.every((t) => testo.includes(t));
+    if (!termini.every((t) => testo.includes(t))) return false;
+    // un allievo è "centrato" se almeno un termine sta nel suo nome e i
+    // termini restanti li spiega la riga del corso: così "mei milano"
+    // segna Mei, mentre cercare solo "milano" non segna nessuno
+    const centrati = iscrittiData.filter((i) => {
+      const nomeIntero = `${i.nome || ""} ${i.cognome || ""}`.toLowerCase();
+      return termini.some((t) => nomeIntero.includes(t)) && termini.every((t) => nomeIntero.includes(t) || testoCorso.includes(t));
+    });
+    if (centrati.length > 0) allieviTrovatiPerData[cd.id] = centrati;
+    return true;
   });
 
   return (
@@ -5530,6 +5549,7 @@ function SezioneDateCorsi({
           corsi={corsi} location={location} cronologico={cronologicoHome}
           corsiDate={corsiDateFiltrate}
           iscritti={iscritti} master={master} onApriData={onApriData}
+          allieviTrovati={allieviTrovatiPerData} onApriIscritto={onApriIscritto}
           onEdit={onEdit} onDelete={onDelete} idInModifica={idInModifica} renderModifica={renderModifica}
         />
       ) : (
@@ -10809,7 +10829,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriIscritto, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -10922,6 +10942,7 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
       <SezioneDateCorsi
         corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
         ricarica={ricarica} onApriData={soloLettura ? () => {} : onApriData}
+        onApriIscritto={soloLettura ? undefined : onApriIscritto}
         nascondiTitolo
         stickyControlli intestazioneSticky={intestazioneGestioneCorsi}
         {...(soloLettura ? { modoForzato: "elenco" } : {})}
@@ -14097,7 +14118,7 @@ function CardCronologico({ mesi, renderRiga }) {
 
 // Vista raggruppata: CITTÀ → corso → elenco date. Usata sia nella Home (sola lettura)
 // che in Impostazioni (con cestino per eliminare).
-function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica, cronologico }) {
+function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master, onApriData, onDelete, onEdit, idInModifica, renderModifica, cronologico, allieviTrovati, onApriIscritto }) {
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
@@ -14142,6 +14163,28 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
         Master: {toTitleCase(masterById[cd.master_id]?.nome || "?")}
       </div>
     );
+    // nomi centrati dalla ricerca: in rosso accanto al corso e cliccabili
+    // per entrare dritti nella scheda dell'allievo
+    const allieviRiga = (allieviTrovati && allieviTrovati[cd.id]) || [];
+    const nomiTrovati = (dimensione) => allieviRiga.length > 0 && (
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 10, rowGap: 2, minWidth: 0 }}>
+        {allieviRiga.map((i) => {
+          const etichetta = toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim());
+          const stile = { ...fontDisplay, fontSize: dimensione, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap" };
+          if (!onApriIscritto) return <span key={i.id} style={stile}>{etichetta}</span>;
+          return (
+            <button
+              key={i.id}
+              onClick={(e) => { e.stopPropagation(); onApriIscritto(i); }}
+              title="Apri la scheda dell'allievo"
+              style={{ ...stile, background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+            >
+              {etichetta}
+            </button>
+          );
+        })}
+      </div>
+    );
     const azioni = (
       <>
         {onEdit && (
@@ -14166,8 +14209,11 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
         <div key={cd.id}>
           <div onClick={() => onApriData?.(cd)} style={{ cursor: onApriData ? "pointer" : "default", borderTop: primaDelGruppo ? "none" : `1px solid ${CREAM_BORDER}`, padding: "10px 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ width: 3, height: 22, borderRadius: 2, background: corso?.colore || NAVY, flexShrink: 0 }} />
-            <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: "1 1 auto", minWidth: 0 }}>
-              {toTitleCase(corso?.nome || "?")}
+            <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+              <div style={{ ...fontDisplay, fontSize: 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {toTitleCase(corso?.nome || "?")}
+              </div>
+              {nomiTrovati(13)}
             </div>
             <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
               {fmtDataCompatta(cd.data_inizio, cd.data_fine).toUpperCase()}
@@ -14193,6 +14239,7 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
                 <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{toTitleCase(corso?.nome || "?")}</div>
                 {sottotitoloSoloMaster}
               </div>
+              {nomiTrovati(17)}
             </div>
           </td>
           {mostraCitta && (
@@ -41880,6 +41927,7 @@ export default function App() {
         <GestioneDate
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master}
           ricarica={fetchDati} onBack={() => setView("home")} onApriData={apriData}
+          onApriIscritto={(i) => { setViewPrimaDiScheda("gestionedate"); apriIscritto(i); }}
           onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
           onApriVerificaAcconti={() => setView("verificaacconti")}
           numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
