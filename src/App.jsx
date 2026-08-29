@@ -18258,7 +18258,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               {/* tre voci esplicite e nessuna preselezionata: "nessun
                   dermografo" è una scelta come le altre, non una casella da
                   deflaggare — le negazioni si sbagliano */}
-              <Field label="Dermografo">
+              <Field label="Specifica Dermografo">
                 <select
                   value={dermografo}
                   onChange={(e) => setDermografo(e.target.value)}
