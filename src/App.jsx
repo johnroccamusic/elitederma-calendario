@@ -15472,7 +15472,14 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
   // separatore non selezionabile, non come pacchetto scegliibile
   const opzioniOrdinate = [...opzioni].sort((a, b) => (a.ordine || 0) - (b.ordine || 0) || a.nome.localeCompare(b.nome));
   const nomiOpzioni = opzioniOrdinate.filter((o) => o.tipo !== "divisore").map((o) => o.nome);
-  const [modoLibero, setModoLibero] = useState(() => (!!value && !nomiOpzioni.includes(value)) || nomiOpzioni.length === 0);
+  // il kit scritto sull'iscrizione è una COPIA del nome, non un
+  // riferimento: rinominando il kit la copia viene aggiornata, ma
+  // eliminandolo resta scritta com'era — ed è giusto così, dice cosa era
+  // stato promesso a quell'allievo. Qui però va detto che quel kit non
+  // esiste più e che ne va scelto uno dall'elenco, altrimenti sembra
+  // tutto a posto e il fabbisogno di quell'allievo non viene calcolato
+  const kitNonPiuInElenco = !!value && !nomiOpzioni.includes(value) && nomiOpzioni.length > 0;
+  const [modoLibero, setModoLibero] = useState(() => nomiOpzioni.length === 0);
 
   if (modoLibero) {
     return (
@@ -15487,18 +15494,34 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
     );
   }
   return (
-    <select
-      value={nomiOpzioni.includes(value) ? value : ""}
-      onChange={(e) => onChange(e.target.value)}
-      style={inputStyle}
-    >
-      <option value="">— scegli pacchetto —</option>
-      {opzioniOrdinate.map((o) => (
-        o.tipo === "divisore"
-          ? <option key={o.id} value="" disabled>──────────</option>
-          : <option key={o.id} value={o.nome}>{o.nome}</option>
-      ))}
-    </select>
+    <div>
+      <select
+        value={nomiOpzioni.includes(value) ? value : (kitNonPiuInElenco ? value : "")}
+        onChange={(e) => onChange(e.target.value)}
+        style={{ ...inputStyle, ...(kitNonPiuInElenco ? { borderColor: GOLD } : {}) }}
+      >
+        <option value="">— scegli pacchetto —</option>
+        {/* il kit cancellato resta selezionato finché non se ne sceglie un
+            altro: sparire da solo perderebbe l'unica traccia di cosa era
+            stato venduto */}
+        {kitNonPiuInElenco && <option value={value}>{value} — non più in elenco</option>}
+        {opzioniOrdinate.map((o) => (
+          o.tipo === "divisore"
+            ? <option key={o.id} value="" disabled>──────────</option>
+            : <option key={o.id} value={o.nome}>{o.nome}</option>
+        ))}
+      </select>
+      {kitNonPiuInElenco && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 4, lineHeight: 1.35 }}>
+          Questo pacchetto non è più fra quelli definiti per il corso: resta scritto qui, ma non porta nessun prodotto in preparazione. Scegline uno dall'elenco.
+        </div>
+      )}
+      {nomiOpzioni.length > 0 && (
+        <button type="button" onClick={() => setModoLibero(true)} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "4px 0 0" }}>
+          Scrivilo a mano
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -37716,7 +37739,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     ricarica(["kit_definizioni", "iscritti"]);
   }
   async function elimina() {
-    if (!window.confirm(`Eliminare il pacchetto "${kit.nome}"? Rimuove anche il suo contenuto (non tocca le edizioni che lo hanno già usato).`)) return;
+    if (!window.confirm(`Eliminare il pacchetto "${kit.nome}"?\n\nSulle iscrizioni che lo hanno già scelto il nome resta scritto — è la traccia di cosa era stato venduto — ma segnalato come "non più in elenco": quegli allievi non porteranno nessun prodotto in preparazione finché non gli assegni un altro pacchetto.`)) return;
     const { error } = await supabase.from("kit_definizioni").delete().eq("id", kit.id);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["kit_definizioni"]);
