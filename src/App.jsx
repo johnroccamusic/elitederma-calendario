@@ -592,13 +592,37 @@ function IconaCarrelloPos({ size = 18, color = "#fff" }) {
     </svg>
   );
 }
+// Il terminale POS: display, tastierino, la carta infilata di lato e lo
+// scontrino che esce da sotto.
+//
+// Il corpo NON è campito di bianco: il fondo del tasto cambia (bianco da
+// attivo, crema da spento) e una campitura si vedrebbe. La carta parte
+// quindi dal bordo del terminale invece di passargli dietro.
+//
+// Serve anche da segnaposto delle foto prodotto (size 13/17/30, colore
+// grigio): quando il colore arriva da fuori l'icona diventa tutta di
+// quel colore, perché due toni su un segnaposto grigio stonerebbero.
 function IconaTilePos({ size = 44, color = NAVY }) {
+  const oro = color === NAVY ? GOLD : color;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="4" y="3.5" width="16" height="11" rx="1.5" />
-      <path d="M8 17.5h8" stroke={GOLD} />
-      <path d="M9 20.5h6" />
-      <path d="M7.5 7h9M7.5 10h5" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* la carta di credito, infilata nel fianco destro */}
+      <rect x="15.2" y="5.9" width="4.2" height="8.6" rx="0.9" stroke={color} strokeWidth="1.4" />
+      <rect x="16.2" y="6.6" width="1.5" height="7.2" fill={oro} />
+      {/* lo scontrino che esce da sotto, e i due piedini */}
+      <rect x="7.6" y="17.2" width="4.1" height="5.2" rx="0.4" fill={oro} />
+      <path d="M6 17.4v1.5M13.6 17.4v1.5" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+      {/* il corpo, il display e i sei tasti */}
+      <rect x="4.4" y="1.6" width="10.9" height="15.8" rx="1.7" stroke={color} strokeWidth="1.6" />
+      <rect x="6.7" y="4" width="6.3" height="3.5" rx="0.3" fill={oro} />
+      <g fill={color}>
+        <rect x="6.9" y="8.9" width="2.2" height="1.5" rx="0.45" />
+        <rect x="10.5" y="8.9" width="2.2" height="1.5" rx="0.45" />
+        <rect x="6.9" y="11.2" width="2.2" height="1.5" rx="0.45" />
+        <rect x="10.5" y="11.2" width="2.2" height="1.5" rx="0.45" />
+        <rect x="6.9" y="13.5" width="2.2" height="1.5" rx="0.45" />
+        <rect x="10.5" y="13.5" width="2.2" height="1.5" rx="0.45" />
+      </g>
     </svg>
   );
 }
