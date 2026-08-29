@@ -771,15 +771,21 @@ function IconaTileMagazziniEsterni({ size = 44 }) {
   const nero = "#111111";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* il profilo del capannone: tetto a capanna e due montanti, pieno */}
-      <path d="M12 2 1.6 6.6V22h4.2V9.4h12.4V22h4.2V6.6z" fill={nero} />
-      {/* le casse, impilate a scaletta come nell'originale */}
-      <rect x="7.2" y="10.6" width="4" height="3.6" fill={nero} />
-      <rect x="7.2" y="15" width="4" height="3.4" fill={nero} />
-      <rect x="11.9" y="15" width="4" height="3.4" fill={nero} />
-      <rect x="7.2" y="19.1" width="4" height="2.9" fill={nero} />
-      <rect x="11.9" y="19.1" width="4" height="2.9" fill={nero} />
-      <rect x="16.6" y="19.1" width="3.6" height="2.9" fill={nero} />
+      {/* il profilo del capannone: tetto a capanna e due montanti. Il tetto
+          resta pieno perché è la parte che dà la forma; i montanti si sono
+          assottigliati, prima erano due blocchi che pesavano più delle
+          casse — e le casse sono il contenuto, cioè il senso dell'icona */}
+      <path d="M12 2.6 2.6 6.9V21.4h1.9V9.9h15V21.4h1.9V6.9z" fill={nero} />
+      {/* le casse, impilate a scaletta: contorno invece che pieno, così si
+          leggono come scatole distinte e non come una macchia unica */}
+      <g stroke={nero} strokeWidth="1.05" strokeLinejoin="round">
+        <rect x="6.6" y="11.2" width="3.6" height="3.1" />
+        <rect x="6.6" y="14.9" width="3.6" height="3.1" />
+        <rect x="10.8" y="14.9" width="3.6" height="3.1" />
+        <rect x="6.6" y="18.6" width="3.6" height="2.8" />
+        <rect x="10.8" y="18.6" width="3.6" height="2.8" />
+        <rect x="15" y="18.6" width="3.6" height="2.8" />
+      </g>
     </svg>
   );
 }
