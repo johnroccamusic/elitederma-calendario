@@ -25864,6 +25864,12 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
       <span style={{ minWidth: 0 }}>{valore}</span>
     </div>
   );
+  const voceTotale = (etichetta, valore) => valore == null || valore === "" ? null : (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+      <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>{etichetta}</span>
+      <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{valore}</span>
+    </div>
+  );
 
   return (
     <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? 10 : 12, marginBottom: 10, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
@@ -25898,15 +25904,22 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
               />
             ))}
           </div>
-          <div style={{ background: BG, borderRadius: 10, padding: "6px 9px" }}>
-            {rigaInfo("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
-            {rigaInfo("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
-            {rigaInfo("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : (metodoSpedizione ? "gratuita" : null))}
-            {rigaInfo("Sconto", sconto != null && sconto > 0 ? `− ${fmtEuroErp2(sconto)}${codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}` : null)}
-            <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 5, marginTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
-              <span style={{ minWidth: 110, flexShrink: 0 }}>Totale</span>
-              <span>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
+          {/* i quattro numeri su una riga sola: uno sotto l'altro erano
+              quattro righe di altezza per quattro cifre. Sconto e coupon,
+              quando ci sono, vanno a capo da soli */}
+          <div style={{ background: BG, borderRadius: 10, padding: "7px 10px", display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "3px 16px" }}>
+            {voceTotale("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
+            {voceTotale("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
+            {voceTotale("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : (metodoSpedizione ? "gratuita" : null))}
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Totale</span>
+              <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
             </div>
+            {sconto != null && sconto > 0 && (
+              <div style={{ flexBasis: "100%", ...fontBody, fontSize: 12, color: "#C0392B", fontWeight: 700, paddingTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                Sconto − {fmtEuroErp2(sconto)}{codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}
+              </div>
+            )}
           </div>
         </div>
 
@@ -26000,12 +26013,20 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
             ))}
           </div>
           {vendita && (
-            <div style={{ background: BG, borderRadius: 10, padding: "6px 9px" }}>
-              {rigaInfo("Ordine", `#${vendita.numero_ordine || "—"}`)}
-              {rigaInfo("Pagamento", vendita.metodo_pagamento || null)}
-              <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 5, marginTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                <span style={{ minWidth: 110, flexShrink: 0 }}>Totale</span>
-                <span>{vendita.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
+            <div style={{ background: BG, borderRadius: 10, padding: "7px 10px", display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: "3px 16px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Ordine</span>
+                <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>#{vendita.numero_ordine || "—"}</span>
+              </div>
+              {vendita.metodo_pagamento && (
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                  <span style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Pagamento</span>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>{vendita.metodo_pagamento}</span>
+                </div>
+              )}
+              <div style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3 }}>Totale</span>
+                <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY }}>{vendita.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
               </div>
             </div>
           )}
