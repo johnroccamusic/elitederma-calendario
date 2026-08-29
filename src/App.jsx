@@ -748,28 +748,33 @@ function IconaTileClassificazioneVoci({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// il capannone con le casse impilate dentro: i magazzini esterni sono
-// posti veri, con dentro roba vera. Prima condivideva il camion con la
-// Logistica, che però è il trasporto — un'altra cosa
+// Tre capannoni, uno davanti e due dietro: i magazzini esterni sono più
+// posti, ed è quel "più di uno" a distinguerli dal magazzino unico — che
+// ha la stessa figura, ma sola (IconaTileGestioneMagazzino).
+//
+// I due dietro finiscono con un muro corto che si ferma appena sopra il
+// tetto di quello davanti: non li si può nascondere davvero, perché il
+// tasto cambia colore di fondo quando è disattivato e una campitura
+// piena si vedrebbe: si lascia invece capire che passano dietro.
 function IconaTileMagazziniEsterni({ size = 44 }) {
-  const nero = "#111111";
+  const lato = size + 5;
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      {/* il profilo del capannone: tetto a capanna e due montanti. Il tetto
-          resta pieno perché è la parte che dà la forma; i montanti si sono
-          assottigliati, prima erano due blocchi che pesavano più delle
-          casse — e le casse sono il contenuto, cioè il senso dell'icona */}
-      <path d="M12 2.6 2.6 6.9V21.4h1.9V9.9h15V21.4h1.9V6.9z" fill={nero} />
-      {/* le casse, impilate a scaletta: contorno invece che pieno, così si
-          leggono come scatole distinte e non come una macchia unica */}
-      <g stroke={nero} strokeWidth="1.05" strokeLinejoin="round">
-        <rect x="6.6" y="11.2" width="3.6" height="3.1" />
-        <rect x="6.6" y="14.9" width="3.6" height="3.1" />
-        <rect x="10.8" y="14.9" width="3.6" height="3.1" />
-        <rect x="6.6" y="18.6" width="3.6" height="2.8" />
-        <rect x="10.8" y="18.6" width="3.6" height="2.8" />
-        <rect x="15" y="18.6" width="3.6" height="2.8" />
+    <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none">
+      <g stroke={NAVY} strokeLinecap="round" strokeLinejoin="round">
+        {/* i due capannoni dietro, più piccoli e più in alto */}
+        <path d="M1.3 11V5.8L5.2 3l3.9 2.8v1.6" strokeWidth="1.5" />
+        <path d="M3.4 7h3.6" strokeWidth="1.2" strokeLinecap="butt" />
+        <path d="M22.7 11V5.8L18.8 3l-3.9 2.8v1.6" strokeWidth="1.5" />
+        <path d="M17 7h3.6" strokeWidth="1.2" strokeLinecap="butt" />
+        {/* quello davanti, uguale all'icona del magazzino */}
+        <path d="M5.8 19.2V11.6L12 7.4l6.2 4.2v7.6" strokeWidth="1.9" />
+        <path d="M9 13h6" strokeWidth="1.6" strokeLinecap="butt" />
       </g>
+      <rect x="4.5" y="8" width="1.6" height="1.4" rx="0.25" fill={GOLD} />
+      <rect x="17.9" y="8" width="1.6" height="1.4" rx="0.25" fill={GOLD} />
+      <rect x="10.7" y="14.4" width="2.6" height="2.2" rx="0.35" fill={GOLD} />
+      <rect x="9.2" y="16.9" width="2.6" height="2.2" rx="0.35" fill={GOLD} />
+      <rect x="12.4" y="16.9" width="2.6" height="2.2" rx="0.35" fill={GOLD} />
     </svg>
   );
 }
