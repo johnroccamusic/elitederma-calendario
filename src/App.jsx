@@ -5397,19 +5397,18 @@ function SezioneDateCorsi({
   const masterById = useMemo(() => Object.fromEntries((master || []).map((m) => [m.id, m])), [master]);
 
   const numeroInProgrammazione = corsiDate.filter((cd) => cd.data_fine >= oggiStr).length;
+  const terminiRicerca = ricercaDate.trim().toLowerCase().split(/\s+/).filter(Boolean);
   // quando la ricerca centra il nome di un allievo, la sua riga va segnata:
   // il corso da solo non basta a capire perché è comparso, e soprattutto si
   // vuole entrare nella sua scheda senza aprire la classe e cercarlo a occhio
   const allieviTrovatiPerData = {};
-  const corsiDateFiltrate = corsiDate.filter((cd) => {
-    if (vistaDateTab === "programmazione" ? cd.data_fine < oggiStr : cd.data_fine >= oggiStr) return false;
-    if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
-    if (filtroCittaHome && cittaDiSede(location, cd.location_id) !== filtroCittaHome) return false;
-    if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
-    const termini = ricercaDate.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (termini.length === 0) return true;
+  // corrispondenza al testo cercato, senza guardare né la tab né i filtri:
+  // serve anche a capire, quando la ricerca non dà niente, se il corso
+  // esiste ma sono i filtri (o la tab sbagliata) a tenerlo nascosto
+  function corrispondeRicerca(cd) {
+    if (terminiRicerca.length === 0) return true;
     const iscrittiData = iscritti.filter((i) => i.corso_data_id === cd.id);
-    const nomiAllievi = iscrittiData.map((i) => `${i.nome} ${i.cognome}`);
+    const nomiAllievi = iscrittiData.map((i) => `${i.nome || ""} ${i.cognome || ""}`);
     const mesiCd = [cd.data_inizio, cd.data_fine].filter(Boolean).map((d) => MESI[parseInt(d.slice(5, 7), 10) - 1]);
     const anniCd = [cd.data_inizio, cd.data_fine].filter(Boolean).map((d) => d.slice(0, 4));
     const testoCorso = [corsoById[cd.corso_id]?.nome, locById[cd.location_id]?.nome, masterById[cd.master_id]?.nome, ...mesiCd, ...anniCd]
@@ -5418,17 +5417,45 @@ function SezioneDateCorsi({
     // ogni termine digitato deve trovarsi da qualche parte nel testo
     // (in qualunque ordine): "mei milano" trova Mei anche se sta in un
     // campo diverso da "milano" (es. nome allievo + città)
-    if (!termini.every((t) => testo.includes(t))) return false;
+    if (!terminiRicerca.every((t) => testo.includes(t))) return false;
     // un allievo è "centrato" se almeno un termine sta nel suo nome e i
     // termini restanti li spiega la riga del corso: così "mei milano"
     // segna Mei, mentre cercare solo "milano" non segna nessuno
     const centrati = iscrittiData.filter((i) => {
       const nomeIntero = `${i.nome || ""} ${i.cognome || ""}`.toLowerCase();
-      return termini.some((t) => nomeIntero.includes(t)) && termini.every((t) => nomeIntero.includes(t) || testoCorso.includes(t));
+      return terminiRicerca.some((t) => nomeIntero.includes(t)) && terminiRicerca.every((t) => nomeIntero.includes(t) || testoCorso.includes(t));
     });
     if (centrati.length > 0) allieviTrovatiPerData[cd.id] = centrati;
     return true;
-  });
+  }
+  const nellaTabCorrente = (cd) => (vistaDateTab === "programmazione" ? cd.data_fine >= oggiStr : cd.data_fine < oggiStr);
+  const passaIFiltri = (cd) => {
+    if (filtroCorsoHome && cd.corso_id !== filtroCorsoHome) return false;
+    if (filtroCittaHome && cittaDiSede(location, cd.location_id) !== filtroCittaHome) return false;
+    if (filtroMasterHome && cd.master_id !== filtroMasterHome) return false;
+    return true;
+  };
+  const corsiDateFiltrate = corsiDate.filter((cd) => nellaTabCorrente(cd) && passaIFiltri(cd) && corrispondeRicerca(cd));
+  // la ricerca non ha dato niente: il corso cercato esiste da qualche altra
+  // parte? Un filtro dimenticato o la tab sbagliata sono la causa più
+  // frequente, e restano invisibili — meglio dirlo che lasciar credere che
+  // quella persona non ci sia
+  const fuoriDaCiCheSiGuarda = terminiRicerca.length > 0 && corsiDateFiltrate.length === 0
+    ? corsiDate.filter((cd) => corrispondeRicerca(cd))
+    : [];
+  const filtriAttiviDescrizione = [
+    filtroCorsoHome && `corso ${toTitleCase(corsi.find((c) => c.id === filtroCorsoHome)?.nome || "?")}`,
+    filtroCittaHome && `città ${toTitleCase(filtroCittaHome)}`,
+    filtroMasterHome && `master ${toTitleCase(master.find((m) => m.id === filtroMasterHome)?.nome || "?")}`,
+  ].filter(Boolean);
+  function mostraQuelliFuori() {
+    setFiltroCorsoHome("");
+    setFiltroCittaHome("");
+    setFiltroMasterHome("");
+    if (!fuoriDaCiCheSiGuarda.some((cd) => nellaTabCorrente(cd))) {
+      setVistaDateTab(vistaDateTab === "programmazione" ? "archivio" : "programmazione");
+    }
+  }
 
   return (
     <div>
@@ -5529,6 +5556,40 @@ function SezioneDateCorsi({
       </>
       )}
       <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: collassabileSuMobile ? 4 : 10 }}>{corsiDateFiltrate.length} cors{corsiDateFiltrate.length === 1 ? "o trovato" : "i trovati"}</div>
+      {/* una ricerca che non trova niente non dice se la persona non c'è o
+          se è un filtro rimasto attivo (o la tab sbagliata) a nasconderla */}
+      {terminiRicerca.length > 0 && corsiDateFiltrate.length === 0 && (
+        <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: 14, marginBottom: 16 }}>
+          {fuoriDaCiCheSiGuarda.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: NAVY }}>
+              Nessun corso e nessun allievo corrisponde a «{ricercaDate.trim()}».
+            </div>
+          ) : (
+            <>
+              <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginBottom: 10 }}>
+                «{ricercaDate.trim()}» c'è, ma fuori da quello che stai guardando
+                {filtriAttiviDescrizione.length > 0 ? ` (filtri attivi: ${filtriAttiviDescrizione.join(" · ")})` : ""}
+                {!fuoriDaCiCheSiGuarda.some((cd) => nellaTabCorrente(cd)) ? ` — sta fra i corsi ${vistaDateTab === "programmazione" ? "passati" : "programmati"}` : ""}.
+              </div>
+              {fuoriDaCiCheSiGuarda.slice(0, 6).map((cd) => (
+                <div key={cd.id} onClick={() => onApriData?.(cd)} style={{ ...fontBody, fontSize: 13, color: NAVY, padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, cursor: onApriData ? "pointer" : "default", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <b>{toTitleCase(corsoById[cd.corso_id]?.nome || "?")}</b>
+                  <span style={{ color: MUTED }}>{toTitleCase(locById[cd.location_id]?.nome || "?")} · {fmtDataCompatta(cd.data_inizio, cd.data_fine)}</span>
+                  {(allieviTrovatiPerData[cd.id] || []).map((i) => (
+                    <span key={i.id} style={{ color: "#C0392B", fontWeight: 700 }}>{toTitleCase(`${i.nome || ""} ${i.cognome || ""}`.trim())}</span>
+                  ))}
+                </div>
+              ))}
+              <button
+                onClick={mostraQuelliFuori}
+                style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "8px 14px", cursor: "pointer", marginTop: 10 }}
+              >
+                Mostrali nell'elenco
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {collassabileSuMobile && (
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
           <button
@@ -14084,11 +14145,50 @@ function TabellaDateCorsi({ mesi, renderRiga, mostraColonnaSede }) {
 
 // una scheda "città" (pin + nome + N corsi programmati) con la tabella
 // date dentro — sua propria rotellina di zoom, indipendente dalle altre
+// Lo zoom della card NON usa la proprietà CSS "zoom".
+//
+// "zoom" è una trasformazione che il browser applica in composizione: quando
+// il contenuto cambia sotto — filtrando o scrivendo nella ricerca — l'area
+// non viene sempre ridipinta, e restava a video l'elenco di prima. Da fuori
+// sembrava che la ricerca sommasse i risultati invece di sostituirli: il
+// contatore ("1 corso trovato"), che sta fuori dalla card, era già corretto
+// mentre sotto rimanevano i corsi delle lettere digitate prima.
+//
+// "transform: scale" viene ridisegnato ad ogni cambiamento. Non occupa però
+// lo spazio che gli spetta (il layout resta quello a grandezza piena), per
+// cui l'altezza scalata si misura e si dà al contenitore: senza, sotto alla
+// card resterebbe una fascia vuota.
+function ZoomBox({ zoom, children }) {
+  const ref = React.useRef(null);
+  const [altezza, setAltezza] = useState(null);
+  const fattore = zoom / 100;
+  React.useLayoutEffect(() => {
+    const nodo = ref.current;
+    if (!nodo) return;
+    const misura = () => setAltezza(Math.ceil(nodo.offsetHeight * fattore));
+    misura();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const osservatore = new ResizeObserver(misura);
+    osservatore.observe(nodo);
+    return () => osservatore.disconnect();
+  });
+  if (zoom === 100) return children;
+  return (
+    <div style={{ height: altezza != null ? altezza : undefined, overflow: "hidden" }}>
+      <div ref={ref} style={{ transform: `scale(${fattore})`, transformOrigin: "top left", width: `${100 / fattore}%` }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function CardCittaData({ c, renderRiga }) {
   const [zoom, controlliZoom] = useZoomScheda();
   const totaleCorsiCitta = Object.values(c.mesi).reduce((tot, m) => tot + m.voci.length, 0);
   return (
-    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, marginBottom: 16, zoom: `${zoom}%` }}>
+    <div style={{ marginBottom: 16 }}>
+    <ZoomBox zoom={zoom}>
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
       {controlliZoom}
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
         <IconaPin size={30} color={GOLD} />
@@ -14098,6 +14198,8 @@ function CardCittaData({ c, renderRiga }) {
         </div>
       </div>
       <TabellaDateCorsi mesi={c.mesi} renderRiga={renderRiga} mostraColonnaSede={false} />
+    </div>
+    </ZoomBox>
     </div>
   );
 }
@@ -14109,10 +14211,12 @@ function CardCittaData({ c, renderRiga }) {
 function CardCronologico({ mesi, renderRiga }) {
   const [zoom, controlliZoom] = useZoomScheda();
   return (
-    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20, zoom: `${zoom}%` }}>
+    <ZoomBox zoom={zoom}>
+    <div style={{ position: "relative", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 20 }}>
       {controlliZoom}
       <TabellaDateCorsi mesi={mesi} renderRiga={renderRiga} mostraColonnaSede />
     </div>
+    </ZoomBox>
   );
 }
 
@@ -14268,6 +14372,17 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
 
   // "Cronologico": tutte le date di tutte le città in un'unica tabella,
   // raggruppata solo per mese e ordinata per data (invece che per città)
+  // La card dell'elenco può essere zoomata (i tasti +/- in alto a destra), e
+  // lo zoom è una trasformazione che il browser applica in composizione:
+  // quando il contenuto cambia sotto — filtrando o scrivendo nella ricerca —
+  // capita che quell'area non venga ridipinta e resti a video l'elenco di
+  // prima. È il difetto per cui il contatore ("1 corso trovato"), che sta
+  // fuori dalla card, si aggiornava mentre l'elenco continuava a mostrare
+  // tutti i corsi, sembrando che la ricerca aggiungesse invece di filtrare.
+  // Legando la chiave alle righe effettivamente mostrate, quando cambiano il
+  // sottoalbero viene rimontato e il browser è costretto a ridisegnarlo.
+  const firmaRighe = corsiDate.map((cd) => cd.id).join(",");
+
   if (cronologico) {
     const mesi = {};
     corsiDate.forEach((cd) => {
@@ -14276,13 +14391,13 @@ function DateRaggruppatePerCitta({ corsi, location, corsiDate, iscritti, master,
       if (!mesi[chiaveMese]) mesi[chiaveMese] = { etichetta: `${MESI[parseInt(mese, 10) - 1]} ${anno}`, voci: [] };
       mesi[chiaveMese].voci.push(cd);
     });
-    return <CardCronologico mesi={mesi} renderRiga={(cd, primaDelGruppo, isMobile) => rigaCorso(cd, true, primaDelGruppo, isMobile)} />;
+    return <CardCronologico key={firmaRighe} mesi={mesi} renderRiga={(cd, primaDelGruppo, isMobile) => rigaCorso(cd, true, primaDelGruppo, isMobile)} />;
   }
 
   return (
     <div>
       {cittaOrdinate.map((c) => (
-        <CardCittaData key={c.nome} c={c} renderRiga={(cd, primaDelGruppo, isMobile) => rigaCorso(cd, false, primaDelGruppo, isMobile)} />
+        <CardCittaData key={`${c.nome}|${firmaRighe}`} c={c} renderRiga={(cd, primaDelGruppo, isMobile) => rigaCorso(cd, false, primaDelGruppo, isMobile)} />
       ))}
     </div>
   );
