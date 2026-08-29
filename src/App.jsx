@@ -37812,6 +37812,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
 
   return (
     <div
+      data-scheda-pacchetto=""
       onDragOver={(e) => { e.preventDefault(); onDragOver && onDragOver(); }}
       onDrop={() => onDrop && onDrop(kit.id)}
       style={{
@@ -38150,6 +38151,22 @@ function PaginaContenutoKit({ corsi, kitDefinizioni, setKitDefinizioni, corsiKit
   const [kitApertoId, setKitApertoId] = useState(null);
   const [kitCopiato, setKitCopiato] = useState(null);
   function onCopia(kitId, prodotti) { setKitCopiato({ id: kitId, prodotti }); }
+
+  // un clic fuori da qualunque pacchetto lo richiude: con venti prodotti
+  // aperti la pagina diventa lunghissima e per chiuderla bisognava
+  // ritrovare l'intestazione in cima. Si ascolta il "pointerdown" e non il
+  // "click" perché il secondo, su una riga che nel frattempo sparisce,
+  // finirebbe nel vuoto; e si guarda se il punto toccato sta dentro una
+  // scheda pacchetto (data-scheda-pacchetto) invece di confrontare gli id
+  useEffect(() => {
+    if (kitApertoId == null) return;
+    function chiudiSeFuori(e) {
+      if (e.target?.closest?.("[data-scheda-pacchetto]")) return;
+      setKitApertoId(null);
+    }
+    document.addEventListener("pointerdown", chiudiSeFuori);
+    return () => document.removeEventListener("pointerdown", chiudiSeFuori);
+  }, [kitApertoId]);
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
