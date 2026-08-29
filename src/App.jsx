@@ -26062,8 +26062,13 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico
   const [payloadPerId, setPayloadPerId] = useState({});
-  const [cambiando, setCambiando] = useState(null);
   const [ordineAperto, setOrdineAperto] = useState(null);
+  // Cambiare stato vuol dire scrivere sul sito e aspettare che WooCommerce
+  // risponda (manda anche la mail al cliente): un secondo o due in cui la
+  // scheda restava lì ferma. Qui lo stato nuovo vale subito in pagina — la
+  // scheda sparisce dall'elenco all'istante — e il giro sul sito continua
+  // per conto suo. Se il sito rifiuta, la scheda torna e lo dice.
+  const [statiOttimisti, setStatiOttimisti] = useState({});
 
   const venditaPerId = useMemo(() => Object.fromEntries((venditeShop || []).map((v) => [v.id, v])), [venditeShop]);
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
@@ -26072,22 +26077,23 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
   const iscrittoById = useMemo(() => Object.fromEntries((iscritti || []).map((i) => [i.id, i])), [iscritti]);
 
   const soloShop = useMemo(() => (venditeShop || []).filter((v) => v.woo_order_id != null), [venditeShop]);
-  const quantiInLavorazione = soloShop.filter((v) => v.stato === "processing").length;
-  const quantiPosDaSpedire = (spedizioniPos || []).filter((sp) => sp.stato === "da_spedire").length;
+  const statoDi = (riga) => statiOttimisti[riga.id] || riga.stato;
+  const quantiInLavorazione = soloShop.filter((v) => statoDi(v) === "processing").length;
+  const quantiPosDaSpedire = (spedizioniPos || []).filter((sp) => statoDi(sp) === "da_spedire").length;
 
   // shop online e banco finiscono nella stessa fila, ordinati per data: chi
   // prepara i pacchi non ha due code separate da guardare, ne ha una sola
   const voci = useMemo(() => {
     const daShop = (vista === "dagestire"
-      ? soloShop.filter((v) => v.stato === "processing")
-      : soloShop.filter((v) => v.stato === "completed"))
+      ? soloShop.filter((v) => statoDi(v) === "processing")
+      : soloShop.filter((v) => statoDi(v) === "completed"))
       .map((v) => ({ tipo: "woo", chiave: `w${v.id}`, data: v.data_ordine || "", vendita: v }));
     const daPos = (spedizioniPos || [])
-      .filter((sp) => (vista === "dagestire" ? sp.stato === "da_spedire" : sp.stato === "spedito"))
+      .filter((sp) => (vista === "dagestire" ? statoDi(sp) === "da_spedire" : statoDi(sp) === "spedito"))
       .map((sp) => ({ tipo: "pos", chiave: `p${sp.id}`, data: sp.ts || "", spedizione: sp, vendita: sp.vendita_id ? venditaPerId[sp.vendita_id] : null }));
     const tutte = [...daShop, ...daPos].sort((a, b) => String(b.data).localeCompare(String(a.data)));
     return vista === "storico" ? tutte.slice(0, 200) : tutte;
-  }, [soloShop, spedizioniPos, vista, venditaPerId]);
+  }, [soloShop, spedizioniPos, vista, venditaPerId, statiOttimisti]);
   const ordini = useMemo(() => voci.filter((v) => v.tipo === "woo").map((v) => v.vendita), [voci]);
 
   // gli stati cambiano anche da fuori (dal sito, o da un collega): questa
@@ -26167,22 +26173,32 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
       ? `Segnare l'ordine #${vendita.numero_ordine || vendita.woo_order_id} come "${etichettaStatoVenditaShop(nuovoStato)}"?\n\nI pezzi venduti torneranno in magazzino, e il cliente riceverà da WooCommerce la mail prevista per questo stato.`
       : `Cambiare lo stato dell'ordine #${vendita.numero_ordine || vendita.woo_order_id} in "${etichettaStatoVenditaShop(nuovoStato)}"?\n\nIl cambio avviene sul sito, e il cliente riceverà da WooCommerce la mail prevista per questo stato.`;
     if (!window.confirm(messaggio)) return;
-    setCambiando(vendita.id);
+    setStatiOttimisti((prev) => ({ ...prev, [vendita.id]: nuovoStato }));
     const { data, error } = await supabase.functions.invoke("woo-stato-ordine", { body: { venditaId: vendita.id, stato: nuovoStato } });
-    setCambiando(null);
-    if (error || data?.errore) { window.alert("Stato non cambiato: " + (data?.errore || error.message)); return; }
-    ricarica(["vendite_shop", "prodotti_shop"]);
+    if (error || data?.errore) {
+      setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[vendita.id]; return nuovo; });
+      window.alert(`Stato non cambiato sul sito, l'ordine #${vendita.numero_ordine || vendita.woo_order_id} resta com'era: ` + (data?.errore || error.message));
+      return;
+    }
+    // la scorciatoia si toglie solo quando i dati veri sono arrivati,
+    // altrimenti la scheda riapparirebbe per un istante
+    await ricarica(["vendite_shop", "prodotti_shop"]);
+    setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[vendita.id]; return nuovo; });
   }
 
   // la spedizione nata dal banco non ha nessuno stato sul sito: è solo un
   // pacco che deve partire, e l'unica cosa da registrare è quando parte
   async function segnaSpeditaPos(sp) {
     if (!window.confirm(`Segnare come spedito il pacco per ${sp.destinatario_nome || "il cliente"}?`)) return;
-    setCambiando(sp.id);
+    setStatiOttimisti((prev) => ({ ...prev, [sp.id]: "spedito" }));
     const { error } = await supabase.from("spedizioni_pos").update({ stato: "spedito", spedito_il: new Date().toISOString() }).eq("id", sp.id);
-    setCambiando(null);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    ricarica(["spedizioni_pos"]);
+    if (error) {
+      setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[sp.id]; return nuovo; });
+      window.alert("Spedizione non aggiornata: " + error.message);
+      return;
+    }
+    await ricarica(["spedizioni_pos"]);
+    setStatiOttimisti((prev) => { const nuovo = { ...prev }; delete nuovo[sp.id]; return nuovo; });
   }
 
   return (
@@ -26222,7 +26238,6 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
                     key={voce.chiave}
                     vendita={voce.vendita}
                     grezzo={payloadPerId[voce.vendita.id] || null}
-                    occupato={cambiando === voce.vendita.id}
                     onCambiaStato={cambiaStato}
                     presi={righePrese[voce.chiave] || {}}
                     onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
@@ -26240,7 +26255,6 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
                   corso={cd ? corsoById[cd.corso_id]?.nome : null}
                   sede={cd ? toTitleCase(locById[cd.location_id]?.nome || "") : null}
                   iscritto={sp.iscritto_id ? iscrittoById[sp.iscritto_id] : null}
-                  occupato={cambiando === sp.id}
                   onSegnaSpedita={() => segnaSpeditaPos(sp)}
                   presi={righePrese[voce.chiave] || {}}
                   onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
