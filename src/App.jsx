@@ -42387,6 +42387,26 @@ export default function App() {
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
   function apriPos() { apriViewProtetta("pos"); }
+  // quanti pacchi aspettano: gli ordini dello shop in lavorazione più le
+  // spedizioni vendute al banco non ancora partite. È il numero rosso sul
+  // tasto, in home e dentro il bivio della logistica.
+  //
+  // Si conta sul database invece di guardare le tabelle in memoria: la
+  // home non carica né gli ordini né le spedizioni (sono migliaia di
+  // righe per un numero solo), e senza questo il pallino sarebbe rimasto
+  // a zero fino a quando non si fosse aperta un'altra pagina
+  const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
+  useEffect(() => {
+    if (!ok || (view !== "home" && view !== "logisticaprodotti")) return undefined;
+    let annullato = false;
+    Promise.all([
+      supabase.from("vendite_shop").select("id", { count: "exact", head: true }).eq("stato", "processing").not("woo_order_id", "is", null),
+      supabase.from("spedizioni_pos").select("id", { count: "exact", head: true }).eq("stato", "da_spedire"),
+    ]).then(([ordini, spedizioni]) => {
+      if (!annullato) setPacchiDaSpedire((ordini.count || 0) + (spedizioni.count || 0));
+    });
+    return () => { annullato = true; };
+  }, [ok, view]);
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
   function apriOrdiniInArrivo() { apriViewProtetta("ordiniinarrivo"); }
@@ -42743,7 +42763,7 @@ export default function App() {
               { chiave: "erp", title: "Amministrazione", descrizione: "Finanziaria e organizzativa", Icona: IconaTileCostiRicavi, attivo: tastoAbilitato("erp"), onClick: apriErp },
               { chiave: "magazzinoshop", title: "Gestione magazzino e shop", descrizione: "Prodotti, scorte, shop online e relative vendite", Icona: IconaTileGestioneMagazzino, attivo: tastoAbilitato("magazzinoshop"), onClick: apriMagazzinoShop },
               { chiave: "pos", title: "POS Vendita diretta", descrizione: "Vendita al banco con scarico automatico dal magazzino", Icona: IconaTilePos, attivo: tastoAbilitato("pos"), onClick: apriPos },
-              { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti },
+              { chiave: "logisticaprodotti", title: "Logistica prodotti", descrizione: "Spedizioni, tracciamenti e documenti", Icona: IconaTileLogistica, attivo: tastoAbilitato("logisticaprodotti"), onClick: apriLogisticaProdotti, badge: pacchiDaSpedire },
               { chiave: "generazioneloghi", title: "Assegna logo", descrizione: "Personalizza loghi, watermark e materiali ufficiali", Icona: IconaLoghiCard, attivo: tastoAbilitato("generazioneloghi"), onClick: apriGenerazioneLoghi },
               { chiave: "gestionemodelle", title: "Gestione modelle", descrizione: "Organizza modelle, disponibilità e assegnazioni", Icona: IconaTileModelle, attivo: tastoAbilitato("gestionemodelle"), onClick: apriGestioneModelle },
               { chiave: "prezzicorsi", title: "Prezzi corsi", descrizione: "Locandine con i prezzi dei corsi, pronte da scaricare", Icona: IconaTilePrezzi, attivo: tastoAbilitato("prezzicorsi"), onClick: apriPrezziCorsi },
@@ -43241,10 +43261,7 @@ export default function App() {
           onBack={() => setView("home")}
           onApriSpedizioniCorsi={apriSpedizioniCorsi}
           onApriOrdiniInArrivo={apriOrdiniInArrivo}
-          quantiOrdiniDaSpedire={
-            (venditeShop || []).filter((v) => v.woo_order_id != null && v.stato === "processing").length
-            + (spedizioniPos || []).filter((sp) => sp.stato === "da_spedire").length
-          }
+          quantiOrdiniDaSpedire={pacchiDaSpedire}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.logisticaprodotti?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("logisticaprodotti", { ordine: o })}
           colonneTasti={layoutTasti.logisticaprodotti?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("logisticaprodotti", { colonne: n })}
           etichetteTasti={layoutTasti.logisticaprodotti?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("logisticaprodotti", chiave, testo)}
