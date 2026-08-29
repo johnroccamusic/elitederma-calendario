@@ -25778,12 +25778,33 @@ function fmtDataBreve(d) {
   return y ? `${g}/${m}/${y.slice(2)}` : "—";
 }
 // un dato del cliente dentro una pastiglia: in fila prendono una riga sola
-// invece di quattro, e restano leggibili perché ognuna è un riquadro a sé
-function pastiglia(etichetta, valore) {
-  if (valore == null || valore === "") return null;
+// invece di quattro, e restano leggibili perché ognuna è un riquadro a sé.
+//
+// Le pastiglie hanno misura fissa (due larghe per nome ed email, due
+// strette per spedizione e pagamento): a rimpicciolirsi è il testo, non il
+// riquadro — così le schede di ordini diversi restano allineate fra loro
+// invece di ballare a seconda di quanto è lungo il cognome del cliente.
+function fontPastiglia(testo, largo) {
+  const n = String(testo || "").length;
+  const soglie = largo ? [30, 38, 46, 56] : [18, 23, 28, 34];
+  if (n <= soglie[0]) return 12;
+  if (n <= soglie[1]) return 11;
+  if (n <= soglie[2]) return 10;
+  if (n <= soglie[3]) return 9;
+  return 8.5;
+}
+function pastiglia(etichetta, valore, largo = true) {
+  const testo = `${etichetta}: ${valore || "—"}`;
   return (
-    <span style={{ ...fontBody, fontSize: 12, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "5px 9px", whiteSpace: "nowrap", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>
-      <span style={{ fontWeight: 700 }}>{etichetta}:</span> {valore}
+    <span style={{
+      ...fontBody, fontSize: fontPastiglia(testo, largo), color: valore ? NAVY : MUTED,
+      background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8,
+      padding: "0 9px", height: 30, display: "flex", alignItems: "center",
+      whiteSpace: "nowrap", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
+    }}>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+        <span style={{ fontWeight: 700 }}>{etichetta}:</span> {valore || "—"}
+      </span>
     </span>
   );
 }
@@ -25913,11 +25934,11 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 
       {/* i dati del cliente su una riga di pastiglie: erano una colonna di
           quattro righe che spingeva in basso gli indirizzi */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 8 }}>
         {pastiglia("Cliente", vendita?.cliente_nome)}
         {pastiglia("Email", vendita?.cliente_email || fatturazione?.email)}
-        {pastiglia("Sped.", metodoSpedizione)}
-        {pastiglia("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title)}
+        {pastiglia("Sped.", metodoSpedizione, false)}
+        {pastiglia("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title, false)}
       </div>
       {notaCliente && (
         <div style={{ ...fontBody, fontSize: 12, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "5px 8px", marginBottom: 8 }}>
@@ -26022,12 +26043,12 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED }}>{spedizione?.ts ? fmtDataBreve(spedizione.ts.slice(0, 10)) : "—"}</span>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "2fr 2fr 1.15fr 1.15fr", gap: 6, marginBottom: 8 }}>
         {pastiglia("Cliente", spedizione?.destinatario_nome || vendita?.cliente_nome)}
         {pastiglia("Email", iscritto?.email || vendita?.cliente_email)}
-        {pastiglia("Tel.", iscritto?.telefono)}
-        {pastiglia("Corso", corso ? `${corso}${sede ? ` · ${sede}` : ""}` : null)}
-        {pastiglia("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null)}
+        {pastiglia("Tel.", iscritto?.telefono, false)}
+        {pastiglia("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null, false)}
+        {corso && pastiglia("Corso", `${corso}${sede ? ` · ${sede}` : ""}`)}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 10 : 14 }}>
