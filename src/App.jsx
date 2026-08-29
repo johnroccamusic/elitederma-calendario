@@ -15333,6 +15333,8 @@ const AREA_MADRE_VISTA = {
   venditealbanco: ["magazzinoshop"],
   omaggi: ["magazzinoshop"],
   prodottiusatikit: ["magazzinoshop"],
+  spedizionicorsi: ["logisticaprodotti"],
+  ordiniinarrivo: ["logisticaprodotti"],
   magazzino: ["magazzinoshop"],
   magazzinoesterni: ["magazzinoshop"],
   gestioneshop: ["magazzinoshop"],
@@ -25747,6 +25749,417 @@ function ModaleDettaglioOrdine({ vendita, onChiudi }) {
         </div>
       )}
     </Modal>
+  );
+}
+
+// ---------- Ordini in arrivo (spedizioni dello shop online) ----------
+// I sei stati che WooCommerce accetta, nell'ordine in cui li mostra il
+// sito. Sono gli stessi di woo-stato-ordine: qui si sceglie, là si scrive.
+const STATI_ORDINE_SHOP = ["completed", "processing", "on-hold", "pending", "cancelled", "refunded"];
+
+// un tasto quadrato di stato, nello stile delle fasi di logistica: quello
+// attuale è colorato e spuntato, gli altri sono bianchi e cliccabili
+function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
+  const st = STATI_VENDITA_SHOP[stato] || { etichetta: stato, colore: MUTED, sfondo: "#fff" };
+  const attivo = stato === attuale;
+  return (
+    <button
+      onClick={attivo || occupato ? undefined : onClick}
+      title={attivo ? "Stato attuale" : `Porta l'ordine in "${st.etichetta}"`}
+      style={{
+        ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px",
+        cursor: attivo || occupato ? "default" : "pointer", textAlign: "center", flex: 1, minWidth: 0,
+        lineHeight: 1.2, overflowWrap: "break-word", aspectRatio: "1 / 1",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
+        opacity: occupato ? 0.5 : 1,
+        background: attivo ? st.sfondo : "#fff",
+        border: `1px solid ${attivo ? st.colore : CREAM_BORDER}`,
+        color: attivo ? st.colore : MUTED,
+      }}
+    >
+      <span style={{ fontSize: 12, lineHeight: 1 }}>{attivo ? "✓" : "○"}</span>
+      <span>{st.etichetta}</span>
+    </button>
+  );
+}
+
+// la "nuvola" di un ordine: data, riepilogo, cliente, indirizzi e i tasti
+// di stato. È lo stesso contenuto della scheda dettaglio di Vendite Shop,
+// disposto per essere letto mentre si prepara il pacco
+function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile }) {
+  const righe = Array.isArray(vendita?.prodotti) ? vendita.prodotti : [];
+  const fatturazione = grezzo?.billing || null;
+  const spedizione = grezzo?.shipping || null;
+  const speseSpedizione = grezzo?.shipping_total != null ? parseNum(grezzo.shipping_total) : null;
+  const metodoSpedizione = (Array.isArray(grezzo?.shipping_lines) ? grezzo.shipping_lines : [])[0]?.method_title || null;
+  const sconto = grezzo?.discount_total != null ? parseNum(grezzo.discount_total) : null;
+  const codiceCoupon = vendita?.codice_coupon || (Array.isArray(grezzo?.coupon_lines) ? grezzo.coupon_lines : [])[0]?.code || null;
+  const notaCliente = grezzo?.customer_note || null;
+  const st = STATI_VENDITA_SHOP[vendita?.stato];
+
+  function indirizzo(a) {
+    if (!a) return [];
+    const nome = [a.first_name, a.last_name].filter(Boolean).join(" ");
+    const via = [a.address_1, a.address_2].filter(Boolean).join(", ");
+    const citta = [a.postcode, a.city, a.state && `(${a.state})`].filter(Boolean).join(" ");
+    return [nome, a.company, via, citta, a.country, a.phone, a.email].filter(Boolean);
+  }
+  const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
+    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
+      <span style={{ color: MUTED, minWidth: 110, flexShrink: 0 }}>{etichetta}</span>
+      <span style={{ minWidth: 0 }}>{valore}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? 14 : 18, marginBottom: 16, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 20, fontWeight: 700, color: NAVY }}>
+          Ordine #{vendita?.numero_ordine || vendita?.woo_order_id}
+        </div>
+        {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 10, padding: "3px 10px" }}>{st.etichetta}</span>}
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
+          {vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 12 : 18 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Prodotti</div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
+            {righe.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
+            ) : righe.map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED, whiteSpace: "nowrap", minWidth: 70, textAlign: "right" }}>
+                  {r.totale_riga != null ? fmtEuroErp2(r.totale_riga) : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: BG, borderRadius: 10, padding: "8px 10px" }}>
+            {rigaInfo("Imponibile", vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : null)}
+            {rigaInfo("IVA", vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : null)}
+            {rigaInfo("Spedizione", speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : (metodoSpedizione ? "gratuita" : null))}
+            {rigaInfo("Sconto", sconto != null && sconto > 0 ? `− ${fmtEuroErp2(sconto)}${codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}` : null)}
+            <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 5, marginTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ minWidth: 110, flexShrink: 0 }}>Totale</span>
+              <span>{vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          {rigaInfo("Cliente", vendita?.cliente_nome || null)}
+          {rigaInfo("Email", vendita?.cliente_email || fatturazione?.email || null)}
+          {rigaInfo("Pagamento", vendita?.metodo_pagamento || grezzo?.payment_method_title || null)}
+          {rigaInfo("Spedizione", metodoSpedizione)}
+          {notaCliente && (
+            <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, background: "#FBF1D9", border: "1px solid #E8D9A0", borderRadius: 8, padding: "6px 8px", marginTop: 6 }}>
+              <b>Nota del cliente:</b> {notaCliente}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginTop: 10 }}>
+            {indirizzo(spedizione).length > 0 && (
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Spedizione</div>
+                {indirizzo(spedizione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{r}</div>)}
+              </div>
+            )}
+            {fatturazione && (
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
+                <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Fatturazione</div>
+                {indirizzo(fatturazione).map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{r}</div>)}
+              </div>
+            )}
+          </div>
+          {!grezzo && (
+            <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8 }}>Carico gli indirizzi…</div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "14px 0 6px" }}>Stato dell'ordine sul sito</div>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch" }}>
+        {STATI_ORDINE_SHOP.map((stato) => (
+          <TastoStatoOrdine key={stato} stato={stato} attuale={vendita?.stato} occupato={occupato} onClick={() => onCambiaStato(vendita, stato)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// la "nuvola" di una spedizione nata dal POS: stessa forma di quella dello
+// shop, ma i dati del cliente arrivano da quanto scritto al banco
+// (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito — c'è solo
+// da dire se il pacco è partito
+function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, occupato, isMobile }) {
+  const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
+  const spedita = spedizione?.stato === "spedito";
+  const rigaInfo = (etichetta, valore) => valore == null || valore === "" ? null : (
+    <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 12.5, color: NAVY, padding: "2px 0" }}>
+      <span style={{ color: MUTED, minWidth: 110, flexShrink: 0 }}>{etichetta}</span>
+      <span style={{ minWidth: 0 }}>{valore}</span>
+    </div>
+  );
+  const indirizzo = [spedizione?.destinatario_nome, spedizione?.indirizzo, [spedizione?.cap, spedizione?.citta].filter(Boolean).join(" ")].filter(Boolean);
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: isMobile ? 14 : 18, marginBottom: 16, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 20, fontWeight: 700, color: NAVY }}>
+          Vendita al banco
+        </div>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: spedita ? "#2E7D32" : "#B8860B", background: spedita ? "#E3F3E5" : "#FBF1D9", borderRadius: 10, padding: "3px 10px" }}>
+          {spedita ? "Spedita" : "Da spedire"}
+        </span>
+        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 10, padding: "3px 10px" }}>POS</span>
+        <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{spedizione?.ts ? fmtData(spedizione.ts.slice(0, 10)) : "—"}</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: isMobile ? 12 : 18 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Prodotti</div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, overflow: "hidden", marginBottom: 10 }}>
+            {righe.length === 0 ? (
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: 10 }}>Nessuna riga di prodotto.</div>
+            ) : righe.map((r, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: 1, minWidth: 0 }}>{r.nome || "—"}</span>
+                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>×{r.quantita ?? 1}</span>
+              </div>
+            ))}
+          </div>
+          {vendita && (
+            <div style={{ background: BG, borderRadius: 10, padding: "8px 10px" }}>
+              {rigaInfo("Ordine", `#${vendita.numero_ordine || "—"}`)}
+              {rigaInfo("Pagamento", vendita.metodo_pagamento || null)}
+              <div style={{ display: "flex", gap: 8, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, paddingTop: 5, marginTop: 3, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                <span style={{ minWidth: 110, flexShrink: 0 }}>Totale</span>
+                <span>{vendita.totale != null ? fmtEuroErp2(vendita.totale) : "—"}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={{ minWidth: 0 }}>
+          {rigaInfo("Cliente", spedizione?.destinatario_nome || vendita?.cliente_nome || null)}
+          {rigaInfo("Email", iscritto?.email || vendita?.cliente_email || null)}
+          {rigaInfo("Telefono", iscritto?.telefono || null)}
+          {rigaInfo("Corso", corso ? `${corso}${sede ? ` · ${sede}` : ""}` : null)}
+          {rigaInfo("Venduto da", vendita?.operatore_nome ? toTitleCase(vendita.operatore_nome) : null)}
+          {indirizzo.length > 0 && (
+            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10, marginTop: 10 }}>
+              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>Spedizione</div>
+              {indirizzo.map((r, i) => <div key={i} style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.4 }}>{r}</div>)}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, margin: "14px 0 6px" }}>Stato della spedizione</div>
+      <div style={{ display: "flex", gap: 6, alignItems: "stretch", maxWidth: 320 }}>
+        <div style={{
+          ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px", textAlign: "center", flex: 1, minWidth: 0,
+          lineHeight: 1.2, aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+          background: spedita ? "#fff" : "#FBF1D9", border: `1px solid ${spedita ? CREAM_BORDER : "#B8860B"}`, color: spedita ? MUTED : "#B8860B",
+        }}>
+          <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "○" : "!"}</span>
+          <span>Da spedire</span>
+        </div>
+        <button
+          onClick={spedita || occupato ? undefined : onSegnaSpedita}
+          title={spedita ? "Già spedita" : "Segna il pacco come partito"}
+          style={{
+            ...fontBody, fontSize: 10.5, fontWeight: 700, borderRadius: 10, padding: "4px 3px", textAlign: "center", flex: 1, minWidth: 0,
+            lineHeight: 1.2, aspectRatio: "1 / 1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+            cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
+            background: spedita ? "#E3F3E5" : "#fff", border: `1px solid ${spedita ? "#2E7D32" : CREAM_BORDER}`, color: spedita ? "#2E7D32" : MUTED,
+          }}
+        >
+          <span style={{ fontSize: 12, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
+          <span>Spedita</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// "Ordini in arrivo": gli ordini dello shop online da preparare e spedire.
+// In pagina restano solo quelli in lavorazione — cioè pagati e in attesa
+// di partire; le vendite già chiuse si guardano dal tasto "Storico", che
+// non deve rubare spazio a quello che c'è da fare oggi.
+function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, location, iscritti, ricarica, onBack, titolo = "Ordini in arrivo" }) {
+  const isMobile = useIsMobile();
+  const [vista, setVista] = useState("dagestire"); // dagestire | storico
+  const [payloadPerId, setPayloadPerId] = useState({});
+  const [cambiando, setCambiando] = useState(null);
+
+  const venditaPerId = useMemo(() => Object.fromEntries((venditeShop || []).map((v) => [v.id, v])), [venditeShop]);
+  const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const corsoDataById = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
+  const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  const iscrittoById = useMemo(() => Object.fromEntries((iscritti || []).map((i) => [i.id, i])), [iscritti]);
+
+  const soloShop = useMemo(() => (venditeShop || []).filter((v) => v.woo_order_id != null), [venditeShop]);
+  const quantiInLavorazione = soloShop.filter((v) => v.stato === "processing").length;
+  const quantiPosDaSpedire = (spedizioniPos || []).filter((sp) => sp.stato === "da_spedire").length;
+
+  // shop online e banco finiscono nella stessa fila, ordinati per data: chi
+  // prepara i pacchi non ha due code separate da guardare, ne ha una sola
+  const voci = useMemo(() => {
+    const daShop = (vista === "dagestire"
+      ? soloShop.filter((v) => v.stato === "processing")
+      : soloShop.filter((v) => v.stato === "completed"))
+      .map((v) => ({ tipo: "woo", chiave: `w${v.id}`, data: v.data_ordine || "", vendita: v }));
+    const daPos = (spedizioniPos || [])
+      .filter((sp) => (vista === "dagestire" ? sp.stato === "da_spedire" : sp.stato === "spedito"))
+      .map((sp) => ({ tipo: "pos", chiave: `p${sp.id}`, data: sp.ts || "", spedizione: sp }));
+    const tutte = [...daShop, ...daPos].sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    return vista === "storico" ? tutte.slice(0, 40) : tutte;
+  }, [soloShop, spedizioniPos, vista]);
+  const ordini = useMemo(() => voci.filter((v) => v.tipo === "woo").map((v) => v.vendita), [voci]);
+
+  // indirizzi, spedizione e coupon stanno in payload_raw, che non si tiene
+  // in memoria per migliaia di ordini: si legge solo per quelli a video
+  useEffect(() => {
+    const mancanti = ordini.filter((o) => payloadPerId[o.id] === undefined).map((o) => o.id).slice(0, 40);
+    if (!mancanti.length) return undefined;
+    let annullato = false;
+    supabase.from("vendite_shop").select("id, payload_raw").in("id", mancanti).then(({ data }) => {
+      if (annullato) return;
+      setPayloadPerId((prev) => {
+        const nuovo = { ...prev };
+        // anche gli id senza risposta vanno segnati, altrimenti si richiedono all'infinito
+        mancanti.forEach((id) => { nuovo[id] = null; });
+        (data || []).forEach((r) => { nuovo[r.id] = r.payload_raw || null; });
+        return nuovo;
+      });
+    });
+    return () => { annullato = true; };
+  }, [ordini, payloadPerId]);
+
+  // lo stato è del sito: si cambia là con woo-stato-ordine e solo se il
+  // sito accetta si scrive anche qui. Il magazzino lo tocca il webhook,
+  // che riceve l'aggiornamento e scarica o ripristina come sempre
+  async function cambiaStato(vendita, nuovoStato) {
+    if (nuovoStato === vendita.stato) return;
+    const tornaIndietro = ["cancelled", "refunded"].includes(nuovoStato) && ["processing", "completed"].includes(vendita.stato);
+    const messaggio = tornaIndietro
+      ? `Segnare l'ordine #${vendita.numero_ordine || vendita.woo_order_id} come "${etichettaStatoVenditaShop(nuovoStato)}"?\n\nI pezzi venduti torneranno in magazzino, e il cliente riceverà da WooCommerce la mail prevista per questo stato.`
+      : `Cambiare lo stato dell'ordine #${vendita.numero_ordine || vendita.woo_order_id} in "${etichettaStatoVenditaShop(nuovoStato)}"?\n\nIl cambio avviene sul sito, e il cliente riceverà da WooCommerce la mail prevista per questo stato.`;
+    if (!window.confirm(messaggio)) return;
+    setCambiando(vendita.id);
+    const { data, error } = await supabase.functions.invoke("woo-stato-ordine", { body: { venditaId: vendita.id, stato: nuovoStato } });
+    setCambiando(null);
+    if (error || data?.errore) { window.alert("Stato non cambiato: " + (data?.errore || error.message)); return; }
+    ricarica(["vendite_shop", "prodotti_shop"]);
+  }
+
+  // la spedizione nata dal banco non ha nessuno stato sul sito: è solo un
+  // pacco che deve partire, e l'unica cosa da registrare è quando parte
+  async function segnaSpeditaPos(sp) {
+    if (!window.confirm(`Segnare come spedito il pacco per ${sp.destinatario_nome || "il cliente"}?`)) return;
+    setCambiando(sp.id);
+    const { error } = await supabase.from("spedizioni_pos").update({ stato: "spedito", spedito_il: new Date().toISOString() }).eq("id", sp.id);
+    setCambiando(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["spedizioni_pos"]);
+  }
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 16 }}>
+          I pacchi da preparare: gli ordini dello shop online in lavorazione e le spedizioni vendute al banco, con i dati del cliente presi dal sito o scritti al POS.
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+          <TabPillola compatto={isMobile} attivo={vista === "dagestire"} onClick={() => setVista("dagestire")}>
+            Da spedire ({quantiInLavorazione + quantiPosDaSpedire})
+          </TabPillola>
+          <TabPillola compatto={isMobile} attivo={vista === "storico"} onClick={() => setVista("storico")}>
+            Storico
+          </TabPillola>
+        </div>
+
+        {voci.length === 0 ? (
+          <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 18, padding: 24, ...fontBody, fontSize: 13.5, color: MUTED }}>
+            {vista === "dagestire"
+              ? "Niente da spedire in questo momento: nessun ordine dello shop in lavorazione e nessuna spedizione dal banco in attesa."
+              : "Nessun ordine completato da mostrare."}
+          </div>
+        ) : (
+          <>
+            {vista === "storico" && (
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
+                Le ultime {voci.length} spedizioni chiuse, dalla più recente.
+              </div>
+            )}
+            {voci.map((voce) => {
+              if (voce.tipo === "woo") {
+                return (
+                  <NuvolaOrdineShop
+                    key={voce.chiave}
+                    vendita={voce.vendita}
+                    grezzo={payloadPerId[voce.vendita.id] || null}
+                    occupato={cambiando === voce.vendita.id}
+                    onCambiaStato={cambiaStato}
+                    isMobile={isMobile}
+                  />
+                );
+              }
+              const sp = voce.spedizione;
+              const cd = sp.corso_data_id ? corsoDataById[sp.corso_data_id] : null;
+              return (
+                <NuvolaSpedizionePos
+                  key={voce.chiave}
+                  spedizione={sp}
+                  vendita={sp.vendita_id ? venditaPerId[sp.vendita_id] : null}
+                  corso={cd ? corsoById[cd.corso_id]?.nome : null}
+                  sede={cd ? toTitleCase(locById[cd.location_id]?.nome || "") : null}
+                  iscritto={sp.iscritto_id ? iscrittoById[sp.iscritto_id] : null}
+                  occupato={cambiando === sp.id}
+                  onSegnaSpedita={() => segnaSpeditaPos(sp)}
+                  isMobile={isMobile}
+                />
+              );
+            })}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// hub d'ingresso di "Logistica prodotti": le spedizioni dei kit ai corsi
+// da una parte, gli ordini dello shop online dall'altra — due mestieri
+// diversi che prima stavano nella stessa pagina
+function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, quantiOrdiniDaSpedire, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Cosa parte da qui: i kit verso i corsi e i pacchi verso i clienti dello shop.</div>
+        <GrigliaTasti
+          pagina="logisticaprodotti" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={2}
+          definizioni={[
+            { chiave: "spedizionicorsi", title: "Spedizioni corsi", descrizione: "Kit, bolle e pacchi verso le sedi dei corsi.", Icona: IconaTileLogistica, attivo: true, onClick: onApriSpedizioniCorsi },
+            { chiave: "ordiniinarrivo", title: "Ordini in arrivo", descrizione: "Gli ordini dello shop online da preparare e spedire.", Icona: IconaScatolaErp, attivo: true, onClick: onApriOrdiniInArrivo, badge: quantiOrdiniDaSpedire },
+          ]}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -41288,7 +41701,9 @@ export default function App() {
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
-    logisticaprodotti: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
+    logisticaprodotti: ["vendite_shop", "spedizioni_pos"],
+    spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
+    ordiniinarrivo: ["vendite_shop", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
@@ -41704,6 +42119,8 @@ export default function App() {
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
   function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
+  function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
+  function apriOrdiniInArrivo() { apriViewProtetta("ordiniinarrivo"); }
   function apriMagazziniLocali() { setView("magazzinilocali"); }
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
@@ -42551,13 +42968,38 @@ export default function App() {
       )}
 
       {view === "logisticaprodotti" && (
+        <PaginaLogisticaHub
+          onBack={() => setView("home")}
+          onApriSpedizioniCorsi={apriSpedizioniCorsi}
+          onApriOrdiniInArrivo={apriOrdiniInArrivo}
+          quantiOrdiniDaSpedire={
+            (venditeShop || []).filter((v) => v.woo_order_id != null && v.stato === "processing").length
+            + (spedizioniPos || []).filter((sp) => sp.stato === "da_spedire").length
+          }
+          ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.logisticaprodotti?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("logisticaprodotti", { ordine: o })}
+          colonneTasti={layoutTasti.logisticaprodotti?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("logisticaprodotti", { colonne: n })}
+          etichetteTasti={layoutTasti.logisticaprodotti?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("logisticaprodotti", chiave, testo)}
+          titolo={etichettaTasto("home", "logisticaprodotti", "Logistica prodotti")}
+        />
+      )}
+
+      {view === "ordiniinarrivo" && (
+        <PaginaOrdiniInArrivo
+          venditeShop={venditeShop} spedizioniPos={spedizioniPos}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
+          titolo={etichettaTasto("logisticaprodotti", "ordiniinarrivo", "Ordini in arrivo")}
+        />
+      )}
+
+      {view === "spedizionicorsi" && (
         <PaginaLogisticaProdotti
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} inventarioSede={inventarioSede}
           prodottiApertiMagazzino={prodottiApertiMagazzino}
           onApriMagazziniLocali={apriMagazziniLocali}
-          ricarica={fetchDati} onBack={() => setView("home")}
-          titolo={etichettaTasto("home", "logisticaprodotti", "Logistica prodotti")}
+          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
+          titolo={etichettaTasto("logisticaprodotti", "spedizionicorsi", "Spedizioni corsi")}
         />
       )}
 
@@ -42565,14 +43007,14 @@ export default function App() {
         <PaginaMagazziniLocali
           location={location} inventarioSede={inventarioSede}
           magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} prodottiShop={prodottiShop} costiSottocategorie={costiSottocategorie}
-          onBack={() => setView("logisticaprodotti")}
+          onBack={() => setView("spedizionicorsi")}
         />
       )}
 
       {view === "spedizionipos" && (
         <PaginaSpedizioniPos
           spedizioniPos={spedizioniPos} corsi={corsi} corsiDate={corsiDate} location={location}
-          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
+          ricarica={fetchDati} onBack={() => setView("spedizionicorsi")}
         />
       )}
 
