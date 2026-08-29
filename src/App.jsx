@@ -5329,13 +5329,17 @@ function SezioneDateCorsi({
   // "Gestione corsi" lo passa: le altre pagine che riusano questo
   // componente restano invariate.
   stickyControlli, intestazioneSticky,
+  // opzionali: ricerca, tab e modo tenuti da chi ospita questa sezione, così
+  // sopravvivono all'andata e ritorno da una scheda. Se non arrivano, il
+  // componente usa i propri, come ha sempre fatto
+  ricercaEsterna, setRicercaEsterna, tabEsterna, setTabEsterna, modoEsterno, setModoEsterno,
 }) {
   const [vistaDateTabInterna, setVistaDateTabInterna] = useState("programmazione"); // programmazione | archivio
   const [vistaDateModoInterno, setVistaDateModoInterno] = useState("elenco"); // elenco | calendario
-  const vistaDateTab = tabForzata || vistaDateTabInterna;
-  const vistaDateModo = modoForzato || vistaDateModoInterno;
-  const setVistaDateTab = setVistaDateTabInterna;
-  const setVistaDateModo = setVistaDateModoInterno;
+  const vistaDateTab = tabForzata || (setTabEsterna ? tabEsterna : vistaDateTabInterna);
+  const vistaDateModo = modoForzato || (setModoEsterno ? modoEsterno : vistaDateModoInterno);
+  const setVistaDateTab = setTabEsterna || setVistaDateTabInterna;
+  const setVistaDateModo = setModoEsterno || setVistaDateModoInterno;
   const isMobile = useIsMobile();
   // riga filtri su mobile: un unico font per tutti i pulsanti, ridotto
   // quel tanto che basta perché stiano tutti su una sola riga senza
@@ -5349,7 +5353,9 @@ function SezioneDateCorsi({
     if (vistaDateTab === "archivio") { registraInterceptaIndietro(() => setVistaDateTab("programmazione")); return () => registraInterceptaIndietro(null); }
     registraInterceptaIndietro(null);
   }, [vistaDateModo, vistaDateTab, nascondiControlli, registraInterceptaIndietro]);
-  const [ricercaDate, setRicercaDate] = useState("");
+  const [ricercaDateInterna, setRicercaDateInterna] = useState("");
+  const ricercaDate = setRicercaEsterna ? (ricercaEsterna || "") : ricercaDateInterna;
+  const setRicercaDate = setRicercaEsterna || setRicercaDateInterna;
   // dimensione del testo SOLO nelle barre-evento del calendario incorporato
   // (nome corso + sigla città), regolabile coi tasti +/- vicino a "Elenco":
   // resta memorizzata in locale, così l'ultima misura scelta vale anche
@@ -10803,7 +10809,7 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 // "Gestione date": calendario per aggiungere nuove edizioni e pannello
 // per modificarle/eliminarle — prima viveva dentro "Setting", ora è una
 // sua pagina separata (stesso sblocco amministratore condiviso)
-function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
+function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, onBack, onApriData, onApriUltimeIscrizioni, onApriVerificaAcconti, numeroAccontiInAttesa, filtroCorsoDate, setFiltroCorsoDate, filtroCittaDate, setFiltroCittaDate, filtroMasterDate, setFiltroMasterDate, cronologicoDate, setCronologicoDate, ricercaDateGestione, setRicercaDateGestione, tabDateGestione, setTabDateGestione, modoDateGestione, setModoDateGestione, registraInterceptaIndietro, titolo = "Gestione corsi", soloLettura = false }) {
   const [msg, setMsg] = useState("");
   const isMobile = useIsMobile();
   // "Aggiungi Corso": scorciatoia che apre direttamente il calendario con
@@ -10919,6 +10925,9 @@ function GestioneDate({ corsi, location, corsiDate, iscritti, master, ricarica, 
         nascondiTitolo
         stickyControlli intestazioneSticky={intestazioneGestioneCorsi}
         {...(soloLettura ? { modoForzato: "elenco" } : {})}
+        ricercaEsterna={ricercaDateGestione} setRicercaEsterna={setRicercaDateGestione}
+        tabEsterna={tabDateGestione} setTabEsterna={setTabDateGestione}
+        modoEsterno={modoDateGestione} setModoEsterno={setModoDateGestione}
         filtroCorsoHome={filtroCorsoDate} setFiltroCorsoHome={setFiltroCorsoDate}
         filtroCittaHome={filtroCittaDate} setFiltroCittaHome={setFiltroCittaDate}
         filtroMasterHome={filtroMasterDate} setFiltroMasterHome={setFiltroMasterDate}
@@ -40700,6 +40709,13 @@ export default function App() {
   // GestioneDate) perché quel componente viene smontato/rimontato ogni
   // volta che si esce e si rientra nella view, e altrimenti perderebbe i
   // filtri impostati in precedenza
+  // ricerca, tab e modo di Gestione corsi stanno qui accanto agli altri
+  // filtri: entrare in un corso e in una scheda allievo smonta la pagina,
+  // e quello che vive dentro di lei si perderebbe — si tornava indietro e
+  // bisognava rifiltrare da capo
+  const [ricercaDateGestione, setRicercaDateGestione] = useState("");
+  const [tabDateGestione, setTabDateGestione] = useState("programmazione");
+  const [modoDateGestione, setModoDateGestione] = useState("elenco");
   const [filtroCorsoDate, setFiltroCorsoDate] = useState("");
   const [filtroCittaDate, setFiltroCittaDate] = useState("");
   const [filtroMasterDate, setFiltroMasterDate] = useState("");
@@ -41783,6 +41799,9 @@ export default function App() {
           onApriUltimeIscrizioni={() => setView("ultimeiscrizioni")}
           onApriVerificaAcconti={() => setView("verificaacconti")}
           numeroAccontiInAttesa={accontiDaVerificare.filter((a) => a.stato === "in_attesa").length}
+          ricercaDateGestione={ricercaDateGestione} setRicercaDateGestione={setRicercaDateGestione}
+          tabDateGestione={tabDateGestione} setTabDateGestione={setTabDateGestione}
+          modoDateGestione={modoDateGestione} setModoDateGestione={setModoDateGestione}
           filtroCorsoDate={filtroCorsoDate} setFiltroCorsoDate={setFiltroCorsoDate}
           filtroCittaDate={filtroCittaDate} setFiltroCittaDate={setFiltroCittaDate}
           filtroMasterDate={filtroMasterDate} setFiltroMasterDate={setFiltroMasterDate}
