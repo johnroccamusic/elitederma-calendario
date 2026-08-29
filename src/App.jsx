@@ -734,10 +734,22 @@ function IconaTileClassificazioneVoci({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// la lente del tasto "Classificazione voci di vendita": classificare le
-// voci vuol dire andarle a guardare una per una, e il cartellino di prima
-// (ora sulla Gestione IVA) diceva un'altra cosa. Nera, con l'impugnatura
-// piena e inclinata e il riflesso sulla lente
+// smistamento: una riga che si divide in due strade — è esattamente quello
+// che si fa in "Classificazione voci di vendita", separare i prodotti dai
+// corsi. Prima condivideva il cartellino con la Gestione IVA, e due tasti
+// con la stessa icona non si distinguono
+function IconaTileSmistaVoci({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12h5.5l3.5-5h4" />
+      <path d="M8.5 12l3.5 5h4" stroke={GOLD} />
+      <circle cx="19" cy="7" r="2" />
+      <circle cx="19" cy="17" r="2" stroke={GOLD} />
+    </svg>
+  );
+}
+// la lente: guardare i prodotti uno per uno, giacenze e movimenti. Nera,
+// con l'impugnatura piena e inclinata e il riflesso sul vetro
 function IconaTileVerificaVoci({ size = 44 }) {
   const nero = "#111111";
   return (
@@ -20828,14 +20840,14 @@ function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onAp
         <GrigliaTasti
           pagina="magazzinoshop" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
-            { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileGestioneMagazzino, attivo: true, onClick: onApriMagazzino, badge: numeroAvvisiMagazzino },
+            { chiave: "gestionemagazzino", title: "Gestione magazzino", descrizione: "Controlla giacenze, movimenti e disponibilità dei prodotti.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriMagazzino, badge: numeroAvvisiMagazzino },
             { chiave: "magazziniesterni", title: "Magazzini esterni", descrizione: "Cosa c'è fisicamente in ogni sede, aggiornato dagli inventari delle master.", Icona: IconaTileLogistica, attivo: true, onClick: onApriMagazziniEsterni },
             { chiave: "gestioneshop", title: "Gestione shop", descrizione: "Gestisci prodotti, ordini, clienti e impostazioni dello shop.", Icona: IconaTileGestioneShop, attivo: true, onClick: onApriGestioneShop },
             { chiave: "venditeshop", title: "Vendite Shop Online", descrizione: "Ordini e performance dello shop online WooCommerce.", Icona: IconaTileVenditeShop, attivo: true, onClick: onApriVenditeShop },
             { chiave: "venditealbanco", title: "Vendite al banco", descrizione: "Tutte le vendite fatte con il POS interno.", Icona: IconaTilePos, attivo: true, onClick: onApriVenditeAlBanco },
             { chiave: "prodottiusatikit", title: "Prodotti usati per i kit", descrizione: "Prodotti mai venduti, distribuiti nei corsi come contenuto dei kit.", Icona: IconaPacchettoRiga, attivo: true, onClick: onApriProdottiUsatiKit },
             { chiave: "omaggi", title: "Omaggi", descrizione: "Prodotti usciti dal POS senza essere venduti, regalati.", Icona: IconaTileOmaggio, attivo: true, onClick: onApriOmaggi },
-            { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileVerificaVoci, attivo: true, onClick: onApriClassificazioneVoci },
+            { chiave: "classificazionevoci", title: "Classificazione voci di vendita", descrizione: "Distingui prodotti, corsi ed esclusioni fra le voci vendute nello shop.", Icona: IconaTileSmistaVoci, attivo: true, onClick: onApriClassificazioneVoci },
             { chiave: "crmshop", title: "CRM Shop Online", descrizione: "Clienti dello shop: ordini, spesa, carrello medio.", Icona: IconaTileCrmShop, attivo: true, onClick: onApriCrmShop },
             { chiave: "generacoupon", title: "Genera Coupon", descrizione: "Crea e gestisci codici sconto per lo shop online.", Icona: IconaTileCoupon, attivo: true, onClick: onApriGeneraCoupon },
             { chiave: "gestioneiva", title: "Gestione IVA", descrizione: "IVA su acquisti e vendite, per aliquota e per prodotto.", Icona: IconaTileClassificazioneVoci, attivo: true, onClick: onApriGestioneIva },
