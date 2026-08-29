@@ -682,44 +682,28 @@ function IconaTileAnagrafiche({ size = 44, color = NAVY }) {
     </svg>
   );
 }
-// Il capannone con il camion davanti e i pallet accatastati: il magazzino
-// è il posto dove la merce arriva, si impila e riparte.
+// Il capannone con le casse dentro: due muri, il tetto a capanna, la trave
+// e tre casse impilate. È l'icona che il titolare ha scelto per il
+// magazzino, sui due tasti che ci portano — quello della home e quello
+// dentro Magazzino/Shop.
 //
-// Disegnata a pieni, non a contorni come le altre icone dei tasti: qui
-// serve la stessa figura netta dell'originale, dove il nero è la massa e
-// il bianco sono le aperture — finestre, portone, croci sui pallet.
+// Il tratto disegna la struttura (blu), il pieno le casse (oro): a
+// dimensione di tasto è quel contrasto a farla riconoscere al volo, molto
+// più del disegno del capannone in sé.
 function IconaTileGestioneMagazzino({ size = 44 }) {
-  const nero = "#111111";
-  // cinque punti più grande di quanto la griglia dei tasti chiede: essendo
-  // disegnata a pieni, alla stessa misura delle icone a tratto sembrava
-  // più piccola di loro
+  // cinque punti più grande di quanto la griglia dei tasti chiede: la
+  // figura è larga e bassa, alla stessa misura delle altre sembrava minore
   const lato = size + 5;
   return (
     <svg width={lato} height={lato} viewBox="0 0 24 24" fill="none">
-      {/* tetto a capanna: banda spessa, sporgente oltre i muri */}
-      <path d="M13.9 4 22.6 7.6v1.9L13.9 5.9 5.2 9.5V7.6z" fill={nero} />
-
-      {/* il muro, cornice del portone: fascia alta e i due montanti */}
-      <path d="M6.6 8.1h14.6v2.9H6.6z" fill={nero} />
-      <path d="M6.6 11h2.1v7.9H6.6zM19.1 11h2.1v7.9h-2.1z" fill={nero} />
-
-      {/* le finestre: cinque tagli bianchi nella fascia alta */}
-      <path d="M8.6 8.6h1.4v1.1H8.6zM11 8.6h1.4v1.1H11zM13.4 8.6h1.4v1.1h-1.4zM15.8 8.6h1.4v1.1h-1.4zM18.2 8.6h1.4v1.1h-1.4z" fill="#fff" />
-
-      {/* i pallet nel portone: tre file di casse con la croce */}
-      <path d="M10.6 11.2h2.57v2.54h-2.57zM10.6 13.74h2.57v2.54h-2.57zM10.6 16.29h2.57v2.54h-2.57zM13.17 11.2h2.57v2.54h-2.57zM13.17 13.74h2.57v2.54h-2.57zM13.17 16.29h2.57v2.54h-2.57zM15.73 11.2h2.57v2.54h-2.57zM15.73 13.74h2.57v2.54h-2.57zM15.73 16.29h2.57v2.54h-2.57z" fill={nero} />
-      <path d="M10.6 11.2l2.57 2.54M13.17 11.2l-2.57 2.54M10.6 13.74l2.57 2.54M13.17 13.74l-2.57 2.54M10.6 16.29l2.57 2.54M13.17 16.29l-2.57 2.54M13.17 11.2l2.57 2.54M15.74 11.2l-2.57 2.54M13.17 13.74l2.57 2.54M15.74 13.74l-2.57 2.54M13.17 16.29l2.57 2.54M15.74 16.29l-2.57 2.54M15.73 11.2l2.57 2.54M18.3 11.2l-2.57 2.54M15.73 13.74l2.57 2.54M18.3 13.74l-2.57 2.54M15.73 16.29l2.57 2.54M18.3 16.29l-2.57 2.54" stroke="#fff" strokeWidth="0.4" />
-
-      {/* il camion davanti: cassone con gli spigoli superiori smussati,
-          cabina bassa col parabrezza, telaio e due ruote */}
-      <path d="M4.2 13.1h6.9v3.9H4.2z" fill={nero} />
-      <path d="M1.3 15.2l1-1.3h1.9v3.1H1.3z" fill={nero} />
-      <path d="M1.9 14.6h1.3v1.2H1.5z" fill="#fff" />
-      <path d="M1.3 17h9.8v1.3H1.3z" fill={nero} />
-      <circle cx="3.4" cy="19" r="1.2" fill={nero} />
-      <circle cx="9" cy="19" r="1.2" fill={nero} />
-      <circle cx="3.4" cy="19" r="0.42" fill="#fff" />
-      <circle cx="9" cy="19" r="0.42" fill="#fff" />
+      {/* i due muri e il tetto, un tratto solo aperto in basso */}
+      <path d="M3.1 20.6V8.5L12 2.9l8.9 5.6v12.1" stroke={NAVY} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
+      {/* la trave sotto il colmo */}
+      <path d="M7.3 9.9h9.4" stroke={NAVY} strokeWidth="1.7" strokeLinecap="butt" />
+      {/* le casse: una sopra, due sotto */}
+      <rect x="9.7" y="12.4" width="4.6" height="3.5" rx="0.45" fill={GOLD} />
+      <rect x="6.6" y="16.5" width="4.6" height="3.5" rx="0.45" fill={GOLD} />
+      <rect x="12.8" y="16.5" width="4.6" height="3.5" rx="0.45" fill={GOLD} />
     </svg>
   );
 }
