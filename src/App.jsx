@@ -10536,66 +10536,97 @@ function nuovoGiornoCorsoVuoto(numero) {
     richiede_modelle_allievi: false, mattina_allievi: false, pomeriggio_allievi: false, tipo_modella_allievi: "",
   };
 }
-// una riga "turno (MAT/POM) + tipo di trattamento", usata identica sia
-// per il blocco Modella del Master sia per il blocco Modella Allievi:
-// stessa forma, dati indipendenti, così non si confondono mai i due turni
-// né i due trattamenti quando entrambi ricorrono nello stesso giorno
-function RigaTurnoETipoGiorno({ etichetta, coloreEtichetta, mattina, pomeriggio, tipo, opzioniTipo, onCambiaMattina, onCambiaPomeriggio, onCambiaTipo }) {
+// il pannello beige di un giorno: a sinistra il turno (MAT/POM), a destra
+// il trattamento. Uno per tipo di modella richiesta — Master e Allievi
+// hanno turni e trattamenti indipendenti, così non si confondono mai
+// quando ricorrono nello stesso giorno; l'etichetta in cima compare solo
+// se quel giorno servono entrambe, altrimenti la spunta a sinistra dice
+// già di chi si sta parlando
+function PannelloTurnoGiorno({ etichetta, coloreEtichetta, mattina, pomeriggio, tipo, opzioniTipo, onCambiaMattina, onCambiaPomeriggio, onCambiaTipo, spento = false }) {
+  const titolino = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 7 };
   return (
-    <div style={{ background: BG, borderRadius: 8, padding: 10 }}>
-      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: coloreEtichetta, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 7 }}>{etichetta}</div>
-      <div style={{ display: "flex", gap: 14, marginBottom: 8, ...fontBody, fontSize: 12.5, color: NAVY }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-          <input type="checkbox" checked={mattina} onChange={(e) => onCambiaMattina(e.target.checked)} /> MAT
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-          <input type="checkbox" checked={pomeriggio} onChange={(e) => onCambiaPomeriggio(e.target.checked)} /> POM
-        </label>
+    <div style={{ background: BG, borderRadius: 10, padding: "10px 14px", opacity: spento ? 0.55 : 1 }}>
+      {etichetta && (
+        <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: coloreEtichetta, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 8 }}>{etichetta}</div>
+      )}
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flexShrink: 0 }}>
+          <div style={titolino}>Servizio</div>
+          <div style={{ display: "flex", gap: 14, ...fontBody, fontSize: 12.5, color: NAVY }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: spento ? "default" : "pointer" }}>
+              <input type="checkbox" checked={!!mattina} disabled={spento} onChange={(e) => onCambiaMattina(e.target.checked)} /> MAT
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: spento ? "default" : "pointer" }}>
+              <input type="checkbox" checked={!!pomeriggio} disabled={spento} onChange={(e) => onCambiaPomeriggio(e.target.checked)} /> POM
+            </label>
+          </div>
+        </div>
+        <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+          <div style={titolino}>Trattamento</div>
+          <select
+            style={{ ...inputStyle, fontSize: 13, background: "#fff", marginTop: -1 }}
+            value={tipo || ""} disabled={spento}
+            onChange={(e) => onCambiaTipo(e.target.value)}
+          >
+            <option value="">Seleziona trattamento</option>
+            {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
+          </select>
+        </div>
       </div>
-      <select style={{ ...inputStyle, fontSize: 13, background: "#fff" }} value={tipo || ""} onChange={(e) => onCambiaTipo(e.target.value)}>
-        <option value="">— Tipo trattamento —</option>
-        {opzioniTipo.map((opz) => <option key={opz} value={opz}>{opz}</option>)}
-      </select>
     </div>
   );
 }
 function BloccoGiornoCorso({ giorno, onCambia, opzioniTipo }) {
+  const master = giorno.richiede_modella_master;
+  const allievi = giorno.richiede_modelle_allievi;
+  // se il giorno non chiede nessuna modella il pannello resta lì, spento:
+  // così le colonne Servizio/Trattamento restano allineate riga per riga e
+  // si vede a colpo d'occhio quali giorni sono ancora da compilare
+  const spunta = { display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" };
   return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, marginBottom: 8 }}>
-      <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Giorno {giorno.numero_giorno}</div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: giorno.richiede_modella_master || giorno.richiede_modelle_allievi ? 10 : 0 }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-          <input type="checkbox" checked={giorno.richiede_modella_master} onChange={(e) => onCambia({ ...giorno, richiede_modella_master: e.target.checked })} />
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 12, marginBottom: 10, display: "flex", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ flex: "0 0 178px", minWidth: 150 }}>
+        <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 8 }}>Giorno {giorno.numero_giorno}</div>
+        <label style={spunta}>
+          <input type="checkbox" checked={master} onChange={(e) => onCambia({ ...giorno, richiede_modella_master: e.target.checked })} />
           Modella del Master
         </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-          <input type="checkbox" checked={giorno.richiede_modelle_allievi} onChange={(e) => onCambia({ ...giorno, richiede_modelle_allievi: e.target.checked })} />
+        <label style={spunta}>
+          <input type="checkbox" checked={allievi} onChange={(e) => onCambia({ ...giorno, richiede_modelle_allievi: e.target.checked })} />
           Allievi
         </label>
       </div>
 
-      {giorno.richiede_modella_master && (
-        <div style={{ marginBottom: giorno.richiede_modelle_allievi ? 8 : 0 }}>
-          <RigaTurnoETipoGiorno
-            etichetta="Modella del Master" coloreEtichetta={GOLD}
+      <div style={{ width: 1, background: CREAM_BORDER, alignSelf: "stretch", flexShrink: 0 }} />
+
+      <div style={{ flex: "1 1 320px", minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        {!master && !allievi && (
+          <PannelloTurnoGiorno
+            mattina={false} pomeriggio={false} tipo="" opzioniTipo={opzioniTipo} spento
+            onCambiaMattina={() => {}} onCambiaPomeriggio={() => {}} onCambiaTipo={() => {}}
+          />
+        )}
+        {master && (
+          <PannelloTurnoGiorno
+            etichetta={allievi ? "Modella del Master" : null} coloreEtichetta={GOLD}
             mattina={giorno.mattina_master} pomeriggio={giorno.pomeriggio_master} tipo={giorno.tipo_modella_master}
             opzioniTipo={opzioniTipo}
             onCambiaMattina={(v) => onCambia({ ...giorno, mattina_master: v })}
             onCambiaPomeriggio={(v) => onCambia({ ...giorno, pomeriggio_master: v })}
             onCambiaTipo={(v) => onCambia({ ...giorno, tipo_modella_master: v })}
           />
-        </div>
-      )}
-      {giorno.richiede_modelle_allievi && (
-        <RigaTurnoETipoGiorno
-          etichetta="Modella Allievi" coloreEtichetta={MUTED}
-          mattina={giorno.mattina_allievi} pomeriggio={giorno.pomeriggio_allievi} tipo={giorno.tipo_modella_allievi}
-          opzioniTipo={opzioniTipo}
-          onCambiaMattina={(v) => onCambia({ ...giorno, mattina_allievi: v })}
-          onCambiaPomeriggio={(v) => onCambia({ ...giorno, pomeriggio_allievi: v })}
-          onCambiaTipo={(v) => onCambia({ ...giorno, tipo_modella_allievi: v })}
-        />
-      )}
+        )}
+        {allievi && (
+          <PannelloTurnoGiorno
+            etichetta={master ? "Allievi" : null} coloreEtichetta={MUTED}
+            mattina={giorno.mattina_allievi} pomeriggio={giorno.pomeriggio_allievi} tipo={giorno.tipo_modella_allievi}
+            opzioniTipo={opzioniTipo}
+            onCambiaMattina={(v) => onCambia({ ...giorno, mattina_allievi: v })}
+            onCambiaPomeriggio={(v) => onCambia({ ...giorno, pomeriggio_allievi: v })}
+            onCambiaTipo={(v) => onCambia({ ...giorno, tipo_modella_allievi: v })}
+          />
+        )}
+      </div>
     </div>
   );
 }
