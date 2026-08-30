@@ -6593,11 +6593,11 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
   // la scatola e chi lo consegna in aula leggono la stessa frase
   function descrizioneKit(i) {
     if (!i.pacchetto_kit) return null;
-    const suffisso = i.dermografo === "nessuno" ? " (senza dermografo)"
-      : !i.dermografo ? ""
-      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(i.dermografo)} già comprato e ricevuto`
-      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(i.dermografo)} da ritirare al corso`
-      : ` + ${etichettaDermografo(i.dermografo)}`;
+    const modello = dermografoAcquistato(i);
+    const suffisso = !modello ? ""
+      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(modello)} già comprato e ricevuto`
+      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(modello)} da ritirare al corso`
+      : ` + ${etichettaDermografo(modello)}`;
     return `${i.pacchetto_kit}${suffisso}`;
   }
 
@@ -15857,10 +15857,10 @@ function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false
 function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) {
   return (
     <>
-      {i.dermografo && (
+      {dermografoAcquistato(i) && (
         <div style={{ marginBottom: 10 }}>
           <div style={{ fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5 }}>Dermografo</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: i.dermografo === "nessuno" ? MUTED : NAVY }}>{etichettaDermografo(i.dermografo)}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: NAVY }}>{etichettaDermografo(dermografoAcquistato(i))}</div>
         </div>
       )}
       {i.pacchetto_kit && (
@@ -19801,7 +19801,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                     <span>{i.nome.toUpperCase()} {i.cognome.toUpperCase()}</span>
                     {i.tutor && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Tutor: {i.tutor}</span>}
                     {i.pacchetto_kit && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>· Pacchetto: {i.pacchetto_kit}</span>}
-                    {i.dermografo && <span style={{ fontSize: 12, fontWeight: 400, color: i.dermografo === "nessuno" ? MUTED : GOLD }}>· {etichettaDermografo(i.dermografo)}</span>}
+                    {dermografoAcquistato(i) && <span style={{ fontSize: 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
                   {i.telefono && (
@@ -20408,7 +20408,7 @@ function VistaRicercaModelle({ param, mostraClasse }) {
                 </div>
                 <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 4 }}>
                   Kit: {i.pacchetto_kit || "—"}
-                  {i.dermografo && <> · <span style={{ color: i.dermografo === "nessuno" ? MUTED : GOLD, fontWeight: 600 }}>{etichettaDermografo(i.dermografo)}</span></>}
+                  {dermografoAcquistato(i) && <> · <span style={{ color: GOLD, fontWeight: 600 }}>{etichettaDermografo(dermografoAcquistato(i))}</span></>}
                 </div>
               </div>
             ))}
@@ -30407,7 +30407,10 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       if (!kitDellIscritto?.dermografo_a_parte) return;
       const nome = `${i.nome || ""} ${i.cognome || ""}`.trim() || "senza nome";
       const riga = { iscrittoId: i.id, nome, corso: corso.nome, data: cd.data_inizio, pacchetto: i.pacchetto_kit || "—", scelta: i.dermografo };
-      if (!i.dermografo) { daScegliere.push(riga); return; }
+      // vale la risposta data nella scheda, non la vecchia colonna riempita
+      // d'ufficio: chi non ha mai risposto va rimesso in lista, è l'unico
+      // posto da cui si sistemano i record del meccanismo vecchio
+      if (!i.dermografo_scelta) { daScegliere.push(riga); return; }
       const etichettaPacchetto = String(i.pacchetto_kit || "").toLowerCase();
       const diceHorus = /horus/.test(etichettaPacchetto);
       const diceSenza = /senza *derm|no derm/.test(etichettaPacchetto);
@@ -38598,6 +38601,23 @@ function etichettaDermografo(valore) {
   if (valore === "nessuno") return "Nessun dermografo";
   return DERMOGRAFI.find((d) => d.chiave === valore)?.etichetta || valore;
 }
+// Il modello di dermografo di un allievo, ma solo se lo dice il meccanismo
+// di oggi: la domanda "L'allievo acquista il dermografo a parte?" nella sua
+// scheda, cioè dermografo_scelta.
+//
+// La colonna dermografo da sola non basta più. Il vecchio meccanismo — la
+// spunta "Il corso prevede dermografo", cancellata — la riempiva con "tekna"
+// a chiunque avesse un kit con Tekna nel nome: sono 74 allievi su 164, quasi
+// tutti di corsi già fatti. Quel valore continuava a spuntare in oro in ogni
+// riepilogo di classe, e soprattutto continuava a farsi contare nel
+// fabbisogno di magazzino, dove significa "preparane uno".
+// Restituisce null anche per chi ha risposto "no" o "ha il suo": in
+// entrambi i casi dal nostro magazzino non esce niente.
+function dermografoAcquistato(i) {
+  const scelta = i?.dermografo_scelta;
+  if (scelta !== "tekna" && scelta !== "horus") return null;
+  return i.dermografo || scelta;
+}
 // il prodotto di magazzino che corrisponde a un modello. Si riconosce dal
 // nome perché è così che sono stati inseriti ("Dermografo Tekna
 // Elitederma"): se un domani ne comparissero due uguali non si tira a
@@ -38615,9 +38635,10 @@ function prodottoDermografo(prodottiShop, modello) {
 function dermografiRichiestiEdizione(iscrittiEdizione) {
   const conteggio = {};
   (iscrittiEdizione || []).forEach((i) => {
-    if (!i.dermografo || i.dermografo === "nessuno") return;
+    const modello = dermografoAcquistato(i);
+    if (!modello) return;
     if (i.dermografo_consegna === "casa") return;
-    conteggio[i.dermografo] = (conteggio[i.dermografo] || 0) + 1;
+    conteggio[modello] = (conteggio[modello] || 0) + 1;
   });
   return conteggio;
 }
@@ -38659,11 +38680,11 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true })
     if (!i.pacchetto_kit) return;
     // chi prepara deve capire in una riga sola se il dermografo va messo
     // nella scatola o se l'allievo ce l'ha già: sono due lavori diversi
-    const suffisso = i.dermografo === "nessuno" ? " (senza dermografo)"
-      : !i.dermografo ? ""
-      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(i.dermografo)} già comprato e ricevuto`
-      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(i.dermografo)} da ritirare al corso`
-      : ` + ${etichettaDermografo(i.dermografo)}`;
+    const modello = dermografoAcquistato(i);
+    const suffisso = !modello ? ""
+      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(modello)} già comprato e ricevuto`
+      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(modello)} da ritirare al corso`
+      : ` + ${etichettaDermografo(modello)}`;
     const chiave = `${i.pacchetto_kit}${suffisso}`;
     conteggio[chiave] = (conteggio[chiave] || 0) + 1;
   });
