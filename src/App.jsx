@@ -18308,12 +18308,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("anagrafica", "nomeCognome")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("anagrafica", "nomeCognome")}
-              <div style={{ display: "flex", gap: 14, flex: 1 }}>
+              <div style={{ ...areaSchedaIscritto, display: "flex", gap: 14, flex: 1 }}>
                 <div style={{ flex: 1 }}>
-                  <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+                  <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
                 </div>
                 <div style={{ flex: 1 }}>
-                  <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+                  <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
                 </div>
               </div>
             </div>
@@ -18322,10 +18322,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("anagrafica", "tutorTelefono")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("anagrafica", "tutorTelefono")}
-              <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", flex: 1 }}>
+              <div style={{ ...areaSchedaIscritto, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", flex: 1 }}>
                 <div style={{ flex: "2 1 140px" }}>
                   <Field label="Tutor">
-                    <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...inputStyle, textTransform: "uppercase" }}>
+                    <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...campoAreaScheda, textTransform: "uppercase" }}>
                       <option value="">— scegli venditore —</option>
                       {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
                       {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
@@ -18336,7 +18336,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   </Field>
                 </div>
                 <div style={{ flex: "2 1 140px" }}>
-                  <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+                  <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
                 </div>
                 <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
                   <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
