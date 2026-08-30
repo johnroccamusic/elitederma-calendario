@@ -81,6 +81,9 @@ const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 // nomi personalizzati delle colonne di "Dettaglio prodotti": stanno
 // accanto alle larghezze, che sono già una preferenza di chi guarda
 const CHIAVE_ETICHETTE_MAGAZZINO = "gestioneMagazzino_etichetteColonne";
+// quanto spazio prende la colonna di sinistra ("Da gestire oggi") rispetto
+// agli avvisi: si sposta con la maniglia verticale, in modalità programmatore
+const CHIAVE_DIVISIONE_MAGAZZINO = "gestioneMagazzino_divisioneColonne";
 const CHIAVE_LARGHEZZE_FRONTOFFICE = "shopOnline_larghezzeColonneFrontOffice";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
@@ -26967,34 +26970,10 @@ function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizio
           <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>apri il piano ›</span>
         </button>
 
-        <div style={{ ...cardStyle, marginBottom: 0 }}>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
-            Avvisi ({avvisi.length})
-          </div>
-          {avvisi.length === 0 ? (
-            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
-          ) : avvisi.map((a, i) => {
-            const p = a.prodotto;
-            const stock = (p.quantita || 0);
-            const coloreAvviso = a.tipo === "apri_pacco" ? "#B8860B" : "#C0392B";
-            return (
-              <div key={`${a.tipo}-${p.id}-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: "1 1 220px" }}>
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: coloreAvviso, flexShrink: 0, marginTop: 5 }} />
-                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, lineHeight: 1.35 }}>
-                    <b>{p.nome}</b>
-                    {a.tipo === "negativo" && <> — giacenza negativa ({p.quantita || 0}): da sistemare</>}
-                    {a.tipo === "apri_pacco" && <> — {stock} sfus{stock === 1 ? "o" : "i"} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""} · {a.box.quantita} pacc{a.box.quantita === 1 ? "o sigillato" : "hi sigillati"} disponibil{a.box.quantita === 1 ? "e" : "i"}</>}
-                    {a.tipo === "riordina" && <> — {stock} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""}{a.box ? " e nessun pacco sigillato" : ""}: riordina dal fornitore</>}
-                  </span>
-                </div>
-                {a.tipo === "apri_pacco" && (
-                  <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        <PannelloAvvisiMagazzino
+          avvisi={avvisi}
+          onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
+        />
       </div>
       {apriConfezioneBoxId && (
         <ModaleApriConfezione boxId={apriConfezioneBoxId} prodottiShop={prodottiShop} onClose={() => setApriConfezioneBoxId(null)} ricarica={ricarica} />
@@ -28508,6 +28487,38 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     setOrdinamento((prev) => (prev.campo === campo ? { campo, direzione: prev.direzione === "asc" ? "desc" : "asc" } : { campo, direzione: COLONNE_MAGAZZINO.find((c) => c.campo === campo)?.direzioneIniziale || "desc" }));
   }
   const larghezzaTabellaMagazzino = COLONNE_MAGAZZINO.reduce((tot, col) => tot + larghezzaDi(col.label, col.larghezza), 0);
+  // La divisione fra le due colonne (riquadri a sinistra, avvisi a destra):
+  // si trascina con la maniglia verticale in mezzo, come il bordo di una
+  // colonna di Excel, e resta com'è stata messa.
+  const [divisioneColonne, setDivisioneColonne] = useState(() => {
+    const salvata = parseFloat(localStorage.getItem(CHIAVE_DIVISIONE_MAGAZZINO));
+    return Number.isFinite(salvata) ? Math.min(75, Math.max(25, salvata)) : 50;
+  });
+  const trascinamentoDivisione = useRef(null);
+  function iniziaTrascinamentoDivisione(e) {
+    const contenitore = e.currentTarget.parentElement;
+    if (!contenitore) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    trascinamentoDivisione.current = { sinistra: contenitore.getBoundingClientRect().left, larghezza: contenitore.getBoundingClientRect().width };
+  }
+  function muoviTrascinamentoDivisione(e) {
+    const t = trascinamentoDivisione.current;
+    if (!t || !t.larghezza) return;
+    const pct = ((e.clientX - t.sinistra) / t.larghezza) * 100;
+    setDivisioneColonne(Math.min(75, Math.max(25, Math.round(pct))));
+  }
+  function fineTrascinamentoDivisione() {
+    if (!trascinamentoDivisione.current) return;
+    trascinamentoDivisione.current = null;
+    try { localStorage.setItem(CHIAVE_DIVISIONE_MAGAZZINO, String(divisioneColonne)); } catch { /* ignora */ }
+  }
+
+  // la prima immagine di ogni prodotto, per le miniature del pannello avvisi
+  const immaginePerProdottoMagazzino = useMemo(() => {
+    const mappa = {};
+    [...(prodottiImmagini || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).forEach((im) => { if (!mappa[im.prodotto_id]) mappa[im.prodotto_id] = im.url; });
+    return mappa;
+  }, [prodottiImmagini]);
 
   // cancellazione definitiva di un prodotto. Prima di toccare qualunque
   // cosa si controlla dove è usato: "corsi_kit_prodotti" è a cascata, quindi
@@ -28799,7 +28810,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             liste da sfoltire e i tre numeri di sintesi), a destra le azioni
             da fare adesso. Prima stavano incolonnate e gli avvisi — la parte
             che chiede un gesto — finivano sotto la piega */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1fr) minmax(0,1fr)", gap: 18, alignItems: "start", marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : `minmax(0,${divisioneColonne}fr) 14px minmax(0,${100 - divisioneColonne}fr)`, gap: isMobile ? 18 : 0, alignItems: "start", marginBottom: 24, position: "relative" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
@@ -28858,36 +28869,31 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             </div>
           </div>
 
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
-              Avvisi ({avvisiMagazzino.length})
+          {/* la maniglia fra le due colonne: si vede solo in modalità
+              programmatore, si trascina e resta dove la si lascia */}
+          {!isMobile && (
+            <div
+              onPointerDown={ruoloUtente === "programmatore" ? iniziaTrascinamentoDivisione : undefined}
+              onPointerMove={ruoloUtente === "programmatore" ? muoviTrascinamentoDivisione : undefined}
+              onPointerUp={ruoloUtente === "programmatore" ? fineTrascinamentoDivisione : undefined}
+              onPointerCancel={ruoloUtente === "programmatore" ? fineTrascinamentoDivisione : undefined}
+              title={ruoloUtente === "programmatore" ? "Trascina per stringere o allargare le due colonne" : undefined}
+              style={{
+                alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: ruoloUtente === "programmatore" ? "col-resize" : "default", touchAction: "none", minHeight: 120,
+              }}
+            >
+              {ruoloUtente === "programmatore" && (
+                <span style={{ width: 4, height: 46, borderRadius: 3, background: CREAM_BORDER }} />
+              )}
             </div>
-            {avvisiMagazzino.length === 0 ? (
-              <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
-            ) : avvisiMagazzino.map((a, i) => {
-              const p = a.prodotto;
-              const stock = (p.quantita || 0);
-              const colore = a.tipo === "apri_pacco" ? "#B8860B" : "#C0392B";
-              return (
-                <div key={`${a.tipo}-${p.id}-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: "1 1 220px" }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: colore, flexShrink: 0, marginTop: 5 }} />
-                    <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, lineHeight: 1.35 }}>
-                      <b>{p.nome}</b>
-                      {a.tipo === "negativo" && <> — giacenza negativa ({p.quantita || 0}): da sistemare</>}
-                      {a.tipo === "apri_pacco" && <> — {stock} sfus{stock === 1 ? "o" : "i"} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""} · {a.box.quantita} pacc{a.box.quantita === 1 ? "o sigillato" : "hi sigillati"} disponibil{a.box.quantita === 1 ? "e" : "i"}</>}
-                      {a.tipo === "riordina" && <> — {stock} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""}{a.box ? " e nessun pacco sigillato" : ""}: riordina dal fornitore</>}
-                    </span>
-                  </div>
-                  {a.tipo === "apri_pacco" ? (
-                    <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
-                  ) : (
-                    <button onClick={() => apriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri scheda</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          )}
+          <PannelloAvvisiMagazzino
+            avvisi={avvisiMagazzino}
+            immaginePerProdotto={immaginePerProdottoMagazzino}
+            onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
+            onApriScheda={(p) => apriScheda(p)}
+          />
         </div>
         </>)}
 
@@ -29488,6 +29494,168 @@ function bundleVirtuale(p) {
 // scorta" in Gestione magazzino — questa lista copre i casi con
 // un'azione specifica da compiere. Usata sia dal pannello "Da gestire
 // oggi" sia dal badge sul tasto "Gestione magazzino"
+// Il pannello degli avvisi di magazzino: due liste distinte, perché sono
+// due lavori diversi. "Da riordinare" è roba da ufficio (si chiama il
+// fornitore), "Pacchi da aprire" è roba da magazzino (si prende un pacco
+// dallo scaffale e lo si apre): mescolarli obbligava a rileggere ogni
+// riga per capire di chi fosse il turno.
+function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco, onApriScheda }) {
+  const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
+  const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
+  const thStyle = { ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" };
+  const tdStyle = { padding: "8px 10px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "center", ...fontBody, fontSize: 12.5, color: NAVY };
+
+  function Miniatura({ prodotto }) {
+    const url = immaginePerProdotto[prodotto.id];
+    return (
+      <span style={{ width: 34, height: 34, borderRadius: 8, background: BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
+        {url ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaScatolaErp size={16} color={MUTED} />}
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: 0, padding: 0, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "16px 18px 12px" }}>
+        <div>
+          <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>Attenzione magazzino</div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>Gli articoli che chiedono un intervento adesso.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #F0C9C2", background: "#FDF3F1", borderRadius: 12, padding: "8px 12px" }}>
+            <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#C0392B" }}>{daRiordinare.length}</span>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>da riordinare</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #EBD9AE", background: "#FDF8EC", borderRadius: 12, padding: "8px 12px" }}>
+            <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#B8860B" }}>{daAprire.length}</span>
+            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>pacchi da aprire</span>
+          </div>
+        </div>
+      </div>
+
+      {avvisi.length === 0 && (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "0 18px 18px" }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
+      )}
+
+      {daRiordinare.length > 0 && (
+        <div style={{ padding: "0 12px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
+            <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 12, fontWeight: 700 }}>!</span>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Da riordinare</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "2px 10px" }}>{daRiordinare.length} articol{daRiordinare.length === 1 ? "o" : "i"}</span>
+          </div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
+                <thead>
+                  <tr style={{ background: "#FDF3F1" }}>
+                    <th style={{ ...thStyle, textAlign: "left" }}>Prodotto</th>
+                    <th style={thStyle}>Disponibili</th>
+                    <th style={thStyle}>Soglia</th>
+                    <th style={thStyle}>Stato</th>
+                    <th style={thStyle}>Azione</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daRiordinare.map((a, i) => {
+                    const p = a.prodotto;
+                    const stock = p.quantita || 0;
+                    const critico = a.tipo === "negativo" || stock <= 0 || (p.soglia_riordino != null && stock <= p.soglia_riordino / 2);
+                    return (
+                      <tr key={`r-${p.id}-${i}`}>
+                        <td style={{ ...tdStyle, textAlign: "left" }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                            <Miniatura prodotto={p} />
+                            <span style={{ minWidth: 0 }}>
+                              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1.25 }}>{p.nome}</span>
+                              <span style={{ ...fontBody, fontSize: 11, color: MUTED }}>{a.tipo === "negativo" ? "Giacenza negativa: da sistemare" : "Riordina dal fornitore"}</span>
+                            </span>
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#C0392B" }}>{stock}</td>
+                        <td style={{ ...tdStyle, color: MUTED }}>{p.soglia_riordino != null ? p.soglia_riordino : "—"}</td>
+                        <td style={tdStyle}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap" }}>
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#C0392B" }} />
+                            {a.tipo === "negativo" ? "Negativa" : critico ? "Critico" : "Sotto scorta"}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          {onApriScheda ? (
+                            <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
+                          ) : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {daAprire.length > 0 && (
+        <div style={{ padding: "0 12px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
+            <IconaScatolaErp size={18} color="#B8860B" />
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#B8860B", textTransform: "uppercase", letterSpacing: 0.6 }}>Pacchi da aprire</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#B8860B", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "2px 10px" }}>{daAprire.length} articol{daAprire.length === 1 ? "o" : "i"}</span>
+          </div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
+                <thead>
+                  <tr style={{ background: "#FDF8EC" }}>
+                    <th style={{ ...thStyle, textAlign: "left" }}>Prodotto</th>
+                    <th style={thStyle}>Sfusi disponibili</th>
+                    <th style={thStyle}>Soglia sfusi</th>
+                    <th style={thStyle}>Pacchi sigillati</th>
+                    <th style={thStyle}>Azione</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daAprire.map((a, i) => {
+                    const p = a.prodotto;
+                    return (
+                      <tr key={`p-${p.id}-${i}`}>
+                        <td style={{ ...tdStyle, textAlign: "left" }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                            <Miniatura prodotto={p} />
+                            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, minWidth: 0 }}>{p.nome}</span>
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, ...fontDisplay, fontSize: 16, fontWeight: 700 }}>{p.quantita || 0}</td>
+                        <td style={{ ...tdStyle, color: MUTED }}>{p.soglia_riordino != null ? p.soglia_riordino : "—"}</td>
+                        <td style={tdStyle}>
+                          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG, borderRadius: 20, padding: "4px 12px", whiteSpace: "nowrap" }}>
+                            {a.box.quantita} pacc{a.box.quantita === 1 ? "o" : "hi"}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          <button onClick={() => onApriPacco(a.box)} style={{ display: "inline-flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
+                            <IconaScatolaErp size={14} color="#fff" />Apri 1 pacco
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {avvisi.length > 0 && (
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, padding: "10px 18px 16px", borderTop: `1px solid ${CREAM_BORDER}`, background: BG }}>
+          <b>Sfusi disponibili</b>: pezzi già aperti, pronti all'uso · <b>Pacchi sigillati</b>: confezioni integre da aprire
+        </div>
+      )}
+    </div>
+  );
+}
+
 function calcolaAvvisiMagazzino(prodottiShop) {
   const attivi = (prodottiShop || []).filter((p) => p.attivo !== false);
   const boxPerSfusoId = new Map();
