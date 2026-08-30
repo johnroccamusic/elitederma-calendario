@@ -146,6 +146,34 @@ async function trovaOCreaFornitore(entity: any) {
 // §4.1) — righe e data_scadenza_prevista sono i campi che userà il
 // motore di match (§6.1 "Origine") e la generazione delle scadenze
 // (§8 punto 5); "rate" solo se il documento ha più di un pagamento
+// La scadenza vera, distinta da quella che Fatture in Cloud si inventa.
+//
+// FIC non lascia mai una spesa senza scadenza. Se l'XML del fornitore non
+// porta termini di pagamento — e la maggior parte non li porta — al momento
+// dell'importazione crea una rata unica con termini "0 giorni" e ci scrive
+// come data di scadenza IL GIORNO IN CUI HA IMPORTATO IL DOCUMENTO. Su 56
+// fatture da luglio 2026, 36 avevano esattamente quella data: una fattura
+// del 7 luglio "scadeva" il 24 agosto solo perché il 24 agosto FIC ne ha
+// ingoiato l'XML.
+//
+// Riportarla qui significava generare scadenze passive già scadute il
+// giorno stesso. Quando la riconosciamo la lasciamo vuota: la data la mette
+// l'operatore quando riconcilia, che è l'unico che sa cosa è stato
+// concordato col fornitore.
+function scadenzaPrevistaVera(d: any): string | null {
+  const scadenza = d.next_due_date || null;
+  if (!scadenza) return null;
+  const giornoImport = typeof d.created_at === "string" ? d.created_at.slice(0, 10) : null;
+  if (!giornoImport || scadenza !== giornoImport) return scadenza;
+  // coincide con il giorno di importazione: è una scadenza vera solo se
+  // qualcuno ha messo dei termini di pagamento veri (più di una rata, o
+  // una rata con giorni diversi da zero)
+  const pagamenti = Array.isArray(d.payments_list) ? d.payments_list : [];
+  if (pagamenti.length > 1) return scadenza;
+  const giorni = Number(pagamenti[0]?.payment_terms?.days ?? 0);
+  return giorni > 0 ? scadenza : null;
+}
+
 function mappaDocumentoFornitore(d: any, fornitoreId: string) {
   const righe = Array.isArray(d.items_list)
     ? d.items_list.map((r: any) => ({ descrizione: r.name || "", importo: r.net_price ?? null }))
@@ -160,7 +188,7 @@ function mappaDocumentoFornitore(d: any, fornitoreId: string) {
     imponibile: d.amount_net ?? null,
     iva: d.amount_vat ?? null,
     totale: d.amount_gross ?? null,
-    data_scadenza_prevista: d.next_due_date || null,
+    data_scadenza_prevista: scadenzaPrevistaVera(d),
     rate: pagamenti.length > 1 ? pagamenti : null,
     righe,
     // stato NON incluso di proposito: sulla insert prende il default di

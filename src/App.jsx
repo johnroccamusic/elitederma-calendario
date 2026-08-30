@@ -24444,6 +24444,11 @@ function PaginaRiconciliazione({
   const [fatturaSelezionataId, setFatturaSelezionataId] = useState(null);
   const [selezioneImpegniNC, setSelezioneImpegniNC] = useState({});
   const [ricercaFattureNC, setRicercaFattureNC] = useState("");
+  // scadenza scritta a mano: serve per i documenti che arrivano da Fatture in
+  // Cloud senza termini di pagamento veri (vedi scadenzaPrevistaVera nella
+  // edge function fic-sync-documenti). Senza una data non si genererebbe
+  // nessuna scadenza passiva, e la spesa sparirebbe dallo scadenzario
+  const [scadenzaManuale, setScadenzaManuale] = useState("");
   const [salvandoNC, setSalvandoNC] = useState(false);
   const [msgNC, setMsgNC] = useState("");
 
@@ -24465,6 +24470,7 @@ function PaginaRiconciliazione({
     const successivo = codaDaRiconciliare[i + offset];
     setApertoId(successivo ? successivo.id : null);
     setSelezione({});
+    setScadenzaManuale("");
     setFatturaSelezionataId(null);
     setSelezioneImpegniNC({});
     setMsg("");
@@ -24500,6 +24506,12 @@ function PaginaRiconciliazione({
   const ncPronta = !!fatturaSelezionataId && (rettificaDirettaNC || Math.abs(allocatoNC - (documento?.totale || 0)) <= 0.01);
 
   const allocato = round2(Object.values(selezione).reduce((s, v) => s + (Number(v) || 0), 0));
+  // la scadenza che il documento porta con sé: quella prevista, oppure la
+  // prima rata se ne ha più d'una (in quel caso le scadenze passive nascono
+  // dalle rate, una per rata, e non c'è niente da chiedere)
+  const rateDocumento = Array.isArray(documento?.rate) && documento.rate.length > 0 ? documento.rate : null;
+  const scadenzaDelDocumento = documento?.data_scadenza_prevista || rateDocumento?.[0]?.due_date || null;
+  const serveScadenzaManuale = !!documento && documento.tipo !== "nota_credito" && !scadenzaDelDocumento;
   const totaleDocumento = documento?.totale || 0;
   const residuo = round2(totaleDocumento - allocato);
 
@@ -24556,8 +24568,11 @@ function PaginaRiconciliazione({
     if (rate && rate.length > 0) {
       const righe = rate.map((r) => ({ documento_id: doc.id, data_scadenza: r.due_date || doc.data_scadenza_prevista || null, importo: r.amount ?? null, stato: "da_pagare" }));
       await supabase.from("scadenza_passiva").insert(righe);
-    } else if (doc.data_scadenza_prevista) {
-      await supabase.from("scadenza_passiva").insert({ documento_id: doc.id, data_scadenza: doc.data_scadenza_prevista, importo: doc.totale, stato: "da_pagare" });
+    } else {
+      // la data scritta a mano vale quanto quella del documento: senza una
+      // delle due la spesa non finirebbe in nessuno scadenzario
+      const data = doc.data_scadenza_prevista || scadenzaManuale || null;
+      if (data) await supabase.from("scadenza_passiva").insert({ documento_id: doc.id, data_scadenza: data, importo: doc.totale, stato: "da_pagare" });
     }
   }
 
@@ -24586,7 +24601,12 @@ function PaginaRiconciliazione({
     }
     await generaScadenzePassive(documento);
     const nuovoAllocatoDoc = round2((documento.importo_allocato || 0) + allocato);
-    await supabase.from("documento_fornitore").update({ stato: "riconciliato", importo_allocato: nuovoAllocatoDoc }).eq("id", documento.id);
+    await supabase.from("documento_fornitore").update({
+      stato: "riconciliato", importo_allocato: nuovoAllocatoDoc,
+      // la data scritta a mano resta scritta sul documento: è quella che
+      // spiega, riaprendolo domani, da dove viene la scadenza passiva
+      ...(serveScadenzaManuale && scadenzaManuale ? { data_scadenza_prevista: scadenzaManuale } : {}),
+    }).eq("id", documento.id);
 
     const primoImpegno = impegnoTabella.find((i) => i.id === voci[0]?.[0]);
     if (primoImpegno) await registraPreferenzaMatch(documento.fornitore_id, primoImpegno.categoria_id, primoImpegno.origine_tipo);
@@ -24794,14 +24814,16 @@ function PaginaRiconciliazione({
     await ricarica(["documento_fornitore", "scadenza_passiva"]);
   }
 
-  const messaggioBarra = allocato <= 0
+  const messaggioBarra = serveScadenzaManuale && !scadenzaManuale
+    ? "Scrivi la scadenza del documento: senza data non si può creare la scadenza passiva"
+    : allocato <= 0
     ? "Seleziona gli impegni da coprire"
     : allocato > totaleDocumento + 0.01
       ? "Hai allocato più del totale fattura: correggi gli importi"
       : residuo > 0.01
         ? `Copertura parziale: ${fmtEuroErp(residuo)} resteranno senza impegno e verranno segnalati come spesa non prevista`
         : "Fattura coperta al centesimo";
-  const bottoneAbilitato = allocato > 0 && allocato <= totaleDocumento + 0.01 && !salvando;
+  const bottoneAbilitato = allocato > 0 && allocato <= totaleDocumento + 0.01 && !salvando && (!serveScadenzaManuale || !!scadenzaManuale);
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
@@ -24853,12 +24875,34 @@ function PaginaRiconciliazione({
                     ["Imponibile", fmtEuroErp(documento.imponibile)],
                     ["IVA", fmtEuroErp(documento.iva)],
                     ["Totale documento", fmtEuroErp(documento.totale)],
-                    ["Scadenza prevista", documento.data_scadenza_prevista ? fmtData(documento.data_scadenza_prevista) : "—"],
                   ].map(([et, val]) => (
                     <div key={et} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13 }}>
                       <span style={{ color: MUTED }}>{et}</span><span style={{ fontWeight: 700, color: NAVY }}>{val}</span>
                     </div>
                   ))}
+                  {/* la scadenza: se il documento ne porta una vera la si
+                      mostra e basta; se il fornitore non l'ha indicata la
+                      scrive qui chi riconcilia, ed è da lì che nascerà la
+                      scadenza passiva */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13 }}>
+                    <span style={{ color: MUTED }}>Scadenza prevista</span>
+                    {scadenzaDelDocumento ? (
+                      <span style={{ fontWeight: 700, color: NAVY }}>{fmtData(scadenzaDelDocumento)}</span>
+                    ) : documento.tipo === "nota_credito" ? (
+                      <span style={{ fontWeight: 700, color: NAVY }}>—</span>
+                    ) : (
+                      <input
+                        type="date" value={scadenzaManuale}
+                        onChange={(e) => setScadenzaManuale(e.target.value)}
+                        style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "5px 8px" }}
+                      />
+                    )}
+                  </div>
+                  {!scadenzaDelDocumento && documento.tipo !== "nota_credito" && (
+                    <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 6, lineHeight: 1.4 }}>
+                      Il fornitore non ha indicato una scadenza: scrivila tu, è la data che finirà nello scadenzario passivo.
+                    </div>
+                  )}
                   {(documento.righe || []).length > 0 && (
                     <div style={{ marginTop: 14 }}>
                       {documento.righe.map((r, idx) => (
