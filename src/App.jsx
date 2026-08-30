@@ -16425,7 +16425,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   const kitScelto = (kitDefinizioni || []).find((k) => k.corso_id === corso?.id && k.nome === pacchettoKit) || null;
   const dermografoAParte = !!kitScelto?.dermografo_a_parte;
   // "no" e "ha il suo" chiudono la questione; solo tekna/horus aprono il
-  // pagamento, e solo "lo paga con il corso" apre il conto
+  // pagamento. "Acquista e paga da sito" (valore gia_pagato) esce da qui:
+  // quella vendita la registra lo shop. Solo "lo paga con il corso" apre
+  // il conto su questa scheda
   const dermografoComprato = dermografoScelta === "tekna" || dermografoScelta === "horus";
   const dermografoDaPagare = dermografoComprato && dermografoPagamento === "con_corso";
   const prezzoListinoDermografo = dermografoComprato ? listinoLordoDermografo(dermografoScelta) : null;
@@ -18726,7 +18728,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                             style={{ ...campoAreaScheda, ...(dermografoPagamento ? {} : { color: MUTED }) }}
                           >
                             <option value="">— scegli —</option>
-                            <option value="gia_pagato">Già pagato</option>
+                            <option value="gia_pagato">Acquista e paga da sito</option>
                             <option value="con_corso">Lo paga con il corso</option>
                           </select>
                         </Field>
