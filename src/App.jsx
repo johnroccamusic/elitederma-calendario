@@ -18670,7 +18670,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "corsoParziale")}
               <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-          <IntestazioneArea Icona={IconaCalendarioCard}>Presenza al corso</IntestazioneArea>
+          {/* il titolo porta anche il pacchetto scelto: i giorni spuntati
+              dipendono da quello, e vederli sotto un titolo generico faceva
+              sembrare una scelta libera quella che invece segue il kit */}
+          <IntestazioneArea Icona={IconaCalendarioCard}>
+            Presenza al corso{pacchettoKit ? ` per ${pacchettoKit}` : ""}
+          </IntestazioneArea>
           {giorniCorsoDiQuesto.length > 0 && (
             <>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY, marginBottom: corsoParziale ? 10 : 0 }}>
