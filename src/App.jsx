@@ -23833,7 +23833,7 @@ function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda,
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
       <SchedaTabAmministrazione attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Prima nota cassa</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Registro documenti fornitore ({documentiCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Fatture ricevute ({documentiCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD">Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
       <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
@@ -25171,6 +25171,38 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
         </div>
         <div style={{ ...fontBody, fontSize: 14, color: MUTED, marginBottom: 20 }}>Prima nota cassa, impegni presi, documenti fornitore e scadenze attive/passive, in un unico posto.</div>
+
+        {/* Cosa c'è da fare, in quattro numeri: sono le code che si
+            allungano da sole (le fatture arrivano da Fatture in Cloud) e
+            che nessuno vede finché non entra nella scheda giusta. Ogni
+            riquadro porta dove si lavora quella coda. */}
+        {(() => {
+          const documenti = documentoFornitoreTabella || [];
+          const daRiconciliare = documenti.filter((d) => d.tipo !== "nota_credito" && d.stato === "da_riconciliare").length;
+          const ncDaRiconciliare = documenti.filter((d) => d.tipo === "nota_credito" && d.stato === "da_riconciliare").length;
+          const daImportare = (fattureRicevuteFic || []).filter((f) => !f.spesa_id).length;
+          const speseDaPagare = (spese || []).filter((sp) => sp.stato && sp.stato !== "pagata").length + daPagare.length;
+          const riquadri = [
+            { chiave: "riconciliare", etichetta: "Documenti da riconciliare", valore: daRiconciliare, colore: "#C67C2E", sfondo: "#FBEEE0", onClick: onApriRiconciliazione },
+            { chiave: "importare", etichetta: "Spese da importare", valore: daImportare, colore: "#B8860B", sfondo: "#FBF3E0", onClick: () => setTab("documenti") },
+            { chiave: "pagare", etichetta: "Spese da pagare", valore: speseDaPagare, colore: "#C0392B", sfondo: "#FBE4E1", onClick: () => setTab("passivo") },
+            { chiave: "notecredito", etichetta: "Note di credito da riconciliare", valore: ncDaRiconciliare, colore: "#8E44AD", sfondo: "#F3EAF6", onClick: onApriRiconciliazione },
+          ];
+          return (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 18 }}>
+              {riquadri.map((r) => (
+                <button
+                  key={r.chiave}
+                  onClick={r.onClick}
+                  style={{ textAlign: "left", background: r.valore > 0 ? r.sfondo : "#fff", border: `1px solid ${r.valore > 0 ? `${r.colore}44` : CREAM_BORDER}`, borderRadius: 14, padding: "14px 16px", cursor: "pointer" }}
+                >
+                  <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: r.valore > 0 ? r.colore : MUTED, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 6, lineHeight: 1.25 }}>{r.etichetta}</div>
+                  <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: r.valore > 0 ? NAVY : MUTED, lineHeight: 1 }}>{r.valore}</div>
+                </button>
+              ))}
+            </div>
+          );
+        })()}
 
         <TabsAmministrazione
           schedaAttiva={tab}
