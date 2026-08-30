@@ -1075,6 +1075,16 @@ function IconaCalendarioLeve({ size = 16, color = "currentColor" }) {
     </svg>
   );
 }
+// triangolo di attenzione: il tasto Advisor in Logistica
+function IconaAvvisoTriangolo({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z" />
+      <line x1="12" y1="9" x2="12" y2="13.5" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
 // freccia che sale: il gesto di caricare un file
 function IconaCaricaFile({ size = 18, color = "currentColor" }) {
   return (
@@ -15430,6 +15440,7 @@ const AREA_MADRE_VISTA = {
   prodottiusatikit: ["magazzinoshop"],
   spedizionicorsi: ["logisticaprodotti"],
   ordiniinarrivo: ["logisticaprodotti"],
+  avvisilogistica: ["logisticaprodotti"],
   magazzino: ["magazzinoshop"],
   magazzinoesterni: ["magazzinoshop"],
   gestioneshop: ["magazzinoshop"],
@@ -26778,6 +26789,92 @@ function TabellaStoricoSpedizioni({ voci, onApriOrdine, isMobile }) {
   );
 }
 
+// Gli avvisi di magazzino dentro Logistica: chi prepara i pacchi deve
+// sapere che un pezzo sta finendo mentre lo sta cercando, senza passare
+// da Gestione magazzino. Stessi conti dell'Advisor e stessa lista di
+// avvisi che si vede là — qui però si agisce solo su quello che è
+// mestiere di chi prepara: aprire un pacco sigillato. Riordinare dal
+// fornitore resta un lavoro d'ufficio, e la riga lo dice e basta.
+function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, ricarica, onBack, onApriAdvisor, titolo = "Advisor" }) {
+  const isMobile = useIsMobile();
+  const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null);
+  const avvisi = useMemo(() => calcolaAvvisiMagazzino(prodottiShop), [prodottiShop]);
+  const sintesi = useMemo(() => {
+    const oggi = dataOggiStr();
+    const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi });
+    const piano = pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi });
+    const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
+    return { risultato, daOrdinare: piano.daOrdinare.length, ritardi };
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, impostazioniMagazzino]);
+
+  const { risultato, daOrdinare, ritardi } = sintesi;
+  const critico = !!risultato.dataCriticaComplessiva;
+  const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
+  const sfondo = ritardi || critico ? "#FBE4E1" : daOrdinare ? "#FBF1D9" : "#E3F3E5";
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 16 }}>
+          Quanto si copre con quello che c'è in magazzino, e cosa chiede un gesto adesso.
+        </div>
+
+        <button
+          onClick={onApriAdvisor}
+          style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "12px 16px", marginBottom: 18, borderRadius: 12, border: `1px solid ${colore}44`, background: sfondo, cursor: "pointer" }}
+        >
+          <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, minWidth: 0 }}>
+            <b style={{ color: colore }}>Advisor</b>{" — "}
+            {risultato.modalita === "senza_date"
+              ? "nessun corso futuro in calendario: nessuna previsione possibile"
+              : critico
+                ? `autonomia fino al ${fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}, poi un corso resta scoperto`
+                : `copri tutti i ${risultato.edizioniConsiderate} corsi in calendario`}
+            {daOrdinare > 0 && <> · <b>{daOrdinare}</b> prodotti da ordinare{ritardi > 0 ? `, ${ritardi} in ritardo` : ""}</>}
+          </span>
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>apri il piano ›</span>
+        </button>
+
+        <div style={{ ...cardStyle, marginBottom: 0 }}>
+          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
+            Avvisi ({avvisi.length})
+          </div>
+          {avvisi.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
+          ) : avvisi.map((a, i) => {
+            const p = a.prodotto;
+            const stock = (p.quantita || 0);
+            const coloreAvviso = a.tipo === "apri_pacco" ? "#B8860B" : "#C0392B";
+            return (
+              <div key={`${a.tipo}-${p.id}-${i}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0, flex: "1 1 220px" }}>
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: coloreAvviso, flexShrink: 0, marginTop: 5 }} />
+                  <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0, lineHeight: 1.35 }}>
+                    <b>{p.nome}</b>
+                    {a.tipo === "negativo" && <> — giacenza negativa ({p.quantita || 0}): da sistemare</>}
+                    {a.tipo === "apri_pacco" && <> — {stock} sfus{stock === 1 ? "o" : "i"} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""} · {a.box.quantita} pacc{a.box.quantita === 1 ? "o sigillato" : "hi sigillati"} disponibil{a.box.quantita === 1 ? "e" : "i"}</>}
+                    {a.tipo === "riordina" && <> — {stock} rimast{stock === 1 ? "o" : "i"}{p.soglia_riordino != null ? ` (soglia ${p.soglia_riordino})` : ""}{a.box ? " e nessun pacco sigillato" : ""}: riordina dal fornitore</>}
+                  </span>
+                </div>
+                {a.tipo === "apri_pacco" && (
+                  <button onClick={() => setApriConfezioneBoxId(a.box.id)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 16, padding: "6px 14px", cursor: "pointer", flexShrink: 0 }}>Apri un pacco</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {apriConfezioneBoxId && (
+        <ModaleApriConfezione boxId={apriConfezioneBoxId} prodottiShop={prodottiShop} onClose={() => setApriConfezioneBoxId(null)} ricarica={ricarica} />
+      )}
+    </div>
+  );
+}
+
 // hub d'ingresso del CRM: gli allievi dei corsi da una parte, i clienti
 // dello shop dall'altra. Sono due anagrafiche diverse — chi compra un
 // corso e chi compra un prodotto — ma si guardano con la stessa domanda
@@ -26807,7 +26904,7 @@ function PaginaCrmHub({ onBack, onApriCrmAllievi, onApriCrmShop, ruoloUtente, or
 // hub d'ingresso di "Logistica prodotti": le spedizioni dei kit ai corsi
 // da una parte, gli ordini dello shop online dall'altra — due mestieri
 // diversi che prima stavano nella stessa pagina
-function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, quantiOrdiniDaSpedire, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArrivo, onApriAvvisi, quantiOrdiniDaSpedire, quantiAvvisi, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
@@ -26818,10 +26915,11 @@ function PaginaLogisticaHub({ onBack, onApriSpedizioniCorsi, onApriOrdiniInArriv
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
         <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>Cosa parte da qui: i kit verso i corsi e i pacchi verso i clienti dello shop.</div>
         <GrigliaTasti
-          pagina="logisticaprodotti" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={2}
+          pagina="logisticaprodotti" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente} onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
           definizioni={[
             { chiave: "spedizionicorsi", title: "Spedizioni corsi", descrizione: "Kit, bolle e pacchi verso le sedi dei corsi.", Icona: IconaTileLogistica, attivo: true, onClick: onApriSpedizioniCorsi },
             { chiave: "ordiniinarrivo", title: "Ordini in arrivo", descrizione: "Gli ordini dello shop online da preparare e spedire.", Icona: IconaScatolaErp, attivo: true, onClick: onApriOrdiniInArrivo, badge: quantiOrdiniDaSpedire },
+            { chiave: "avvisilogistica", title: "Advisor", descrizione: "Cosa sta finendo: pacchi da aprire e prodotti da riordinare.", Icona: IconaAvvisoTriangolo, attivo: true, onClick: onApriAvvisi, badge: quantiAvvisi },
           ]}
         />
       </div>
@@ -42565,7 +42663,8 @@ export default function App() {
     inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
-    logisticaprodotti: ["vendite_shop", "spedizioni_pos"],
+    logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
+    avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "impostazioni_magazzino"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
@@ -42763,6 +42862,7 @@ export default function App() {
   // a zero fino a quando non si fosse aperta un'altra pagina
   // il dock: "coricato" lo mette di traverso insieme alla pagina che si
   // corica (CRM allievi), "nascosto" lo fa scendere sotto lo schermo
+  const [viewPrimaDiAdvisor, setViewPrimaDiAdvisor] = useState("magazzino");
   const [dockCoricato, setDockCoricato] = useState(false);
   const [dockNascosto, setDockNascosto] = useState(false);
   const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
@@ -43012,6 +43112,8 @@ export default function App() {
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
   function apriOrdiniInArrivo() { apriViewProtetta("ordiniinarrivo"); }
+  function apriAvvisiLogistica() { apriViewProtetta("avvisilogistica"); }
+  function apriAdvisorDa(vistaDiPartenza) { setViewPrimaDiAdvisor(vistaDiPartenza); setView("advisor"); }
   function apriMagazziniLocali() { setView("magazzinilocali"); }
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
@@ -43700,7 +43802,8 @@ export default function App() {
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
           onApriIscritto={apriIscrittoDaAdvisor}
-          ricarica={fetchDati} onBack={() => setView("magazzino")}
+          // si torna da dove si è entrati: dal magazzino o dagli avvisi in Logistica
+          ricarica={fetchDati} onBack={() => setView(viewPrimaDiAdvisor)}
         />
       )}
 
@@ -43711,7 +43814,7 @@ export default function App() {
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
-          onApriAdvisor={() => setView("advisor")} assicuraTabelle={assicuraTabelle}
+          onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
@@ -43905,11 +44008,23 @@ export default function App() {
           onBack={() => setView("home")}
           onApriSpedizioniCorsi={apriSpedizioniCorsi}
           onApriOrdiniInArrivo={apriOrdiniInArrivo}
+          onApriAvvisi={apriAvvisiLogistica}
           quantiOrdiniDaSpedire={pacchiDaSpedire}
+          quantiAvvisi={calcolaAvvisiMagazzino(prodottiShop).length}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.logisticaprodotti?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("logisticaprodotti", { ordine: o })}
           colonneTasti={layoutTasti.logisticaprodotti?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("logisticaprodotti", { colonne: n })}
           etichetteTasti={layoutTasti.logisticaprodotti?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("logisticaprodotti", chiave, testo)}
           titolo={etichettaTasto("home", "logisticaprodotti", "Logistica prodotti")}
+        />
+      )}
+
+      {view === "avvisilogistica" && (
+        <PaginaAvvisiLogistica
+          prodottiShop={prodottiShop} corsiDate={corsiDate} iscritti={iscritti}
+          kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          impostazioniMagazzino={impostazioniMagazzino}
+          ricarica={fetchDati} onBack={() => setView("logisticaprodotti")} onApriAdvisor={() => apriAdvisorDa("avvisilogistica")}
+          titolo={etichettaTasto("logisticaprodotti", "avvisilogistica", "Advisor")}
         />
       )}
 
