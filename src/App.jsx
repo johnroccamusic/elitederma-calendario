@@ -367,6 +367,14 @@ function IconaWhatsapp({ size = 16 }) {
     </svg>
   );
 }
+// maglietta: la taglia della divisa dell'allievo, nell'elenco classe
+function IconaMaglietta({ size = 16, color = "#2E7D32" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <path d="M16 2h-2a2 2 0 0 1-4 0H8L3 5l2 4 2-1v13h10V8l2 1 2-4-5-3z" />
+    </svg>
+  );
+}
 // icona telefono: usata accanto a un CAMPO DI TESTO editabile per il
 // numero (non sul numero stesso, altrimenti su schermo touch un tocco per
 // chiamare finirebbe invece per mettere a fuoco/modificare il campo)
@@ -6578,6 +6586,12 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
 // pagamenti: quelli non la riguardano.
 function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriModelle, onBack }) {
   const coloreCorso = corso?.colore || NAVY;
+  // la pastiglia della taglia prende una velatura del colore del corso: due
+  // cifre esadecimali di trasparenza in coda, che valgono solo se il colore
+  // e' scritto in esadecimale a sei cifre (lo sono tutti in anagrafica)
+  const esadecimale = /^#[0-9a-f]{6}$/i.test(coloreCorso);
+  const tintaCorso = esadecimale ? `${coloreCorso}12` : "#F6F7F9";
+  const bordoTinta = esadecimale ? `${coloreCorso}3A` : CREAM_BORDER;
   const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
   const oggiStr = dataOggiStr();
   const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
@@ -6627,34 +6641,40 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
           )}
         </div>
 
-        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9, marginBottom: 12 }}>
-            <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{allievi.length}</span>
-            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>Allievi totali</span>
-          </div>
-
+        <div style={{ marginTop: 14, paddingTop: 18, borderTop: `1px solid ${CREAM_BORDER}` }}>
           {allievi.length === 0 ? (
             <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo iscritto.</div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {allievi.map((i, idx) => (
-                <div key={i.id} style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>
-                      <span style={{ color: MUTED, fontWeight: 400, marginRight: 6 }}>{idx + 1}.</span>
-                      {`${i.nome || ""} ${i.cognome || ""}`.trim()}
-                    </div>
-                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>
-                      Taglia {i.taglia_divisa || "—"}
-                    </div>
-                  </div>
-                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>
-                    {descrizioneKit(i) || "Nessun kit"}
-                  </div>
+          ) : allievi.map((i, idx) => (
+            <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <div style={{ width: 26, height: 26, borderRadius: "50%", background: coloreCorso, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 13, fontWeight: 700 }}>{idx + 1}</div>
+
+              <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.2 }}>
+                  {`${i.nome || ""} ${i.cognome || ""}`.trim()}
                 </div>
-              ))}
+                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 1, lineHeight: 1.35 }}>
+                  {descrizioneKit(i) || "Nessun kit"}
+                  {i.tutor && <span style={{ color: GOLD, marginLeft: 8 }}>: tutor {toTitleCase(i.tutor)}</span>}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0, marginLeft: "auto" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, background: tintaCorso, border: `1px solid ${bordoTinta}`, borderRadius: 12, padding: "7px 12px" }}>
+                  <IconaMaglietta size={16} color={coloreCorso} />
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia {i.taglia_divisa || "—"}</span>
+                </div>
+                {i.telefono && (
+                  <>
+                    <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
+                    <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 13, color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                    <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" title="Apri chat WhatsApp" style={{ display: "flex" }}>
+                      <IconaWhatsapp size={20} />
+                    </a>
+                  </>
+                )}
+              </div>
             </div>
-          )}
+          ))}
         </div>
 
         {onApriModelle && (
