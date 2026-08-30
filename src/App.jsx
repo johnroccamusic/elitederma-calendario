@@ -10576,6 +10576,58 @@ function PannelloTurnoGiorno({ etichetta, coloreEtichetta, mattina, pomeriggio, 
     </div>
   );
 }
+// "Tipi di modella selezionabili" + "Durata": stanno insieme perché sono
+// la stessa decisione presa da due lati — quali trattamenti si possono
+// chiedere in questo corso, e su quanti giorni distribuirli. I tipi sono
+// pastiglie che vanno a capo da sole invece di un elenco in un riquadro
+// che scorre: si vedono tutti insieme, e quelli spuntati si riconoscono
+// senza doverli cercare
+function SceltaTipiEDurata({ tipiModella, selezionati, onCambiaSelezionati, durata, onCambiaDurata }) {
+  const titoletto = { ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 };
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, display: "flex", gap: 14, flexWrap: "wrap" }}>
+      <div style={{ flex: "1 1 340px", minWidth: 0 }}>
+        <div style={{ ...titoletto, marginBottom: 10 }}>
+          Tipi di modella selezionabili <span style={{ fontWeight: 400, color: MUTED, textTransform: "none", letterSpacing: 0 }}>(vuoto = tutti)</span>
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 10 }}>
+          {tipiModella.length === 0 && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun tipo di modella definito ancora — vedi "Definisci tipi di modelle".</span>}
+          {tipiModella.map((t) => {
+            const scelto = selezionati.includes(t.id);
+            return (
+              <label
+                key={t.id}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
+                  ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY,
+                  border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`, borderRadius: 10,
+                  padding: "7px 12px", background: "#fff",
+                }}
+              >
+                <input
+                  type="checkbox" checked={scelto}
+                  onChange={(e) => onCambiaSelezionati(e.target.checked ? [...selezionati, t.id] : selezionati.filter((id) => id !== t.id))}
+                />
+                {t.nome}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ flex: "0 1 190px", minWidth: 160, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12 }}>
+        <div style={{ ...titoletto, marginBottom: 8 }}>
+          Durata <span style={{ fontWeight: 400, color: MUTED, textTransform: "none", letterSpacing: 0 }}>(giorni)</span>
+        </div>
+        <input type="number" min="0" style={inputStyle} value={durata} onChange={(e) => onCambiaDurata(e.target.value)} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: BG, borderRadius: 10, padding: "10px 12px", marginTop: 10 }}>
+          <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", border: `1.5px solid ${MUTED}`, color: MUTED, display: "flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 11, fontWeight: 700 }}>i</span>
+          <span style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.35 }}>Serve per organizzare le modelle per giorno</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 function BloccoGiornoCorso({ giorno, onCambia, opzioniTipo }) {
   const master = giorno.richiede_modella_master;
   const allievi = giorno.richiede_modelle_allievi;
@@ -11117,20 +11169,11 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                   {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                 </div>
               </Field>
-              <Field label="Tipi di modella selezionabili in questo corso (vuoto = tutti)">
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 10, maxHeight: 160, overflow: "auto" }}>
-                  {tipiModella.length === 0 && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun tipo di modella definito ancora — vedi "Definisci tipi di modelle".</span>}
-                  {tipiModella.map((t) => (
-                    <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-                      <input type="checkbox" checked={tipiModellaSelCorso.includes(t.id)} onChange={(e) => setTipiModellaSelCorso((prev) => (e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)))} />
-                      {t.nome}
-                    </label>
-                  ))}
-                </div>
-              </Field>
-              <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
-                <input type="number" min="0" style={inputStyle} value={durataCorso} onChange={(e) => setDurataCorso(e.target.value)} />
-              </Field>
+              <SceltaTipiEDurata
+                tipiModella={tipiModella}
+                selezionati={tipiModellaSelCorso} onCambiaSelezionati={setTipiModellaSelCorso}
+                durata={durataCorso} onCambiaDurata={setDurataCorso}
+              />
               {giorniCorso.length > 0 && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
@@ -11181,20 +11224,11 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
                     {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
                   </div>
                 </Field>
-                <Field label="Tipi di modella selezionabili in questo corso (vuoto = tutti)">
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: 10, maxHeight: 160, overflow: "auto" }}>
-                    {tipiModella.length === 0 && <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun tipo di modella definito ancora — vedi "Definisci tipi di modelle".</span>}
-                    {tipiModella.map((t) => (
-                      <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
-                        <input type="checkbox" checked={tipiModellaSelCorsoModifica.includes(t.id)} onChange={(e) => setTipiModellaSelCorsoModifica((prev) => (e.target.checked ? [...prev, t.id] : prev.filter((id) => id !== t.id)))} />
-                        {t.nome}
-                      </label>
-                    ))}
-                  </div>
-                </Field>
-                <Field label="Durata (giorni, opzionale — serve per organizzare le modelle per giorno)">
-                  <input type="number" min="0" style={inputStyle} value={durataCorsoModifica} onChange={(e) => setDurataCorsoModifica(e.target.value)} />
-                </Field>
+                <SceltaTipiEDurata
+                  tipiModella={tipiModella}
+                  selezionati={tipiModellaSelCorsoModifica} onCambiaSelezionati={setTipiModellaSelCorsoModifica}
+                  durata={durataCorsoModifica} onCambiaDurata={setDurataCorsoModifica}
+                />
                 {giorniCorsoModifica.length > 0 && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>Modelle richieste per giorno</div>
