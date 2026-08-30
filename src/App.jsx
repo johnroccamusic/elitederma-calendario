@@ -27832,15 +27832,15 @@ const COLONNE_MAGAZZINO = [
   { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 170, allinea: "left" },
   { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 100, allinea: "left" },
   { label: "Unità di misura", campo: null, larghezza: 52 },
-  { label: "Stock", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 60, allinea: "right" },
-  { label: "Soglia riordino", campo: "soglia_riordino", direzioneIniziale: "desc", larghezza: 58, allinea: "right" },
+  { label: "Stock", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 60 },
+  { label: "Soglia riordino", campo: "soglia_riordino", direzioneIniziale: "desc", larghezza: 58 },
   { label: "Non sul POS", campo: null, larghezza: 64 },
   { label: "Solo offline", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
-  { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84, allinea: "right" },
-  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74, allinea: "right" },
-  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62, allinea: "right" },
-  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62, allinea: "right" },
+  { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
+  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
+  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
+  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
   // margine di sicurezza ha il suo valore generale in Impostazioni e il
@@ -28162,7 +28162,12 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
     ricarica(["prodotti_shop"]);
   }
 
-  const tdStyle = { padding: "8px 6px", borderTop: `1px solid ${CREAM_BORDER}` };
+  // Colonne in stile foglio di calcolo: il titolo fa parte della colonna e
+  // il contenuto sta dove sta il titolo, qualunque larghezza abbia. Tutto
+  // centrato tranne nome e categoria, che sono testo e si leggono da
+  // sinistra: allargando la colonna il testo non deve scappare via.
+  const tdStyle = { padding: "8px 6px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "center" };
+  const tdTesto = { ...tdStyle, textAlign: "left" };
   // quattro cifre al massimo: la casella larga mangiava spazio a tutta la
   // tabella, e il numero incollato a sinistra non si allineava con quello
   // della riga sopra. Stretta e allineata a destra, come si leggono i numeri
@@ -28170,14 +28175,14 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
 
   return (
     <tr>
-      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdStyle, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
+      <td onClick={() => onApriModifica(p.id)} title="Clicca per modificare il prodotto" style={{ ...tdTesto, ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, cursor: "pointer", overflow: "hidden" }}>
         <span
           title={p.woo_product_id && p.stato === "publish" ? "Pubblicato sullo shop online" : p.stato === "private" ? "Privato: sul sito, ma visibile solo a chi è dentro come amministratore" : "Solo magazzino: non è sullo shop online"}
           style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", marginRight: 6, flexShrink: 0, background: p.woo_product_id && p.stato === "publish" ? "#2E7D32" : p.stato === "private" ? "#3B6FA0" : "#CBC6B8" }}
         />
         <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
       </td>
-      <td style={{ ...tdStyle, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
+      <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
       <td style={tdStyle}>
         <input style={{ ...cellInputStyle, width: 36, textAlign: "center" }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
       </td>
@@ -28220,16 +28225,16 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           <input style={cellInputStyle} inputMode="numeric" value={scortaMin} onChange={(e) => setScortaMin(e.target.value)} onBlur={salvaScortaMin} placeholder="—" />
         )}
       </td>
-      <td style={{ ...tdStyle, textAlign: "center" }} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
+      <td style={tdStyle} title={p.forzatoEscludi ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Esclude questo prodotto dalla vendita diretta (POS e shop online)"}>
         <input type="checkbox" checked={p.forzatoEscludi || !!p.escludi_vendita_diretta} disabled={p.forzatoEscludi} onChange={(e) => salvaFlagEscludiVenditaDiretta(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoEscludi ? "default" : "pointer" }} />
       </td>
-      <td style={{ ...tdStyle, textAlign: "center" }} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
+      <td style={tdStyle} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
         <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
       </td>
       {/* stato e avvisi ("Riordina dal fornitore", "Apri confezione") al
           centro della loro colonna: erano schiacciati a sinistra sotto un
           titolo centrato */}
-      <td style={{ ...tdStyle, whiteSpace: "nowrap", textAlign: "center" }}>
+      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
         {p.conta_magazzino === false ? (
           <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
         ) : p.boxCollegato && (p.esaurito || p.sottoScorta) && p.boxCollegato.inMagazzino > 0 ? (
@@ -28270,7 +28275,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </div>
         )}
       </td>
-      <td style={{ ...tdStyle, textAlign: "right" }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
+      <td style={{ ...tdStyle }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
         <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
           {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
           {!p.iva_verificata && (
