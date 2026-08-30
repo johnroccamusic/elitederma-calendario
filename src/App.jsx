@@ -15845,18 +15845,21 @@ function BottonePulsanteScheda({ p }) {
     <button
       onClick={p.onClick}
       disabled={p.disabled}
+      // quattro tasti uguali, con lo stesso fondo delle nuvole della scheda:
+      // erano scritte trasparenti di larghezze diverse, e non si capiva
+      // dove finisse una e cominciasse l'altra
       style={{
-        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", gap: 6,
-        padding: "4px 4px",
-        borderRadius: 16, border: "none", cursor: p.disabled ? "default" : "pointer",
-        background: "transparent",
+        ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        padding: "11px 10px",
+        borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, cursor: p.disabled ? "default" : "pointer",
+        background: "#FBF6EA",
         color: NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
-        flex: "0 0 auto", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
+        flex: "1 1 0", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
       }}
     >
-      <p.Icona size={15} color={GOLD} />
-      <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "left", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
+      <p.Icona size={16} color={GOLD} />
+      <span style={{ whiteSpace: "normal", lineHeight: 1.15, textAlign: "center", minWidth: 0, overflowWrap: "break-word" }}>{p.etichetta}</span>
     </button>
   );
 }
@@ -18021,7 +18024,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <>
                 <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
                 {manigliaSpazio("dopoDivider")}
-                <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoSecondari }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoSecondari }}>
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
