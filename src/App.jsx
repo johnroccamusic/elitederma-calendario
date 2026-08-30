@@ -19055,14 +19055,14 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   {!nessunaIva && (
                     <div style={{ flex: "1 1 100px" }}>
                       <Field label="Totale con Iva">
-                        <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totaleConIva.toFixed(2)} disabled />
+                        <input style={{ ...campoAreaScheda, background: "#EDEAE2", color: NAVY, fontWeight: 700 }} value={totaleConIva.toFixed(2)} disabled />
                       </Field>
                     </div>
                   )}
                   <div style={{ flex: "1 1 100px" }}>
                     <Field label="Totale con interessi">
                       <input
-                        style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
+                        style={{ ...campoAreaScheda, background: "#EDEAE2", color: NAVY, fontWeight: 700 }}
                         value={(() => {
                           const interessiTotali = tutteLeQuote
                             .filter((q) => q !== pagSaldo && q.metodo === "Rate")
