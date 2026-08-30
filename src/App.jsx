@@ -1805,6 +1805,10 @@ const inputStyle = {
 // amministrativo → Costi della classe): inputStyle è pensato per form
 // con pochi campi, troppo alto per una tabella di più righe
 const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 };
+// le caselle del blocco "Totale pattuito", su fondo azzurro: il bordo
+// crema degli altri campi lì sopra si perdeva, e le tre caselle
+// sembravano macchie bianche senza contorno
+const campoBloccoVendita = { ...inputStyle, background: "#fff", border: "1.5px solid #A9C2D4" };
 
 // tendina con ricerca: una <select> nativa va benissimo per dieci voci,
 // ma con 140 fornitori in ordine alfabetico trovare il proprio significa
@@ -18447,24 +18451,24 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ background: "#EEF4F8", border: `1px solid #D8E4EC`, borderRadius: 10, padding: 14, flex: 1 }}>
+              <div style={{ background: "#F5F9FC", border: `1.5px solid #A9C2D4`, borderRadius: 10, padding: 14, flex: 1 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
-                  <input style={inputStyle} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  <input style={campoBloccoVendita} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                 </Field>
               </div>
               {adminSbloccato && (
                 <>
                   <div style={{ flex: 1 }}>
                     <Field label="Quota venditore (7%)" minLabelHeight={34}>
-                      <input style={{ ...inputStyle, background: "#F4F6F8", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <input style={{ ...campoBloccoVendita, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
                     </Field>
                   </div>
                   <div style={{ flex: 1 }}>
                     <Field label="Quota speciale" minLabelHeight={34}>
                       <input
-                        style={inputStyle}
+                        style={campoBloccoVendita}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
