@@ -26383,8 +26383,9 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
   const righeIndirizzo = [
     spedizione?.destinatario_nome,
     [spedizione?.indirizzo, spedizione?.civico].filter(Boolean).join(" "),
+    [spedizione?.citofono && `Citofono ${spedizione.citofono}`, spedizione?.interno && `int. ${spedizione.interno}`].filter(Boolean).join(" · "),
     [spedizione?.cap, spedizione?.citta, spedizione?.provincia && `(${spedizione.provincia})`].filter(Boolean).join(" "),
-    iscritto?.telefono,
+    spedizione?.cellulare || iscritto?.telefono,
   ].filter(Boolean);
   const righeFattura = spedizione?.richiede_fattura ? [
     spedizione?.fattura_ditta,
@@ -34412,6 +34413,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   const [spedCitta, setSpedCitta] = useState("");
   const [spedCap, setSpedCap] = useState("");
   const [spedProvincia, setSpedProvincia] = useState("");
+  const [spedCitofono, setSpedCitofono] = useState("");
+  const [spedInterno, setSpedInterno] = useState("");
+  const [spedCellulare, setSpedCellulare] = useState("");
   // la fattura si chiede prima di compilare: i quattro campi che servono
   // solo a lei restano nascosti finché non è spuntata, e diventano
   // obbligatori appena lo è
@@ -34427,7 +34431,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     if (!spedizioneAttiva) return [];
     const mancanti = [
       [spedNome, "Nome"], [spedCognome, "Cognome"], [spedIndirizzo, "Indirizzo"], [spedCivico, "Civico"],
-      [spedCap, "CAP"], [spedCitta, "Città"], [spedProvincia, "Provincia"],
+      [spedCap, "CAP"], [spedCitta, "Città"], [spedProvincia, "Provincia"], [spedCellulare, "Cellulare"],
     ].filter(([v]) => !String(v || "").trim()).map(([, etichetta]) => etichetta);
     if (spedRichiedeFattura) {
       mancanti.push(...[
@@ -34451,6 +34455,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       setSpedCitta(toTitleCase(isc.citta_residenza || isc.fattura_citta || ""));
       setSpedCap(isc.cap_residenza || isc.fattura_cap || "");
       setSpedProvincia((isc.fattura_prov || "").toUpperCase());
+      setSpedCellulare(isc.telefono || "");
       if (isc.richiede_fattura) {
         setSpedRichiedeFattura(true);
         setSpedDitta(isc.fattura_ditta || "");
@@ -34568,6 +34573,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setCarrello([]); setScontoTipo("percentuale"); setScontoValore(""); setCouponValore(""); setCouponAttivo(null); setMetodoPagamento("pos"); setNote(""); setMsg("");
     setSpedizioneAttiva(false); setSpedIscrittoId("");
     setSpedNome(""); setSpedCognome(""); setSpedIndirizzo(""); setSpedCivico(""); setSpedCitta(""); setSpedCap(""); setSpedProvincia("");
+    setSpedCitofono(""); setSpedInterno(""); setSpedCellulare("");
     setSpedRichiedeFattura(false); setSpedDitta(""); setSpedPiva(""); setSpedCodDest(""); setSpedPec("");
     setOmaggioAttivo(false);
   }
@@ -34642,6 +34648,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       citta: spedCitta.trim() || null,
       cap: spedCap.trim() || null,
       provincia: spedProvincia.trim().toUpperCase() || null,
+      citofono: spedCitofono.trim() || null,
+      interno: spedInterno.trim() || null,
+      cellulare: spedCellulare.trim() || null,
       richiede_fattura: spedRichiedeFattura,
       fattura_ditta: spedRichiedeFattura ? spedDitta.trim() : null,
       fattura_piva: spedRichiedeFattura ? spedPiva.trim() : null,
@@ -34880,10 +34889,18 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ flex: 1 }}><Field label="Indirizzo"><input style={inputStyle} value={spedIndirizzo} onChange={(e) => setSpedIndirizzo(e.target.value)} /></Field></div>
             <div style={{ width: 90 }}><Field label="Civico"><input style={inputStyle} value={spedCivico} onChange={(e) => setSpedCivico(e.target.value)} /></Field></div>
           </div>
+          {/* quello che serve al corriere per consegnare davvero: sul
+              citofono c'è spesso un cognome diverso, e senza un numero da
+              chiamare il pacco torna indietro */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ flex: 1 }}><Field label="Citofono"><input style={inputStyle} value={spedCitofono} onChange={(e) => setSpedCitofono(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field label="Interno"><input style={inputStyle} value={spedInterno} onChange={(e) => setSpedInterno(e.target.value)} /></Field></div>
+          </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
             <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
             <div style={{ width: 74 }}><Field label="Prov."><input style={{ ...inputStyle, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
+            <div style={{ flex: "1 1 140px" }}><Field label="Cellulare"><input style={inputStyle} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field></div>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 8px" }}>
