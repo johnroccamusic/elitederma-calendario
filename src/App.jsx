@@ -38779,6 +38779,11 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
   const prodottiKit = righe.filter((r) => r.tipo === "kit");
   const idsUsati = new Set(prodottiKit.map((r) => r.prodotto_id));
 
+  async function cambiaDermografoAParte(valore) {
+    const { error } = await supabase.from("kit_definizioni").update({ dermografo_a_parte: valore }).eq("id", kit.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["kit_definizioni"]);
+  }
   async function salvaNome() {
     const nuovo = nome.trim();
     if (!nuovo || nuovo === kit.nome) { setNome(kit.nome); return; }
@@ -38938,6 +38943,21 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
             </div>
           ))}
         </div>
+      )}
+      {/* prima riga di ogni pacchetto aperto: dice se il dermografo è
+          compreso o se l'allievo lo compra a parte. Sta qui e non sulla
+          scheda dell'allievo perché è una proprietà del pacchetto — vale
+          per chiunque lo scelga — e da qui la scheda sa cosa chiedere */}
+      {aperto && (
+        <label style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 0", marginBottom: 4, borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
+          <input
+            type="checkbox"
+            checked={!!kit.dermografo_a_parte}
+            onChange={(e) => cambiaDermografoAParte(e.target.checked)}
+            style={{ width: 16, height: 16, flexShrink: 0, cursor: "pointer" }}
+          />
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>Dermografo da acquistare a parte</span>
+        </label>
       )}
       {aperto && prodottiKit.map((r) => {
         const p = prodottiShop.find((pp) => pp.id === r.prodotto_id);
