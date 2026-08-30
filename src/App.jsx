@@ -25809,7 +25809,9 @@ function indirizzoOrdine(a) {
 // ordini diversi restano allineate fra loro
 function RiquadroDatoCliente({ Icona, etichetta, valore }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "9px 12px", minWidth: 0 }}>
+    // fondo crema come il riquadro dei totali: i quattro dati del cliente
+    // sono un blocco solo, e su bianco si perdevano dentro la scheda
+    <div style={{ display: "flex", alignItems: "center", gap: 10, background: BG, border: `1px solid #E0D7C3`, borderRadius: 12, padding: "9px 12px", minWidth: 0 }}>
       <span style={{ color: MUTED, flexShrink: 0, display: "flex" }}><Icona size={20} color={MUTED} /></span>
       <div style={{ minWidth: 0 }}>
         <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, marginBottom: 1 }}>{etichetta}</div>
