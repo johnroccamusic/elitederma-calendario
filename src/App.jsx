@@ -34895,12 +34895,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <div style={{ flex: 1 }}><Field label="Citofono"><input style={inputStyle} value={spedCitofono} onChange={(e) => setSpedCitofono(e.target.value)} /></Field></div>
             <div style={{ width: 90 }}><Field label="Interno"><input style={inputStyle} value={spedInterno} onChange={(e) => setSpedInterno(e.target.value)} /></Field></div>
+            <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <div style={{ width: 90 }}><Field label="CAP"><input style={inputStyle} value={spedCap} onChange={(e) => setSpedCap(e.target.value)} /></Field></div>
             <div style={{ flex: 1 }}><Field label="Città"><input style={inputStyle} value={spedCitta} onChange={(e) => setSpedCitta(e.target.value)} /></Field></div>
             <div style={{ width: 74 }}><Field label="Prov."><input style={{ ...inputStyle, textTransform: "uppercase" }} maxLength={2} value={spedProvincia} onChange={(e) => setSpedProvincia(e.target.value.toUpperCase())} /></Field></div>
-            <div style={{ flex: "1 1 140px" }}><Field label="Cellulare"><input style={inputStyle} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field></div>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <Field label="Cellulare"><input style={inputStyle} inputMode="tel" value={spedCellulare} onChange={(e) => setSpedCellulare(e.target.value)} /></Field>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "10px 0 8px" }}>
