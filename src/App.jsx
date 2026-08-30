@@ -25902,9 +25902,9 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
       onClick={attivo || occupato ? undefined : onClick}
       title={attivo ? "Stato attuale" : `Porta l'ordine in "${st.etichetta}"`}
       style={{
-        ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px",
+        ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 3px",
         cursor: attivo || occupato ? "default" : "pointer", textAlign: "center", flex: 1, minWidth: 0,
-        lineHeight: 1.15, overflowWrap: "break-word",
+        lineHeight: 1.15, overflowWrap: "anywhere", hyphens: "auto",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
         opacity: occupato ? 0.5 : 1,
         // lo stato in cui l'ordine si trova si accende nel suo colore, gli
@@ -26013,9 +26013,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
       </div>
 
       <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato dell'ordine sul sito</div>
-      {/* da mobile sei tasti in fila diventano sei colonne da cinquanta
-          pixel, con le etichette tagliate a meta': due righe da tre */}
-      <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : undefined, gap: 8, alignItems: "stretch" }}>
+      <div style={{ display: "flex", gap: isMobile ? 5 : 8, alignItems: "stretch" }}>
         {STATI_ORDINE_SHOP.map((stato) => (
           <TastoStatoOrdine key={stato} stato={stato} attuale={vendita?.stato} occupato={occupato} onClick={() => onCambiaStato(vendita, stato)} />
         ))}
