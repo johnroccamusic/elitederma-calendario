@@ -15703,6 +15703,11 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
   // esiste più e che ne va scelto uno dall'elenco, altrimenti sembra
   // tutto a posto e il fabbisogno di quell'allievo non viene calcolato
   const kitNonPiuInElenco = !!value && !nomiOpzioni.includes(value) && nomiOpzioni.length > 0;
+  // Il kit si sceglie dalla tendina e basta: scriverlo a mano produceva
+  // nomi che non corrispondono a nessun pacchetto definito, e quegli
+  // iscritti non generano fabbisogno — sono le righe che poi l'Advisor
+  // elenca sotto "Kit da assegnare". Il campo libero resta solo come
+  // scialuppa per i corsi che non hanno ancora nessun kit configurato.
   const [modoLibero, setModoLibero] = useState(() => nomiOpzioni.length === 0);
 
   if (modoLibero) {
@@ -15724,7 +15729,7 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
         onChange={(e) => onChange(e.target.value)}
         style={{ ...inputStyle, ...(kitNonPiuInElenco ? { borderColor: GOLD } : {}) }}
       >
-        <option value="">— scegli pacchetto —</option>
+        <option value="">Seleziona un kit dalla tendina</option>
         {/* il kit cancellato resta selezionato finché non se ne sceglie un
             altro: sparire da solo perderebbe l'unica traccia di cosa era
             stato venduto */}
@@ -15739,11 +15744,6 @@ function CampoPacchettoKit({ value, onChange, opzioni }) {
         <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 4, lineHeight: 1.35 }}>
           Questo pacchetto non è più fra quelli definiti per il corso: resta scritto qui, ma non porta nessun prodotto in preparazione. Scegline uno dall'elenco.
         </div>
-      )}
-      {nomiOpzioni.length > 0 && (
-        <button type="button" onClick={() => setModoLibero(true)} style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: "4px 0 0" }}>
-          Scrivilo a mano
-        </button>
       )}
     </div>
   );
