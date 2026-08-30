@@ -2802,7 +2802,7 @@ function Gate({ onOk }) {
   async function check() {
     setVerificando(true);
     const [{ data: utenti }, { data: masterRighe }, { data: venditoriRighe }] = await Promise.all([
-      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario"),
+      supabase.from("utenti_app").select("id, nome, password, permessi, chiave_sistema, venditore_id, solo_calendario, amministratore"),
       supabase.from("master").select("id, nome, password, permessi, venditore_id"),
       supabase.from("venditori").select("id, nome, password, permessi"),
     ]);
@@ -2884,7 +2884,11 @@ function Gate({ onOk }) {
       // (es. ufficio/magazzino): al login atterra sempre in Home come
       // qualunque altro utente nominale, mai dritto sulla dashboard
       // venditori (restaSuHomeAlLogin, letto più sotto in onOk del Gate)
-      ruolo = "user";
+      // il grado batte tutto il resto: un account nominale marcato
+      // amministratore entra come tale anche se è collegato a un venditore
+      // — altrimenti trovava le schede iscritto in sola lettura, come un
+      // venditore qualsiasi, pur avendo tutti i permessi
+      ruolo = nominale.amministratore ? "amministratore" : "user";
       utente = {
         id: nominale.id, nome: nominale.nome,
         permessi: [...new Set([...(nominale.permessi || []), ...(venditoreDelNominale ? [...(venditoreDelNominale.permessi || []), "dashboardvenditori"] : [])])],
@@ -9783,6 +9787,16 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["utenti_app"]);
   }
+  // grado amministratore su un account nominale: sblocca ovunque ciò che
+  // finora chiedeva la password amministratore condivisa
+  async function salvaAmministratore(checked) {
+    const { error } = await persist({ amministratore: checked });
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["utenti_app"]);
+  }
+  const chkAmministratore = (
+    <input type="checkbox" checked={!!utente.amministratore} onChange={(e) => salvaAmministratore(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Entra con grado amministratore: modifica le schede iscritto, vede Contabilità classe e il Riepilogo amministrativo senza chiedere la password" />
+  );
   const chkSoloCalendario = (
     <input type="checkbox" checked={!!utente.solo_calendario} onChange={(e) => salvaSoloCalendario(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} title="Entra dritto su Gestione corsi, sola lettura del calendario e dei filtri: niente Home, Indietro, Avanti, aggiunta/modifica/eliminazione corsi" />
   );
@@ -9812,10 +9826,16 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
           </div>
         )}
         {!sistema && (
-          <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
-            {chkSoloCalendario}
-            <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Solo calendario (sola lettura, entra dritto qui)</span>
-          </label>
+          <>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
+              {chkSoloCalendario}
+              <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Solo calendario (sola lettura, entra dritto qui)</span>
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer" }}>
+              {chkAmministratore}
+              <span style={{ ...fontBody, fontSize: 12.5, color: NAVY }}>Amministratore (modifica tutto senza password)</span>
+            </label>
+          </>
         )}
         <div style={{ marginBottom: 12 }}>
           {TASTI_HOME.map((t) => (
@@ -9858,6 +9878,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
       </td>
       <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
+      <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkAmministratore}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkSoloCalendario}</td>
       {TASTI_HOME.map((t) => (
         <td key={t.chiave} style={{ ...tdStyle, textAlign: "center" }}>
@@ -9965,6 +9986,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
                 <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome utente</ThOrdina>
                 <th style={thStyle}>Password</th>
                 <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato</ThOrdina>
+                <th style={{ ...thStyle, textAlign: "center" }}>Amministratore</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario</th>
                 {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
                 {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
