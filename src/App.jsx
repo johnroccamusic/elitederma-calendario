@@ -42823,11 +42823,17 @@ export default function App() {
           >
             <div
               style={{
-                position: "absolute", left: 14, right: 14,
+                position: "absolute",
                 bottom: dockCoricato ? 8 : "calc(env(safe-area-inset-bottom, 0px) - 2px)",
                 pointerEvents: "auto",
                 transition: "transform 260ms ease",
-                transform: dockNascosto ? "translateY(calc(100% - 22px))" : "translateY(0)",
+                // dritto occupa tutta la larghezza dello schermo; coricato no:
+                // lo schermo diventa lungo quanto il telefono e il dock, tirato
+                // da un capo all'altro, sparpagliava i quattro tasti. Coricato
+                // resta della sua misura, al centro
+                ...(dockCoricato
+                  ? { left: "50%", transform: `translateX(-50%) translateY(${dockNascosto ? "calc(100% - 22px)" : "0px"})` }
+                  : { left: 14, right: 14, transform: dockNascosto ? "translateY(calc(100% - 22px))" : "translateY(0)" }),
               }}
             >
               <button
