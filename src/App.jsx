@@ -1810,8 +1810,26 @@ const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 }
 // fondo azzurro tenue e bordo intonato, così ognuna si stacca dal bianco
 // della scheda. Le caselle dentro restano bianche con un filo appena
 // accennato: sul colore basta il bianco a dire dove si scrive.
-const areaSchedaIscritto = { background: "#F5F9FC", border: "1px solid #C7D8E4", borderRadius: 10, padding: 14 };
-const campoAreaScheda = { ...inputStyle, background: "#fff", border: "1px solid #E1E9EF" };
+const areaSchedaIscritto = {
+  background: "#FFFDF8",
+  border: `1px solid ${CREAM_BORDER}`,
+  borderLeft: `4px solid ${GOLD}`,
+  borderRadius: 12,
+  padding: 16,
+};
+const campoAreaScheda = { ...inputStyle, background: "#fff", border: "1px solid #E6DFCE", borderRadius: 8 };
+// il titolo in cima a ogni area: icona a sinistra, testo maiuscolo e
+// spaziato. Le icone stanno solo qui — accanto ai metodi di pagamento no,
+// lì bastano i cerchietti
+const titoloAreaScheda = { ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.8 };
+function IntestazioneArea({ Icona, children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12, color: GOLD }}>
+      {Icona && <Icona size={18} color={GOLD} />}
+      <span style={titoloAreaScheda}>{children}</span>
+    </div>
+  );
+}
 
 // tendina con ricerca: una <select> nativa va benissimo per dieci voci,
 // ma con 140 fornitori in ordine alfabetico trovare il proprio significa
@@ -2541,12 +2559,15 @@ function SemaforoPagamento({ pagato, onClick }) {
     </button>
   );
 }
-function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip }) {
+function BloccoQuota({ titolo, Icona, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   return (
     <div style={{ ...areaSchedaIscritto, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
-        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, color: GOLD }}>
+          {Icona && <Icona size={18} color={GOLD} />}
+          <span style={titoloAreaScheda}>{titolo}</span>
+        </div>
         {onRimuovi && (
           <button onClick={onRimuovi} title="Rimuovi questo pagamento" style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 2, display: "flex" }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
@@ -18406,6 +18427,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("anagrafica", "datiAnagrafici")}
               <div style={{ ...areaSchedaIscritto, flex: 1 }}>
+                <IntestazioneArea Icona={IconaPersonaSemplice}>Dati dell'allievo</IntestazioneArea>
                 <div style={{ display: "flex", gap: 14 }}>
                   <div style={{ flex: 1 }}>
                     <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
@@ -18451,6 +18473,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 {manigliaRiga("anagrafica", "fatturazione")}
                 <div style={{ ...areaSchedaIscritto, flex: 1 }}>
+              <IntestazioneArea Icona={IconaRicevutaErp}>Dati di fatturazione</IntestazioneArea>
               <Field label="Nome ditta">
                 <input value={fatturaDitta} onChange={(e) => setFatturaDitta(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
               </Field>
@@ -18548,6 +18571,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
               <div style={{ ...areaSchedaIscritto, flex: 1 }}>
+            <IntestazioneArea Icona={IconaRicevutaErp}>Dati di vendita</IntestazioneArea>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
@@ -18587,7 +18611,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("contabili", "pacchettoKit")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "pacchettoKit")}
-              <div style={{ display: "flex", gap: 14, flex: 1 }}>
+              <div style={{ ...areaSchedaIscritto, flex: 1 }}>
+            <IntestazioneArea Icona={IconaScatolaErp}>Pacchetto / Kit</IntestazioneArea>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
             <div style={{ flex: 1 }}>
               <Field label="Pacchetto/Kit">
                 <CampoPacchettoKit
@@ -18606,8 +18632,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
             <div style={{ flex: 1 }}>
               <Field label="Tipo di offerta">
-                <input value={tipoOfferta} onChange={(e) => setTipoOfferta(e.target.value)} style={inputStyle} />
+                <input value={tipoOfferta} onChange={(e) => setTipoOfferta(e.target.value)} style={campoAreaScheda} />
               </Field>
+            </div>
             </div>
               </div>
             </div>
@@ -18616,7 +18643,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("contabili", "corsoParziale")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "corsoParziale")}
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaCalendarioCard}>Presenza al corso</IntestazioneArea>
           {giorniCorsoDiQuesto.length > 0 && (
             <>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", ...fontBody, fontSize: 14, color: NAVY, marginBottom: corsoParziale ? 10 : 0 }}>
@@ -18660,9 +18688,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 {manigliaRiga("contabili", "dermografoAParte")}
                 <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-                    L'allievo acquista il dermografo a parte?
-                  </div>
+                  <IntestazioneArea Icona={IconaCartaPos}>L'allievo acquista il dermografo a parte?</IntestazioneArea>
                   <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
                     <div style={{ flex: "1 1 200px" }}>
                       <Field label="Risposta">
@@ -18771,7 +18797,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               {manigliaRiga("contabili", "quotaAcconto")}
               <div style={{ flex: 1, minWidth: 0 }}>
           <BloccoQuota
-            titolo="Quota acconto"
+            titolo="Quota acconto" Icona={IconaBanconota}
             valori={pagAcconto}
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
             totaleBloccato={false}
@@ -18841,7 +18867,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               {manigliaRiga("contabili", "quotaPrecorso")}
               <div style={{ flex: 1, minWidth: 0 }}>
           <BloccoQuota
-            titolo="Quota pre corso"
+            titolo="Quota pre corso" Icona={IconaClipboardErp}
             valori={pagPrecorso}
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
             onImponibile={(v) => setPagPrecorso((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
@@ -18893,7 +18919,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 {manigliaRiga("contabili", "quotaDermografo")}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <BloccoQuota
-                    titolo={`Dermografo ${dermografoScelta === "tekna" ? "Tekna" : "Horus"}`}
+                    titolo={`Dermografo ${dermografoScelta === "tekna" ? "Tekna" : "Horus"}`} Icona={IconaCartaPos}
                     valori={{
                       ...pagDermografo,
                       totale: prezzoDermografoLordo != null ? String(prezzoDermografoLordo) : "",
@@ -18920,7 +18946,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               {manigliaRiga("contabili", "daAvereAlCorso")}
               <div style={{ flex: 1, minWidth: 0 }}>
           <BloccoQuota
-            titolo="Da avere al corso"
+            titolo="Da avere al corso" Icona={IconaPortafoglio}
             valori={pagSaldo}
             opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva"]}
             onImponibile={(v) => setPagSaldo((prev) => conImponibileAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
@@ -18964,12 +18990,12 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             const sommaAccontiPagati = quotePagate.filter((x) => x.pagato).reduce((somma, x) => somma + impEffettivo(x.q), 0);
             const restanoDaPagare = totalePattuito === "" ? null : round2(parseNum(totalePattuito) - sommaAccontiPagati);
             return (
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: BG_CHIARO }}>
-                <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>Pagherà in totale</div>
+              <div style={{ ...areaSchedaIscritto, marginBottom: 10, background: BG_CHIARO }}>
+                <IntestazioneArea Icona={IconaLibroContabile}>Pagherà in totale</IntestazioneArea>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <div style={{ flex: "1 1 100px" }}>
                     <Field label="Totale senza Iva">
-                      <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totaleSenzaIva.toFixed(2)} disabled />
+                      <input style={{ ...campoAreaScheda, background: "#fff", color: NAVY, fontWeight: 700 }} value={totaleSenzaIva.toFixed(2)} disabled />
                     </Field>
                   </div>
                   {/* se nessuna quota ha davvero un'IVA (tutte pagate con
@@ -18999,8 +19025,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   </div>
                 </div>
                 {restanoDaPagare != null && (
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, marginTop: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    Restano da pagare: {restanoDaPagare.toFixed(2)} €
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "10px 12px", borderRadius: 10, background: "#FBF1D9", border: "1px solid #E8D9A0" }}>
+                    <IconaPortafoglio size={18} />
+                    <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.6 }}>Restano da pagare:</span>
+                    <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: restanoDaPagare > 0 ? "#C0392B" : "#2E7D32" }}>{restanoDaPagare.toFixed(2)} €</span>
                   </div>
                 )}
               </div>
