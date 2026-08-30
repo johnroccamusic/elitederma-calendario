@@ -25934,7 +25934,6 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
   const sconto = grezzo?.discount_total != null ? parseNum(grezzo.discount_total) : null;
   const codiceCoupon = vendita?.codice_coupon || (Array.isArray(grezzo?.coupon_lines) ? grezzo.coupon_lines : [])[0]?.code || null;
   const notaCliente = grezzo?.customer_note || null;
-  const st = STATI_VENDITA_SHOP[vendita?.stato];
 
   return (
     <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 12, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
@@ -25942,7 +25941,8 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>
           Ordine #{vendita?.numero_ordine || vendita?.woo_order_id}
         </div>
-        {st && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: st.colore, background: st.sfondo, borderRadius: 20, padding: "3px 12px" }}>{st.etichetta}</span>}
+        {/* niente pastiglia di stato: lo dicono i sei tasti in fondo alla
+            scheda, e ripeterlo qui e' solo una riga in piu' da leggere */}
         <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
           {vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}
         </span>
@@ -26047,9 +26047,6 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
     <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 12, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>Vendita al banco</div>
-        <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: spedita ? "#2E7D32" : "#D2731A", background: spedita ? "#E3F3E5" : "#FCF3D4", borderRadius: 20, padding: "3px 12px" }}>
-          {spedita ? "Spedita" : "Da spedire"}
-        </span>
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 20, padding: "3px 12px" }}>POS</span>
         <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{spedizione?.ts ? fmtData(spedizione.ts.slice(0, 10)) : "—"}</span>
       </div>
