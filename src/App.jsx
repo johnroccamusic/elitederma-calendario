@@ -26013,7 +26013,9 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
       </div>
 
       <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato dell'ordine sul sito</div>
-      <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+      {/* da mobile sei tasti in fila diventano sei colonne da cinquanta
+          pixel, con le etichette tagliate a meta': due righe da tre */}
+      <div style={{ display: isMobile ? "grid" : "flex", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : undefined, gap: 8, alignItems: "stretch" }}>
         {STATI_ORDINE_SHOP.map((stato) => (
           <TastoStatoOrdine key={stato} stato={stato} attuale={vendita?.stato} occupato={occupato} onClick={() => onCambiaStato(vendita, stato)} />
         ))}
@@ -26281,7 +26283,10 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+      {/* in fondo serve piu' spazio di quanto sembri: su un telefono la
+          barra di sistema copre l'ultima scheda, e i tasti di stato
+          dell'ultimo ordine restavano sotto e non si potevano premere */}
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px calc(160px + env(safe-area-inset-bottom, 0px))" : "32px 32px 90px" }}>
         <div style={{ marginBottom: isMobile ? 12 : 18 }}>
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
         </div>
