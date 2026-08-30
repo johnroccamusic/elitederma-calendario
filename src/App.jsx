@@ -17990,17 +17990,20 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   chiave: "master", Icona: IconaMasterAccento, label: "Master",
                   valore: (master || []).find((m) => m.id === corsoData.master_id)?.nome?.toUpperCase() || "?",
                 },
-                { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} posti liberi su ${max}` },
+                { chiave: "disponibilita", Icona: IconaDisponibilitaAccento, label: "Disponibilità", valore: `${liberi} post${liberi === 1 ? "o libero" : "i liberi"}` },
               ].filter(Boolean);
               return (
                 <div style={{ position: "relative", background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: `${spaziIscrizioni.dateBoxPaddingV}px 14px`, marginBottom: spaziIscrizioni.dopoDateBox }}>
                   <div style={{ display: "grid", gridTemplateColumns: `repeat(${celleIntestazione.length}, 1fr)`, gap: 10 }}>
                     {celleIntestazione.map(({ chiave, Icona, label, valore }, idx) => (
-                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0, paddingLeft: idx > 0 ? 10 : 0, borderLeft: idx > 0 ? `1px solid ${CREAM_BORDER}` : "none" }}>
-                        <Icona size={19} color={GOLD} />
+                      // il divisore è più scuro del bordo della card: separa tre
+                      // dati accostati, e un filo crema su fondo crema non li
+                      // teneva distinti
+                      <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
+                        <Icona size={22} color={GOLD} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ ...fontBody, fontSize: 10, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
-                          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+                          <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
+                          <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
                         </div>
                       </div>
                     ))}
