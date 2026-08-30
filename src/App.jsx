@@ -6649,19 +6649,21 @@ function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriMod
               <div style={{ width: 26, height: 26, borderRadius: "50%", background: coloreCorso, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 13, fontWeight: 700 }}>{idx + 1}</div>
 
               <div style={{ flex: "1 1 180px", minWidth: 0 }}>
-                <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.2 }}>
-                  {`${i.nome || ""} ${i.cognome || ""}`.trim()}
+                <div style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.2 }}>
+                    {`${i.nome || ""} ${i.cognome || ""}`.trim()}
+                  </span>
+                  {i.tutor && <span style={{ ...fontBody, fontSize: 13, color: GOLD }}>: tutor {toTitleCase(i.tutor)}</span>}
                 </div>
                 <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 1, lineHeight: 1.35 }}>
                   {descrizioneKit(i) || "Nessun kit"}
-                  {i.tutor && <span style={{ color: GOLD, marginLeft: 8 }}>: tutor {toTitleCase(i.tutor)}</span>}
                 </div>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0, marginLeft: "auto" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, background: tintaCorso, border: `1px solid ${bordoTinta}`, borderRadius: 12, padding: "7px 12px" }}>
-                  <IconaMaglietta size={16} color={coloreCorso} />
-                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia {i.taglia_divisa || "—"}</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, width: 108, background: tintaCorso, border: `1px solid ${bordoTinta}`, borderRadius: 12, padding: "5px 8px" }}>
+                  <IconaMaglietta size={14} color={coloreCorso} />
+                  <span style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>Taglia {i.taglia_divisa || "—"}</span>
                 </div>
                 {i.telefono && (
                   <>
