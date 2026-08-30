@@ -76,6 +76,61 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 100, 130, 90, 100, 150, 110, 82,
 // intestazioni sovrapposte anche dopo aver corretto i default, perché
 // il valore vecchio in localStorage vince sempre su quello nuovo
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v9";
+// ---------- Impaginazioni condivise ----------
+// Quello che il programmatore sistema trascinando — larghezze delle
+// colonne, nomi delle colonne, divisione fra due riquadri — è la vista
+// buona per tutti, non un gusto del suo computer: sta su
+// impostazioni_layout_tabelle, una riga per schermata.
+//
+// La cache vive qui fuori dai componenti: si legge una volta per
+// sessione, ogni schermata che usa la stessa chiave si aggiorna insieme
+// alle altre, e il salvataggio parte in ritardo perché trascinando una
+// colonna arrivano cento cambiamenti al secondo.
+const LAYOUT_CACHE = {};
+const LAYOUT_ASCOLTATORI = {};
+const LAYOUT_CARICATE = {};
+const LAYOUT_TIMER = {};
+function notificaLayout(chiave) {
+  (LAYOUT_ASCOLTATORI[chiave] || new Set()).forEach((f) => f(LAYOUT_CACHE[chiave]));
+}
+function caricaLayoutCondiviso(chiave) {
+  if (LAYOUT_CARICATE[chiave]) return LAYOUT_CARICATE[chiave];
+  LAYOUT_CARICATE[chiave] = supabase.from("impostazioni_layout_tabelle").select("valore").eq("chiave", chiave).maybeSingle()
+    .then(({ data }) => {
+      if (data?.valore && LAYOUT_CACHE[chiave] === undefined) { LAYOUT_CACHE[chiave] = data.valore; notificaLayout(chiave); }
+      return LAYOUT_CACHE[chiave];
+    })
+    .catch(() => LAYOUT_CACHE[chiave]);
+  return LAYOUT_CARICATE[chiave];
+}
+// chi sta usando l'app: lo scrive App appena lo sa. Serve qui perché solo
+// il programmatore fissa la vista per tutti — gli altri possono
+// trascinare una colonna, ma resta un aggiustamento della loro sessione
+let RUOLO_APP = null;
+function impostaRuoloApp(ruolo) { RUOLO_APP = ruolo; }
+function salvaLayoutCondiviso(chiave, valore) {
+  LAYOUT_CACHE[chiave] = valore;
+  notificaLayout(chiave);
+  if (RUOLO_APP !== "programmatore") return;
+  clearTimeout(LAYOUT_TIMER[chiave]);
+  LAYOUT_TIMER[chiave] = setTimeout(() => {
+    supabase.from("impostazioni_layout_tabelle").upsert({ chiave, valore, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" })
+      .then(({ error }) => { if (error) console.warn("Impaginazione non salvata:", error.message); });
+  }, 600);
+}
+// restituisce [valore, salva]: il valore parte dal predefinito, poi
+// arriva quello condiviso appena il database risponde
+function useLayoutCondiviso(chiave, predefinito) {
+  const [valore, setValore] = useState(() => LAYOUT_CACHE[chiave] ?? predefinito);
+  useEffect(() => {
+    if (!LAYOUT_ASCOLTATORI[chiave]) LAYOUT_ASCOLTATORI[chiave] = new Set();
+    LAYOUT_ASCOLTATORI[chiave].add(setValore);
+    caricaLayoutCondiviso(chiave);
+    return () => { LAYOUT_ASCOLTATORI[chiave].delete(setValore); };
+  }, [chiave]);
+  return [valore, (nuovo) => salvaLayoutCondiviso(chiave, nuovo)];
+}
+
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 // nomi personalizzati delle colonne di "Dettaglio prodotti": stanno
@@ -3434,40 +3489,19 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   const LARGHEZZA_COLONNA_MIN = 30;
   const LARGHEZZA_COLONNA_MAX = 260;
   const limitaLarghezza = (v) => Math.min(LARGHEZZA_COLONNA_MAX, Math.max(LARGHEZZA_COLONNA_MIN, v));
-  const larghezzeSalvate = (() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_COLONNE) || "null");
-      if (Array.isArray(v) && v.length === LARGHEZZE_COLONNE_DEFAULT.length) return v.map(limitaLarghezza);
-    } catch { /* localStorage non disponibile: usa i default */ }
-    // nessuna regolazione personale salvata in questo browser: parte dalla
-    // vista "fissata su tutti i terminali" da chi programma, se esiste ed
-    // è compatibile con le colonne attuali (stessa versione = stesso
-    // numero di colonne) — altrimenti il default hardcoded
-    if (
-      layoutCondiviso?.versione_colonne === CHIAVE_LARGHEZZE_COLONNE &&
-      Array.isArray(layoutCondiviso?.larghezze_colonne) &&
-      layoutCondiviso.larghezze_colonne.length === LARGHEZZE_COLONNE_DEFAULT.length
-    ) {
-      return layoutCondiviso.larghezze_colonne.map(limitaLarghezza);
-    }
-    return LARGHEZZE_COLONNE_DEFAULT;
-  })();
+  // La distribuzione delle colonne è una sola per tutti: quella che il
+  // programmatore lascia trascinando. Prima ogni browser teneva la sua
+  // copia e la vista condivisa serviva solo a chi apriva la pagina per la
+  // prima volta — così nessuno vedeva davvero le stesse colonne.
+  const larghezzeSalvate = (
+    layoutCondiviso?.versione_colonne === CHIAVE_LARGHEZZE_COLONNE &&
+    Array.isArray(layoutCondiviso?.larghezze_colonne) &&
+    layoutCondiviso.larghezze_colonne.length === LARGHEZZE_COLONNE_DEFAULT.length
+  ) ? layoutCondiviso.larghezze_colonne.map(limitaLarghezza) : LARGHEZZE_COLONNE_DEFAULT;
   const [larghezze, setLarghezze] = useState(larghezzeSalvate);
-  const [salvandoLayoutCondiviso, setSalvandoLayoutCondiviso] = useState(false);
-  // solo chi programma vede "Fissa vista su tutti i terminali": scrive le
-  // larghezze attuali come punto di partenza condiviso per chi apre questa
-  // pagina senza ancora una propria regolazione salvata nel suo browser
-  async function fissaVistaSuTuttiITerminali() {
-    setSalvandoLayoutCondiviso(true);
-    const { error } = await supabase
-      .from("impostazioni_layout_assegnazione_master")
-      .update({ larghezze_colonne: larghezze, versione_colonne: CHIAVE_LARGHEZZE_COLONNE })
-      .eq("id", "00000000-0000-0000-0000-000000000002");
-    setSalvandoLayoutCondiviso(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    window.alert("Fissata: chi apre questa pagina per la prima volta su un nuovo browser partirà da questa distribuzione delle colonne.");
-    ricarica(["impostazioni_layout_assegnazione_master"]);
-  }
+  // se la vista condivisa arriva (o cambia) dopo il primo disegno, le
+  // colonne si allineano da sole invece di restare al default
+  useEffect(() => { setLarghezze(larghezzeSalvate); }, [JSON.stringify(larghezzeSalvate)]);
   const COLONNE = larghezze.map((larghezza) => ({ larghezza }));
   const larghezzaTabella = larghezze.reduce((a, b) => a + b, 0);
 
@@ -3486,10 +3520,14 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
   function fineRidimensionamento() {
     if (!ridimensionamentoRef.current) return;
     ridimensionamentoRef.current = null;
-    setLarghezze((attuali) => {
-      try { localStorage.setItem(CHIAVE_LARGHEZZE_COLONNE, JSON.stringify(attuali)); } catch { /* ignora */ }
-      return attuali;
-    });
+    // lasciata la maniglia, la nuova distribuzione diventa quella di tutti
+    // (solo se a trascinare è il programmatore)
+    if (ruoloUtente === "programmatore") {
+      supabase.from("impostazioni_layout_assegnazione_master")
+        .update({ larghezze_colonne: larghezze, versione_colonne: CHIAVE_LARGHEZZE_COLONNE })
+        .eq("id", "00000000-0000-0000-0000-000000000002")
+        .then(({ error }) => { if (error) console.warn("Larghezze non salvate:", error.message); });
+    }
   }
 
   // opzioni disponibili per la tendina persona di una riga "docente
@@ -3875,16 +3913,6 @@ function AssegnazioneMaster({ corsi, location, corsiDate, corsiDateDocenti, mast
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {ruoloUtente === "programmatore" && (
-                  <button
-                    onClick={fissaVistaSuTuttiITerminali}
-                    disabled={salvandoLayoutCondiviso}
-                    title="Salva la distribuzione attuale delle colonne come punto di partenza per chi apre questa pagina su un altro terminale"
-                    style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", cursor: salvandoLayoutCondiviso ? "default" : "pointer", background: "#fff", opacity: salvandoLayoutCondiviso ? 0.6 : 1 }}
-                  >
-                    {salvandoLayoutCondiviso ? "Salvo…" : "Fissa vista su tutti i terminali"}
-                  </button>
-                )}
                 <div
                   title="Al momento è disponibile solo la vista tabella"
                   style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 13, fontWeight: 600, color: MUTED, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: "8px 12px", opacity: 0.6, cursor: "default", background: "#fff" }}
@@ -4888,9 +4916,7 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
   // ai filtri: la larghezza è quindi una mappa "chiave colonna" -> px
   // (chiave = "corso"/"totale" o l'id del venditore) invece che un array
   // a indice fisso, e resta salvata per sempre in questo browser
-  const [larghezze, setLarghezze] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_VENDITORI) || "{}"); } catch { return {}; }
-  });
+  const [larghezze, setLarghezze] = useLayoutCondiviso(CHIAVE_LARGHEZZE_VENDITORI, {});
   function larghezzaDi(chiave, larghezzaDefault) {
     return larghezze[chiave] ?? larghezzaDefault;
   }
@@ -4904,15 +4930,10 @@ function StatisticaVenditori({ corsi, corsiDate, iscritti, venditori, costiCateg
     const r = ridimensionamentoRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
     const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
-    setLarghezze((precedenti) => ({ ...precedenti, [r.chiave]: nuovaLarghezza }));
+    setLarghezze({ ...larghezze, [r.chiave]: nuovaLarghezza });
   }
   function fineRidimensionamento() {
-    if (!ridimensionamentoRef.current) return;
     ridimensionamentoRef.current = null;
-    setLarghezze((attuali) => {
-      try { localStorage.setItem(CHIAVE_LARGHEZZE_VENDITORI, JSON.stringify(attuali)); } catch { /* ignora */ }
-      return attuali;
-    });
   }
 
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -28418,32 +28439,21 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const [sincronizzando, setSincronizzando] = useState(false);
   const [msgSync, setMsgSync] = useState("");
 
-  // larghezza delle colonne trascinabile col mouse (stesso pattern di
-  // Assegnazione Master/Statistica Venditori): mappa "etichetta colonna"
-  // -> px, salvata per sempre in questo browser
-  const [larghezze, setLarghezze] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_MAGAZZINO) || "{}"); } catch { return {}; }
-  });
-  // Rinominare una colonna: tasto destro sull'intestazione, solo in
-  // modalità programmatore. I nomi restano su questo dispositivo, come le
-  // larghezze qui sopra: è una preferenza di chi guarda la tabella, non un
-  // dato dell'azienda.
-  const [etichetteColonne, setEtichetteColonne] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CHIAVE_ETICHETTE_MAGAZZINO) || "{}"); } catch { return {}; }
-  });
+  // larghezze e nomi delle colonne: quello che il programmatore sistema
+  // trascinando è la vista buona per tutti, quindi sta sul database e non
+  // nel suo browser (vedi useLayoutCondiviso)
+  const [larghezze, setLarghezze] = useLayoutCondiviso(CHIAVE_LARGHEZZE_MAGAZZINO, {});
+  const [etichetteColonne, setEtichetteColonne] = useLayoutCondiviso(CHIAVE_ETICHETTE_MAGAZZINO, {});
   function etichettaColonna(label) { return etichetteColonne[label] || label; }
   function rinominaColonna(e, label) {
     if (ruoloUtente !== "programmatore" || !label) return;
     e.preventDefault();
     const nuovo = window.prompt(`Nome della colonna "${etichettaColonna(label)}":`, etichettaColonna(label));
     if (nuovo === null) return;
-    setEtichetteColonne((prev) => {
-      const aggiornate = { ...prev };
-      // vuoto = torna al nome originale, invece di lasciare una colonna senza titolo
-      if (nuovo.trim()) aggiornate[label] = nuovo.trim(); else delete aggiornate[label];
-      try { localStorage.setItem(CHIAVE_ETICHETTE_MAGAZZINO, JSON.stringify(aggiornate)); } catch { /* ignora */ }
-      return aggiornate;
-    });
+    const aggiornate = { ...etichetteColonne };
+    // vuoto = torna al nome originale, invece di lasciare una colonna senza titolo
+    if (nuovo.trim()) aggiornate[label] = nuovo.trim(); else delete aggiornate[label];
+    setEtichetteColonne(aggiornate);
   }
 
   function larghezzaDi(etichetta, larghezzaDefault) { return larghezze[etichetta] ?? larghezzaDefault; }
@@ -28457,15 +28467,12 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const r = ridimensionamentoRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
     const nuovaLarghezza = Math.max(30, r.startWidth + (e.clientX - r.startX));
-    setLarghezze((precedenti) => ({ ...precedenti, [r.etichetta]: nuovaLarghezza }));
+    // il salvataggio è già rimandato di suo (vedi salvaLayoutCondiviso):
+    // trascinando arrivano decine di cambiamenti al secondo
+    setLarghezze({ ...larghezze, [r.etichetta]: nuovaLarghezza });
   }
   function fineRidimensionamento() {
-    if (!ridimensionamentoRef.current) return;
     ridimensionamentoRef.current = null;
-    setLarghezze((attuali) => {
-      try { localStorage.setItem(CHIAVE_LARGHEZZE_MAGAZZINO, JSON.stringify(attuali)); } catch { /* ignora */ }
-      return attuali;
-    });
   }
 
   function tornaIndietro() { onBack(); }
@@ -28478,10 +28485,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // La divisione fra le due colonne (riquadri a sinistra, avvisi a destra):
   // si trascina con la maniglia verticale in mezzo, come il bordo di una
   // colonna di Excel, e resta com'è stata messa.
-  const [divisioneColonne, setDivisioneColonne] = useState(() => {
-    const salvata = parseFloat(localStorage.getItem(CHIAVE_DIVISIONE_MAGAZZINO));
-    return Number.isFinite(salvata) ? Math.min(75, Math.max(25, salvata)) : 50;
-  });
+  const [divisioneColonne, setDivisioneColonne] = useLayoutCondiviso(CHIAVE_DIVISIONE_MAGAZZINO, 50);
   const trascinamentoDivisione = useRef(null);
   function iniziaTrascinamentoDivisione(e) {
     const contenitore = e.currentTarget.parentElement;
@@ -28496,9 +28500,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     setDivisioneColonne(Math.min(75, Math.max(25, Math.round(pct))));
   }
   function fineTrascinamentoDivisione() {
-    if (!trascinamentoDivisione.current) return;
     trascinamentoDivisione.current = null;
-    try { localStorage.setItem(CHIAVE_DIVISIONE_MAGAZZINO, String(divisioneColonne)); } catch { /* ignora */ }
   }
 
   // la prima immagine di ogni prodotto, per le miniature del pannello avvisi
@@ -36438,9 +36440,7 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
   // mouse (stesso pattern di "Dettaglio prodotti"/Assegnazione Master),
   // salvata per sempre in questo browser — evita i titoli mozzati quando
   // il nome di una voce è lungo
-  const [largFo, setLargFo] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_FRONTOFFICE) || "{}"); } catch { return {}; }
-  });
+  const [largFo, setLargFo] = useLayoutCondiviso(CHIAVE_LARGHEZZE_FRONTOFFICE, {});
   function larghezzaFoDi(chiave, larghezzaDefault) { return largFo[chiave] ?? larghezzaDefault; }
   const ridimFoRef = React.useRef(null);
   function iniziaRidimFo(e, chiave, larghezzaAttuale) {
@@ -36452,15 +36452,10 @@ function PaginaGestioneShop({ categorieProdotti, prodottiShop, prodottiCategorie
     const r = ridimFoRef.current;
     if (!r || e.pointerId !== r.pointerId) return;
     const nuovaLarghezza = Math.max(140, r.startWidth + (e.clientX - r.startX));
-    setLargFo((precedenti) => ({ ...precedenti, [r.chiave]: nuovaLarghezza }));
+    setLargFo({ ...largFo, [r.chiave]: nuovaLarghezza });
   }
   function fineRidimFo() {
-    if (!ridimFoRef.current) return;
     ridimFoRef.current = null;
-    setLargFo((attuali) => {
-      try { localStorage.setItem(CHIAVE_LARGHEZZE_FRONTOFFICE, JSON.stringify(attuali)); } catch { /* ignora */ }
-      return attuali;
-    });
   }
   function manigliaColonnaFo(chiave, larghezzaAttuale) {
     return (
@@ -43157,6 +43152,9 @@ export default function App() {
   // a zero fino a quando non si fosse aperta un'altra pagina
   // il dock: "coricato" lo mette di traverso insieme alla pagina che si
   // corica (CRM allievi), "nascosto" lo fa scendere sotto lo schermo
+  // lo store delle impaginazioni condivise deve sapere chi sta usando
+  // l'app: solo il programmatore fissa la vista per tutti
+  useEffect(() => { impostaRuoloApp(ruoloUtente); }, [ruoloUtente]);
   const [viewPrimaDiAdvisor, setViewPrimaDiAdvisor] = useState("magazzino");
   const [dockCoricato, setDockCoricato] = useState(false);
   const [dockNascosto, setDockNascosto] = useState(false);
