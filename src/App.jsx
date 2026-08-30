@@ -1808,7 +1808,7 @@ const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 }
 // le caselle del blocco "Totale pattuito", su fondo azzurro: il bordo
 // crema degli altri campi lì sopra si perdeva, e le tre caselle
 // sembravano macchie bianche senza contorno
-const campoBloccoVendita = { ...inputStyle, background: "#fff", border: "1.5px solid #A9C2D4" };
+const campoBloccoVendita = { ...inputStyle, background: "#fff", border: "1px solid #C7D8E4" };
 
 // tendina con ricerca: una <select> nativa va benissimo per dieci voci,
 // ma con 140 fornitori in ordine alfabetico trovare il proprio significa
@@ -18451,7 +18451,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ background: "#F5F9FC", border: `1.5px solid #A9C2D4`, borderRadius: 10, padding: 14, flex: 1 }}>
+              <div style={{ background: "#F5F9FC", border: `1px solid #C7D8E4`, borderRadius: 10, padding: 14, flex: 1 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
