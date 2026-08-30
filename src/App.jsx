@@ -16080,7 +16080,7 @@ const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzati
 // .ordine_righe, forma { anagrafica: [...], contabili: [...], organizzativi: [...] })
 const ORDINE_RIGHE_ISCRITTO_DEFAULT = {
   anagrafica: ["modulo", "nomeCognome", "tutorTelefono", "fatturazione"],
-  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "quotaAcconto", "quotaPrecorso", "dermografoAParte", "daAvereAlCorso", "pagheraInTotale"],
+  contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "dermografoAParte", "quotaAcconto", "quotaPrecorso", "quotaDermografo", "daAvereAlCorso", "pagheraInTotale"],
   organizzativi: ["accordiCommerciali", "richiedeModelle", "tagliaDivisa", "screenAcconto", "screenRecap", "note"],
 };
 // una chiave/default/limite "spazioDopoRiga<Sezione><Riga>" per ciascuna
@@ -16204,6 +16204,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // scelto lo dichiara (kit_definizioni.dermografo_a_parte). "gia_pagato"
   // chiude lì; "con_corso" apre il conto di quella vendita — listino di
   // magazzino, sconto riservato all'allievo, e la quota con i suoi metodi
+  const [dermografoScelta, setDermografoScelta] = useState("");
   const [dermografoPagamento, setDermografoPagamento] = useState("");
   const [dermografoSconto, setDermografoSconto] = useState("");
   const [pagDermografo, setPagDermografo] = useState(QUOTA_VUOTA);
@@ -16386,10 +16387,20 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // il pacchetto scelto dice se il dermografo è compreso o si compra a parte
   const kitScelto = (kitDefinizioni || []).find((k) => k.corso_id === corso?.id && k.nome === pacchettoKit) || null;
   const dermografoAParte = !!kitScelto?.dermografo_a_parte;
-  const prezzoListinoDermografo = dermografo && dermografo !== "nessuno" ? listinoLordoDermografo(dermografo) : null;
+  // "no" e "ha il suo" chiudono la questione; solo tekna/horus aprono il
+  // pagamento, e solo "lo paga con il corso" apre il conto
+  const dermografoComprato = dermografoScelta === "tekna" || dermografoScelta === "horus";
+  const dermografoDaPagare = dermografoComprato && dermografoPagamento === "con_corso";
+  const prezzoListinoDermografo = dermografoComprato ? listinoLordoDermografo(dermografoScelta) : null;
   const prezzoDermografoLordo = prezzoListinoDermografo != null
     ? round2(Math.max(0, prezzoListinoDermografo - (dermografoSconto === "" ? 0 : parseNum(dermografoSconto))))
     : null;
+  // dal lordo si torna indietro: con "Cash no iva" non c'è IVA da scorporare
+  // e l'imponibile pareggia il totale, come nelle altre quote
+  const dermografoSenzaIva = pagDermografo.metodo === "Cash no iva";
+  const imponibileDermografo = prezzoDermografoLordo == null ? null
+    : (dermografoSenzaIva ? prezzoDermografoLordo : round2(prezzoDermografoLordo / 1.22));
+  const ivaDermografo = prezzoDermografoLordo == null ? null : round2(prezzoDermografoLordo - imponibileDermografo);
   const loc = location.find((l) => l.id === corsoData.location_id);
   // template dei giorni di questo corso-tipo (Modella del Master/Allievi),
   // usato sia dal selettore "Giorno" nell'iscrizione sia da "Assegna modelle"
@@ -16996,6 +17007,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     // su qualche iscritto già in produzione — senza questo filtro
     // "corso parziale" risulterebbe attivo per errore, con giorni presenti
     // solo quelli rimasti per sbaglio nel vecchio formato
+    setDermografoScelta(i.dermografo_scelta || "");
     setDermografoPagamento(i.dermografo_pagamento || "");
     setDermografoSconto(i.dermografo_sconto != null ? String(i.dermografo_sconto) : "");
     setPagDermografo({
@@ -17162,8 +17174,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (strict) {
       // il pacchetto dichiara che il dermografo si compra a parte: allora
       // modello e modalità di pagamento non sono facoltativi
-      if (dermografoAParte && !dermografo) altriMancanti.push("il modello di dermografo (questo pacchetto non lo comprende)");
-      if (dermografoAParte && !dermografoPagamento) altriMancanti.push("come l'allievo paga il dermografo");
+      if (dermografoAParte && !dermografoScelta) altriMancanti.push("la risposta sul dermografo acquistato a parte");
+      if (dermografoAParte && dermografoComprato && !dermografoPagamento) altriMancanti.push("come l'allievo paga il dermografo");
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
       if (pagAcconto.totale === "") altriMancanti.push("quota acconto");
       if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
@@ -17272,15 +17284,20 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         // dermografo a parte: si salva solo se il pacchetto lo prevede,
         // altrimenti le caselle si svuotano — un kit cambiato non deve
         // lasciarsi dietro il conto di un dermografo che non c'è più
-        dermografo_pagamento: dermografoAParte ? (dermografoPagamento || null) : null,
-        dermografo_prezzo_listino: dermografoAParte && dermografoPagamento === "con_corso" ? prezzoDermografoLordo : null,
-        dermografo_sconto: dermografoAParte && dermografoPagamento === "con_corso" && dermografoSconto !== "" ? parseNum(dermografoSconto) : null,
-        dermografo_imponibile: dermografoAParte && dermografoPagamento === "con_corso" && pagDermografo.imponibile !== "" ? parseNum(pagDermografo.imponibile) : null,
-        dermografo_totale: dermografoAParte && dermografoPagamento === "con_corso" && pagDermografo.totale !== "" ? parseNum(pagDermografo.totale) : null,
-        dermografo_metodo: dermografoAParte && dermografoPagamento === "con_corso" ? (pagDermografo.metodo || null) : null,
-        dermografo_pagato: dermografoAParte && dermografoPagamento === "con_corso" ? pagDermografoPagato : false,
+        dermografo_scelta: dermografoAParte ? (dermografoScelta || null) : null,
+        dermografo_pagamento: dermografoAParte && dermografoComprato ? (dermografoPagamento || null) : null,
+        dermografo_prezzo_listino: dermografoDaPagare ? prezzoListinoDermografo : null,
+        dermografo_sconto: dermografoDaPagare && dermografoSconto !== "" ? parseNum(dermografoSconto) : null,
+        dermografo_imponibile: dermografoDaPagare && imponibileDermografo != null ? imponibileDermografo : null,
+        dermografo_totale: dermografoDaPagare && prezzoDermografoLordo != null ? prezzoDermografoLordo : null,
+        dermografo_metodo: dermografoDaPagare ? (pagDermografo.metodo || null) : null,
+        dermografo_pagato: dermografoDaPagare ? pagDermografoPagato : false,
         pacchetto_kit: pacchettoKit.trim() || null,
-        dermografo: corso?.prevede_dermografo !== false ? (dermografo || null) : null,
+        // per il magazzino conta solo quale pezzo esce: "no" e "ha il suo"
+        // valgono entrambi "nessuno", la differenza la tiene dermografo_scelta
+        dermografo: dermografoAParte
+          ? (dermografoComprato ? dermografoScelta : (dermografoScelta ? "nessuno" : null))
+          : (corso?.prevede_dermografo !== false ? (dermografo || null) : null),
         tipo_offerta: tipoOfferta.trim() || null,
         taglia_divisa: tagliaDivisa || null,
         totale_pattuito: totalePattuito === "" ? null : parseNum(totalePattuito),
@@ -18618,6 +18635,122 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             </div>
             {spaziatoreRiga("contabili", "corsoParziale")}
           </div>
+
+          {/* La domanda sul dermografo compare solo se il pacchetto scelto
+              dichiara di non comprenderlo. "No" e "ha il suo" chiudono la
+              questione; scegliendo un modello si chiede come lo paga, e solo
+              "lo paga con il corso" apre il conto della vendita */}
+          {dermografoAParte && (
+            <div {...propsRiga("contabili", "dermografoAParte")}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
+                {manigliaRiga("contabili", "dermografoAParte")}
+                <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
+                    L'allievo acquista il dermografo a parte?
+                  </div>
+                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-start" }}>
+                    <div style={{ flex: "1 1 200px" }}>
+                      <Field label="Risposta">
+                        <select
+                          value={dermografoScelta}
+                          onChange={(e) => {
+                            const scelto = e.target.value;
+                            setDermografoScelta(scelto);
+                            // cambiando risposta il conto di prima non deve
+                            // restare appeso: si riparte puliti
+                            if (scelto !== "tekna" && scelto !== "horus") {
+                              setDermografoPagamento(""); setDermografoSconto("");
+                              setPagDermografo(QUOTA_VUOTA); setPagDermografoPagato(false);
+                            }
+                          }}
+                          style={{ ...campoAreaScheda, ...(dermografoScelta ? {} : { color: MUTED }) }}
+                        >
+                          <option value="">— scegli —</option>
+                          <option value="no">No</option>
+                          <option value="ha_il_suo">Ha il suo</option>
+                          <option value="tekna">Sì, Tekna</option>
+                          <option value="horus">Sì, Horus</option>
+                        </select>
+                      </Field>
+                    </div>
+                    {dermografoComprato && (
+                      <div style={{ flex: "1 1 200px" }}>
+                        <Field label="Come lo paga">
+                          <select
+                            value={dermografoPagamento}
+                            onChange={(e) => {
+                              setDermografoPagamento(e.target.value);
+                              if (e.target.value !== "con_corso") { setDermografoSconto(""); setPagDermografo(QUOTA_VUOTA); setPagDermografoPagato(false); }
+                            }}
+                            style={{ ...campoAreaScheda, ...(dermografoPagamento ? {} : { color: MUTED }) }}
+                          >
+                            <option value="">— scegli —</option>
+                            <option value="gia_pagato">Già pagato</option>
+                            <option value="con_corso">Lo paga con il corso</option>
+                          </select>
+                        </Field>
+                      </div>
+                    )}
+                  </div>
+
+                  {dermografoDaPagare && (
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 110px" }}>
+                        <Field label="Prezzo">
+                          <input
+                            style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }}
+                            value={prezzoListinoDermografo != null ? prezzoListinoDermografo.toFixed(2) : ""}
+                            placeholder="prodotto non trovato"
+                            disabled
+                          />
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 110px" }}>
+                        <Field label="Sconto riservato">
+                          <input
+                            style={campoAreaScheda}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={dermografoSconto}
+                            onChange={(e) => setDermografoSconto(e.target.value)}
+                          />
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 120px" }}>
+                        <Field label="Pagato (lordo)">
+                          <input
+                            style={{ ...campoAreaScheda, background: "#EDF1F4", color: NAVY, fontWeight: 700 }}
+                            value={prezzoDermografoLordo != null ? prezzoDermografoLordo.toFixed(2) : ""}
+                            disabled
+                          />
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 110px" }}>
+                        <Field label={dermografoSenzaIva ? "IVA (nessuna)" : "IVA 22%"}>
+                          <input
+                            style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }}
+                            value={ivaDermografo != null ? ivaDermografo.toFixed(2) : ""}
+                            disabled
+                          />
+                        </Field>
+                      </div>
+                      <div style={{ flex: "1 1 110px" }}>
+                        <Field label="Imponibile">
+                          <input
+                            style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }}
+                            value={imponibileDermografo != null ? imponibileDermografo.toFixed(2) : ""}
+                            disabled
+                          />
+                        </Field>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {spaziatoreRiga("contabili", "dermografoAParte")}
+            </div>
+          )}
+
           <div {...propsRiga("contabili", "quotaAcconto")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "quotaAcconto")}
@@ -18736,109 +18869,34 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             {spaziatoreRiga("contabili", "quotaPrecorso")}
           </div>
 
-          {/* Dermografo comprato a parte: compare solo se il pacchetto lo
-              dichiara. Il modello è obbligatorio e finisce in
-              iscritti.dermografo, quello che leggono Advisor e logistica —
-              il pezzo esce dal magazzino quando viene messo nel kit, non
-              alla vendita. "Già pagato" chiude qui; "Lo paga con il corso"
-              apre il conto, con lo stesso vestito delle altre quote */}
-          {dermografoAParte && (
-            <div {...propsRiga("contabili", "dermografoAParte")}>
+          {/* la quota del dermografo: compare solo quando l'allievo lo compra
+              e lo paga col corso. Importo e imponibile arrivano dal blocco
+              qui sopra — qui si dice come lo paga e se è già entrato */}
+          {dermografoDaPagare && (
+            <div {...propsRiga("contabili", "quotaDermografo")}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-                {manigliaRiga("contabili", "dermografoAParte")}
-                <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
-                  <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10 }}>
-                    L'allievo acquista il dermografo a parte
-                  </div>
-                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                    <div style={{ flex: "1 1 200px" }}>
-                      <Field label="Modello">
-                        <select
-                          value={dermografo}
-                          onChange={(e) => setDermografo(e.target.value)}
-                          style={{ ...campoAreaScheda, ...(dermografo ? {} : { color: MUTED }) }}
-                        >
-                          <option value="">— scegli —</option>
-                          {DERMOGRAFI.map((d) => <option key={d.chiave} value={d.chiave}>{d.etichetta}</option>)}
-                        </select>
-                      </Field>
-                    </div>
-                    <div style={{ flex: "1 1 200px" }}>
-                      <Field label="Come lo paga">
-                        <select
-                          value={dermografoPagamento}
-                          onChange={(e) => setDermografoPagamento(e.target.value)}
-                          style={{ ...campoAreaScheda, ...(dermografoPagamento ? {} : { color: MUTED }) }}
-                        >
-                          <option value="">— scegli —</option>
-                          <option value="gia_pagato">Già pagato</option>
-                          <option value="con_corso">Lo paga con il corso</option>
-                        </select>
-                      </Field>
-                    </div>
-                  </div>
-
-                  {dermografoPagamento === "con_corso" && (
-                    <>
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
-                        <div style={{ flex: "1 1 130px" }}>
-                          <Field label="Prezzo di listino">
-                            <input
-                              style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }}
-                              value={prezzoListinoDermografo != null ? prezzoListinoDermografo.toFixed(2) : ""}
-                              placeholder={dermografo ? "prodotto non trovato" : "scegli il modello"}
-                              disabled
-                            />
-                          </Field>
-                        </div>
-                        <div style={{ flex: "1 1 130px" }}>
-                          <Field label="Sconto riservato">
-                            <input
-                              style={campoAreaScheda}
-                              inputMode="decimal"
-                              value={dermografoSconto}
-                              onChange={(e) => {
-                                setDermografoSconto(e.target.value);
-                                // il totale della quota segue prezzo e sconto: è il
-                                // prezzo davvero pagato, e da lì si scorpora l'IVA
-                                const scontato = prezzoListinoDermografo != null
-                                  ? round2(Math.max(0, prezzoListinoDermografo - (e.target.value === "" ? 0 : parseNum(e.target.value))))
-                                  : null;
-                                if (scontato != null) {
-                                  setPagDermografo((prev) => conTotaleAggiornato(prev, String(scontato), prev.metodo !== "Cash no iva"));
-                                }
-                              }}
-                              placeholder="0.00"
-                            />
-                          </Field>
-                        </div>
-                        <div style={{ flex: "1 1 130px" }}>
-                          <Field label="Prezzo pagato (lordo)">
-                            <input
-                              style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED, fontWeight: 700 }}
-                              value={prezzoDermografoLordo != null ? prezzoDermografoLordo.toFixed(2) : ""}
-                              disabled
-                            />
-                          </Field>
-                        </div>
-                      </div>
-                      <BloccoQuota
-                        titolo="Dermografo — pagamento"
-                        valori={pagDermografo}
-                        opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
-                        imponibileBloccato
-                        onImponibile={() => {}}
-                        onTotale={(v) => setPagDermografo((prev) => conTotaleAggiornato(prev, v, prev.metodo !== "Cash no iva"))}
-                        onMetodo={(v) => setPagDermografo((prev) => conMetodoAggiornatoSenzaBlocco(prev, v))}
-                        onInteressi={(v) => setPagDermografo((prev) => ({ ...prev, interessi: v }))}
-                        pagato={pagDermografoPagato}
-                        onPagato={setPagDermografoPagato}
-                      />
-                    </>
-                  )}
+                {manigliaRiga("contabili", "quotaDermografo")}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <BloccoQuota
+                    titolo={`Dermografo ${dermografoScelta === "tekna" ? "Tekna" : "Horus"}`}
+                    valori={{
+                      ...pagDermografo,
+                      totale: prezzoDermografoLordo != null ? String(prezzoDermografoLordo) : "",
+                      imponibile: imponibileDermografo != null ? String(imponibileDermografo) : "",
+                    }}
+                    opzioniMetodo={["Sito", "Bonifico", "Pos", "Cash no iva", "Rate"]}
+                    totaleBloccato
+                    imponibileBloccato
+                    onImponibile={() => {}}
+                    onTotale={() => {}}
+                    onMetodo={(v) => setPagDermografo((prev) => ({ ...prev, metodo: v, interessi: v === "Rate" ? prev.interessi : "" }))}
+                    onInteressi={(v) => setPagDermografo((prev) => ({ ...prev, interessi: v }))}
+                    pagato={pagDermografoPagato}
+                    onPagato={setPagDermografoPagato}
+                  />
                 </div>
               </div>
-              {spaziatoreRiga("contabili", "dermografoAParte")}
+              {spaziatoreRiga("contabili", "quotaDermografo")}
             </div>
           )}
 
