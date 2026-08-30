@@ -78,6 +78,9 @@ const LARGHEZZE_COLONNE_DEFAULT = [54, 110, 80, 100, 130, 90, 100, 150, 110, 82,
 const CHIAVE_LARGHEZZE_COLONNE = "assegnazioneMaster_larghezzeColonne_v9";
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
+// nomi personalizzati delle colonne di "Dettaglio prodotti": stanno
+// accanto alle larghezze, che sono già una preferenza di chi guarda
+const CHIAVE_ETICHETTE_MAGAZZINO = "gestioneMagazzino_etichetteColonne";
 const CHIAVE_LARGHEZZE_FRONTOFFICE = "shopOnline_larghezzeColonneFrontOffice";
 const ETICHETTE_COLONNE_MASTER = ["Data", "Corso", "Città", "Sede", "Docenti", "Avvisata", "Note", "Viaggio", "Alloggio", "Hotel pagato", "Note viaggio"];
 // intestazioni che vanno a capo su due righe invece di restare su una
@@ -27596,19 +27599,22 @@ function interoOpzionale(testo) {
 // colonne ordinabili della tabella dettaglio, e direzione di default al
 // primo click su ciascuna (stile Windows Explorer): testo parte
 // crescente A→Z, numeri partono decrescente (più alto in cima)
+// "allinea" dice dove sta il contenuto della colonna, così l'intestazione
+// si mette nello stesso posto: prima erano tutte a sinistra sopra celle
+// centrate, e nessun titolo stava sopra la sua colonna
 const COLONNE_MAGAZZINO = [
-  { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 170 },
-  { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 100 },
-  { label: "Unità di misura", campo: null, larghezza: 68 },
-  { label: "Stock", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 74 },
-  { label: "Soglia riordino", campo: "soglia_riordino", direzioneIniziale: "desc", larghezza: 70 },
+  { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 170, allinea: "left" },
+  { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 100, allinea: "left" },
+  { label: "Unità di misura", campo: null, larghezza: 52 },
+  { label: "Stock", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 60, allinea: "right" },
+  { label: "Soglia riordino", campo: "soglia_riordino", direzioneIniziale: "desc", larghezza: 58, allinea: "right" },
   { label: "Non sul POS", campo: null, larghezza: 64 },
   { label: "Solo offline", campo: null, larghezza: 64 },
   { label: "Stato", campo: "esaurito", direzioneIniziale: "desc", larghezza: 72 },
-  { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84 },
-  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74 },
-  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62 },
-  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62 },
+  { label: "Prezzo vendita (IVA incl.)", campo: "prezzo_vendita", direzioneIniziale: "desc", larghezza: 84, allinea: "right" },
+  { label: "Costo acquisto", campo: "costo_acquisto", direzioneIniziale: "desc", larghezza: 74, allinea: "right" },
+  { label: "Margine %", campo: "margine", direzioneIniziale: "desc", larghezza: 62, allinea: "right" },
+  { label: "Venduto", campo: "quantitaVenduta", direzioneIniziale: "desc", larghezza: 62, allinea: "right" },
   // S/R = scorta e riordino: verde solo se ci sono i tre dati che servono
   // davvero all'Advisor (scorta minima, tempo di consegna, fornitore). Il
   // margine di sicurezza ha il suo valore generale in Impostazioni e il
@@ -27931,7 +27937,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
   }
 
   const tdStyle = { padding: "8px 6px", borderTop: `1px solid ${CREAM_BORDER}` };
-  const cellInputStyle = { ...inputStyle, width: 50, padding: "4px 5px", fontSize: 11 };
+  // quattro cifre al massimo: la casella larga mangiava spazio a tutta la
+  // tabella, e il numero incollato a sinistra non si allineava con quello
+  // della riga sopra. Stretta e allineata a destra, come si leggono i numeri
+  const cellInputStyle = { ...inputStyle, width: 46, padding: "4px 6px", fontSize: 11, textAlign: "right" };
 
   return (
     <tr>
@@ -27944,7 +27953,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
       </td>
       <td style={{ ...tdStyle, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
       <td style={tdStyle}>
-        <input style={{ ...cellInputStyle, width: 40 }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
+        <input style={{ ...cellInputStyle, width: 36, textAlign: "center" }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
       </td>
       <td style={tdStyle}>
         {p.giacenza_propria === false ? (
@@ -27991,7 +28000,10 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
       <td style={{ ...tdStyle, textAlign: "center" }} title={p.forzatoSoloOffline ? "Forzato da una categoria di questo prodotto — toglilo da lì (Gestisci categorie)" : "Il prodotto non viene mai creato/aggiornato su WooCommerce, anche con un prezzo"}>
         <input type="checkbox" checked={p.forzatoSoloOffline || !!p.solo_offline} disabled={p.forzatoSoloOffline} onChange={(e) => salvaFlagSoloOffline(e.target.checked)} style={{ width: 16, height: 16, cursor: p.forzatoSoloOffline ? "default" : "pointer" }} />
       </td>
-      <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+      {/* stato e avvisi ("Riordina dal fornitore", "Apri confezione") al
+          centro della loro colonna: erano schiacciati a sinistra sotto un
+          titolo centrato */}
+      <td style={{ ...tdStyle, whiteSpace: "nowrap", textAlign: "center" }}>
         {p.conta_magazzino === false ? (
           <span style={{ ...fontBody, fontSize: 9.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 8, padding: "2px 6px" }}>Illimitato</span>
         ) : p.boxCollegato && (p.esaurito || p.sottoScorta) && p.boxCollegato.inMagazzino > 0 ? (
@@ -28032,7 +28044,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
           </div>
         )}
       </td>
-      <td style={tdStyle} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
+      <td style={{ ...tdStyle, textAlign: "right" }} title={`Prezzo al pubblico, IVA inclusa${p.prezzo_vendita != null ? ` — netto ${fmtEuroErp2(p.prezzo_vendita)}` : ""}. Si modifica solo dalla scheda prodotto (clic sul nome)`}>
         <span style={{ ...fontBody, fontSize: 11, color: NAVY, display: "inline-flex", alignItems: "center", gap: 4 }}>
           {prezzoAlPubblico(p) != null ? fmtEuroErp2(prezzoAlPubblico(p)) : "—"}
           {!p.iva_verificata && (
@@ -28174,7 +28186,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "impostazioni_magazzino"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -28214,6 +28226,28 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
   const [larghezze, setLarghezze] = useState(() => {
     try { return JSON.parse(localStorage.getItem(CHIAVE_LARGHEZZE_MAGAZZINO) || "{}"); } catch { return {}; }
   });
+  // Rinominare una colonna: tasto destro sull'intestazione, solo in
+  // modalità programmatore. I nomi restano su questo dispositivo, come le
+  // larghezze qui sopra: è una preferenza di chi guarda la tabella, non un
+  // dato dell'azienda.
+  const [etichetteColonne, setEtichetteColonne] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(CHIAVE_ETICHETTE_MAGAZZINO) || "{}"); } catch { return {}; }
+  });
+  function etichettaColonna(label) { return etichetteColonne[label] || label; }
+  function rinominaColonna(e, label) {
+    if (ruoloUtente !== "programmatore" || !label) return;
+    e.preventDefault();
+    const nuovo = window.prompt(`Nome della colonna "${etichettaColonna(label)}":`, etichettaColonna(label));
+    if (nuovo === null) return;
+    setEtichetteColonne((prev) => {
+      const aggiornate = { ...prev };
+      // vuoto = torna al nome originale, invece di lasciare una colonna senza titolo
+      if (nuovo.trim()) aggiornate[label] = nuovo.trim(); else delete aggiornate[label];
+      try { localStorage.setItem(CHIAVE_ETICHETTE_MAGAZZINO, JSON.stringify(aggiornate)); } catch { /* ignora */ }
+      return aggiornate;
+    });
+  }
+
   function larghezzaDi(etichetta, larghezzaDefault) { return larghezze[etichetta] ?? larghezzaDefault; }
   const ridimensionamentoRef = React.useRef(null);
   function iniziaRidimensionamento(e, etichetta, larghezzaAttuale) {
@@ -28716,10 +28750,11 @@ function PaginaMagazzino({ categorieProdotti, prodottiShop, prodottiCategorie, p
                     <th
                       key={col.label}
                       onClick={() => ordinaPer(col.campo)}
-                      title={col.campo ? "Clicca per ordinare" : undefined}
-                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: "left", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
+                      onContextMenu={(e) => rinominaColonna(e, col.label)}
+                      title={col.campo ? (ruoloUtente === "programmatore" ? "Clicca per ordinare · tasto destro per rinominare" : "Clicca per ordinare") : undefined}
+                      style={{ ...fontBody, fontSize: 9, fontWeight: 700, color: ordinamento.campo === col.campo ? NAVY : MUTED, textTransform: "uppercase", letterSpacing: 0.2, textAlign: col.allinea || "center", padding: "8px 6px", borderBottom: `1px solid ${CREAM_BORDER}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: col.campo ? "pointer" : "default", userSelect: "none", position: "relative" }}
                     >
-                      {col.label}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
+                      {etichettaColonna(col.label)}{ordinamento.campo === col.campo && (ordinamento.direzione === "asc" ? " ▲" : " ▼")}
                       <div
                         onClick={(e) => e.stopPropagation()}
                         onPointerDown={(e) => iniziaRidimensionamento(e, col.label, larghezzaDi(col.label, col.larghezza))}
@@ -43671,6 +43706,7 @@ export default function App() {
 
       {view === "magazzino" && (
         <PaginaMagazzino
+          ruoloUtente={ruoloUtente}
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
