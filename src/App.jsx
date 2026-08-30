@@ -15552,23 +15552,27 @@ function SelettoreDataDiploma({ valore, dataInizio, dataFine, onCambia }) {
 // riga "etichetta / importo / metodo" della sezione Pagamenti: da mobile
 // importo e metodo scendono sulla stessa riga sotto l'etichetta (3
 // colonne fisse non ci stanno), da desktop restano affiancati
-function rigaPagamentoIscritto(label, valore, metodo, isMobile) {
+// "daPagare" tinge di rosso tutta la riga, etichetta compresa: una quota
+// ancora da incassare in mezzo a quelle pagate, scritta dello stesso
+// colore, non si notava — e questa scheda si legge di corsa, in aula
+function rigaPagamentoIscritto(label, valore, metodo, isMobile, daPagare = false) {
+  const colore = daPagare ? "#C0392B" : NAVY;
   if (isMobile) {
     return (
       <>
-        <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
+        <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: colore, fontWeight: daPagare ? 700 : 400 }}>{label}</div>
         <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", gap: 10, paddingBottom: 10 }}>
-          <span style={{ minWidth: 0, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</span>
-          <span style={{ minWidth: 0, color: NAVY, whiteSpace: "normal", wordBreak: "break-word", textAlign: "right" }}>{metodo}</span>
+          <span style={{ minWidth: 0, fontWeight: 700, color: colore, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</span>
+          <span style={{ minWidth: 0, color: colore, whiteSpace: "normal", wordBreak: "break-word", textAlign: "right" }}>{metodo}</span>
         </div>
       </>
     );
   }
   return (
     <>
-      <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY }}>{label}</div>
-      <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
-      <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{metodo}</div>
+      <div style={{ padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: colore, fontWeight: daPagare ? 700 : 400 }}>{label}</div>
+      <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, fontWeight: 700, color: colore, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
+      <div style={{ minWidth: 0, padding: "10px 0", borderTop: `1px solid ${CREAM_BORDER}`, color: colore, whiteSpace: "normal", wordBreak: "break-word" }}>{metodo}</div>
     </>
   );
 }
@@ -15618,17 +15622,22 @@ function RiepilogoVenditaIscritto({ i, isMobile, mostraQuotaVenditore = true }) 
         {(i.acconto_totale != null || i.precorso_totale != null || i.saldo_totale != null) && (
           <div style={{ gridColumn: "1 / -1", fontSize: 11, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>Pagamenti</div>
         )}
+        {/* l'etichetta dice se quei soldi sono entrati o no: "Pagato in
+            acconto" quando la quota è segnata pagata, "Da pagare in
+            acconto" finché non lo è */}
         {i.acconto_totale != null && rigaPagamentoIscritto(
-          "Pagato in acconto",
+          i.acconto_pagato ? "Pagato in acconto" : "Da pagare in acconto",
           `${totQuota(i, "acconto")} €${i.acconto_interessi ? ` (interessi ${i.acconto_interessi} €)` : ""}`,
           i.acconto_metodo || "?",
-          isMobile
+          isMobile,
+          !i.acconto_pagato
         )}
         {i.precorso_totale != null && rigaPagamentoIscritto(
-          "Pagato pre corso",
+          i.precorso_pagato ? "Pagato pre corso" : "Da pagare pre corso",
           `${totQuota(i, "precorso")} €${i.precorso_interessi ? ` (interessi ${i.precorso_interessi} €)` : ""}`,
           i.precorso_metodo || "?",
-          isMobile
+          isMobile,
+          !i.precorso_pagato
         )}
         {i.saldo_totale != null && rigaPagamentoIscritto(
           "Importo da pagare al corso",
