@@ -35250,6 +35250,13 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     : corsiInCorsoOggi;
   const [corsoPosId, setCorsoPosId] = useState("");
   const corsoPosSel = corsiEleggibiliPos.find((cd) => cd.id === corsoPosId) || null;
+  // "Prelevato dai kit in loco": il pezzo venduto è stato tirato fuori da un
+  // kit presente in aula. Dal magazzino centrale era già uscito quando Raf
+  // ha spedito il pacco: scaricarlo di nuovo qui lo conterebbe due volte.
+  // Quindi la vendita si registra, l'incasso pure, ma il magazzino non si
+  // tocca — il pezzo esce dall'atteso di rientro alla chiusura del corso
+  const [prelevatoDaiKit, setPrelevatoDaiKit] = useState(false);
+  const senzaScaricoMagazzino = !!corsoPosSel && prelevatoDaiKit;
   const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
@@ -35433,6 +35440,7 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setSpedCitofono(""); setSpedInterno(""); setSpedCellulare("");
     setSpedRichiedeFattura(false); setSpedDitta(""); setSpedPiva(""); setSpedCodDest(""); setSpedPec("");
     setOmaggioAttivo(false);
+    setPrelevatoDaiKit(false);
   }
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
@@ -35459,7 +35467,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // giacenza propria e si risolve nei suoi componenti; un box con
     // giacenza fisica scarica il proprio stock come un prodotto normale
     const righeVendita = carrello.flatMap((r) => righeScarico(trovaProdotto(r.prodottoId), r.quantita, bundleComponenti, prodottiPerId));
-    const pianiVendita = preparaScarichi(righeVendita);
+    // merce presa dai kit in aula: non si verifica la disponibilità in
+    // centrale e non si scarica — quei pezzi sono usciti dal magazzino
+    // giorni fa, con il pacco del corso
+    const pianiVendita = senzaScaricoMagazzino ? [] : preparaScarichi(righeVendita);
     if (!pianiVendita) { setMsg("Vendita non registrata: disponibilità insufficiente."); return; }
 
     // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
@@ -35491,6 +35502,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       operatore_id: operatore.id,
       operatore_nome: operatore.nome,
       corso_data_id: corsoPosSel?.id || null,
+      // le due indicazioni che servono alla chiusura del corso: da dove è
+      // uscito il pezzo, e se l'allievo se l'è portato via subito
+      prelevato_dai_kit: senzaScaricoMagazzino,
+      consegnato_in_aula: corsoPosSel ? !spedizioneAttiva : null,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
     };
@@ -35522,8 +35537,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setMsg(datiSpedizione ? `${etichettaEsito} e spedizione inviata a Raf.` : `${etichettaEsito}.`);
 
     (async () => {
-      const erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
-      if (erroreScarico) { window.alert("Attenzione: " + erroreScarico); ricarica(["prodotti_shop"]); return; }
+      if (pianiVendita.length > 0) {
+        const erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
+        if (erroreScarico) { window.alert("Attenzione: " + erroreScarico); ricarica(["prodotti_shop"]); return; }
+      }
 
       const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert(datiVendita).select().single();
       if (erroreVendita) {
@@ -35632,6 +35649,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
               ))}
             </select>
           </Field>
+          {corsoPosSel && (
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, marginTop: -6, marginBottom: 12 }}>
+              <input type="checkbox" checked={prelevatoDaiKit} onChange={(e) => setPrelevatoDaiKit(e.target.checked)} style={{ marginTop: 3 }} />
+              <span>
+                Prelevato dai kit in loco
+                <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1 }}>
+                  Il pezzo è stato preso da un kit presente in aula: il magazzino non si scarica di nuovo, il pezzo esce dall'atteso di rientro.
+                </span>
+              </span>
+            </label>
+          )}
         </div>
       )}
       {carrello.length === 0 ? (
@@ -39004,6 +39032,11 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   function cambiaRiservaKit(kitId, valore) {
     onSalvaCampi({ riserva_per_kit: { ...riservaPerKit, [kitId]: valore === "" ? 0 : Math.max(0, Number(valore)) } });
   }
+  const dermografiRiserva = statoEdizione.dermografi_riserva || {};
+  const dermografiDegliAllievi = dermografiRichiestiEdizione(iscrittiEdizione);
+  function cambiaDermografiRiserva(modello, valore) {
+    onSalvaCampi({ dermografi_riserva: { ...dermografiRiserva, [modello]: valore === "" ? 0 : Math.max(0, Number(valore)) } });
+  }
   // accessori didattica: non appartengono a un kit specifico ma a tutto
   // il corso (Setting > Tipologie di kit > "Accessori didattica"), quindi
   // si scaricano insieme a QUALUNQUE kit/pacchetto scelto per l'edizione
@@ -39029,7 +39062,21 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   function rimuoviProdottoExtra(prodottoId) {
     const nuovo = { ...accessoriQuantita };
     delete nuovo[`extra::${prodottoId}`];
-    onSalvaCampi({ accessori_quantita: nuovo });
+    const senzaFlag = { ...extraDaVendita };
+    delete senzaFlag[prodottoId];
+    onSalvaCampi({ accessori_quantita: nuovo, extra_da_vendita: senzaFlag });
+  }
+  // "Da vendere": un extra che parte per essere venduto al corso, non per
+  // essere consumato in aula. Cambia due cose. Alla spedizione NON scarica
+  // il magazzino — quei pezzi restano nostri finché qualcuno non li compra,
+  // e se non si vendono tornano indietro o restano nel magazzino della
+  // sede, che è come dire in centrale. E alla chiusura del corso la
+  // quantità attesa in rientro scende da sola a ogni vendita registrata.
+  const extraDaVendita = statoEdizione.extra_da_vendita || {};
+  function cambiaExtraDaVendita(prodottoId, valore) {
+    const nuovo = { ...extraDaVendita };
+    if (valore) nuovo[prodottoId] = true; else delete nuovo[prodottoId];
+    onSalvaCampi({ extra_da_vendita: nuovo });
   }
 
   // "Consulenze": una riga per ciascuna spedita, mai una quantità sommata
@@ -39146,6 +39193,29 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         )}
       </div>
 
+      {/* i dermografi degli allievi li conta la loro scheda; qui si
+          aggiungono solo quelli di riserva, che nessun allievo ha
+          comprato ma che partono lo stesso — e alla chiusura del corso
+          vanno guardati uno per uno, sono i pezzi più costosi del pacco */}
+      <div style={labelStyle}>Dermografi di riserva</div>
+      <div style={{ marginBottom: 20 }}>
+        {DERMOGRAFI.map((d) => (
+          <div key={d.chiave} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY }}>
+              {d.etichetta}
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 400, color: MUTED, marginLeft: 8 }}>
+                agli allievi: {dermografiDegliAllievi[d.chiave] || 0}
+              </span>
+            </span>
+            <input
+              type="number" min="0" style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
+              value={dermografiRiserva[d.chiave] ?? ""} placeholder="0"
+              onChange={(e) => cambiaDermografiRiserva(d.chiave, e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+
       {/* si autocompila dalla taglia scelta da ciascun iscritto nel modulo
           di iscrizione (iscritti.taglia_divisa): qui solo la possibilità
           di correggerla, per chi prepara davvero le divise da spedire */}
@@ -39215,8 +39285,12 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
       <div style={{ marginTop: 12 }}>
         {prodottiExtraIds.map((prodottoId) => (
           <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY }}>{nomeProdotto(prodottoId)}</span>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>{nomeProdotto(prodottoId)}</span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <label title="Parte per essere venduto al corso: non scarica il magazzino alla spedizione, scarica quando viene venduto" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, color: extraDaVendita[prodottoId] ? NAVY : MUTED, whiteSpace: "nowrap" }}>
+                <input type="checkbox" checked={!!extraDaVendita[prodottoId]} onChange={(e) => cambiaExtraDaVendita(prodottoId, e.target.checked)} />
+                Da vendere
+              </label>
               <input
                 type="number" min="0" style={{ ...inputStyle, width: 70, padding: "6px 8px" }}
                 value={accessoriQuantita[`extra::${prodottoId}`] ?? ""} placeholder="0"
@@ -39398,7 +39472,12 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // ogni allievo. Stessa regola dei kit — si applica solo la differenza
     // rispetto a quanto già scaricato, così un iscritto che cambia modello
     // restituisce l'uno e prende l'altro invece di sommarsi
+    // ai dermografi degli allievi si sommano quelli di riserva: partono
+    // anche loro, e dal magazzino escono esattamente come gli altri
     const dermografiRichiesti = dermografiRichiestiEdizione(iscritti.filter((i) => i.corso_data_id === corsoData.id));
+    Object.entries(stato.dermografi_riserva || {}).forEach(([modello, q]) => {
+      if (q > 0) dermografiRichiesti[modello] = (dermografiRichiesti[modello] || 0) + Number(q);
+    });
     const dermografiScaricati = stato.scarico_dermografi || {};
     const nuovoScaricoDermografi = {};
     const dermografiSenzaProdotto = [];
@@ -39436,10 +39515,16 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
     // prodottoId" per i prodotti extra aggiunti a mano su questa
     // edizione — in tutti e tre i casi il prodotto è l'ultima parte
     // della chiave, la quantità scaricata si confronta allo stesso modo
+    // gli extra marcati "da vendere" restano fuori: partono per essere
+    // venduti, non consumati. Finché nessuno li compra sono ancora merce
+    // nostra — scaricarli alla spedizione, e poi di nuovo alla vendita,
+    // toglierebbe due volte lo stesso pezzo dal magazzino
+    const daVendita = stato.extra_da_vendita || {};
     const accessoriScaricatiAggiornati = { ...(stato.accessori_scaricati || {}) };
     new Set([...Object.keys(stato.accessori_quantita || {}), ...Object.keys(stato.accessori_scaricati || {})]).forEach((chiave) => {
       const prodottoId = chiave.split("::")[1];
       if (!prodottoId) return;
+      if (chiave.startsWith("extra::") && daVendita[prodottoId]) return;
       const target = stato.accessori_quantita?.[chiave] || 0;
       const giaScaricato = stato.accessori_scaricati?.[chiave] || 0;
       const deltaAcc = target - giaScaricato;
@@ -39555,6 +39640,54 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // parte davvero, quindi è qui che si chiede se scaricare i prodotti
   // dal magazzino — non più un tasto separato ("Modifica quantità di
   // magazzino"), lo scarico è legato all'avanzamento della fase stessa
+  // La fotografia di cosa è partito davvero. Si scatta quando il pacco
+  // viene ritirato dal corriere, ed è la base di ogni conto alla chiusura
+  // del corso: da quel momento un iscritto aggiunto o cancellato non
+  // cambia più quello che risulta spedito. Senza, l'atteso in rientro
+  // poggerebbe su un numero che si muove alle spalle di chi lo legge.
+  function fotografiaSpedizione(corsoData) {
+    const stato = statoDi(corsoData.id);
+    const iscrittiEdizione = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
+    const perIscritti = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni || [], corsoData.corso_id);
+    const riserva = stato.riserva_per_kit || {};
+    const kit = {};
+    new Set([...Object.keys(perIscritti), ...Object.keys(riserva)]).forEach((kitId) => {
+      const q = perIscritti[kitId] || 0;
+      const r = Number(riserva[kitId] || 0);
+      if (q + r <= 0) return;
+      kit[kitId] = { nome: (kitDefinizioni || []).find((k) => k.id === kitId)?.nome || null, per_iscritti: q, riserva: r };
+    });
+    // gli extra "da vendere" viaggiano nello stesso pacco ma sono un'altra
+    // cosa: non si consumano in aula, si vendono — e quello che non si
+    // vende torna indietro intero
+    const daVendita = stato.extra_da_vendita || {};
+    const accessori = {};
+    const merceVendita = {};
+    Object.entries(stato.accessori_quantita || {}).forEach(([chiave, q]) => {
+      const prodottoId = chiave.split("::")[1];
+      if (!prodottoId || !q) return;
+      const destinazione = chiave.startsWith("extra::") && daVendita[prodottoId] ? merceVendita : accessori;
+      destinazione[prodottoId] = (destinazione[prodottoId] || 0) + Number(q);
+    });
+    return {
+      ts: new Date().toISOString(),
+      kit,
+      iscritti: iscrittiEdizione.map((i) => ({
+        id: i.id,
+        nome: `${i.nome || ""} ${i.cognome || ""}`.trim(),
+        kit_id: i.kit_id || null,
+        kit_nome: i.pacchetto_kit || null,
+        dermografo: dermografoAcquistato(i),
+        dermografo_consegna: i.dermografo_consegna || null,
+      })),
+      // "assegnati" esclude già chi il dermografo se l'è fatto mandare a
+      // casa: quello nel pacco del corso non c'è mai stato
+      dermografi: { assegnati: dermografiRichiestiEdizione(iscrittiEdizione), riserva: stato.dermografi_riserva || {} },
+      accessori,
+      merce_vendita: merceVendita,
+      consulenze: (stato.consulenze_edizione || []).map((r) => ({ id: r.id, prodotto_id: r.prodotto_id })),
+    };
+  }
   async function cambiaFaseLogistica(corsoData, fase) {
     if (fase === "ritirato_corriere") {
       if (!window.confirm("Vuoi scaricare i prodotti in partenza dal magazzino?")) return;
@@ -39562,6 +39695,10 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       // avanza: altrimenti risulterebbe "ritirato" senza scarico registrato
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
+      await salvaCampiEdizione(corsoData.id, {
+        fase, spedizione_snapshot: fotografiaSpedizione(corsoData), spedizione_snapshot_ts: new Date().toISOString(),
+      });
+      return;
     }
     await salvaCampiEdizione(corsoData.id, { fase });
   }
@@ -43245,7 +43382,7 @@ export default function App() {
     // WooCommerce, di gran lunga la colonna più pesante del database, letta
     // in un solo punto di tutta l'app (CRM Shop). Caricata a parte, vedi
     // "vendite_shop_crm" sotto
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id").order("data_ordine", { ascending: false })).data || []),
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id, prelevato_dai_kit, consegnato_in_aula").order("data_ordine", { ascending: false })).data || []),
     vendite_shop_crm: async () => setVenditeShopCrm((await supabase.from("vendite_shop").select("id, payload_raw")).data || []),
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
