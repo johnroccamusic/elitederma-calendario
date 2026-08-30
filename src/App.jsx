@@ -7381,8 +7381,8 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
     const righe = [
       ...righeKit.map((r) => ({ tipo: "kit", kit_id: r.kitId, atteso: r.atteso, chiave: chiaveRiga("kit", r.kitId) })),
       ...righeDermografi.map((r) => ({ tipo: "dermografo", modello_dermografo: r.modello, atteso: r.atteso, chiave: chiaveRiga("dermografo", r.modello) })),
-      ...righeMerce.map((r) => ({ tipo: "prodotto", prodotto_id: r.prodottoId, atteso: r.atteso, chiave: chiaveRiga("merce", r.prodottoId) })),
-      ...righeAltro.map((r) => ({ tipo: "prodotto", prodotto_id: r.prodottoId, atteso: r.atteso, chiave: chiaveRiga("altro", r.prodottoId) })),
+      ...righeMerce.map((r) => ({ tipo: "merce_vendita", prodotto_id: r.prodottoId, atteso: r.atteso, chiave: chiaveRiga("merce", r.prodottoId) })),
+      ...righeAltro.map((r) => ({ tipo: "accessorio", prodotto_id: r.prodottoId, atteso: r.atteso, chiave: chiaveRiga("altro", r.prodottoId) })),
       ...righeDifettosi.map((r) => ({ tipo: "reso_difettoso", prodotto_id: r.prodottoId, atteso: r.quantita, chiave: chiaveRiga("difettoso", r.prodottoId) })),
     ].map(({ chiave, ...riga }) => {
       const s = scostamenti[chiave];
@@ -17073,7 +17073,7 @@ function ManigliaRidimensionaOrizzontale({ cursore = "ew-resize", onPointerDown,
     />
   );
 }
-function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -17382,6 +17382,27 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   const posClasse = round2(listaIscritti.reduce((s, i) => s + (i.saldo_metodo === "Pos" ? (i.saldo_totale || 0) : 0), 0) + incassiExtraPos);
   const daIncassareClasse = round2(contantiClasse + posClasse);
 
+  // Vendite al corso: i prodotti venduti agli allievi durante il corso —
+  // sono incassi veri, fatti in aula, e il contante finisce nella stessa
+  // busta del resto. Restano un blocco a sé perché non sono quote del
+  // corso: si registrano dal POS, uno per uno, nel momento in cui si incassa
+  const venditeAlCorso = (venditeShop || []).filter((v) => v.corso_data_id === corsoData.id && v.tipo_movimento !== "annullamento" && v.tipo_movimento !== "omaggio");
+  const righeVenditeAlCorso = (() => {
+    const mappa = {};
+    venditeAlCorso.forEach((v) => {
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+        const chiave = r.prodotto_id || r.nome || "—";
+        if (!mappa[chiave]) mappa[chiave] = { chiave, nome: r.nome || "—", quantita: 0, totale: 0 };
+        mappa[chiave].quantita += r.quantita || 0;
+        mappa[chiave].totale = round2(mappa[chiave].totale + (r.totale_riga || 0));
+      });
+    });
+    return Object.values(mappa).sort((a, b) => b.totale - a.totale);
+  })();
+  const venditeAlCorsoContanti = round2(venditeAlCorso.filter((v) => v.metodo_pagamento === "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  const venditeAlCorsoPos = round2(venditeAlCorso.filter((v) => v.metodo_pagamento !== "contanti").reduce((s, v) => s + (v.totale || 0), 0));
+  const venditeAlCorsoTotale = round2(venditeAlCorsoContanti + venditeAlCorsoPos);
+
   // Incassi lordo/netto/di cui: non più uno scorporo IVA generico, ma la
   // somma dei VERI campi "totale" (con IVA) e "imponibile" (senza IVA)
   // già presenti sulla scheda di ogni allievo, per tutte e tre le fasi
@@ -17490,7 +17511,10 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // giorno) meno tutto il Cash da pagare della tabella spese — può
   // risultare negativo se le spese cash superano il cash incassato al
   // corso, e in tal caso serve integrare da un'altra fonte
-  const cassaContantiClasse = round2(contantiClasse - totaleCashDaPagareClasse);
+  // nella busta finisce anche il contante delle vendite fatte in aula: è
+  // denaro incassato al corso come il resto, e chi la riceve deve trovarci
+  // dentro la stessa cifra che l'app dichiara
+  const cassaContantiClasse = round2(contantiClasse + venditeAlCorsoContanti - totaleCashDaPagareClasse);
 
   // solo le categorie legate a UNA classe hanno senso nel "+" del
   // Riepilogo amministrativo (le categorie "aziendali" restano taggabili
@@ -19262,6 +19286,35 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                 </div>
               ))}
 
+              {venditeAlCorso.length > 0 && (
+                <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 4 }}>Vendite al corso</div>
+                  <div style={{ ...fontBody, fontSize: 12, color: MUTED, textAlign: "center", marginBottom: 12 }}>
+                    Prodotti venduti agli allievi durante il corso. Il contante entra nella busta insieme al resto.
+                  </div>
+                  {righeVenditeAlCorso.map((r) => (
+                    <div key={r.chiave} style={{ display: "flex", justifyContent: "space-between", gap: 10, ...fontBody, fontSize: 13, color: NAVY, padding: "5px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                      <span>{r.nome} <span style={{ color: MUTED }}>× {r.quantita}</span></span>
+                      <span style={{ fontWeight: 700, whiteSpace: "nowrap" }}>€ {r.totale}</span>
+                    </div>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 14, marginTop: 14 }}>
+                    <div style={{ padding: "12px 18px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Contanti</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoContanti}</div>
+                    </div>
+                    <div style={{ padding: "12px 18px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, textAlign: "center" }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>POS</div>
+                      <div style={{ ...fontBody, fontSize: 18, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoPos}</div>
+                    </div>
+                    <div style={{ padding: "12px 18px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, textAlign: "center" }}>
+                      <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Totale vendite</div>
+                      <div style={{ ...fontBody, fontSize: 20, fontWeight: 700, color: NAVY }}>€ {venditeAlCorsoTotale}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ paddingTop: 16, marginTop: 6, borderTop: `1px solid ${CREAM_BORDER}` }}>
                 <div style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: NAVY, textAlign: "center", marginBottom: 16 }}>Riepilogo Cash</div>
                 <div style={{ display: "flex", alignItems: "stretch", justifyContent: "center", flexWrap: "wrap", gap: 14 }}>
@@ -19276,6 +19329,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                   <div style={{ padding: "14px 20px", borderRadius: 12, background: BG_CHIARO, border: `1px solid ${GOLD}`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
                     <div style={{ ...fontBody, fontSize: 10.5, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap", marginBottom: 8 }}>Cash pulito in busta</div>
                     <div style={{ ...fontBody, fontSize: 22, fontWeight: 700, color: cassaContantiClasse < 0 ? "#C0392B" : NAVY }}>€ {cassaContantiClasse}</div>
+                    {venditeAlCorsoContanti > 0 && (
+                      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4, whiteSpace: "nowrap" }}>di cui € {venditeAlCorsoContanti} di vendite</div>
+                    )}
                   </div>
                   <Button onClick={salvaCostiClasse} disabled={salvandoCosti} style={{ alignSelf: "center" }}>{salvandoCosti ? "Salvo…" : "Salva costi"}</Button>
                 </div>
@@ -39592,7 +39648,170 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
-function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, onSalvaCampi, onProdottiRientrati, onCambiaTagliaIscritto }) {
+// Il ricevimento del pacco di rientro, in Logistica prodotti. È qui che il
+// corso si chiude davvero: non alla conferma della master, che dichiara
+// senza contare, ma allo scaffale — Raf apre gli scatoloni, scrive cosa è
+// tornato riga per riga, e solo allora le giacenze si muovono.
+//
+// Le tre colonne non si sovrascrivono mai fra loro: atteso (calcolato),
+// dichiarato (la master, se ha corretto), ricevuto (Raf). È la differenza
+// fra loro il dato che serve, e se c'è resta scritta sul corso.
+function PannelloBollaRientro({ corsoData, kitDefinizioni, corsiKitProdotti, prodottiShop, nomeUtente, onFatto }) {
+  const [chiusura, setChiusura] = useState(null);
+  const [righe, setRighe] = useState([]);
+  const [ricevuti, setRicevuti] = useState({});
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => { carica(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [corsoData?.id]);
+  async function carica() {
+    if (!corsoData?.id) return;
+    const { data: c } = await supabase.from("chiusura_corso").select("*").eq("corso_data_id", corsoData.id).maybeSingle();
+    setChiusura(c || null);
+    if (!c) { setRighe([]); return; }
+    const { data: r } = await supabase.from("chiusura_corso_righe").select("*").eq("chiusura_id", c.id);
+    const elenco = r || [];
+    setRighe(elenco);
+    // la casella nasce già con l'atteso dentro: nel caso normale — tutto
+    // torna — Raf non scrive niente, guarda e conferma
+    setRicevuti(Object.fromEntries(elenco.map((x) => [x.id, String(x.ricevuto ?? (x.dichiarato ?? x.atteso))])));
+  }
+
+  const nomeKit = (id) => (kitDefinizioni || []).find((k) => k.id === id)?.nome || "Kit";
+  const nomeProdotto = (id) => (prodottiShop || []).find((p) => p.id === id)?.nome || "—";
+  const etichettaRiga = (r) =>
+    r.tipo === "kit" ? nomeKit(r.kit_id)
+      : r.tipo === "dermografo" ? etichettaDermografo(r.modello_dermografo)
+        : nomeProdotto(r.prodotto_id);
+  const atteso = (r) => (r.dichiarato != null ? r.dichiarato : r.atteso);
+  const ricevutoDi = (r) => { const v = ricevuti[r.id]; return v === "" || v == null ? 0 : Math.max(0, Number(v)); };
+
+  async function registraRicevuto() {
+    if (!chiusura || righe.length === 0) return;
+    const scostamenti = righe.filter((r) => ricevutoDi(r) !== atteso(r));
+    const messaggio = scostamenti.length === 0
+      ? "Tutto quadra: registro il rientro e chiudo il corso. Le giacenze si aggiornano ora."
+      : `${scostamenti.length} righe non quadrano: il corso resta aperto con la differenza in evidenza. Le giacenze si aggiornano su quanto è tornato davvero. Procedo?`;
+    if (!window.confirm(messaggio)) return;
+    setSalvando(true);
+
+    const deltaPerProdotto = {};
+    const difettosiDaCreare = [];
+    righe.forEach((r) => {
+      const q = ricevutoDi(r);
+      if (r.tipo === "kit" && q > 0) {
+        // un kit che torna intero rimette dentro tutto quello che conteneva
+        (corsiKitProdotti || []).filter((x) => x.kit_id === r.kit_id && (x.tipo === "kit" || x.tipo === "accessorio")).forEach((x) => {
+          deltaPerProdotto[x.prodotto_id] = (deltaPerProdotto[x.prodotto_id] || 0) + (x.quantita || 0) * q;
+        });
+      } else if (r.tipo === "dermografo" && q > 0) {
+        const prodotto = prodottoDermografo(prodottiShop, r.modello_dermografo);
+        if (prodotto) deltaPerProdotto[prodotto.id] = (deltaPerProdotto[prodotto.id] || 0) + q;
+      } else if (r.tipo === "accessorio" && q > 0) {
+        deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + q;
+      } else if (r.tipo === "merce_vendita") {
+        // la merce da vendita non era mai stata scaricata: era rimasta
+        // nostra, solo lontana. Quello che non torna non è rientrato in
+        // magazzino — è sparito, e va tolto adesso
+        const mancante = Math.max(0, atteso(r) - q);
+        if (mancante > 0) deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) - mancante;
+      } else if (r.tipo === "reso_difettoso" && q > 0) {
+        // i pezzi rotti non tornano vendibili: giacenza separata
+        difettosiDaCreare.push({ prodotto_id: r.prodotto_id, quantita: q, corso_data_id: corsoData.id, stato: "in_giacenza" });
+      }
+    });
+
+    for (const [prodottoId, delta] of Object.entries(deltaPerProdotto)) {
+      if (!delta) continue;
+      const prodotto = (prodottiShop || []).find((p) => p.id === prodottoId);
+      if (!prodotto) continue;
+      const errore = await muoviStock(prodotto, delta, {
+        origine: "chiusura_corso", nota: "Rientro dal corso", riferimento: corsoData.id, utente: nomeUtente || null,
+      });
+      if (errore) { window.alert("Attenzione: " + errore); setSalvando(false); return; }
+    }
+    if (difettosiDaCreare.length > 0) await supabase.from("resi_difettosi").insert(difettosiDaCreare);
+    for (const r of righe) {
+      await supabase.from("chiusura_corso_righe").update({ ricevuto: ricevutoDi(r) }).eq("id", r.id);
+    }
+    await supabase.from("chiusura_corso").update({
+      stato: scostamenti.length === 0 ? "ricevuta" : "scostamento",
+      ricevuta_ts: new Date().toISOString(), ricevuta_da: nomeUtente || null,
+    }).eq("id", chiusura.id);
+    setSalvando(false);
+    await carica();
+    onFatto && onFatto();
+  }
+
+  if (!chiusura || chiusura.stato === "aperta") {
+    return (
+      <div style={{ marginTop: 20 }}>
+        <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>Bolla di rientro</div>
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, lineHeight: 1.45 }}>
+          La master non ha ancora confermato la chiusura del corso: quando lo farà, qui compare cosa deve tornare indietro.
+        </div>
+      </div>
+    );
+  }
+
+  const giaRicevuta = chiusura.stato === "ricevuta" || chiusura.stato === "scostamento";
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Bolla di rientro</div>
+      <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 10 }}>
+        Confermata{chiusura.confermata_da ? ` da ${chiusura.confermata_da}` : ""}
+        {chiusura.confermata_ts ? ` il ${fmtData(chiusura.confermata_ts.slice(0, 10))}` : ""}. Scrivi cosa è tornato davvero.
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 22, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, paddingRight: 2 }}>
+        <span>Atteso</span><span>Ricevuto</span>
+      </div>
+      {righe.map((r) => {
+        const differenza = ricevutoDi(r) - atteso(r);
+        return (
+          <div key={r.id} style={{ padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>
+                {etichettaRiga(r)}
+                {r.tipo === "reso_difettoso" && <span style={{ color: "#C0392B", fontSize: 11, fontWeight: 700 }}> · reso difettoso</span>}
+              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, width: 26, textAlign: "center" }}>{atteso(r)}</span>
+                <input
+                  type="number" min="0" disabled={giaRicevuta} style={{ ...inputStyle, width: 62, padding: "6px 8px" }}
+                  value={ricevuti[r.id] ?? ""} onChange={(e) => setRicevuti((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                />
+              </div>
+            </div>
+            {r.motivo && (
+              <div style={{ ...fontBody, fontSize: 11.5, color: GOLD, marginTop: 2 }}>
+                La master ha dichiarato {r.dichiarato} invece di {r.atteso}: {r.motivo}
+              </div>
+            )}
+            {differenza !== 0 && (
+              <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", marginTop: 2 }}>
+                {differenza > 0 ? `${differenza} in più del previsto` : `${-differenza} in meno del previsto`}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {giaRicevuta ? (
+        <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: chiusura.stato === "ricevuta" ? "#2E7D32" : "#C0392B", marginTop: 12 }}>
+          {chiusura.stato === "ricevuta"
+            ? `Rientro registrato${chiusura.ricevuta_da ? ` da ${chiusura.ricevuta_da}` : ""}: corso chiuso.`
+            : "Rientro registrato con scostamenti: il corso resta aperto."}
+        </div>
+      ) : (
+        <button
+          onClick={registraRicevuto} disabled={salvando}
+          style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "13px 16px", cursor: salvando ? "default" : "pointer", width: "100%", marginTop: 12, opacity: salvando ? 0.6 : 1 }}
+        >
+          {salvando ? "Registro…" : "Registra il ricevuto e aggiorna le giacenze"}
+        </button>
+      )}
+    </div>
+  );
+}
+function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefinizioni, corsiKitProdotti, prodottiShop, inventarioSede, prodottiApertiMagazzino, iscrittiEdizione, nomeUtente, onSalvaCampi, onRientroRegistrato, onCambiaTagliaIscritto }) {
   // stessa intestazione (data/corso/città nel colore del corso) della
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
@@ -39693,29 +39912,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   function aggiornaLivelloConsulenza(id, livello) {
     onSalvaCampi({ consulenze_edizione: consulenzeEdizione.map((r) => (r.id === id ? { ...r, livello } : r)) });
   }
-
-  // "Materiali da rientrare": quello che la master ha dichiarato di
-  // rispedire (Inventario di sede > "Prodotti interi") — ora per KIT
-  // intero, non più per singolo prodotto sciolto: i kit si confrontano
-  // con la stessa baseline "già applicato" del resto (mai ripristinare
-  // due volte lo stesso magazzino), gli aperti con l'ultima quantità già
-  // registrata nel mucchio per QUESTA edizione (l'upsert la sovrascrive sempre)
-  const rientroInteri = statoEdizione.rientro_prodotti_interi || {};
-  const rientroSciolti = statoEdizione.rientro_prodotti_sciolti || {};
-  const rientroAperti = statoEdizione.rientro_prodotti_aperti || {};
-  const interiProcessato = statoEdizione.rientro_interi_processato || {};
-  const scioltiProcessato = statoEdizione.rientro_sciolti_processato || {};
-  const apertiPileQui = (prodottiApertiMagazzino || []).filter((r) => r.corso_data_id === corsoData.id);
-  // resta nascosta finché la master non preme "Trasmetti inventario"
-  // (Inventario Master): prima di allora potrebbe essere a metà lavoro
-  const inventarioTrasmesso = !!statoEdizione.inventario_trasmesso_ts;
-  const interiDaRientrare = inventarioTrasmesso && Object.keys(rientroInteri).length > 0;
-  const scioltiDaRientrare = inventarioTrasmesso && Object.keys(rientroSciolti).length > 0;
-  const apertiDaRientrare = inventarioTrasmesso && Object.keys(rientroAperti).length > 0;
-  const rientriDaProcessare =
-    Object.entries(rientroInteri).some(([pid, q]) => (q || 0) !== (interiProcessato[pid] || 0)) ||
-    Object.entries(rientroSciolti).some(([pid, q]) => (q || 0) !== (scioltiProcessato[pid] || 0)) ||
-    Object.entries(rientroAperti).some(([pid, r]) => (r?.quantita || 0) !== (apertiPileQui.find((a) => a.prodotto_id === pid)?.quantita || 0));
 
   return (
     <div>
@@ -39935,51 +40131,10 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         </div>
       )}
 
-      {(interiDaRientrare || scioltiDaRientrare || apertiDaRientrare) && (
-        <div style={{ marginTop: 20 }}>
-          <div style={labelStyle}>Materiali da rientrare</div>
-          {interiDaRientrare && (
-            <div style={{ marginBottom: (scioltiDaRientrare || apertiDaRientrare) ? 10 : 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Kit interi</div>
-              {Object.entries(rientroInteri).map(([kitId, q]) => (
-                <div key={kitId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" }}>
-                  <span>{nomeKit(kitId)}</span><span>{q || 0}x</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {scioltiDaRientrare && (
-            <div style={{ marginBottom: apertiDaRientrare ? 10 : 0 }}>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, marginBottom: 4 }}>Prodotti sciolti</div>
-              {Object.entries(rientroSciolti).map(([pid, q]) => (
-                <div key={pid} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "3px 0" }}>
-                  <span>{nomeProdotto(pid)}</span><span>{q || 0}x</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {apertiDaRientrare && (
-            <div>
-              <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, marginBottom: 4 }}>Prodotti mancanti (non rientrano)</div>
-              {Object.entries(rientroAperti).map(([pid, r]) => (
-                <div key={pid} style={{ padding: "3px 0" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY }}>
-                    <span>{nomeProdotto(pid)}</span><span>{r?.quantita || 0}x</span>
-                  </div>
-                  {r?.nota && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, fontStyle: "italic" }}>{r.nota}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-          <button
-            onClick={onProdottiRientrati}
-            disabled={!rientriDaProcessare}
-            style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: rientriDaProcessare ? "#fff" : MUTED, background: rientriDaProcessare ? NAVY : "#EDEAE0", border: "none", borderRadius: 10, padding: "13px 16px", cursor: rientriDaProcessare ? "pointer" : "default", width: "100%", marginTop: 12 }}
-          >
-            {rientriDaProcessare ? "Prodotti rientrati" : "Materiali già rientrati"}
-          </button>
-        </div>
-      )}
+      <PannelloBollaRientro
+        corsoData={corsoData} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
+        prodottiShop={prodottiShop} nomeUtente={nomeUtente} onFatto={onRientroRegistrato}
+      />
     </div>
   );
 }
@@ -39987,7 +40142,7 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 // fasi di spedizione a sinistra, preparazione kit dell'edizione scelta a
 // destra — lo stato di ogni edizione (logistica_kit_edizioni) è creato al
 // volo al primo utilizzo (nessuna riga finché non si tocca qualcosa)
-function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, bundleComponenti, inventarioSede, prodottiApertiMagazzino, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
+function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKitProdotti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, bundleComponenti, inventarioSede, prodottiApertiMagazzino, utenteLoggato, onApriMagazziniLocali, onBack, ricarica, titolo = "Logistica prodotti" }) {
   const isMobile = useIsMobile();
   const oggiStr = dataOggiStr();
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
@@ -40301,52 +40456,6 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // mucchio "prodotti_aperti_magazzino" per questa edizione, con la nota
   // scritta dalla master (l'upsert riflette sempre l'ultimo valore
   // dichiarato)
-  async function processaRientro(corsoData) {
-    const stato = statoDi(corsoData.id);
-    const rientroInteri = stato.rientro_prodotti_interi || {};
-    const rientroSciolti = stato.rientro_prodotti_sciolti || {};
-    const rientroAperti = stato.rientro_prodotti_aperti || {};
-    const processatoAttuale = stato.rientro_interi_processato || {};
-    const scioltiProcessatoAttuale = stato.rientro_sciolti_processato || {};
-    const nuovoProcessato = { ...processatoAttuale };
-    const nuovoScioltiProcessato = { ...scioltiProcessatoAttuale };
-    const scritture = [];
-    const deltaPerProdotto = {};
-    Object.entries(rientroInteri).forEach(([kitId, q]) => {
-      const target = q || 0;
-      const giaFatto = processatoAttuale[kitId] || 0;
-      const delta = target - giaFatto;
-      if (delta !== 0) {
-        corsiKitProdotti.filter((r) => r.kit_id === kitId && (r.tipo === "kit" || r.tipo === "accessorio")).forEach((r) => {
-          deltaPerProdotto[r.prodotto_id] = (deltaPerProdotto[r.prodotto_id] || 0) + r.quantita * delta;
-        });
-        nuovoProcessato[kitId] = target;
-      }
-    });
-    Object.entries(rientroSciolti).forEach(([prodottoId, q]) => {
-      const target = q || 0;
-      const giaFatto = scioltiProcessatoAttuale[prodottoId] || 0;
-      const delta = target - giaFatto;
-      if (delta !== 0) {
-        deltaPerProdotto[prodottoId] = (deltaPerProdotto[prodottoId] || 0) + delta;
-        nuovoScioltiProcessato[prodottoId] = target;
-      }
-    });
-    Object.entries(deltaPerProdotto).forEach(([prodottoId, delta]) => {
-      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
-      if (prodotto) scritture.push(muoviStock(prodotto, delta, { origine: "rientro_sciolti", nota: "Rientro prodotti sciolti dal corso" }));
-    });
-    const righeAperti = Object.entries(rientroAperti).map(([prodottoId, r]) => ({
-      prodotto_id: prodottoId, corso_data_id: corsoData.id, quantita: r?.quantita || 0, nota: r?.nota || null, stato: "da_valutare",
-    }));
-    if (righeAperti.length > 0) {
-      scritture.push(supabase.from("prodotti_aperti_magazzino").upsert(righeAperti, { onConflict: "prodotto_id,corso_data_id" }));
-    }
-    if (scritture.length === 0) return;
-    await Promise.all(scritture);
-    await salvaCampiEdizione(corsoData.id, { rientro_interi_processato: nuovoProcessato, rientro_sciolti_processato: nuovoScioltiProcessato });
-  }
-
   const pileAperti = useMemo(() => {
     const perProdotto = {};
     (prodottiApertiMagazzino || []).forEach((r) => {
@@ -40446,7 +40555,8 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                 prodottiApertiMagazzino={prodottiApertiMagazzino}
                 iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === edizioneSel.id)}
                 onSalvaCampi={(campi) => salvaCampiEdizione(edizioneSel.id, campi)}
-                onProdottiRientrati={() => processaRientro(edizioneSel)}
+                nomeUtente={utenteLoggato?.nome || null}
+                onRientroRegistrato={() => ricarica(["prodotti_shop", "logistica_kit_edizioni"])}
                 onCambiaTagliaIscritto={cambiaTagliaIscritto}
               />
             )}
@@ -43623,7 +43733,7 @@ function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreA
                   master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
                   segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
                   spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
-                  venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
+                  venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
                   accontiDaVerificare={accontiDaVerificare}
                   ricarica={ricarica}
                   onBack={() => {}}
@@ -45559,6 +45669,7 @@ export default function App() {
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           corsiKitProdotti={corsiKitProdotti} kitDefinizioni={kitDefinizioni} logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} bundleComponenti={bundleComponenti} inventarioSede={inventarioSede}
           prodottiApertiMagazzino={prodottiApertiMagazzino}
+          utenteLoggato={utenteLoggato}
           onApriMagazziniLocali={apriMagazziniLocali}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
           titolo={etichettaTasto("logisticaprodotti", "spedizionicorsi", "Spedizioni corsi")}
@@ -45732,6 +45843,7 @@ export default function App() {
           corsiTipiModella={corsiTipiModella}
           venditori={venditori}
           prodottiShop={prodottiShop}
+          venditeShop={venditeShop}
           accontiDaVerificare={accontiDaVerificare}
           ricarica={fetchDati}
           onBack={() => setView(viewPrimaDiScheda)}
