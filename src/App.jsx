@@ -17069,9 +17069,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   async function persistiIscritto(strict = !modificandoId) {
     if (!nome.trim() || !cognome.trim()) { setMsg("Inserisci nome e cognome."); return false; }
     if (!modificandoId && liberi <= 0) { setMsg("Nessun posto disponibile su questa data."); return false; }
-    // richiesto solo sulle iscrizioni nuove: le storiche non vanno bloccate
-    // per un campo che quando sono state fatte non esisteva
-    if (!modificandoId && corso?.prevede_dermografo !== false && !dermografo) { setMsg("Scegli il dermografo: Tekna, Horus oppure nessuno."); return false; }
+    // Il dermografo non si chiede più qui: la domanda arriva solo quando il
+    // pacchetto scelto dichiara "Dermografo da acquistare a parte", e vive
+    // dentro quel blocco. Il valore resta in iscritti.dermografo, che è
+    // quello che leggono Advisor e logistica.
 
     const metodiMancanti = [];
     if (pagAcconto.totale !== "" && parseNum(pagAcconto.totale) !== 0 && !pagAcconto.metodo) metodiMancanti.push("quota acconto");
@@ -18512,29 +18513,6 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 />
               </Field>
             </div>
-            {/* solo dove il dermografo fa parte del percorso (Definisci
-                corso → "Il corso prevede dermografo"): su laminazione,
-                extension, gemme, henné, IKE o micro la domanda non ha senso
-                e non va nemmeno posta */}
-            {corso?.prevede_dermografo !== false && (
-            <div style={{ flex: 1 }}>
-              {/* tre voci esplicite e nessuna preselezionata: "nessun
-                  dermografo" è una scelta come le altre, non una casella da
-                  deflaggare — le negazioni si sbagliano */}
-              <Field label="Specifica Dermografo">
-                <select
-                  value={dermografo}
-                  onChange={(e) => setDermografo(e.target.value)}
-                  style={{ ...inputStyle, ...(dermografo ? {} : { color: MUTED }) }}
-                >
-                  <option value="">— scegli —</option>
-                  <option value="tekna">Dermografo Tekna</option>
-                  <option value="horus">Dermografo Horus</option>
-                  <option value="nessuno">Nessun dermografo</option>
-                </select>
-              </Field>
-            </div>
-            )}
             <div style={{ flex: 1 }}>
               <Field label="Tipo di offerta">
                 <input value={tipoOfferta} onChange={(e) => setTipoOfferta(e.target.value)} style={inputStyle} />
