@@ -11036,6 +11036,12 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       ],
     },
     {
+      // nasce vuoto di proposito: e' il gruppo in cui chi programma
+      // trascina le voci che riguardano i corsi, prendendole dagli altri
+      chiave: "corsi", titolo: "Corsi", coloreBg: "#EDE4F5", Icona: IconaCorsoRiga,
+      voci: [],
+    },
+    {
       chiave: "venditeprodotti", titolo: "Vendite prodotti", coloreBg: "#F5DCC8", Icona: IconaGruppoVenditeProdotti,
       voci: [
         { chiave: "targetmaster", etichetta: "Target Master", Icona: IconaTargetRiga, onClick: () => setShowTargetMasterModal(true) },
@@ -11129,6 +11135,11 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
               <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: BG, borderRadius: 8, padding: "3px 11px", flexShrink: 0 }}>{g.voci.length}</div>
             </div>
             <div style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
+              {g.voci.length === 0 && (
+                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "18px 0", textAlign: "center" }}>
+                  {programmatore ? "Trascina qui una voce" : "Nessuna voce"}
+                </div>
+              )}
               {g.voci.map((v, i) => (
                 <button
                   key={v.chiave}
