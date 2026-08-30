@@ -1805,10 +1805,13 @@ const inputStyle = {
 // amministrativo → Costi della classe): inputStyle è pensato per form
 // con pochi campi, troppo alto per una tabella di più righe
 const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 };
-// le caselle del blocco "Totale pattuito", su fondo azzurro: il bordo
-// crema degli altri campi lì sopra si perdeva, e le tre caselle
-// sembravano macchie bianche senza contorno
-const campoBloccoVendita = { ...inputStyle, background: "#fff", border: "1px solid #E1E9EF" };
+// Le aree della scheda iscritto — totale pattuito, quote, fatturazione e
+// qualunque blocco si aggiunga in futuro — hanno tutte lo stesso vestito:
+// fondo azzurro tenue e bordo intonato, così ognuna si stacca dal bianco
+// della scheda. Le caselle dentro restano bianche con un filo appena
+// accennato: sul colore basta il bianco a dire dove si scrive.
+const areaSchedaIscritto = { background: "#F5F9FC", border: "1px solid #C7D8E4", borderRadius: 10, padding: 14 };
+const campoAreaScheda = { ...inputStyle, background: "#fff", border: "1px solid #E1E9EF" };
 
 // tendina con ricerca: una <select> nativa va benissimo per dieci voci,
 // ma con 140 fornitori in ordine alfabetico trovare il proprio significa
@@ -2541,7 +2544,7 @@ function SemaforoPagamento({ pagato, onClick }) {
 function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInteressi, onTotaleConInteressi, soloLettura, imponibileBloccato, totaleBloccato, opzioniMetodo, pagato, onPagato, onRimuovi, onBonificoFile, mostraSaltaFile, onBonificoSkip }) {
   const totaleConInteressi = round2(parseNum(valori.totale) + parseNum(valori.interessi || 0));
   return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, marginBottom: 10, background: soloLettura ? BG : "#fff" }}>
+    <div style={{ ...areaSchedaIscritto, marginBottom: 10, ...(soloLettura ? { background: BG } : {}) }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
         <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
         {onRimuovi && (
@@ -2554,7 +2557,7 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
         <div style={{ flex: "1 1 90px" }}>
           <Field label="Imponibile">
             <input
-              style={{ ...inputStyle, background: soloLettura || imponibileBloccato ? "#EFEFEF" : "#fff", color: soloLettura || imponibileBloccato ? MUTED : NAVY }}
+              style={{ ...campoAreaScheda, background: soloLettura || imponibileBloccato ? "#EDF1F4" : "#fff", color: soloLettura || imponibileBloccato ? MUTED : NAVY }}
               inputMode="decimal"
               value={valori.imponibile}
               disabled={soloLettura || imponibileBloccato}
@@ -2564,13 +2567,13 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
         </div>
         <div style={{ flex: "1 1 90px" }}>
           <Field label="IVA 22%">
-            <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={ivaDiQuota(valori)} disabled />
+            <input style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }} value={ivaDiQuota(valori)} disabled />
           </Field>
         </div>
         <div style={{ flex: "1 1 90px" }}>
           <Field label={titolo === "Quota acconto" && valori.metodo === "Rate" ? "Totale (senza interessi)" : "Totale"}>
             <input
-              style={{ ...inputStyle, background: soloLettura || totaleBloccato ? "#EFEFEF" : "#fff", color: soloLettura || totaleBloccato ? MUTED : NAVY }}
+              style={{ ...campoAreaScheda, background: soloLettura || totaleBloccato ? "#EDF1F4" : "#fff", color: soloLettura || totaleBloccato ? MUTED : NAVY }}
               inputMode="decimal"
               value={valori.totale}
               disabled={soloLettura || totaleBloccato}
@@ -2597,7 +2600,7 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
           <div style={{ flex: 1 }}>
             <Field label="Interessi">
               <input
-                style={inputStyle}
+                style={campoAreaScheda}
                 inputMode="decimal"
                 value={valori.interessi || ""}
                 onChange={(e) => onInteressi && onInteressi(e.target.value)}
@@ -2608,14 +2611,14 @@ function BloccoQuota({ titolo, valori, onImponibile, onTotale, onMetodo, onInter
             <Field label="Totale incluso interessi">
               {onTotaleConInteressi ? (
                 <input
-                  style={inputStyle}
+                  style={campoAreaScheda}
                   inputMode="decimal"
                   value={valori.totale === "" && (valori.interessi || "") === "" ? "" : totaleConInteressi.toFixed(2)}
                   onChange={(e) => onTotaleConInteressi(e.target.value)}
                 />
               ) : (
                 <input
-                  style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }}
+                  style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }}
                   value={valori.totale === "" && (valori.interessi || "") === "" ? "" : totaleConInteressi.toFixed(2)}
                   disabled
                 />
@@ -18354,53 +18357,53 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             <div {...propsRiga("anagrafica", "fatturazione")}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
                 {manigliaRiga("anagrafica", "fatturazione")}
-                <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, flex: 1 }}>
+                <div style={{ ...areaSchedaIscritto, flex: 1 }}>
               <Field label="Nome ditta">
-                <input value={fatturaDitta} onChange={(e) => setFatturaDitta(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                <input value={fatturaDitta} onChange={(e) => setFatturaDitta(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
               </Field>
               <div style={{ display: "flex", gap: 14 }}>
                 <div style={{ flex: 3 }}>
                   <Field label="Indirizzo">
-                    <input value={fatturaIndirizzo} onChange={(e) => setFatturaIndirizzo(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    <input value={fatturaIndirizzo} onChange={(e) => setFatturaIndirizzo(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
                   </Field>
                 </div>
                 <div style={{ flex: 1 }}>
                   <Field label="N. civico">
-                    <input maxLength={5} value={fatturaCivico} onChange={(e) => setFatturaCivico(e.target.value.toUpperCase().slice(0, 5))} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    <input maxLength={5} value={fatturaCivico} onChange={(e) => setFatturaCivico(e.target.value.toUpperCase().slice(0, 5))} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
                   </Field>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 14 }}>
                 <div style={{ flex: 2 }}>
                   <Field label="Città">
-                    <input value={fatturaCitta} onChange={(e) => setFatturaCitta(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    <input value={fatturaCitta} onChange={(e) => setFatturaCitta(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
                   </Field>
                 </div>
                 <div style={{ flex: 1 }}>
                   <Field label="Prov.">
-                    <input maxLength={2} value={fatturaProv} onChange={(e) => setFatturaProv(e.target.value.toUpperCase().slice(0, 2))} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    <input maxLength={2} value={fatturaProv} onChange={(e) => setFatturaProv(e.target.value.toUpperCase().slice(0, 2))} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
                   </Field>
                 </div>
                 <div style={{ flex: 1 }}>
                   <Field label="Cap">
-                    <input maxLength={5} value={fatturaCap} onChange={(e) => setFatturaCap(e.target.value.slice(0, 5))} style={inputStyle} />
+                    <input maxLength={5} value={fatturaCap} onChange={(e) => setFatturaCap(e.target.value.slice(0, 5))} style={campoAreaScheda} />
                   </Field>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 14 }}>
                 <div style={{ flex: 1 }}>
                   <Field label="P.IVA">
-                    <input value={fatturaPiva} onChange={(e) => setFatturaPiva(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    <input value={fatturaPiva} onChange={(e) => setFatturaPiva(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
                   </Field>
                 </div>
                 <div style={{ flex: 1 }}>
                   <Field label="Cod. Dest.">
-                    <input value={fatturaCodDest} onChange={(e) => setFatturaCodDest(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    <input value={fatturaCodDest} onChange={(e) => setFatturaCodDest(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
                   </Field>
                 </div>
                 <div style={{ flex: 1 }}>
                   <Field label="PEC">
-                    <input value={fatturaPec} onChange={(e) => setFatturaPec(e.target.value)} style={inputStyle} />
+                    <input value={fatturaPec} onChange={(e) => setFatturaPec(e.target.value)} style={campoAreaScheda} />
                   </Field>
                 </div>
               </div>
@@ -18451,24 +18454,24 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ background: "#F5F9FC", border: `1px solid #C7D8E4`, borderRadius: 10, padding: 14, flex: 1 }}>
+              <div style={{ ...areaSchedaIscritto, flex: 1 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
-                  <input style={campoBloccoVendita} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
+                  <input style={campoAreaScheda} inputMode="decimal" value={totalePattuito} onChange={(e) => setTotalePattuito(e.target.value)} />
                 </Field>
               </div>
               {adminSbloccato && (
                 <>
                   <div style={{ flex: 1 }}>
                     <Field label="Quota venditore (7%)" minLabelHeight={34}>
-                      <input style={{ ...campoBloccoVendita, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <input style={{ ...campoAreaScheda, background: "#EDF1F4", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
                     </Field>
                   </div>
                   <div style={{ flex: 1 }}>
                     <Field label="Quota speciale" minLabelHeight={34}>
                       <input
-                        style={campoBloccoVendita}
+                        style={campoAreaScheda}
                         inputMode="decimal"
                         placeholder="es. 60.00"
                         value={quotaSpeciale}
