@@ -25909,11 +25909,13 @@ function TastoStatoOrdine({ stato, attuale, onClick, occupato }) {
         lineHeight: 1.15, overflowWrap: "anywhere", hyphens: "auto",
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1, overflow: "hidden",
         opacity: occupato ? 0.5 : 1,
-        // lo stato in cui l'ordine si trova si accende nel suo colore, gli
-        // altri sono le caselle di crema in cui lo si può spostare
-        background: attivo ? acceso.sfondo : BG_CHIARO,
-        border: `1px solid ${attivo ? acceso.bordo : "#D9CDB4"}`,
-        color: attivo ? acceso.testo : "#8A7355",
+        // lo stato in cui l'ordine si trova si accende nel suo colore; gli
+        // altri restano grigio chiaro, caselle spente in cui lo si può
+        // spostare — il crema di prima si confondeva con lo sfondo della
+        // pagina e sembravano tutti mezzi accesi
+        background: attivo ? acceso.sfondo : "#F2F2F4",
+        border: `1px solid ${attivo ? acceso.bordo : "#E2E2E7"}`,
+        color: attivo ? acceso.testo : "#8B8FA3",
       }}
     >
       <span style={{ fontSize: 13, lineHeight: 1 }}>{attivo ? "✓" : "○"}</span>
@@ -26110,7 +26112,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         <div style={{
           ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
           lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-          background: spedita ? BG_CHIARO : "#FCF3D4", border: `1px solid ${spedita ? "#D9CDB4" : "#E0A72B"}`, color: spedita ? "#8A7355" : "#D2731A",
+          background: spedita ? "#F2F2F4" : "#FCF3D4", border: `1px solid ${spedita ? "#E2E2E7" : "#E0A72B"}`, color: spedita ? "#8B8FA3" : "#D2731A",
         }}>
           <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
           <span>Da spedire</span>
@@ -26122,7 +26124,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
             ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
             lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
             cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
-            background: spedita ? "#E3F3E5" : BG_CHIARO, border: `1px solid ${spedita ? "#2E7D32" : "#D9CDB4"}`, color: spedita ? "#2E7D32" : "#8A7355",
+            background: spedita ? "#E3F3E5" : "#F2F2F4", border: `1px solid ${spedita ? "#2E7D32" : "#E2E2E7"}`, color: spedita ? "#2E7D32" : "#8B8FA3",
           }}
         >
           <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
