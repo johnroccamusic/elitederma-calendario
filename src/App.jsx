@@ -131,6 +131,41 @@ function useLayoutCondiviso(chiave, predefinito) {
   return [valore, (nuovo) => salvaLayoutCondiviso(chiave, nuovo)];
 }
 
+// colonne trascinabili per le tabelle di Gestione utenti/password: stessa
+// meccanica delle altre, con la larghezza condivisa (la fissa chi
+// programma, la vedono tutti)
+function useColonneRidimensionabili(chiave) {
+  const [larghezze, setLarghezze] = useLayoutCondiviso(chiave, {});
+  const trascinamento = React.useRef(null);
+  function larghezzaDi(colonna, predefinita) { return larghezze[colonna] ?? predefinita; }
+  function iniziaTrascinamento(e, colonna, larghezzaAttuale) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    trascinamento.current = { colonna, pointerId: e.pointerId, startX: e.clientX, startWidth: larghezzaAttuale };
+  }
+  function muoviTrascinamento(e) {
+    const t = trascinamento.current;
+    if (!t || e.pointerId !== t.pointerId) return;
+    setLarghezze({ ...larghezze, [t.colonna]: Math.max(44, t.startWidth + (e.clientX - t.startX)) });
+  }
+  function fineTrascinamento() { trascinamento.current = null; }
+  function maniglia(colonna, larghezzaAttuale) {
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => iniziaTrascinamento(e, colonna, larghezzaAttuale)}
+        onPointerMove={muoviTrascinamento}
+        onPointerUp={fineTrascinamento}
+        onPointerCancel={fineTrascinamento}
+        title="Trascina per stringere o allargare la colonna"
+        style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+      />
+    );
+  }
+  return { larghezzaDi, maniglia };
+}
+
 const CHIAVE_LARGHEZZE_VENDITORI = "statisticaVenditori_larghezzeColonne";
 const CHIAVE_LARGHEZZE_MAGAZZINO = "gestioneMagazzino_larghezzeColonne";
 // nomi personalizzati delle colonne di "Dettaglio prodotti": stanno
@@ -9875,7 +9910,7 @@ const RigaTabellaUtente = React.forwardRef(function RigaTabellaUtente({ utente, 
         )}
       </td>
       <td style={tdStyle}>
-        <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }} />
+        <input value={password} onChange={(e) => setPassword(e.target.value)} onBlur={salvaCampi} style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 13, textAlign: "center" }} />
       </td>
       <td style={tdStyle}>{!sistema && selVenditoreCollegato}</td>
       <td style={{ ...tdStyle, textAlign: "center" }}>{!sistema && chkAmministratore}</td>
@@ -9949,7 +9984,7 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
     nome: (u) => u.nome || "",
     venditore: (u) => nomeVenditore(u.venditore_id),
   });
-  const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
+  const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
 
   // nome e password si salvano già da soli quando si esce dal campo; questo
   // Salva unico (sotto la tabella, non più in fondo a ogni riga di
@@ -9962,6 +9997,18 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
     await Promise.all(Object.values(refRighe.current).map((r) => r?.salvaSeNecessario?.()));
     setSalvandoTutto(false);
   }
+
+  // colonne strette e trascinabili: sono una quindicina di caselle da
+  // spuntare, e a larghezza automatica la tabella usciva dallo schermo
+  const { larghezzaDi, maniglia } = useColonneRidimensionabili("gestioneUtenti_larghezzeColonne");
+  const colonneUtenti = [
+    { chiave: "nome", larghezza: 120 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
+    { chiave: "amministratore", larghezza: 78 }, { chiave: "solocalendario", larghezza: 78 },
+    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
+    ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
+    { chiave: "azioni", larghezza: 44 },
+  ];
+  const larghezzaTabellaUtenti = colonneUtenti.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
 
   return (
     <div>
@@ -9980,16 +10027,19 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, marginTop: 14 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 820 }}>
+          <table style={{ borderCollapse: "collapse", tableLayout: "fixed", width: larghezzaTabellaUtenti }}>
+            <colgroup>
+              {colonneUtenti.map((c) => <col key={c.chiave} style={{ width: larghezzaDi(c.chiave, c.larghezza) }} />)}
+            </colgroup>
             <thead>
               <tr>
-                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome utente</ThOrdina>
-                <th style={thStyle}>Password</th>
-                <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato</ThOrdina>
-                <th style={{ ...thStyle, textAlign: "center" }}>Amministratore</th>
-                <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario</th>
-                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
-                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
+                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome utente{maniglia("nome", larghezzaDi("nome", 120))}</ThOrdina>
+                <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
+                <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
+                <th style={{ ...thStyle, textAlign: "center" }}>Amministratore{maniglia("amministratore", larghezzaDi("amministratore", 78))}</th>
+                <th style={{ ...thStyle, textAlign: "center" }}>Solo calendario{maniglia("solocalendario", larghezzaDi("solocalendario", 78))}</th>
+                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}</th>)}
+                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}</th>)}
                 <th style={thStyle}></th>
               </tr>
             </thead>
@@ -10001,8 +10051,20 @@ function TabellaGestioneUtenti({ utentiApp, agende, venditori, ricarica }) {
           </table>
         </div>
       )}
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         <Button onClick={salvaTutto} disabled={salvandoTutto}>{salvandoTutto ? "Salvo…" : "Salva"}</Button>
+      </div>
+      {/* le due colonne che si somigliano ma non c'entrano niente l'una con
+          l'altra: senza questo promemoria si finisce per spuntare la prima
+          pensando di dare i poteri della seconda */}
+      <div style={{ marginTop: 16, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: "12px 14px", ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.5 }}>
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Due cose diverse, che si confondono facilmente</div>
+        <div style={{ marginBottom: 6 }}>
+          <b>Utenti amministrazione</b> è il permesso di aprire <i>una pagina</i>: il tasto Amministrazione in home, cioè Contabilità, Categorie di spesa, Operativo corsi, Anagrafiche. È una chiave di porta, esattamente come "Gestione corsi" o "Dashboard venditori" nelle colonne accanto.
+        </div>
+        <div>
+          <b>Amministratore</b> è un <i>grado</i>, e non apre pagine: sblocca ciò che l'app protegge con il codice amministratore anche dentro le pagine che uno già può aprire. In concreto — modificare la scheda di un iscritto già registrato, aprire Contabilità classe e Riepilogo amministrativo dentro un corso, entrare in Setting senza che venga chiesto il codice.
+        </div>
       </div>
     </div>
   );
@@ -10094,7 +10156,7 @@ function RigaTabellaMaster({ masterRec, agende, venditori, ricarica }) {
           onChange={(e) => setPassword(e.target.value)}
           onBlur={salvaPassword}
           placeholder="Nessuna password"
-          style={{ ...inputStyle, width: 110, padding: "6px 8px", fontSize: 13 }}
+          style={{ ...inputStyle, width: 68, padding: "6px 8px", fontSize: 13, textAlign: "center" }}
         />
       </td>
       <td style={tdStyle}>{selVenditoreCollegato}</td>
@@ -10127,7 +10189,14 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
     nome: (m) => m.nome || "",
     venditore: (m) => nomeVenditore(m.venditore_id),
   });
-  const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
+  const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
+  const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordMaster_larghezzeColonne");
+  const colonneMaster = [
+    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 84 }, { chiave: "venditore", larghezza: 130 },
+    ...TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => ({ chiave: t.chiave, larghezza: 84 })),
+    ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
+  ];
+  const larghezzaTabellaMaster = colonneMaster.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password Master</div>
@@ -10142,14 +10211,15 @@ function TabellaPasswordMaster({ master, agende, venditori, ricarica }) {
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 500 + (TASTI_HOME.length - 1 + agende.length) * 140 }}>
+          <table style={{ borderCollapse: "collapse", tableLayout: "fixed", width: larghezzaTabellaMaster }}>
+            <colgroup>{colonneMaster.map((c) => <col key={c.chiave} style={{ width: larghezzaDi(c.chiave, c.larghezza) }} />)}</colgroup>
             <thead>
               <tr>
-                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome master</ThOrdina>
-                <th style={thStyle}>Password</th>
-                <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato</ThOrdina>
-                {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
-                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
+                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome master{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
+                <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 84))}</th>
+                <ThOrdina campo="venditore" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Venditore collegato{maniglia("venditore", larghezzaDi("venditore", 130))}</ThOrdina>
+                {TASTI_HOME.filter((t) => t.chiave !== "dashboardmaster").map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}</th>)}
+                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -10248,7 +10318,14 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
   const isMobile = useIsMobile();
   const { ordine, cambiaOrdine, ordina } = useOrdinamentoTabella({ campo: "nome", direzione: "asc" });
   const venditoriOrdinati = ordina(venditori, { nome: (v) => v.nome || "" });
-  const thStyle = { padding: "10px 10px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, textAlign: "left", background: BG, whiteSpace: "nowrap" };
+  const thStyle = { padding: "8px 8px", borderBottom: `2px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 9, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.3, textAlign: "left", background: BG, whiteSpace: "normal", lineHeight: 1.2, verticalAlign: "bottom", position: "relative" };
+  const { larghezzaDi, maniglia } = useColonneRidimensionabili("passwordVenditori_larghezzeColonne");
+  const colonneVenditori = [
+    { chiave: "nome", larghezza: 140 }, { chiave: "password", larghezza: 140 },
+    ...TASTI_HOME.map((t) => ({ chiave: t.chiave, larghezza: 84 })),
+    ...agende.map((a) => ({ chiave: `agenda-${a.id}`, larghezza: 84 })),
+  ];
+  const larghezzaTabellaVenditori = colonneVenditori.reduce((tot, c) => tot + larghezzaDi(c.chiave, c.larghezza), 0);
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Password venditori</div>
@@ -10263,13 +10340,14 @@ function TabellaPasswordVenditori({ venditori, agende, ricarica }) {
         </div>
       ) : (
         <div style={{ overflowX: "auto", background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 12 }}>
-          <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 340 + TASTI_HOME.length * 140 + agende.length * 140 }}>
+          <table style={{ borderCollapse: "collapse", tableLayout: "fixed", width: larghezzaTabellaVenditori }}>
+            <colgroup>{colonneVenditori.map((c) => <col key={c.chiave} style={{ width: larghezzaDi(c.chiave, c.larghezza) }} />)}</colgroup>
             <thead>
               <tr>
-                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome venditore</ThOrdina>
-                <th style={thStyle}>Password</th>
-                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}</th>)}
-                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}</th>)}
+                <ThOrdina campo="nome" ordine={ordine} onOrdina={cambiaOrdine} style={thStyle}>Nome venditore{maniglia("nome", larghezzaDi("nome", 140))}</ThOrdina>
+                <th style={thStyle}>Password{maniglia("password", larghezzaDi("password", 140))}</th>
+                {TASTI_HOME.map((t) => <th key={t.chiave} style={{ ...thStyle, textAlign: "center" }}>{t.etichetta}{maniglia(t.chiave, larghezzaDi(t.chiave, 84))}</th>)}
+                {agende.map((a) => <th key={a.id} style={{ ...thStyle, textAlign: "center" }}>Agenda: {a.nome}{maniglia(`agenda-${a.id}`, larghezzaDi(`agenda-${a.id}`, 84))}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -26462,7 +26540,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
   const notaCliente = grezzo?.customer_note || null;
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 12, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 24, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>
           Ordine #{vendita?.numero_ordine || vendita?.woo_order_id}
@@ -26573,7 +26651,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
   ].filter(Boolean) : [];
 
   return (
-    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 12, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
+    <div style={{ background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: isMobile ? 12 : 18, marginBottom: 24, boxShadow: "0 2px 10px rgba(14,27,51,0.05)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>Vendita al banco</div>
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 20, padding: "3px 12px" }}>POS</span>
