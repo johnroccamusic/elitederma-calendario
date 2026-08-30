@@ -18447,7 +18447,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                   la vendita, e deve staccarsi dalle quote che stanno sotto.
                   Le caselle dei numeri restano bianche, o il dato si
                   perderebbe nel colore */}
-              <div style={{ background: "#DDE7EE", border: `1px solid #C4D4DF`, borderRadius: 10, padding: 14, flex: 1 }}>
+              <div style={{ background: "#EEF4F8", border: `1px solid #D8E4EC`, borderRadius: 10, padding: 14, flex: 1 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
