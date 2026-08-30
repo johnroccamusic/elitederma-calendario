@@ -6565,7 +6565,7 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
           {apribile ? (
             <div onClick={(e) => { e.stopPropagation(); onApriInventario(corsoData.id); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
-              Inventario fine corso →
+              Chiusura corso →
             </div>
           ) : <span />}
           {codiceReferral && (
@@ -6811,7 +6811,7 @@ function PaginaRiepilogoVenditeProdotti({ soggettoTipo, soggettoId, nomeSoggetto
 // c'è nessuna schermata di login secondaria. Chi invece ha solo il
 // permesso sul tasto (staff/Amministratore) vede la tendina per
 // scegliere quale master guardare
-function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriClasse, onBack, titolo = "Dashboard master" }) {
+function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscritti, masterLoggataId, venditeShop, prodottiShop, targetVenditeProdotti, coupon, puntiMasterRegolaBase, puntiMasterPeriodiSpeciali, puntiMasterImpostazioni, onApriInventarioSede, onApriChiusura, onApriClasse, onBack, titolo = "Dashboard master" }) {
   const isMobile = useIsMobile();
   const [masterSelId, setMasterSelId] = useState(masterLoggataId || "");
   const masterSel = master.find((m) => m.id === masterSelId) || null;
@@ -6920,13 +6920,13 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
         <div style={{ maxWidth: 640, margin: "0 auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
             <TastoLivelloPrecedente titolo="Dashboard master" onClick={() => setMostraListaInventario(false)} />
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Inventario corso corrente</div>
+            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Chiusura corso</div>
           </div>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Scegli il corso da rendicontare — in cima anche quelli finiti da circa una settimana.</div>
+          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>Scegli il corso da chiudere — in cima anche quelli finiti da circa una settimana.</div>
           {corsiEleggibiliInventario.map((cd) => {
             const c = corsoById[cd.corso_id]; const l = locById[cd.location_id];
             return (
-              <div key={cd.id} onClick={() => onApriInventarioSede(cd.id)} style={{ ...cardStyle, marginBottom: 10, padding: 16, cursor: "pointer" }}>
+              <div key={cd.id} onClick={() => onApriChiusura(cd.id)} style={{ ...cardStyle, marginBottom: 10, padding: 16, cursor: "pointer" }}>
                 <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{c?.nome || "—"}</div>
                 <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>{fmtDataCompatta(cd.data_inizio, cd.data_fine)} · {toTitleCase(l?.nome || "—")}</div>
               </div>
@@ -7029,7 +7029,7 @@ function PaginaDashboardMaster({ master, corsi, location, corsiDate, hotel, iscr
                 key={cd.id} corsoData={cd} corso={corsoById[cd.corso_id]} loc={locById[cd.location_id]}
                 hotelAssociato={(hotel || []).find((h) => h.id === cd.alloggio_id)}
                 iscrittiEdizione={(iscritti || []).filter((i) => i.corso_data_id === cd.id)}
-                apribile={inFinestraInventario(cd)} onApriInventario={onApriInventarioSede} onApriClasse={onApriClasse}
+                apribile={inFinestraInventario(cd)} onApriInventario={onApriChiusura} onApriClasse={onApriClasse}
                 codiceReferral={(coupon || []).find((c) => c.corsi_date_id === cd.id)?.codice || null}
               />
             ))}
@@ -7162,6 +7162,544 @@ function RigaRientroProdotto({ nome, quantita, onQuantita, onRimuovi }) {
     </div>
   );
 }
+// ---------- Chiusura corso ----------
+// Il principio: la master non conta il rientro, dichiara i consumi; il
+// rientro lo calcola l'app.
+//
+//   atteso in rientro = spedito da Raf − consumato dichiarato
+//
+// Ogni numero che le compare è già calcolato: conferma, oppure dichiara
+// uno scostamento scegliendo un motivo da un elenco chiuso. Confermare è
+// un secondo, contare sono venti minuti — e a fine corso, fuori sede,
+// nessuno conta davvero: qualunque numero scritto a mano sarebbe finto.
+// La verifica vera la fa Raf al ricevimento, che è l'unico con il tempo e
+// lo scaffale. Per questo il corso non si chiude qui.
+const MOTIVI_SCOSTAMENTO = [
+  "Consumato durante il corso",
+  "Rotto in aula",
+  "Perso",
+  "Consegnato a un allievo",
+  "Rimasto in sede",
+  "Mai arrivato nel pacco",
+];
+
+function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, venditeShop, masterLoggataId, nomeUtente, onBack, onApriInventarioSede }) {
+  const isMobile = useIsMobile();
+  const [chiusura, setChiusura] = useState(null);
+  const [consegne, setConsegne] = useState([]);
+  const [dermografiRighe, setDermografiRighe] = useState([]);
+  const [prelievi, setPrelievi] = useState([]);
+  const [caricando, setCaricando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  // gli scostamenti sulla bolla restano qui finché non si conferma: sono
+  // correzioni a un calcolo, non dichiarazioni autonome come le altre
+  const [scostamenti, setScostamenti] = useState({});
+  const [ricercaPrelievo, setRicercaPrelievo] = useState("");
+
+  const loc = (location || []).find((l) => l.id === corsoData?.location_id) || null;
+  const stato = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData?.id) || null;
+  const iscrittiEdizione = (iscritti || []).filter((i) => i.corso_data_id === corsoData?.id);
+  const prodottoDi = (id) => (prodottiShop || []).find((p) => p.id === id) || null;
+  const nomeProdotto = (id) => prodottoDi(id)?.nome || "—";
+  const nomeKit = (id) => (kitDefinizioni || []).find((k) => k.id === id)?.nome || "Kit";
+
+  // cosa è partito: la fotografia scattata alla partenza del pacco. Se
+  // manca (edizione partita prima che esistesse) la si ricompone dal vivo,
+  // e lo si dice — è una ricostruzione, non un documento
+  const fotografata = !!stato?.spedizione_snapshot;
+  const spedito = useMemo(
+    () => stato?.spedizione_snapshot || componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId: corso?.id || null }),
+    [stato, iscrittiEdizione, kitDefinizioni, corso]
+  );
+
+  useEffect(() => { caricaTutto(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [corsoData?.id]);
+
+  async function caricaTutto() {
+    if (!corsoData?.id) return;
+    setCaricando(true);
+    // upsert e non "cerca, poi crea": due aperture ravvicinate vedrebbero
+    // entrambe "nessuna riga" e violerebbero il vincolo su corso_data_id
+    const { data: riga } = await supabase
+      .from("chiusura_corso")
+      .upsert({ corso_data_id: corsoData.id, master_id: masterLoggataId || null }, { onConflict: "corso_data_id" })
+      .select().single();
+    if (!riga) { setCaricando(false); return; }
+    const [c, d, p] = await Promise.all([
+      supabase.from("chiusura_corso_consegne").select("*").eq("chiusura_id", riga.id),
+      supabase.from("chiusura_corso_dermografi").select("*").eq("chiusura_id", riga.id),
+      supabase.from("chiusura_corso_prelievi").select("*").eq("chiusura_id", riga.id),
+    ]);
+    // le righe nascono già spuntate "consegnato": nel caso normale la
+    // master non tocca niente, deflagga solo chi non ha ricevuto il kit
+    const consegneEsistenti = c.data || [];
+    const daCreare = iscrittiEdizione
+      .filter((i) => !consegneEsistenti.some((r) => r.iscritto_id === i.id))
+      .map((i) => ({
+        chiusura_id: riga.id, iscritto_id: i.id, kit_consegnato: true,
+        dermografo_consegnato: dermografoAcquistato(i) && i.dermografo_consegna !== "casa" ? true : null,
+      }));
+    // un dermografo di riserva per pezzo, mai aggregati: sono gli oggetti
+    // più costosi che escono dal magazzino, e vanno guardati uno per uno
+    const dermografiEsistenti = d.data || [];
+    const dermografiDaCreare = [];
+    Object.entries(spedito?.dermografi?.riserva || {}).forEach(([modello, quantita]) => {
+      for (let indice = 1; indice <= Number(quantita || 0); indice += 1) {
+        if (!dermografiEsistenti.some((r) => r.modello === modello && r.indice === indice)) {
+          dermografiDaCreare.push({ chiusura_id: riga.id, modello, indice, esito: null });
+        }
+      }
+    });
+    if (daCreare.length > 0) await supabase.from("chiusura_corso_consegne").insert(daCreare);
+    if (dermografiDaCreare.length > 0) await supabase.from("chiusura_corso_dermografi").insert(dermografiDaCreare);
+    const [c2, d2] = daCreare.length > 0 || dermografiDaCreare.length > 0
+      ? await Promise.all([
+          supabase.from("chiusura_corso_consegne").select("*").eq("chiusura_id", riga.id),
+          supabase.from("chiusura_corso_dermografi").select("*").eq("chiusura_id", riga.id),
+        ])
+      : [c, d];
+    setChiusura(riga);
+    setConsegne(c2.data || []);
+    setDermografiRighe((d2.data || []).sort((a, b) => a.modello.localeCompare(b.modello) || a.indice - b.indice));
+    setPrelievi(p.data || []);
+    setCaricando(false);
+  }
+
+  const consegnaDi = (iscrittoId) => consegne.find((r) => r.iscritto_id === iscrittoId) || null;
+  async function cambiaConsegna(iscrittoId, campi) {
+    const riga = consegnaDi(iscrittoId);
+    if (!riga) return;
+    setConsegne((prev) => prev.map((r) => (r.id === riga.id ? { ...r, ...campi } : r)));
+    await supabase.from("chiusura_corso_consegne").update(campi).eq("id", riga.id);
+  }
+  async function cambiaDermografo(id, campi) {
+    setDermografiRighe((prev) => prev.map((r) => (r.id === id ? { ...r, ...campi } : r)));
+    await supabase.from("chiusura_corso_dermografi").update(campi).eq("id", id);
+  }
+  async function aggiungiPrelievo(prodottoId) {
+    setRicercaPrelievo("");
+    const { data } = await supabase.from("chiusura_corso_prelievi")
+      .insert({ chiusura_id: chiusura.id, prodotto_id: prodottoId, quantita: 1, dichiarato_da: nomeUtente || null })
+      .select().single();
+    if (data) setPrelievi((prev) => [...prev, data]);
+  }
+  async function cambiaPrelievo(id, campi) {
+    setPrelievi((prev) => prev.map((r) => (r.id === id ? { ...r, ...campi } : r)));
+    await supabase.from("chiusura_corso_prelievi").update(campi).eq("id", id);
+  }
+  async function rimuoviPrelievo(id) {
+    setPrelievi((prev) => prev.filter((r) => r.id !== id));
+    await supabase.from("chiusura_corso_prelievi").delete().eq("id", id);
+  }
+
+  // --- i conti ---
+  // le vendite fatte a questo corso: quelle consegnate in aula tolgono
+  // pezzi da qui, quelle "da spedire" partiranno da Raf e non toccano il
+  // materiale presente in sede
+  const venditeCorso = (venditeShop || []).filter((v) => v.corso_data_id === corsoData?.id && v.tipo_movimento !== "annullamento");
+  const idProdottoRiga = (riga) => riga.prodotto_id || (prodottiShop || []).find((p) => p.nome === riga.nome)?.id || null;
+  function sommaVendite(filtro) {
+    const mappa = {};
+    venditeCorso.filter(filtro).forEach((v) => {
+      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((r) => {
+        const id = idProdottoRiga(r);
+        if (id) mappa[id] = (mappa[id] || 0) + (r.quantita || 0);
+      });
+    });
+    return mappa;
+  }
+  const consegnateInAula = (v) => v.consegnato_in_aula !== false;
+  const vendutoDaiKit = sommaVendite((v) => v.prelevato_dai_kit && consegnateInAula(v));
+  const vendutoDaMerce = sommaVendite((v) => !v.prelevato_dai_kit && consegnateInAula(v));
+
+  // kit: spediti − consegnati agli allievi presenti
+  const consegnatiPerKit = {};
+  iscrittiEdizione.forEach((i) => {
+    const riga = consegnaDi(i.id);
+    if (riga && riga.kit_consegnato === false) return;
+    const kitId = i.kit_id || (spedito?.iscritti || []).find((x) => x.id === i.id)?.kit_id;
+    if (kitId) consegnatiPerKit[kitId] = (consegnatiPerKit[kitId] || 0) + 1;
+  });
+  const righeKit = Object.entries(spedito?.kit || {}).map(([kitId, dati]) => {
+    const spediti = (dati.per_iscritti || 0) + (dati.riserva || 0);
+    return { kitId, nome: dati.nome || nomeKit(kitId), spediti, consegnati: consegnatiPerKit[kitId] || 0, atteso: Math.max(0, spediti - (consegnatiPerKit[kitId] || 0)) };
+  }).filter((r) => r.spediti > 0);
+
+  // dermografi: quelli degli allievi più quelli di riserva, meno quelli
+  // che risultano consegnati (dall'elenco allievi o dalle righe di riserva)
+  const righeDermografi = (() => {
+    const assegnati = spedito?.dermografi?.assegnati || {};
+    const riserva = spedito?.dermografi?.riserva || {};
+    return [...new Set([...Object.keys(assegnati), ...Object.keys(riserva)])].map((modello) => {
+      const spediti = (assegnati[modello] || 0) + Number(riserva[modello] || 0);
+      const consegnatiAllievi = iscrittiEdizione.filter((i) =>
+        dermografoAcquistato(i) === modello && i.dermografo_consegna !== "casa" && consegnaDi(i.id)?.dermografo_consegnato !== false
+      ).length;
+      const consegnatiRiserva = dermografiRighe.filter((r) => r.modello === modello && r.esito === "consegnato").length;
+      return { modello, spediti, consegnati: consegnatiAllievi + consegnatiRiserva, atteso: Math.max(0, spediti - consegnatiAllievi - consegnatiRiserva) };
+    }).filter((r) => r.spediti > 0);
+  })();
+
+  // merce da vendita: spedita − venduta e consegnata in aula
+  const righeMerce = Object.entries(spedito?.merce_vendita || {}).map(([prodottoId, quantita]) => ({
+    prodottoId, spediti: Number(quantita || 0), venduti: vendutoDaMerce[prodottoId] || 0,
+    atteso: Math.max(0, Number(quantita || 0) - (vendutoDaMerce[prodottoId] || 0)),
+  })).filter((r) => r.spediti > 0);
+
+  // altro materiale spedito (accessori didattica ed extra non da vendita)
+  const righeAltro = Object.entries(spedito?.accessori || {}).map(([prodottoId, quantita]) => ({
+    prodottoId, spediti: Number(quantita || 0), atteso: Number(quantita || 0),
+  })).filter((r) => r.spediti > 0);
+
+  // pezzi usciti dai kit: le vendite col prelievo dichiarato, più le
+  // sostituzioni. Quale sacchetto sia stato aperto è irrilevante: conta
+  // che il pezzo è uscito
+  const usciteDaiKit = (() => {
+    const mappa = {};
+    Object.entries(vendutoDaiKit).forEach(([id, q]) => { mappa[id] = (mappa[id] || 0) + q; });
+    prelievi.forEach((r) => { mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + (r.quantita || 0); });
+    return Object.entries(mappa).map(([prodottoId, quantita]) => ({ prodottoId, quantita }));
+  })();
+  const righeDifettosi = prelievi.filter((r) => r.guasto_riconsegnato).map((r) => ({ prodottoId: r.prodotto_id, quantita: r.quantita || 0 }));
+  const scartiDichiarati = prelievi.filter((r) => !r.guasto_riconsegnato);
+
+  const chiaveRiga = (tipo, riferimento) => `${tipo}:${riferimento}`;
+  function scostamentoDi(tipo, riferimento) { return scostamenti[chiaveRiga(tipo, riferimento)] || null; }
+  function apriScostamento(tipo, riferimento, atteso) {
+    setScostamenti((prev) => ({ ...prev, [chiaveRiga(tipo, riferimento)]: { dichiarato: atteso, motivo: MOTIVI_SCOSTAMENTO[0] } }));
+  }
+  function cambiaScostamento(tipo, riferimento, campi) {
+    setScostamenti((prev) => ({ ...prev, [chiaveRiga(tipo, riferimento)]: { ...prev[chiaveRiga(tipo, riferimento)], ...campi } }));
+  }
+  function annullaScostamento(tipo, riferimento) {
+    setScostamenti((prev) => { const copia = { ...prev }; delete copia[chiaveRiga(tipo, riferimento)]; return copia; });
+  }
+
+  async function confermaBolla() {
+    if (!chiusura) return;
+    if (!window.confirm("Confermi la bolla di rientro? Da qui in poi la vede Raf, che verificherà il pacco al ricevimento.")) return;
+    setSalvando(true);
+    const righe = [
+      ...righeKit.map((r) => ({ tipo: "kit", kit_id: r.kitId, atteso: r.atteso, chiave: chiaveRiga("kit", r.kitId) })),
+      ...righeDermografi.map((r) => ({ tipo: "dermografo", modello_dermografo: r.modello, atteso: r.atteso, chiave: chiaveRiga("dermografo", r.modello) })),
+      ...righeMerce.map((r) => ({ tipo: "prodotto", prodotto_id: r.prodottoId, atteso: r.atteso, chiave: chiaveRiga("merce", r.prodottoId) })),
+      ...righeAltro.map((r) => ({ tipo: "prodotto", prodotto_id: r.prodottoId, atteso: r.atteso, chiave: chiaveRiga("altro", r.prodottoId) })),
+      ...righeDifettosi.map((r) => ({ tipo: "reso_difettoso", prodotto_id: r.prodottoId, atteso: r.quantita, chiave: chiaveRiga("difettoso", r.prodottoId) })),
+    ].map(({ chiave, ...riga }) => {
+      const s = scostamenti[chiave];
+      return { ...riga, chiusura_id: chiusura.id, dichiarato: s ? Number(s.dichiarato) : null, motivo: s ? s.motivo : null };
+    });
+    await supabase.from("chiusura_corso_righe").delete().eq("chiusura_id", chiusura.id);
+    if (righe.length > 0) await supabase.from("chiusura_corso_righe").insert(righe);
+    const { data } = await supabase.from("chiusura_corso").update({
+      stato: "confermata_master", confermata_ts: new Date().toISOString(), confermata_da: nomeUtente || null,
+    }).eq("id", chiusura.id).select().single();
+    setSalvando(false);
+    if (data) setChiusura(data);
+  }
+
+  const titoloBlocco = { ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 };
+  const sottotitoloBlocco = { ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.45 };
+  const rigaBase = { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` };
+  const confermata = chiusura?.stato && chiusura.stato !== "aperta";
+  const risultatiPrelievo = ricercaPrelievo.trim()
+    ? (prodottiShop || []).filter((p) => p.attivo !== false && p.nome.toLowerCase().includes(ricercaPrelievo.trim().toLowerCase())).slice(0, 8)
+    : [];
+
+  function RigaAttesa({ etichetta, dettaglio, atteso, tipo, riferimento }) {
+    const s = scostamentoDi(tipo, riferimento);
+    return (
+      <div style={{ padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+            <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>{etichetta}</div>
+            {dettaglio && <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 1 }}>{dettaglio}</div>}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+            <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: s ? MUTED : NAVY, textDecoration: s ? "line-through" : "none" }}>{atteso}</span>
+            {s && <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#C0392B" }}>{s.dichiarato}</span>}
+            {!confermata && (s
+              ? <button onClick={() => annullaScostamento(tipo, riferimento)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "none", border: "none", cursor: "pointer" }}>Annulla</button>
+              : <button onClick={() => apriScostamento(tipo, riferimento, atteso)} style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer" }}>Non torna</button>
+            )}
+          </div>
+        </div>
+        {s && !confermata && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+            <input
+              type="number" min="0" style={{ ...inputStyle, width: 80, padding: "6px 8px" }}
+              value={s.dichiarato} onChange={(e) => cambiaScostamento(tipo, riferimento, { dichiarato: e.target.value === "" ? 0 : Math.max(0, Number(e.target.value)) })}
+            />
+            <select style={{ ...inputStyle, width: "auto", flex: "1 1 220px", padding: "6px 8px" }} value={s.motivo} onChange={(e) => cambiaScostamento(tipo, riferimento, { motivo: e.target.value })}>
+              {MOTIVI_SCOSTAMENTO.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (caricando) {
+    return (
+      <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px", ...fontBody, color: MUTED }}>Carico la chiusura…</div>
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 760, margin: "0 auto", padding: isMobile ? "20px 16px 60px" : "32px 20px 60px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+        <TastoLivelloPrecedente titolo="Indietro" onClick={onBack} />
+        <div style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>Chiusura corso</div>
+      </div>
+      <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, marginBottom: 18 }}>
+        {corso?.nome || "—"} · {toTitleCase(loc?.nome || "—")} · {fmtData(corsoData?.data_inizio)}
+      </div>
+
+      {!fotografata && (
+        <div style={{ ...cardStyle, padding: 14, marginBottom: 16, border: "1px solid #E8D9A0", background: "#FBF3E0" }}>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.5 }}>
+            Di questo corso non esiste la fotografia della spedizione: i numeri qui sotto sono ricostruiti da quello che risulta oggi.
+            Dalla prossima edizione la fotografia si scatta da sola quando Raf segna il pacco come ritirato dal corriere.
+          </div>
+        </div>
+      )}
+
+      {confermata && (
+        <div style={{ ...cardStyle, padding: 14, marginBottom: 16, border: "1px solid #A8D5AE", background: "#E9F5EA" }}>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#2E7D32" }}>
+            Bolla confermata{chiusura.confermata_da ? ` da ${chiusura.confermata_da}` : ""} il {fmtData((chiusura.confermata_ts || "").slice(0, 10))}.
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: "#2E7D32", marginTop: 2 }}>
+            Ora tocca a Raf: il corso si chiude quando il pacco rientra e viene verificato.
+          </div>
+        </div>
+      )}
+
+      {/* 1 — Allievi */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+        <div style={titoloBlocco}>1 · Allievi</div>
+        <div style={sottotitoloBlocco}>Sono tutti già spuntati come "kit consegnato": togli la spunta solo a chi non l'ha ricevuto.</div>
+        {iscrittiEdizione.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun iscritto.</div>}
+        {iscrittiEdizione.map((i) => {
+          const riga = consegnaDi(i.id);
+          const modello = dermografoAcquistato(i);
+          const dermografoQui = modello && i.dermografo_consegna !== "casa";
+          return (
+            <div key={i.id} style={rigaBase}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: confermata ? "default" : "pointer", flex: "1 1 220px", minWidth: 0 }}>
+                <input type="checkbox" disabled={confermata} checked={riga ? riga.kit_consegnato !== false : true} onChange={(e) => cambiaConsegna(i.id, { kit_consegnato: e.target.checked })} />
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{`${i.nome || ""} ${i.cognome || ""}`.trim()}</span>
+                  <span style={{ display: "block", ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 1 }}>{i.pacchetto_kit || "Nessun kit"}</span>
+                </span>
+              </label>
+              {dermografoQui ? (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: confermata ? "default" : "pointer", flexShrink: 0, ...fontBody, fontSize: 12.5, color: NAVY }}>
+                  <input type="checkbox" disabled={confermata} checked={riga ? riga.dermografo_consegnato !== false : true} onChange={(e) => cambiaConsegna(i.id, { dermografo_consegnato: e.target.checked })} />
+                  {etichettaDermografo(modello)}
+                </label>
+              ) : (
+                <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>
+                  {modello ? "dermografo ricevuto a casa" : "nessun dermografo"}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 2 — Kit di riserva */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+        <div style={titoloBlocco}>2 · Kit di riserva</div>
+        <div style={sottotitoloBlocco}>Non li conti: è una sottrazione fra quanto ha spedito Raf e quanto è stato consegnato qui sopra.</div>
+        {righeKit.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit spedito per questa edizione.</div>}
+        {righeKit.map((r) => (
+          <RigaAttesa
+            key={r.kitId} tipo="kit" riferimento={r.kitId} atteso={r.atteso}
+            etichetta={r.nome}
+            dettaglio={`spediti ${r.spediti} · consegnati ${r.consegnati}`}
+          />
+        ))}
+      </div>
+
+      {/* 3 — Dermografi */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+        <div style={titoloBlocco}>3 · Dermografi</div>
+        <div style={sottotitoloBlocco}>Uno per uno, mai a mucchio: sono gli oggetti più costosi del pacco. Per ciascuno di riserva, di' se è stato consegnato o se rientra.</div>
+        {dermografiRighe.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun dermografo di riserva in questo pacco.</div>}
+        {dermografiRighe.map((r) => (
+          <div key={r.id} style={rigaBase}>
+            <div style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY }}>
+              {etichettaDermografo(r.modello)} <span style={{ color: MUTED, fontWeight: 400 }}>n. {r.indice}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", flexShrink: 0 }}>
+              <button
+                disabled={confermata}
+                onClick={() => cambiaDermografo(r.id, { esito: "rientra", iscritto_id: null })}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, borderRadius: 14, padding: "6px 12px", cursor: confermata ? "default" : "pointer",
+                  color: r.esito === "rientra" ? "#fff" : NAVY, background: r.esito === "rientra" ? NAVY : "#fff", border: `1px solid ${r.esito === "rientra" ? NAVY : CREAM_BORDER}` }}
+              >
+                Rientra
+              </button>
+              <button
+                disabled={confermata}
+                onClick={() => cambiaDermografo(r.id, { esito: "consegnato" })}
+                style={{ ...fontBody, fontSize: 12, fontWeight: 700, borderRadius: 14, padding: "6px 12px", cursor: confermata ? "default" : "pointer",
+                  color: r.esito === "consegnato" ? "#fff" : NAVY, background: r.esito === "consegnato" ? NAVY : "#fff", border: `1px solid ${r.esito === "consegnato" ? NAVY : CREAM_BORDER}` }}
+              >
+                Consegnato
+              </button>
+              {r.esito === "consegnato" && (
+                <select
+                  disabled={confermata} style={{ ...inputStyle, width: "auto", minWidth: 160, padding: "6px 8px" }}
+                  value={r.iscritto_id || ""} onChange={(e) => cambiaDermografo(r.id, { iscritto_id: e.target.value || null })}
+                >
+                  <option value="">— a quale allievo —</option>
+                  {iscrittiEdizione.map((i) => <option key={i.id} value={i.id}>{`${i.nome || ""} ${i.cognome || ""}`.trim()}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 4 — Materiale prelevato dai kit */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+        <div style={titoloBlocco}>4 · Materiale prelevato dai kit in loco</div>
+        <div style={sottotitoloBlocco}>Da quale kit sia uscito il pezzo non interessa: conta che è uscito.</div>
+
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Venduto prendendolo dai kit</div>
+        {Object.keys(vendutoDaiKit).length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 14 }}>Nessuna vendita con prelievo dai kit. Si dichiara al momento dell'incasso, con la spunta sul POS.</div>
+        ) : (
+          <div style={{ marginBottom: 14 }}>
+            {Object.entries(vendutoDaiKit).map(([prodottoId, q]) => (
+              <div key={prodottoId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: NAVY, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <span>{nomeProdotto(prodottoId)}</span><span style={{ fontWeight: 700 }}>{q}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>Dato in sostituzione di un pezzo difettoso</div>
+        {prelievi.map((r) => (
+          <div key={r.id} style={rigaBase}>
+            <span style={{ flex: "1 1 160px", minWidth: 0, ...fontBody, fontSize: 13.5, fontWeight: 600, color: NAVY }}>{nomeProdotto(r.prodotto_id)}</span>
+            <input
+              type="number" min="1" disabled={confermata} style={{ ...inputStyle, width: 64, padding: "6px 8px" }}
+              value={r.quantita} onChange={(e) => cambiaPrelievo(r.id, { quantita: Math.max(1, Number(e.target.value) || 1) })}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: confermata ? "default" : "pointer", ...fontBody, fontSize: 12.5, color: NAVY }}>
+              <input type="checkbox" disabled={confermata} checked={!!r.guasto_riconsegnato} onChange={(e) => cambiaPrelievo(r.id, { guasto_riconsegnato: e.target.checked })} />
+              Pezzo guasto riconsegnato
+            </label>
+            {!confermata && <button onClick={() => rimuoviPrelievo(r.id)} title="Rimuovi" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: 4 }}>✕</button>}
+          </div>
+        ))}
+        {!confermata && (
+          <div style={{ marginTop: 10 }}>
+            <input style={inputStyle} placeholder="Cerca il prodotto dato in sostituzione…" value={ricercaPrelievo} onChange={(e) => setRicercaPrelievo(e.target.value)} />
+            {risultatiPrelievo.map((p) => (
+              <button key={p.id} onClick={() => aggiungiPrelievo(p.id)} style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", borderBottom: `1px solid ${CREAM_BORDER}`, padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY }}>
+                {p.nome}
+              </button>
+            ))}
+          </div>
+        )}
+        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10, lineHeight: 1.45 }}>
+          Con la spunta il pezzo rotto torna indietro e finisce in una giacenza separata, così il conto quadra senza sporcare il magazzino vendibile. Senza la spunta è un pezzo perso, e resta scritto come tale.
+        </div>
+      </div>
+
+      {/* 5 — Materiale da vendita */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+        <div style={titoloBlocco}>5 · Materiale da vendita</div>
+        <div style={sottotitoloBlocco}>Scende da solo a ogni incasso registrato: non c'è niente da contare, guardalo solo se un numero non torna.</div>
+        {righeMerce.length === 0 && <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessuna merce da vendita spedita a questo corso.</div>}
+        {righeMerce.map((r) => (
+          <RigaAttesa
+            key={r.prodottoId} tipo="merce" riferimento={r.prodottoId} atteso={r.atteso}
+            etichetta={nomeProdotto(r.prodottoId)}
+            dettaglio={`spediti ${r.spediti} · venduti ${r.venduti}`}
+          />
+        ))}
+      </div>
+
+      {/* La bolla */}
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 14 }}>
+        <div style={titoloBlocco}>Bolla di rientro</div>
+        <div style={sottotitoloBlocco}>Già scritta. Confermala, o correggi la riga che non torna dicendo perché.</div>
+
+        {righeKit.filter((r) => r.atteso > 0).map((r) => (
+          <div key={r.kitId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 14, color: NAVY, padding: "6px 0" }}>
+            <span>{r.nome} <span style={{ color: MUTED, fontSize: 12.5 }}>(integri)</span></span>
+            <span style={{ fontWeight: 700 }}>{scostamentoDi("kit", r.kitId)?.dichiarato ?? r.atteso}</span>
+          </div>
+        ))}
+        {righeDermografi.filter((r) => r.atteso > 0).map((r) => (
+          <div key={r.modello} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 14, color: NAVY, padding: "6px 0" }}>
+            <span>{etichettaDermografo(r.modello)}</span>
+            <span style={{ fontWeight: 700 }}>{scostamentoDi("dermografo", r.modello)?.dichiarato ?? r.atteso}</span>
+          </div>
+        ))}
+        {righeMerce.filter((r) => r.atteso > 0).map((r) => (
+          <div key={r.prodottoId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 14, color: NAVY, padding: "6px 0" }}>
+            <span>{nomeProdotto(r.prodottoId)}</span>
+            <span style={{ fontWeight: 700 }}>{scostamentoDi("merce", r.prodottoId)?.dichiarato ?? r.atteso}</span>
+          </div>
+        ))}
+        {righeAltro.length > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 12, marginBottom: 2 }}>Altro materiale spedito</div>
+            {righeAltro.map((r) => (
+              <RigaAttesa key={r.prodottoId} tipo="altro" riferimento={r.prodottoId} atteso={r.atteso} etichetta={nomeProdotto(r.prodottoId)} dettaglio={`spediti ${r.spediti}`} />
+            ))}
+          </>
+        )}
+        {righeDifettosi.length > 0 && (
+          <>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.5, marginTop: 12, marginBottom: 2 }}>Resi difettosi — giacenza separata</div>
+            {righeDifettosi.map((r) => (
+              <div key={r.prodottoId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 14, color: NAVY, padding: "6px 0" }}>
+                <span>{nomeProdotto(r.prodottoId)}</span><span style={{ fontWeight: 700 }}>{r.quantita}</span>
+              </div>
+            ))}
+          </>
+        )}
+        {usciteDaiKit.length > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 2 }}>Meno, usciti dai kit</div>
+            {usciteDaiKit.map((r) => (
+              <div key={r.prodottoId} style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: 13, color: MUTED, padding: "4px 0" }}>
+                <span>{nomeProdotto(r.prodottoId)}</span><span>− {r.quantita}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {scartiDichiarati.length > 0 && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 10 }}>
+            Dichiarati persi e non attesi indietro: {scartiDichiarati.map((r) => `${nomeProdotto(r.prodotto_id)} (${r.quantita})`).join(" · ")}.
+          </div>
+        )}
+
+        {!confermata && (
+          <div style={{ marginTop: 16 }}>
+            <Button onClick={confermaBolla} disabled={salvando}>{salvando ? "Salvo…" : "Conferma la bolla di rientro"}</Button>
+            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
+              Il corso non si chiude qui: si chiude quando Raf riceve il pacco e registra cosa è tornato davvero.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {onApriInventarioSede && (
+        <button onClick={onApriInventarioSede} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
+          Inventario di sede →
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, segnalazioniMagazzino, ricarica, onBack }) {
   const isMobile = useIsMobile();
   const [ricercaIntero, setRicercaIntero] = useState("");
@@ -35479,7 +36017,9 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     // zero, non solo il totale, altrimenti risulterebbe un ricavo fantasma
     // per prodotto in report che sommano "prodotti.totale_riga"
     const fattoreSconto = subtotale > 0 ? totaleNetto / subtotale : 1;
-    const prodottiRiga = carrello.map((r) => ({ nome: r.nome, quantita: r.quantita, totale_riga: omaggioAttivo ? 0 : round2(r.prezzo * r.quantita * fattoreSconto) }));
+    // il prodotto_id serve alla chiusura del corso per sapere QUALE pezzo è
+    // uscito: il solo nome costringeva a indovinare per stringa
+    const prodottiRiga = carrello.map((r) => ({ prodotto_id: r.prodottoId, nome: r.nome, quantita: r.quantita, totale_riga: omaggioAttivo ? 0 : round2(r.prezzo * r.quantita * fattoreSconto) }));
 
     // Al banco c'è gente che aspetta: la schermata si svuota subito e le
     // scritture (scarico magazzino, vendita, eventuale spedizione) vanno
@@ -38856,6 +39396,59 @@ function dermografiRichiestiEdizione(iscrittiEdizione) {
   });
   return conteggio;
 }
+// Cosa parte per un'edizione, in un oggetto solo: kit (per gli iscritti e
+// di riserva), gli allievi con il loro kit e il loro dermografo, i
+// dermografi assegnati e di riserva, gli accessori, la merce da vendere e
+// le consulenze.
+//
+// Serve due volte, e nei due momenti significa cose diverse. Quando Raf
+// segna il pacco come ritirato dal corriere la si scatta e la si congela
+// (logistica_kit_edizioni.spedizione_snapshot): da quel momento un
+// iscritto aggiunto o cancellato non cambia più quello che risulta
+// spedito. Alla chiusura del corso si legge quella fotografia — e solo se
+// manca, per un'edizione partita prima che questo esistesse, la si
+// ricompone dal vivo, sapendo che è una ricostruzione.
+function componiSpedizione({ stato, iscrittiEdizione, kitDefinizioni, corsoId }) {
+  const perIscritti = kitRichiestiEdizione(iscrittiEdizione || [], kitDefinizioni || [], corsoId);
+  const riserva = stato?.riserva_per_kit || {};
+  const kit = {};
+  new Set([...Object.keys(perIscritti), ...Object.keys(riserva)]).forEach((kitId) => {
+    const q = perIscritti[kitId] || 0;
+    const r = Number(riserva[kitId] || 0);
+    if (q + r <= 0) return;
+    kit[kitId] = { nome: (kitDefinizioni || []).find((k) => k.id === kitId)?.nome || null, per_iscritti: q, riserva: r };
+  });
+  // gli extra "da vendere" viaggiano nello stesso pacco ma sono un'altra
+  // cosa: non si consumano in aula, si vendono — e quello che non si vende
+  // torna indietro intero
+  const daVendita = stato?.extra_da_vendita || {};
+  const accessori = {};
+  const merceVendita = {};
+  Object.entries(stato?.accessori_quantita || {}).forEach(([chiave, q]) => {
+    const prodottoId = chiave.split("::")[1];
+    if (!prodottoId || !q) return;
+    const destinazione = chiave.startsWith("extra::") && daVendita[prodottoId] ? merceVendita : accessori;
+    destinazione[prodottoId] = (destinazione[prodottoId] || 0) + Number(q);
+  });
+  return {
+    ts: new Date().toISOString(),
+    kit,
+    iscritti: (iscrittiEdizione || []).map((i) => ({
+      id: i.id,
+      nome: `${i.nome || ""} ${i.cognome || ""}`.trim(),
+      kit_id: i.kit_id || null,
+      kit_nome: i.pacchetto_kit || null,
+      dermografo: dermografoAcquistato(i),
+      dermografo_consegna: i.dermografo_consegna || null,
+    })),
+    // "assegnati" esclude già chi il dermografo se l'è fatto mandare a
+    // casa: quello nel pacco del corso non c'è mai stato
+    dermografi: { assegnati: dermografiRichiestiEdizione(iscrittiEdizione || []), riserva: stato?.dermografi_riserva || {} },
+    accessori,
+    merce_vendita: merceVendita,
+    consulenze: (stato?.consulenze_edizione || []).map((r) => ({ id: r.id, prodotto_id: r.prodotto_id })),
+  };
+}
 // quanti kit di ciascun tipo servono per un'edizione, dedotti dalle
 // scelte reali degli iscritti (iscritti.pacchetto_kit corrisponde
 // sempre esattamente al nome di un kit_definizioni di quel corso) —
@@ -39640,54 +40233,6 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // parte davvero, quindi è qui che si chiede se scaricare i prodotti
   // dal magazzino — non più un tasto separato ("Modifica quantità di
   // magazzino"), lo scarico è legato all'avanzamento della fase stessa
-  // La fotografia di cosa è partito davvero. Si scatta quando il pacco
-  // viene ritirato dal corriere, ed è la base di ogni conto alla chiusura
-  // del corso: da quel momento un iscritto aggiunto o cancellato non
-  // cambia più quello che risulta spedito. Senza, l'atteso in rientro
-  // poggerebbe su un numero che si muove alle spalle di chi lo legge.
-  function fotografiaSpedizione(corsoData) {
-    const stato = statoDi(corsoData.id);
-    const iscrittiEdizione = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id);
-    const perIscritti = kitRichiestiEdizione(iscrittiEdizione, kitDefinizioni || [], corsoData.corso_id);
-    const riserva = stato.riserva_per_kit || {};
-    const kit = {};
-    new Set([...Object.keys(perIscritti), ...Object.keys(riserva)]).forEach((kitId) => {
-      const q = perIscritti[kitId] || 0;
-      const r = Number(riserva[kitId] || 0);
-      if (q + r <= 0) return;
-      kit[kitId] = { nome: (kitDefinizioni || []).find((k) => k.id === kitId)?.nome || null, per_iscritti: q, riserva: r };
-    });
-    // gli extra "da vendere" viaggiano nello stesso pacco ma sono un'altra
-    // cosa: non si consumano in aula, si vendono — e quello che non si
-    // vende torna indietro intero
-    const daVendita = stato.extra_da_vendita || {};
-    const accessori = {};
-    const merceVendita = {};
-    Object.entries(stato.accessori_quantita || {}).forEach(([chiave, q]) => {
-      const prodottoId = chiave.split("::")[1];
-      if (!prodottoId || !q) return;
-      const destinazione = chiave.startsWith("extra::") && daVendita[prodottoId] ? merceVendita : accessori;
-      destinazione[prodottoId] = (destinazione[prodottoId] || 0) + Number(q);
-    });
-    return {
-      ts: new Date().toISOString(),
-      kit,
-      iscritti: iscrittiEdizione.map((i) => ({
-        id: i.id,
-        nome: `${i.nome || ""} ${i.cognome || ""}`.trim(),
-        kit_id: i.kit_id || null,
-        kit_nome: i.pacchetto_kit || null,
-        dermografo: dermografoAcquistato(i),
-        dermografo_consegna: i.dermografo_consegna || null,
-      })),
-      // "assegnati" esclude già chi il dermografo se l'è fatto mandare a
-      // casa: quello nel pacco del corso non c'è mai stato
-      dermografi: { assegnati: dermografiRichiestiEdizione(iscrittiEdizione), riserva: stato.dermografi_riserva || {} },
-      accessori,
-      merce_vendita: merceVendita,
-      consulenze: (stato.consulenze_edizione || []).map((r) => ({ id: r.id, prodotto_id: r.prodotto_id })),
-    };
-  }
   async function cambiaFaseLogistica(corsoData, fase) {
     if (fase === "ritirato_corriere") {
       if (!window.confirm("Vuoi scaricare i prodotti in partenza dal magazzino?")) return;
@@ -39695,8 +40240,13 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
       // avanza: altrimenti risulterebbe "ritirato" senza scarico registrato
       const ok = await sincronizzaMagazzino(corsoData);
       if (ok === false) return;
+      const foto = componiSpedizione({
+        stato: statoDi(corsoData.id),
+        iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === corsoData.id),
+        kitDefinizioni, corsoId: corsoData.corso_id,
+      });
       await salvaCampiEdizione(corsoData.id, {
-        fase, spedizione_snapshot: fotografiaSpedizione(corsoData), spedizione_snapshot_ts: new Date().toISOString(),
+        fase, spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
       });
       return;
     }
@@ -44057,6 +44607,10 @@ export default function App() {
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
+  // la chiusura del corso e l'inventario della sede sono due lavori
+  // diversi che prima stavano nella stessa pagina: il primo riguarda il
+  // pacco che torna, il secondo cosa c'è stabilmente in quella sede
+  function apriChiusuraCorso(corsoDataId) { scrollAppInCima(); setInventarioSedeCorsoDataId(corsoDataId); setView("chiusuracorso"); }
   function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setView("classemaster"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
@@ -44867,6 +45421,7 @@ export default function App() {
           venditeShop={venditeShop} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} coupon={coupon}
           puntiMasterRegolaBase={puntiMasterRegolaBase} puntiMasterPeriodiSpeciali={puntiMasterPeriodiSpeciali} puntiMasterImpostazioni={puntiMasterImpostazioni}
           onApriInventarioSede={apriInventarioSede}
+          onApriChiusura={apriChiusuraCorso}
           onApriClasse={apriClasseMaster}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "dashboardmaster", "Dashboard master")}
@@ -44902,6 +45457,18 @@ export default function App() {
           />
         );
       })()}
+
+      {view === "chiusuracorso" && (
+        <PaginaChiusuraCorso
+          corsoData={corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId) || null}
+          corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
+          location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
+          logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
+          masterLoggataId={utenteLoggato?.masterId || null} nomeUtente={utenteLoggato?.nome || null}
+          onBack={() => setView("dashboardmaster")}
+          onApriInventarioSede={() => setView("inventariosede")}
+        />
+      )}
 
       {view === "inventariosede" && (
         <PaginaInventarioSede
