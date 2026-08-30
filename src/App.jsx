@@ -13233,13 +13233,26 @@ function corsoParzialeDaKitPmuBase(testoKit) {
     haLabbra = t.includes("labbra");
     haEyeliner = t.includes("eyeliner");
   }
+  // se il nome dichiara quanti giorni dura ("- 2 gg"), quella è la parola
+  // definitiva sul NUMERO: i trattamenti dicono QUALI giorni, il conteggio
+  // li taglia dal primo. "Sopracciglia - 2 gg" sono i giorni 1 e 2, non 1-3
+  const conteggio = /(\d+)\s*(?:gg|giorn[oi])\b/.exec(t);
+  const giorniDichiarati = conteggio ? parseInt(conteggio[1], 10) : null;
+
   const nTrattamenti = [haSopracciglia, haLabbra, haEyeliner].filter(Boolean).length;
-  if (nTrattamenti === 0 || nTrattamenti === 3) return null;
+  if (nTrattamenti === 0 || nTrattamenti === 3) {
+    // nessun trattamento riconosciuto ma i giorni sì: i primi N
+    if (nTrattamenti === 0 && giorniDichiarati > 0) {
+      return { corsoParziale: true, giorniPresenza: Array.from({ length: giorniDichiarati }, (_, k) => k + 1) };
+    }
+    return null;
+  }
   const giorni = new Set();
   if (haSopracciglia) [1, 2, 3].forEach((g) => giorni.add(g));
   if (haLabbra) [4, 5].forEach((g) => giorni.add(g));
   if (haEyeliner) giorni.add(6);
-  return { corsoParziale: true, giorniPresenza: [...giorni].sort((a, b) => a - b) };
+  const elenco = [...giorni].sort((a, b) => a - b);
+  return { corsoParziale: true, giorniPresenza: giorniDichiarati > 0 ? elenco.slice(0, giorniDichiarati) : elenco };
 }
 
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
