@@ -1808,7 +1808,7 @@ const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 }
 // le caselle del blocco "Totale pattuito", su fondo azzurro: il bordo
 // crema degli altri campi lì sopra si perdeva, e le tre caselle
 // sembravano macchie bianche senza contorno
-const campoBloccoVendita = { ...inputStyle, background: "#fff", border: "1px solid #C7D8E4" };
+const campoBloccoVendita = { ...inputStyle, background: "#fff", border: "1px solid #E1E9EF" };
 
 // tendina con ricerca: una <select> nativa va benissimo per dieci voci,
 // ma con 140 fornitori in ordine alfabetico trovare il proprio significa
