@@ -16243,6 +16243,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // magazzino, sconto riservato all'allievo, e la quota con i suoi metodi
   const [dermografoScelta, setDermografoScelta] = useState("");
   const [dermografoPagamento, setDermografoPagamento] = useState("");
+  const [dermografoConsegna, setDermografoConsegna] = useState("");
   const [dermografoSconto, setDermografoSconto] = useState("");
   const [pagDermografo, setPagDermografo] = useState(QUOTA_VUOTA);
   const [pagDermografoPagato, setPagDermografoPagato] = useState(false);
@@ -17048,6 +17049,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     // solo quelli rimasti per sbaglio nel vecchio formato
     setDermografoScelta(i.dermografo_scelta || "");
     setDermografoPagamento(i.dermografo_pagamento || "");
+    setDermografoConsegna(i.dermografo_consegna || "");
     setDermografoSconto(i.dermografo_sconto != null ? String(i.dermografo_sconto) : "");
     setPagDermografo({
       ...QUOTA_VUOTA,
@@ -17215,6 +17217,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       // modello e modalità di pagamento non sono facoltativi
       if (dermografoAParte && !dermografoScelta) altriMancanti.push("la risposta sul dermografo acquistato a parte");
       if (dermografoAParte && dermografoComprato && !dermografoPagamento) altriMancanti.push("come l'allievo paga il dermografo");
+      if (dermografoAParte && dermografoComprato && !dermografoConsegna) altriMancanti.push("dove l'allievo riceve il dermografo");
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
       if (pagAcconto.totale === "") altriMancanti.push("quota acconto");
       if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
@@ -17325,6 +17328,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         // lasciarsi dietro il conto di un dermografo che non c'è più
         dermografo_scelta: dermografoAParte ? (dermografoScelta || null) : null,
         dermografo_pagamento: dermografoAParte && dermografoComprato ? (dermografoPagamento || null) : null,
+        dermografo_consegna: dermografoAParte && dermografoComprato ? (dermografoConsegna || null) : null,
         dermografo_prezzo_listino: dermografoDaPagare ? prezzoListinoDermografo : null,
         dermografo_sconto: dermografoDaPagare && dermografoSconto !== "" ? parseNum(dermografoSconto) : null,
         dermografo_imponibile: dermografoDaPagare && imponibileDermografo != null ? imponibileDermografo : null,
@@ -17334,6 +17338,8 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         pacchetto_kit: pacchettoKit.trim() || null,
         // per il magazzino conta solo quale pezzo esce: "no" e "ha il suo"
         // valgono entrambi "nessuno", la differenza la tiene dermografo_scelta
+        // il modello resta scritto anche se lo riceve a casa: a non contarlo
+        // per il magazzino ci pensa dermografo_consegna, qui non si mente
         dermografo: dermografoAParte
           ? (dermografoComprato ? dermografoScelta : (dermografoScelta ? "nessuno" : null))
           : (corso?.prevede_dermografo !== false ? (dermografo || null) : null),
@@ -18702,7 +18708,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                             // cambiando risposta il conto di prima non deve
                             // restare appeso: si riparte puliti
                             if (scelto !== "tekna" && scelto !== "horus") {
-                              setDermografoPagamento(""); setDermografoSconto("");
+                              setDermografoPagamento(""); setDermografoConsegna(""); setDermografoSconto("");
                               setPagDermografo(QUOTA_VUOTA); setPagDermografoPagato(false);
                             }
                           }}
@@ -18716,6 +18722,21 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                         </select>
                       </Field>
                     </div>
+                    {dermografoComprato && (
+                      <div style={{ flex: "1 1 200px" }}>
+                        <Field label="Tipo di consegna">
+                          <select
+                            value={dermografoConsegna}
+                            onChange={(e) => setDermografoConsegna(e.target.value)}
+                            style={{ ...campoAreaScheda, ...(dermografoConsegna ? {} : { color: MUTED }) }}
+                          >
+                            <option value="">— scegli —</option>
+                            <option value="casa">Riceve a casa subito</option>
+                            <option value="corso">Ritira al corso</option>
+                          </select>
+                        </Field>
+                      </div>
+                    )}
                     {dermografoComprato && (
                       <div style={{ flex: "1 1 200px" }}>
                         <Field label="Come lo paga">
@@ -37858,11 +37879,14 @@ function prodottoDermografo(prodottiShop, modello) {
   return trovati.length === 1 ? trovati[0] : null;
 }
 // quanti dermografi servono per un'edizione, per modello, contando solo
-// gli allievi che ne hanno davvero chiesto uno
+// gli allievi che ne hanno davvero chiesto uno E che lo ritirano al corso:
+// chi lo ha comprato dal sito e ricevuto a casa non passa dal nostro
+// pacco, quindi non va preparato né scaricato dal magazzino
 function dermografiRichiestiEdizione(iscrittiEdizione) {
   const conteggio = {};
   (iscrittiEdizione || []).forEach((i) => {
     if (!i.dermografo || i.dermografo === "nessuno") return;
+    if (i.dermografo_consegna === "casa") return;
     conteggio[i.dermografo] = (conteggio[i.dermografo] || 0) + 1;
   });
   return conteggio;
@@ -37903,9 +37927,13 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true })
   const conteggio = {};
   iscrittiEdizione.forEach((i) => {
     if (!i.pacchetto_kit) return;
+    // chi prepara deve capire in una riga sola se il dermografo va messo
+    // nella scatola o se l'allievo ce l'ha già: sono due lavori diversi
     const suffisso = i.dermografo === "nessuno" ? " (senza dermografo)"
-      : i.dermografo ? ` + ${etichettaDermografo(i.dermografo)}`
-      : "";
+      : !i.dermografo ? ""
+      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(i.dermografo)} già comprato e ricevuto`
+      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(i.dermografo)} da ritirare al corso`
+      : ` + ${etichettaDermografo(i.dermografo)}`;
     const chiave = `${i.pacchetto_kit}${suffisso}`;
     conteggio[chiave] = (conteggio[chiave] || 0) + 1;
   });
