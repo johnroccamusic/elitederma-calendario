@@ -15834,10 +15834,12 @@ function BottonePulsanteScheda({ p }) {
           flex: "1 1 0", minWidth: 0, boxSizing: "border-box",
         }}
       >
-        <span style={{ width: 38, height: 38, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <p.Icona size={17} color={p.attivo ? "#fff" : NAVY} />
+        <span style={{ width: 46, height: 46, borderRadius: "50%", background: p.attivo ? NAVY : BG_CHIARO, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: p.attivo ? "0 4px 12px rgba(14,27,51,0.25)" : "none" }}>
+          <p.Icona size={20} color={p.attivo ? "#fff" : NAVY} />
         </span>
         <span style={{ whiteSpace: "normal", lineHeight: 1.2, textAlign: "center" }}>{p.etichetta}</span>
+        {/* la barretta oro dice quale pannello è aperto senza dover leggere */}
+        <span style={{ width: 34, height: 3, borderRadius: 2, background: p.attivo ? GOLD : "transparent" }} />
       </button>
     );
   }
@@ -15852,7 +15854,7 @@ function BottonePulsanteScheda({ p }) {
         ...fontDisplay, fontWeight: 600, fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
         padding: "11px 10px",
         borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, cursor: p.disabled ? "default" : "pointer",
-        background: "#FBF6EA",
+        background: "#fff",
         color: NAVY, opacity: p.disabled ? 0.5 : 1,
         textTransform: "uppercase", letterSpacing: 0.3,
         flex: "1 1 0", minWidth: 0, overflow: "hidden", boxSizing: "border-box",
@@ -18003,7 +18005,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                       // dati accostati, e un filo crema su fondo crema non li
                       // teneva distinti
                       <div key={chiave} style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0, paddingLeft: idx > 0 ? 14 : 0, borderLeft: idx > 0 ? `1px solid #D5C9AF` : "none" }}>
-                        <Icona size={22} color={GOLD} />
+                        <span style={{ width: 38, height: 38, borderRadius: 11, background: "#fff", border: `1px solid ${CREAM_BORDER}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <Icona size={20} color={GOLD} />
+                        </span>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ ...fontBody, fontSize: 11, color: GOLD, textTransform: "uppercase", letterSpacing: 0.5, whiteSpace: "nowrap" }}>{label}</div>
                           <div style={{ ...fontBody, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "normal", wordBreak: "break-word" }}>{valore}</div>
@@ -18024,7 +18028,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <>
                 <div style={{ position: "relative", borderTop: `1px solid ${CREAM_BORDER}`, marginBottom: spaziIscrizioni.dopoDivider }} />
                 {manigliaSpazio("dopoDivider")}
-                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoSecondari }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 10, flexWrap: "wrap", marginBottom: spaziIscrizioni.dopoSecondari, background: BG_CHIARO, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: 8 }}>
                   {secondari.map((p) => <BottonePulsanteScheda key={p.chiave} p={p} />)}
                 </div>
                 {manigliaSpazio("dopoSecondari")}
