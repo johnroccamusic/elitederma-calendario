@@ -18855,7 +18855,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <button
             type="button"
             onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%" }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#FFFDF8", border: `2px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
           >
             + Aggiungi un altro acconto
           </button>
@@ -18903,7 +18903,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <button
             type="button"
             onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "transparent", border: `1px dashed ${CREAM_BORDER}`, borderRadius: 8, padding: "8px 10px", cursor: "pointer", width: "100%" }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#FFFDF8", border: `2px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
           >
             + Aggiungi un'altra quota pre corso
           </button>
