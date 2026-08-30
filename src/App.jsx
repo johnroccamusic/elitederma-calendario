@@ -5664,12 +5664,13 @@ function SezioneDateCorsi({
       )}
       </div>
 
-      {/* la chiave lega l'elenco al testo cercato: ad ogni ricerca diversa il
-          sottoalbero viene ricreato da zero. È la garanzia definitiva contro
-          quello che si vedeva — contatore aggiornato e sotto l'elenco di
-          prima — perché su nodi nuovi il browser non ha niente di vecchio da
-          lasciare a video */}
-      <div key={`elenco:${ricercaDate}`}>
+      {/* la chiave lega l'elenco a TUTTO ciò che ne cambia il contenuto —
+          testo cercato, tab Programmati/Passati, filtri, vista cronologica —
+          così ad ogni cambiamento il sottoalbero viene ricreato da zero. È
+          la garanzia contro quello che si vedeva: contatore aggiornato ("3
+          corsi trovati") e sotto l'elenco di prima. Su nodi nuovi il browser
+          non ha niente di vecchio da lasciare a video */}
+      <div key={`elenco:${vistaDateTab}:${cronologicoHome ? "crono" : "citta"}:${filtroCorsoHome}:${filtroCittaHome}:${filtroMasterHome}:${ricercaDate}`}>
       {vistaDateModo === "elenco" ? (
         <DateRaggruppatePerCitta
           corsi={corsi} location={location} cronologico={cronologicoHome}
