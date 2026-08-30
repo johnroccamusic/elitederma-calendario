@@ -25837,9 +25837,11 @@ function RiquadroIndirizzo({ Icona, titolo, righe }) {
 // separata dalla successiva da una linea sottile
 function CellaTotale({ etichetta, valore, forte = false, primo = false }) {
   return (
-    <div style={{ flex: 1, minWidth: 0, textAlign: "center", padding: "0 6px", borderLeft: primo ? "none" : `1px solid ${CREAM_BORDER}` }}>
-      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 3 }}>{etichetta}</div>
-      <div style={{ ...fontBody, fontSize: forte ? 17 : 14, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{valore}</div>
+    // il divisore è più scuro del bordo delle schede: qui separa quattro
+    // numeri accostati, e un filo troppo chiaro non li teneva distinti
+    <div style={{ flex: 1, minWidth: 0, textAlign: "center", padding: "0 6px", borderLeft: primo ? "none" : `1px solid #D5C9AF` }}>
+      <div style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: forte ? GOLD : MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{etichetta}</div>
+      <div style={{ ...fontBody, fontSize: forte ? 17 : 15, fontWeight: 700, color: NAVY, whiteSpace: "nowrap" }}>{valore}</div>
     </div>
   );
 }
@@ -25946,6 +25948,13 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
         <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>
           {vendita?.data_ordine ? fmtData(vendita.data_ordine.slice(0, 10)) : "—"}
         </span>
+        {/* lo sconto sta qui in cima e non fra i totali: è la cosa che
+            cambia il conto, e va vista subito insieme al numero d'ordine */}
+        {sconto != null && sconto > 0 && (
+          <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY }}>
+            Sconto − {fmtEuroErp2(sconto)}{codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}
+          </span>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1.15fr 1.15fr 1fr 1fr", gap: 8, marginBottom: 18 }}>
@@ -25992,16 +26001,11 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 
           {/* i totali in una fascia sola, divisi da linee sottili: quattro
               numeri che si leggono in fila invece di quattro righe */}
-          <div style={{ background: BG, borderRadius: 12, padding: "10px 4px", display: "flex", alignItems: "stretch", flexWrap: "wrap" }}>
+          <div style={{ background: BG, borderRadius: 12, padding: "12px 4px", display: "flex", alignItems: "stretch" }}>
             <CellaTotale primo etichetta="Imponibile" valore={vendita?.totale_imponibile != null ? fmtEuroErp2(vendita.totale_imponibile) : "—"} />
             <CellaTotale etichetta="IVA" valore={vendita?.totale_iva != null ? fmtEuroErp2(vendita.totale_iva) : "—"} />
             <CellaTotale etichetta="Spedizione" valore={speseSpedizione != null && speseSpedizione > 0 ? fmtEuroErp2(speseSpedizione) : "gratuita"} />
             <CellaTotale etichetta="Totale" valore={vendita?.totale != null ? fmtEuroErp2(vendita.totale) : "—"} forte />
-            {sconto != null && sconto > 0 && (
-              <div style={{ flexBasis: "100%", textAlign: "center", ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${CREAM_BORDER}` }}>
-                Sconto − {fmtEuroErp2(sconto)}{codiceCoupon ? ` (coupon ${codiceCoupon})` : ""}
-              </div>
-            )}
           </div>
         </div>
 
