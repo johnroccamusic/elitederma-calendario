@@ -17973,6 +17973,10 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         ];
         const primari = [
           { chiave: "iscrivi", etichetta: liberi <= 0 && vista !== "form" ? "Completo" : "Iscrivi", Icona: IconaPersonaAggiungi, onClick: () => { if (vista !== "form") apriIscrizione(); }, disabled: liberi <= 0 && vista !== "form", primario: true, attivo: vista === "form" },
+          // la lista pura della classe: dopo un'iscrizione o un giro in
+          // contabilità ci si torna sempre, e l'unica strada era il tasto
+          // "Fatto, torna alla lista" in fondo alla scheda
+          { chiave: "vediclasse", etichetta: "Vedi classe", Icona: IconaGruppoTeam, onClick: () => { setMostraGestione(false); setCostiAperto(false); setVista("lista"); }, primario: true, attivo: vista === "lista" && !mostraGestione && !costiAperto },
           { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true, attivo: vista === "lista" && mostraGestione },
           ...(adminSbloccato ? [{ chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: vista === "lista" && costiAperto }] : []),
           { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" },
