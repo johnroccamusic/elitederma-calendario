@@ -17077,6 +17077,24 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
     if (serveFileBonifico(pagPrecorso, pagPrecorsoPagato)) fileBonificoMancanti.push("quota pre corso");
     precorsoExtra.forEach((r, idx) => { if (serveFileBonifico(r, r.pagato)) fileBonificoMancanti.push(`pre corso aggiuntivo ${idx + 1}`); });
 
+    // Le quote registrate devono coprire il totale pattuito. Capitava di
+    // salvare un'iscrizione da 590 € con dentro solo l'acconto da 150:
+    // gli altri 440 non erano scritti da nessuna parte, e la scheda
+    // sembrava a posto. Vale solo sulle iscrizioni nuove — sulle vecchie
+    // bloccherebbe anche il salvataggio automatico di un campo qualsiasi.
+    const sommaQuote = round2(
+      [pagAcconto, ...accontoExtra, pagPrecorso, ...precorsoExtra, pagSaldo]
+        .reduce((somma, q) => somma + (q.totale === "" ? 0 : parseNum(q.totale)), 0)
+    );
+    const pattuito = totalePattuito === "" ? 0 : parseNum(totalePattuito);
+    if (strict && pattuito > 0 && Math.abs(sommaQuote - pattuito) > 0.01) {
+      const differenza = round2(Math.abs(pattuito - sommaQuote));
+      setMsg(sommaQuote < pattuito
+        ? `Impossibile salvare: le quote registrate sono ${fmtEuroErp2(sommaQuote)} su ${fmtEuroErp2(pattuito)} di totale pattuito. Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
+        : `Impossibile salvare: le quote registrate sono ${fmtEuroErp2(sommaQuote)} e superano di ${fmtEuroErp2(differenza)} il totale pattuito di ${fmtEuroErp2(pattuito)}.`);
+      return false;
+    }
+
     const altriMancanti = [];
     if (strict) {
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
