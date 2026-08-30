@@ -34599,12 +34599,6 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const pianiVendita = preparaScarichi(righeVendita);
     if (!pianiVendita) { setMsg("Vendita non registrata: disponibilità insufficiente."); return; }
 
-    setSalvando(true);
-    setMsg("");
-
-    const erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: operatore?.nome || null });
-    if (erroreScarico) { setSalvando(false); setMsg(erroreScarico); return; }
-
     // il totale netto (dopo sconto) si distribuisce proporzionalmente sulle
     // righe, così il fatturato per prodotto in Magazzino/Analisi resta
     // coerente col totale davvero incassato — negli omaggi ogni riga vale
@@ -34613,7 +34607,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     const fattoreSconto = subtotale > 0 ? totaleNetto / subtotale : 1;
     const prodottiRiga = carrello.map((r) => ({ nome: r.nome, quantita: r.quantita, totale_riga: omaggioAttivo ? 0 : round2(r.prezzo * r.quantita * fattoreSconto) }));
 
-    const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert({
+    // Al banco c'è gente che aspetta: la schermata si svuota subito e le
+    // scritture (scarico magazzino, vendita, eventuale spedizione) vanno
+    // avanti per conto loro. Tutto quello che serve viene fotografato ora,
+    // perché fra un attimo i campi del form saranno già azzerati.
+    const datiVendita = {
       woo_order_id: null,
       numero_ordine: `POS-${Date.now()}`,
       data_ordine: new Date().toISOString(),
@@ -34632,36 +34630,51 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       corso_data_id: corsoPosSel?.id || null,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
-    }).select().single();
-    if (erroreVendita) { setSalvando(false); setMsg("Magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message); return; }
-
-    if (spedizioneAttiva) {
-      const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({
-        vendita_id: venditaCreata.id,
-        corso_data_id: corsoPosSel?.id || null,
-        iscritto_id: spedIscrittoId || null,
-        destinatario_nome: spedDestinatario,
-        nome: spedNome.trim(),
-        cognome: spedCognome.trim(),
-        indirizzo: spedIndirizzo.trim() || null,
-        civico: spedCivico.trim() || null,
-        citta: spedCitta.trim() || null,
-        cap: spedCap.trim() || null,
-        provincia: spedProvincia.trim().toUpperCase() || null,
-        richiede_fattura: spedRichiedeFattura,
-        fattura_ditta: spedRichiedeFattura ? spedDitta.trim() : null,
-        fattura_piva: spedRichiedeFattura ? spedPiva.trim() : null,
-        fattura_cod_dest: spedRichiedeFattura ? spedCodDest.trim() : null,
-        fattura_pec: spedRichiedeFattura ? spedPec.trim() : null,
-        prodotti: prodottiRiga,
-      });
-      if (erroreSped) { setSalvando(false); setMsg("Vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message); ricarica(["prodotti_shop", "vendite_shop"]); return; }
-    }
-    setSalvando(false);
-    nuovaVendita();
+    };
+    const datiSpedizione = spedizioneAttiva ? {
+      corso_data_id: corsoPosSel?.id || null,
+      iscritto_id: spedIscrittoId || null,
+      destinatario_nome: spedDestinatario,
+      nome: spedNome.trim(),
+      cognome: spedCognome.trim(),
+      indirizzo: spedIndirizzo.trim() || null,
+      civico: spedCivico.trim() || null,
+      citta: spedCitta.trim() || null,
+      cap: spedCap.trim() || null,
+      provincia: spedProvincia.trim().toUpperCase() || null,
+      richiede_fattura: spedRichiedeFattura,
+      fattura_ditta: spedRichiedeFattura ? spedDitta.trim() : null,
+      fattura_piva: spedRichiedeFattura ? spedPiva.trim() : null,
+      fattura_cod_dest: spedRichiedeFattura ? spedCodDest.trim() : null,
+      fattura_pec: spedRichiedeFattura ? spedPec.trim() : null,
+      prodotti: prodottiRiga,
+    } : null;
+    const nomeOperatore = operatore?.nome || null;
     const etichettaEsito = omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
-    setMsg(spedizioneAttiva ? `${etichettaEsito} e spedizione inviata a Raf.` : `${etichettaEsito}.`);
-    ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos"]);
+
+    nuovaVendita();
+    setMsg(datiSpedizione ? `${etichettaEsito} e spedizione inviata a Raf.` : `${etichettaEsito}.`);
+
+    (async () => {
+      const erroreScarico = await applicaScarichi(pianiVendita, { origine: "vendita_pos", nota: "Vendita al banco", utente: nomeOperatore });
+      if (erroreScarico) { window.alert("Attenzione: " + erroreScarico); ricarica(["prodotti_shop"]); return; }
+
+      const { data: venditaCreata, error: erroreVendita } = await supabase.from("vendite_shop").insert(datiVendita).select().single();
+      if (erroreVendita) {
+        window.alert("Attenzione: magazzino aggiornato, ma la vendita non è stata registrata: " + erroreVendita.message);
+        ricarica(["prodotti_shop", "vendite_shop"]);
+        return;
+      }
+      if (datiSpedizione) {
+        const { error: erroreSped } = await supabase.from("spedizioni_pos").insert({ ...datiSpedizione, vendita_id: venditaCreata.id });
+        if (erroreSped) {
+          window.alert("Attenzione: vendita registrata, ma l'ordine di spedizione non è stato creato: " + erroreSped.message);
+          ricarica(["prodotti_shop", "vendite_shop"]);
+          return;
+        }
+      }
+      ricarica(["prodotti_shop", "vendite_shop", "spedizioni_pos"]);
+    })();
   }
 
   const venditePos = (venditeShop || []).filter((v) => v.origine === "pos").sort((a, b) => (b.data_ordine || "").localeCompare(a.data_ordine || ""));
@@ -34930,8 +34943,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: (msg.startsWith("Vendita registrata") || msg.startsWith("Omaggio registrato")) ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
-      <Button onClick={confermaVendita} disabled={salvando || carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim())} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
-        {salvando ? "Registro…" : omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp2(totaleDaIncassare)}`}
+      <Button onClick={confermaVendita} disabled={carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim())} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
+        {omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp2(totaleDaIncassare)}`}
       </Button>
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
     </>
