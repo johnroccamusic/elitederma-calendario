@@ -7086,35 +7086,6 @@ function RigaAttrezzaturaInventario({ riga, voce, onSalva, onRimuovi }) {
 // principale/speciale selezionati + accessori didattica del corso — la
 // stessa identica logica di PannelloPreparazioneKit, riusata sia per
 // limitare le tendine di "Materiali rispediti" (Inventario di sede) sia
-// per la sezione "Materiali da rientrare" in Logistica prodotti
-function prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti) {
-  if (!corsoData) return [];
-  const stato = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData.id) || {};
-  const richiesti = kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData.id), kitDefinizioni || [], corso?.id || null);
-  const ids = new Set();
-  (corsiKitProdotti || []).forEach((r) => {
-    // sia il contenuto del kit sia gli accessori specifici DI QUEL kit
-    // (kit_id valorizzato, es. "Matita marrone" legato a KIT BASE) sono
-    // stati davvero spediti — quantitaInviataPerProdotto li conta
-    // entrambi, quindi vanno inclusi anche qui o non sarebbe mai
-    // possibile dichiararli rispediti o mancanti
-    const appartieneAlKit = r.kit_id && richiesti[r.kit_id] > 0 && (r.tipo === "kit" || r.tipo === "accessorio");
-    const accessorioDidattica = r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null);
-    if (appartieneAlKit || accessorioDidattica) ids.add(r.prodotto_id);
-  });
-  // "Prodotti extra kit": pescati a mano dall'intero magazzino per questa
-  // singola edizione (chiave "extra::prodottoId" su accessori_quantita) —
-  // non appartengono a nessun template, quindi l'unica traccia è qui
-  Object.keys(stato.accessori_quantita || {}).forEach((chiave) => {
-    if (chiave.startsWith("extra::")) ids.add(chiave.slice(7));
-  });
-  return Array.from(ids);
-}
-// quantità EFFETTIVAMENTE inviata di ciascun prodotto a questa edizione:
-// stessa identica logica di quantità di PannelloPreparazioneKit/
-// Logistica prodotti — un kit per ciascun pacchetto scelto dagli
-// iscritti, ognuno con la propria lista di prodotti, più gli accessori
-// con override manuale — è il termine "Inviati" della verifica di
 // congruità dell'Inventario Post Corso
 function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti) {
   const mappa = {};
@@ -7134,7 +7105,7 @@ function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitPr
   (corsiKitProdotti || []).filter((r) => r.tipo === "accessorio" && !r.kit_id && r.corso_id === (corso?.id || null)).forEach((r) => {
     mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + (r.quantita || 0);
   });
-  // "Prodotti extra kit": stessa chiave "extra::prodottoId" di prodottiSpeditiIds
+  // "Prodotti extra kit": chiave "extra::prodottoId" nella stessa mappa
   Object.entries(stato.accessori_quantita || {}).forEach(([chiave, q]) => {
     if (!chiave.startsWith("extra::")) return;
     const prodottoId = chiave.slice(7);
@@ -7145,7 +7116,6 @@ function quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitPr
 // elenco causali dell'Inventario Post Corso — "Da verificare"/"Non so"
 // esistono apposta per non bloccare la master quando non ha la
 // risposta: il pezzo resta segnato aperto/da chiarire, non sparisce
-const CAUSALI_AMMANCO = ["Persi", "Rotti", "Regalati / omaggio", "Rubati", "Errore di conteggio", "Prodotto aperto", "Da verificare", "Non so"];
 // una riga di "Materiali che vengono rispediti": prodotto + quantità +
 // rimuovi (a differenza di Prodotti/Attrezzature a sinistra, qui la
 // lista è libera: si aggiunge dalla tendina, si può togliere)
@@ -7700,19 +7670,9 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
   );
 }
 
-function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, inventarioAmmanchi, segnalazioniMagazzino, ricarica, onBack }) {
+function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiSottocategorie, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti, inventarioSede, masterLoggataId, venditeShop, prodottiApertiMagazzino, magazzinoLocaleConsumabili, segnalazioniMagazzino, ricarica, onBack }) {
   const isMobile = useIsMobile();
-  const [ricercaIntero, setRicercaIntero] = useState("");
-  const [ricercaSciolti, setRicercaSciolti] = useState("");
-  const [ricercaAperto, setRicercaAperto] = useState("");
-  const [campoInteroAttivo, setCampoInteroAttivo] = useState(false);
-  const [campoScioltiAttivo, setCampoScioltiAttivo] = useState(false);
-  const [campoApertoAttivo, setCampoApertoAttivo] = useState(false);
   const [ricercaConsumabile, setRicercaConsumabile] = useState("");
-  const [prodottoApertoScelto, setProdottoApertoScelto] = useState(null); // prodotto in attesa di nota (flag SÌ)
-  const [notaAperto, setNotaAperto] = useState("");
-  const [salvandoAperto, setSalvandoAperto] = useState(false);
-  const [mostraCongruita, setMostraCongruita] = useState(false);
   const [testoSegnalazione, setTestoSegnalazione] = useState("");
   const [inviandoSegnalazione, setInviandoSegnalazione] = useState(false);
   const loc = location.find((l) => l.id === corsoData?.location_id) || null;
@@ -7781,26 +7741,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   // edizione (kit scelto + accessori didattica) — unica fonte per
   // "Prodotti mancanti" e per la verifica di congruità
   const statoEdizione = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData?.id) || null;
-  const idsSpediti = useMemo(
-    () => prodottiSpeditiIds(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti),
-    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti]
-  );
-  const prodottiSpediti = idsSpediti.map((id) => prodottiShop.find((p) => p.id === id)).filter(Boolean);
-  // i kit richiesti per questa edizione (uno per pacchetto scelto dagli
-  // iscritti): "Prodotti interi" ragiona per kit intero spedito, non
-  // per singolo prodotto sciolto — un kit intero che torna comprende
-  // sia il contenuto vero e proprio sia gli accessori specifici di quel
-  // kit (es. "Matita marrone" legata a KIT BASE)
-  const kitRichiesti = useMemo(
-    () => kitRichiestiEdizione((iscritti || []).filter((i) => i.corso_data_id === corsoData?.id), kitDefinizioni || [], corso?.id || null),
-    [iscritti, kitDefinizioni, corso, corsoData]
-  );
   const nomeKit = (id) => (kitDefinizioni || []).find((k) => k.id === id)?.nome || "—";
-  const rientroInteri = statoEdizione?.rientro_prodotti_interi || {};
-  const rientroAperti = statoEdizione?.rientro_prodotti_aperti || {};
   const consulenzeEdizione = statoEdizione?.consulenze_edizione || [];
-  const inventarioTrasmessoTs = statoEdizione?.inventario_trasmesso_ts || null;
-
   // upsert invece di "trova o inserisci": se due salvataggi partono
   // vicini prima che statoEdizione si aggiorni, entrambi vedrebbero
   // "nessuna riga" e proverebbero un insert, violando il vincolo unique
@@ -7812,104 +7754,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["logistica_kit_edizioni"]);
   }
-  function salvaRientroInteri(nuovoOggetto) {
-    return salvaCampiStatoEdizione({ rientro_prodotti_interi: nuovoOggetto });
-  }
-  // selezionare un kit aggiunge TUTTE le sue unità richieste: se serve
-  // rispedirne solo una parte, la quantità si corregge dopo con lo
-  // stesso input numerico usato per gli altri elenchi
-  function aggiungiKitIntero(kitId) {
-    setRicercaIntero("");
-    if (!kitId || rientroInteri[kitId] != null) return;
-    salvaRientroInteri({ ...rientroInteri, [kitId]: kitRichiesti[kitId] || 1 });
-  }
-  const risultatiIntero = Object.keys(kitRichiesti)
-    .filter((kitId) => rientroInteri[kitId] == null)
-    .map((kitId) => ({ id: kitId, nome: nomeKit(kitId) }))
-    .filter((k) => !ricercaIntero.trim() || k.nome.toLowerCase().includes(ricercaIntero.trim().toLowerCase()));
-  function rimuoviIntero(kitId) {
-    const resto = { ...rientroInteri };
-    delete resto[kitId];
-    salvaRientroInteri(resto);
-  }
-  // espande le quantità di kit interi rientrati nei singoli prodotti che
-  // li compongono (kit + accessori specifici del kit), per la verifica
-  // di congruità che invece ragiona per prodotto — stessa identica
-  // logica di sincronizzaMagazzino/processaRientro in Logistica prodotti
-  const rispeditiInteriPerProdotto = useMemo(() => {
-    const mappa = {};
-    Object.entries(rientroInteri).forEach(([kitId, qtaKit]) => {
-      if (!qtaKit) return;
-      (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && (r.tipo === "kit" || r.tipo === "accessorio")).forEach((r) => {
-        mappa[r.prodotto_id] = (mappa[r.prodotto_id] || 0) + r.quantita * qtaKit;
-      });
-    });
-    return mappa;
-  }, [rientroInteri, corsiKitProdotti]);
-
-  // "Prodotti sciolti": spediti a questa edizione ma non legati a un kit
-  // specifico (accessori didattica del corso, prodotti extra kit) — non
-  // hanno un kit in cui raggrupparli, si scelgono uno per uno come i
-  // vecchi "Prodotti interi" prima di ragionare per kit
-  const idsProdottiDiKit = useMemo(() => {
-    const ids = new Set();
-    (corsiKitProdotti || []).forEach((r) => { if (r.kit_id && (r.tipo === "kit" || r.tipo === "accessorio")) ids.add(r.prodotto_id); });
-    return ids;
-  }, [corsiKitProdotti]);
-  const prodottiSciolti = prodottiSpediti.filter((p) => !idsProdottiDiKit.has(p.id));
-  const rientroSciolti = statoEdizione?.rientro_prodotti_sciolti || {};
-  function salvaRientroSciolti(nuovoOggetto) {
-    return salvaCampiStatoEdizione({ rientro_prodotti_sciolti: nuovoOggetto });
-  }
-  function aggiungiProdottoSciolto(prodottoId) {
-    setRicercaSciolti("");
-    if (!prodottoId || rientroSciolti[prodottoId] != null) return;
-    salvaRientroSciolti({ ...rientroSciolti, [prodottoId]: 1 });
-  }
-  const risultatiSciolti = prodottiSciolti
-    .filter((p) => rientroSciolti[p.id] == null)
-    .filter((p) => !ricercaSciolti.trim() || p.nome.toLowerCase().includes(ricercaSciolti.trim().toLowerCase()));
-  function rimuoviSciolto(prodottoId) {
-    const resto = { ...rientroSciolti };
-    delete resto[prodottoId];
-    salvaRientroSciolti(resto);
-  }
-
-  // "Prodotti mancanti": presi dai kit durante il corso e che non
-  // rientreranno in magazzino — stessa lista ristretta di "Prodotti
-  // interi" (solo ciò che è stato davvero spedito), con nota
-  // obbligatoria sul motivo dell'ammanco. Scrive in rientro_prodotti_
-  // aperti (sull'edizione, non più direttamente in prodotti_aperti_
-  // magazzino): diventa un ammanco vero e proprio solo quando Raf
-  // conferma il rientro da Logistica prodotti (processaRientro), che è
-  // il momento in cui questi pezzi finiscono davvero nel mucchio da
-  // smaltire — qui la master sta solo dichiarando, non ancora chiudendo
-  const risultatiAperto = prodottiSpediti
-    .filter((p) => rientroAperti[p.id] == null)
-    .filter((p) => !ricercaAperto.trim() || p.nome.toLowerCase().includes(ricercaAperto.trim().toLowerCase()));
-  function selezionaProdottoAperto(p) {
-    setRicercaAperto("");
-    setProdottoApertoScelto(p);
-    setNotaAperto("");
-  }
-  async function confermaProdottoAperto() {
-    if (!notaAperto.trim()) { window.alert("Scrivi in breve perché il prodotto manca."); return; }
-    setSalvandoAperto(true);
-    const esistente = rientroAperti[prodottoApertoScelto.id];
-    await salvaCampiStatoEdizione({
-      rientro_prodotti_aperti: { ...rientroAperti, [prodottoApertoScelto.id]: { quantita: (esistente?.quantita || 0) + 1, nota: notaAperto.trim() } },
-    });
-    setSalvandoAperto(false);
-    setProdottoApertoScelto(null);
-  }
-  function rimuoviUnoAperto(prodottoId) {
-    const riga = rientroAperti[prodottoId];
-    const resto = { ...rientroAperti };
-    if (!riga || riga.quantita <= 1) delete resto[prodottoId];
-    else resto[prodottoId] = { ...riga, quantita: riga.quantita - 1 };
-    salvaCampiStatoEdizione({ rientro_prodotti_aperti: resto });
-  }
-
   // "Consulenze": una riga per ciascuna spedita da Raf in Logistica
   // prodotti (stesso prodotto spedito due volte = due righe distinte,
   // mai sommate) — qui la master aggiorna solo il livello di
@@ -7922,11 +7766,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
   // rientrare" in Logistica prodotti resta nascosta — Raf non deve
   // vedere Prodotti interi/mancanti a metà lavoro, solo quando la
   // master dichiara di aver finito
-  function trasmettiInventario() {
-    if (!window.confirm("Trasmettere l'inventario a Raf? Da questo momento Prodotti interi e mancanti saranno visibili in Logistica prodotti.")) return;
-    salvaCampiStatoEdizione({ inventario_trasmesso_ts: new Date().toISOString() });
-  }
-
   // "Segnalazioni": problemi sulla sede visti durante il corso (uno
   // sgabello senza rotellina, un lettino tagliato…) — appartengono alla
   // sede del corso, non a questa singola edizione: compaiono nella
@@ -7943,53 +7782,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     if (error) { window.alert("Errore: " + error.message); return; }
     setTestoSegnalazione("");
     ricarica(["segnalazioni_magazzino"]);
-  }
-
-  // verifica di congruità: Inviati − Venduti − Rispediti − Restano = Da
-  // giustificare, per ogni prodotto del corso — calcolata solo qui,
-  // niente conferma finché non è tutto giustificato
-  const inviatiPerProdottoId = useMemo(
-    () => quantitaInviataPerProdotto(corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti),
-    [corsoData, corso, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti]
-  );
-  const vendutiPerProdottoId = useMemo(() => {
-    const mappa = {};
-    (venditeShop || []).filter((v) => v.corso_data_id === corsoData?.id).forEach((v) => {
-      (Array.isArray(v.prodotti) ? v.prodotti : []).forEach((p) => {
-        const prod = prodottiShop.find((pp) => (pp.nome || "").trim().toLowerCase() === (p.nome || "").trim().toLowerCase());
-        if (!prod) return;
-        mappa[prod.id] = (mappa[prod.id] || 0) + (p.quantita || 0);
-      });
-    });
-    return mappa;
-  }, [venditeShop, corsoData, prodottiShop]);
-  const restanoPerProdottoId = useMemo(() => {
-    const mappa = {};
-    consumabiliQui.filter((c) => c.corso_data_id === corsoData?.id).forEach((c) => { mappa[c.prodotto_id] = (mappa[c.prodotto_id] || 0) + (c.quantita || 0); });
-    return mappa;
-  }, [consumabiliQui, corsoData]);
-  const righeCongruita = prodottiSpediti
-    .map((p) => {
-      const inviati = inviatiPerProdottoId[p.id] || 0;
-      const venduti = vendutiPerProdottoId[p.id] || 0;
-      const rispediti = (rispeditiInteriPerProdotto[p.id] || 0) + (Number(rientroSciolti[p.id]) || 0) + (Number(rientroAperti[p.id]?.quantita) || 0);
-      const restano = restanoPerProdottoId[p.id] || 0;
-      const daGiustificare = Math.max(0, inviati - venduti - rispediti - restano);
-      const giaGiustificato = (inventarioAmmanchi || []).filter((a) => a.corso_data_id === corsoData?.id && a.prodotto_id === p.id).reduce((s, a) => s + (a.quantita || 0), 0);
-      return { prodotto: p, inviati, venduti, rispediti, restano, daGiustificare: Math.max(0, daGiustificare - giaGiustificato) };
-    })
-    .filter((r) => r.inviati > 0);
-  const totaleDaGiustificare = righeCongruita.reduce((s, r) => s + r.daGiustificare, 0);
-
-  if (!corsoData) {
-    return (
-      <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
-        <div style={{ maxWidth: 640, margin: "0 auto" }}>
-          <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Dashboard master" onClick={onBack} /></div>
-          <div style={{ ...cardStyle, textAlign: "center", padding: 40, color: MUTED, ...fontBody, fontSize: 14 }}>Nessun corso attivo al momento.</div>
-        </div>
-      </div>
-    );
   }
 
   const labelStyleInv = { ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 };
@@ -8090,97 +7882,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
             </div>
           </div>
 
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, marginBottom: 10 }}>Prodotti che sto per rispedire</div>
-            <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Kit interi</div>
-              <div style={labelStyleInv}>Kit interi spediti da Raf: tornano in magazzino così come sono.</div>
-              <div style={{ position: "relative" }}>
-                <input
-                  style={inputStyle} value={ricercaIntero} onChange={(e) => setRicercaIntero(e.target.value)} placeholder="Cerca tra i kit spediti…"
-                  onFocus={() => setCampoInteroAttivo(true)} onBlur={() => setTimeout(() => setCampoInteroAttivo(false), 150)}
-                />
-                {campoInteroAttivo && risultatiIntero.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
-                    {risultatiIntero.map((k) => (
-                      <div key={k.id} onClick={() => aggiungiKitIntero(k.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{k.nome}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ marginBottom: 10 }} />
-              {Object.keys(rientroInteri).length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit ancora.</div>
-              ) : Object.entries(rientroInteri).map(([kitId, q]) => (
-                <RigaRientroProdotto
-                  key={kitId} nome={nomeKit(kitId)} quantita={q}
-                  onQuantita={(v) => salvaRientroInteri({ ...rientroInteri, [kitId]: v })}
-                  onRimuovi={() => rimuoviIntero(kitId)}
-                />
-              ))}
-            </div>
-
-            <div style={{ ...cardStyle, marginBottom: 16, padding: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Prodotti inviati sciolti</div>
-              <div style={labelStyleInv}>Non appartengono a un kit (accessori didattica, extra kit): tornano così come sono.</div>
-              <div style={{ position: "relative" }}>
-                <input
-                  style={inputStyle} value={ricercaSciolti} onChange={(e) => setRicercaSciolti(e.target.value)} placeholder="Cerca tra i prodotti spediti…"
-                  onFocus={() => setCampoScioltiAttivo(true)} onBlur={() => setTimeout(() => setCampoScioltiAttivo(false), 150)}
-                />
-                {campoScioltiAttivo && risultatiSciolti.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
-                    {risultatiSciolti.map((p) => (
-                      <div key={p.id} onClick={() => aggiungiProdottoSciolto(p.id)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div style={{ marginBottom: 10 }} />
-              {Object.keys(rientroSciolti).length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun prodotto ancora.</div>
-              ) : Object.entries(rientroSciolti).map(([pid, q]) => (
-                <RigaRientroProdotto
-                  key={pid} nome={prodottiShop.find((p) => p.id === pid)?.nome || "—"} quantita={q}
-                  onQuantita={(v) => salvaRientroSciolti({ ...rientroSciolti, [pid]: v })}
-                  onRimuovi={() => rimuoviSciolto(pid)}
-                />
-              ))}
-            </div>
-
-            <div style={{ ...cardStyle, padding: 16 }}>
-              <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: GOLD, marginBottom: 4 }}>Prodotti mancanti</div>
-              <div style={labelStyleInv}>Presi dai kit durante il corso, non rientrano: scegli il prodotto e scrivi il motivo.</div>
-              <div style={{ position: "relative" }}>
-                <input
-                  style={inputStyle} value={ricercaAperto} onChange={(e) => setRicercaAperto(e.target.value)} placeholder="Cerca tra i prodotti spediti…"
-                  onFocus={() => setCampoApertoAttivo(true)} onBlur={() => setTimeout(() => setCampoApertoAttivo(false), 150)}
-                />
-                {campoApertoAttivo && risultatiAperto.length > 0 && (
-                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.1)", zIndex: 10, marginTop: 2, maxHeight: 240, overflowY: "auto" }}>
-                    {risultatiAperto.map((p) => (
-                      <div key={p.id} onClick={() => selezionaProdottoAperto(p)} style={{ padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` }}>{p.nome}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {Object.keys(rientroAperti).length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginTop: 10 }}>Nessun prodotto ancora.</div>
-              ) : (
-                <div style={{ marginTop: 10 }}>
-                  {Object.entries(rientroAperti).map(([pid, r]) => (
-                    <div key={pid} style={{ padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <span style={{ flex: 1, ...fontBody, fontSize: 13, color: NAVY }}>{prodottiShop.find((p) => p.id === pid)?.nome || "—"} × {r.quantita}</span>
-                        <button onClick={() => rimuoviUnoAperto(pid)} title="Rimuovi un pezzo" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 14, padding: 4 }}>✕</button>
-                      </div>
-                      {r.nota && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, fontStyle: "italic" }}>{r.nota}</div>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
 
         <div style={{ marginTop: 24, ...cardStyle, padding: 16 }}>
@@ -8209,47 +7910,8 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
           )}
         </div>
 
-        <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", ...cardStyle, padding: 16 }}>
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Verifica di congruità</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
-              {totaleDaGiustificare > 0 ? `${totaleDaGiustificare} pezz${totaleDaGiustificare === 1 ? "o" : "i"} da giustificare` : "Tutto torna, niente da giustificare."}
-            </div>
-          </div>
-          <Button onClick={() => setMostraCongruita(true)}>Verifica e conferma</Button>
-        </div>
-
-        <div style={{ marginTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", ...cardStyle, padding: 16 }}>
-          <div>
-            <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Trasmetti inventario</div>
-            <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>
-              {inventarioTrasmessoTs ? `Trasmesso a Raf il ${new Date(inventarioTrasmessoTs).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}.` : "Raf non vede ancora Prodotti interi e mancanti: sono visibili in Logistica prodotti solo dopo la trasmissione."}
-            </div>
-          </div>
-          <Button onClick={trasmettiInventario}>{inventarioTrasmessoTs ? "Ritrasmetti" : "Trasmetti inventario"}</Button>
-        </div>
       </div>
 
-      {prodottoApertoScelto && (
-        <Modal title={`Prodotto mancante — ${prodottoApertoScelto.nome}`} onClose={() => setProdottoApertoScelto(null)}>
-          <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 10 }}>Scrivi in breve perché non rientra — Raf lo vedrà quando conferma il rientro di questo corso.</div>
-          <Field label="Motivo">
-            <textarea value={notaAperto} onChange={(e) => setNotaAperto(e.target.value)} rows={3} style={{ ...inputStyle, resize: "vertical" }} placeholder="Es. Colore terminato durante il corso, non è tornato in kit." />
-          </Field>
-          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 14 }}>
-            Esempi: "Pigmento aperto e usato interamente sul modello." · "Ago rotto durante l'esercitazione."
-          </div>
-          <Button onClick={confermaProdottoAperto} disabled={salvandoAperto} style={{ width: "100%" }}>{salvandoAperto ? "Salvo…" : "Conferma"}</Button>
-        </Modal>
-      )}
-
-      {mostraCongruita && (
-        <ModaleCongruitaInventario
-          corsoData={corsoData} masterLoggataId={masterLoggataId} righeCongruita={righeCongruita}
-          prodottiApertiFlagSi={(p) => p.rientro_obbligatorio_se_aperto}
-          onClose={() => setMostraCongruita(false)} ricarica={ricarica} onConfermato={onBack}
-        />
-      )}
     </div>
   );
 }
@@ -8294,99 +7956,6 @@ function RigaConsulenza({ nome, livello, onCambiaLivello, onRimuovi, disponibili
     </div>
   );
 }
-// verifica di congruità e causali — non si può confermare l'inventario
-// finché ogni pezzo "da giustificare" non ha una causale assegnata
-function ModaleCongruitaInventario({ corsoData, masterLoggataId, righeCongruita, prodottiApertiFlagSi, onClose, ricarica, onConfermato }) {
-  const [causalePerProdotto, setCausalePerProdotto] = useState({}); // prodottoId -> { quantita, causale, nota, foto }
-  const [salvando, setSalvando] = useState(false);
-  const [msg, setMsg] = useState("");
-
-  const totaleDaGiustificare = righeCongruita.reduce((s, r) => s + r.daGiustificare, 0);
-
-  function campo(prodottoId) {
-    return causalePerProdotto[prodottoId] || { quantita: 1, causale: "", nota: "", file: null };
-  }
-  function aggiornaCampo(prodottoId, valori) {
-    setCausalePerProdotto((prev) => ({ ...prev, [prodottoId]: { ...campo(prodottoId), ...valori } }));
-  }
-
-  async function assegnaCausale(riga) {
-    const c = campo(riga.prodotto.id);
-    const qta = Number(c.quantita) || 0;
-    if (!c.causale) { setMsg("Scegli una causale."); return; }
-    if (!(qta > 0) || qta > riga.daGiustificare) { setMsg("Quantità non valida."); return; }
-    if (c.causale === "Rotti" && !c.file) { setMsg("Per \"Rotti\" serve una foto del pezzo."); return; }
-    if (c.causale === "Prodotto aperto" && !c.nota.trim()) { setMsg("Scrivi in breve perché il prodotto è stato aperto."); return; }
-
-    setSalvando(true); setMsg("");
-    let fotoPath = null;
-    if (c.file) {
-      const percorso = `${corsoData.id}/${riga.prodotto.id}-${Date.now()}-${sanitizzaNomeFile(c.file.name)}`;
-      const { error: erroreUpload } = await supabase.storage.from("inventario-foto").upload(percorso, c.file);
-      if (erroreUpload) { setSalvando(false); setMsg("Errore caricamento foto: " + erroreUpload.message); return; }
-      fotoPath = percorso;
-    }
-    const { error } = await supabase.from("inventario_ammanchi").insert({
-      corso_data_id: corsoData.id, master_id: masterLoggataId || null, prodotto_id: riga.prodotto.id,
-      quantita: qta, causale: c.causale, nota: c.nota.trim() || null, foto_path: fotoPath,
-    });
-    if (error) { setSalvando(false); setMsg("Errore: " + error.message); return; }
-
-    // "Prodotto aperto" materializza anche nel magazzino aperti se il
-    // prodotto ha il flag di rientro obbligatorio (§6.3)
-    if (c.causale === "Prodotto aperto" && prodottiApertiFlagSi(riga.prodotto)) {
-      const { data: esistenti } = await supabase.from("prodotti_aperti_magazzino").select("*").eq("prodotto_id", riga.prodotto.id).eq("corso_data_id", corsoData.id).maybeSingle();
-      await supabase.from("prodotti_aperti_magazzino").upsert({
-        prodotto_id: riga.prodotto.id, corso_data_id: corsoData.id,
-        quantita: (esistenti?.quantita || 0) + qta, nota: c.nota.trim(),
-        master_id: masterLoggataId || null, stato: "da_valutare",
-      }, { onConflict: "prodotto_id,corso_data_id" });
-    }
-
-    setSalvando(false);
-    setCausalePerProdotto((prev) => { const n = { ...prev }; delete n[riga.prodotto.id]; return n; });
-    ricarica(["inventario_ammanchi", "prodotti_aperti_magazzino"]);
-  }
-
-  return (
-    <Modal title="Verifica di congruità" onClose={onClose} maxWidth={640}>
-      {righeCongruita.filter((r) => r.daGiustificare > 0 || r.inviati > 0).length === 0 ? (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 16 }}>Nessun prodotto del corso da verificare.</div>
-      ) : righeCongruita.map((r) => (
-        <div key={r.prodotto.id} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: `1px solid ${CREAM_BORDER}` }}>
-          <div style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{r.prodotto.nome}</div>
-          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginBottom: 8 }}>
-            Inviati {r.inviati} · Venduti {r.venduti} · Rispediti {r.rispediti} · Restano {r.restano}
-            {r.daGiustificare > 0 && <span style={{ color: "#C0392B", fontWeight: 700 }}> → {r.daGiustificare} da giustificare</span>}
-          </div>
-          {r.daGiustificare > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <input type="number" min="1" max={r.daGiustificare} value={campo(r.prodotto.id).quantita} onChange={(e) => aggiornaCampo(r.prodotto.id, { quantita: e.target.value })} style={{ ...inputStyle, width: 64, padding: "6px 8px" }} />
-                <select value={campo(r.prodotto.id).causale} onChange={(e) => aggiornaCampo(r.prodotto.id, { causale: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 160, padding: "6px 8px" }}>
-                  <option value="">— causale —</option>
-                  {CAUSALI_AMMANCO.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-                <Button onClick={() => assegnaCausale(r)} disabled={salvando} style={{ padding: "8px 14px" }}>Aggiungi</Button>
-              </div>
-              {campo(r.prodotto.id).causale === "Rotti" && (
-                <CampoFileTrascinabile accept="image/*" onChange={(e) => aggiornaCampo(r.prodotto.id, { file: e.target.files?.[0] || null })} style={inputStyle} />
-              )}
-              {campo(r.prodotto.id).causale === "Prodotto aperto" && (
-                <textarea value={campo(r.prodotto.id).nota} onChange={(e) => aggiornaCampo(r.prodotto.id, { nota: e.target.value })} rows={2} style={{ ...inputStyle, resize: "vertical" }} placeholder="Perché è stato aperto? Es. sostituito un prodotto fallato nel kit di un'allieva." />
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-      {msg && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 10 }}>{msg}</div>}
-      <Button onClick={onConfermato} disabled={totaleDaGiustificare > 0} style={{ width: "100%" }}>
-        {totaleDaGiustificare > 0 ? `Giustifica ancora ${totaleDaGiustificare} pezz${totaleDaGiustificare === 1 ? "o" : "i"}` : "Conferma inventario"}
-      </Button>
-    </Modal>
-  );
-}
-
 // tasto "+ Nuova agenda" (solo Programmatore): crea subito una riga col
 // nome scelto — appare all'istante come nuova colonna-checkbox in
 // Gestione utenti/Password Master (chiave permesso "agenda_<id>")
@@ -43933,7 +43502,6 @@ export default function App() {
   const [magazzinoLocaleConsumabili, setMagazzinoLocaleConsumabili] = useState([]);
   // causali assegnate ai pezzi "da giustificare" nella verifica di
   // congruità dell'Inventario Post Corso
-  const [inventarioAmmanchi, setInventarioAmmanchi] = useState([]);
   const [spedizioniPos, setSpedizioniPos] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
@@ -44088,7 +43656,6 @@ export default function App() {
     acconti_da_verificare: async () => setAccontiDaVerificare((await supabase.from("acconti_da_verificare").select("*").order("ts", { ascending: false })).data || []),
     target_vendite_prodotti: async () => setTargetVenditeProdotti((await supabase.from("target_vendite_prodotti").select("*").order("data_inizio", { ascending: false })).data || []),
     magazzino_locale_consumabili: async () => setMagazzinoLocaleConsumabili((await supabase.from("magazzino_locale_consumabili").select("*")).data || []),
-    inventario_ammanchi: async () => setInventarioAmmanchi((await supabase.from("inventario_ammanchi").select("*")).data || []),
     spedizioni_pos: async () => setSpedizioniPos((await supabase.from("spedizioni_pos").select("*").order("ts", { ascending: false })).data || []),
     master_corsi: async () => setMasterCorsi((await supabase.from("master_corsi").select("*")).data || []),
     allievi_crm: async () => setAllieviCrm((await supabase.from("allievi_crm").select("*")).data || []),
@@ -44247,7 +43814,7 @@ export default function App() {
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
     dashboardmaster: ["master", "corsi", "location", "corsi_date", "hotel", "iscritti", "vendite_shop", "prodotti_shop", "target_vendite_prodotti", "coupon", "punti_master_regola_base", "punti_master_periodi_speciali", "punti_master_impostazioni"],
-    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "inventario_ammanchi", "segnalazioni_magazzino"],
+    inventariosede: ["corsi_date", "corsi", "location", "prodotti_shop", "costi_sottocategorie", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "iscritti", "inventario_sede", "vendite_shop", "prodotti_aperti_magazzino", "magazzino_locale_consumabili", "segnalazioni_magazzino"],
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
@@ -45589,7 +45156,7 @@ export default function App() {
           iscritti={iscritti}
           inventarioSede={inventarioSede} masterLoggataId={utenteLoggato?.masterId || null}
           venditeShop={venditeShop} prodottiApertiMagazzino={prodottiApertiMagazzino}
-          magazzinoLocaleConsumabili={magazzinoLocaleConsumabili} inventarioAmmanchi={inventarioAmmanchi}
+          magazzinoLocaleConsumabili={magazzinoLocaleConsumabili}
           segnalazioniMagazzino={segnalazioniMagazzino}
           ricarica={fetchDati} onBack={() => setView("dashboardmaster")}
         />
