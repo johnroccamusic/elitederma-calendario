@@ -17217,7 +17217,6 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
       // modello e modalità di pagamento non sono facoltativi
       if (dermografoAParte && !dermografoScelta) altriMancanti.push("la risposta sul dermografo acquistato a parte");
       if (dermografoAParte && dermografoComprato && !dermografoPagamento) altriMancanti.push("come l'allievo paga il dermografo");
-      if (dermografoAParte && dermografoComprato && !dermografoConsegna) altriMancanti.push("dove l'allievo riceve il dermografo");
       if (totalePattuito === "") altriMancanti.push("totale pattuito");
       if (pagAcconto.totale === "") altriMancanti.push("quota acconto");
       if (!pacchettoKit.trim()) altriMancanti.push("pacchetto/kit");
@@ -17328,7 +17327,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
         // lasciarsi dietro il conto di un dermografo che non c'è più
         dermografo_scelta: dermografoAParte ? (dermografoScelta || null) : null,
         dermografo_pagamento: dermografoAParte && dermografoComprato ? (dermografoPagamento || null) : null,
-        dermografo_consegna: dermografoAParte && dermografoComprato ? (dermografoConsegna || null) : null,
+        // vuota significa "ritira al corso": è il caso in cui il pezzo va
+        // preparato, e nel dubbio è meglio prepararlo che dimenticarlo
+        dermografo_consegna: dermografoAParte && dermografoComprato ? (dermografoConsegna || "corso") : null,
         dermografo_prezzo_listino: dermografoDaPagare ? prezzoListinoDermografo : null,
         dermografo_sconto: dermografoDaPagare && dermografoSconto !== "" ? parseNum(dermografoSconto) : null,
         dermografo_imponibile: dermografoDaPagare && imponibileDermografo != null ? imponibileDermografo : null,
@@ -18743,8 +18744,13 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                           <select
                             value={dermografoPagamento}
                             onChange={(e) => {
-                              setDermografoPagamento(e.target.value);
-                              if (e.target.value !== "con_corso") { setDermografoSconto(""); setPagDermografo(QUOTA_VUOTA); setPagDermografoPagato(false); }
+                              const modo = e.target.value;
+                              setDermografoPagamento(modo);
+                              if (modo !== "con_corso") { setDermografoSconto(""); setPagDermografo(QUOTA_VUOTA); setPagDermografoPagato(false); }
+                              // la consegna si propone da sé: chi compra dal sito
+                              // se lo fa spedire, chi lo paga col corso lo ritira
+                              // in aula. Resta cambiabile, ma non blocca più nessuno
+                              if (!dermografoConsegna && modo) setDermografoConsegna(modo === "gia_pagato" ? "casa" : "corso");
                             }}
                             style={{ ...campoAreaScheda, ...(dermografoPagamento ? {} : { color: MUTED }) }}
                           >
