@@ -33152,10 +33152,17 @@ function NuovoAllievoCrm({ corsi, corsiDate, location, onClose, ricarica }) {
 // costruisciAllieviCrm) — nessuna query server-side, nessuna
 // paginazione: stesso stile del resto dell'app, tutto già in memoria e
 // filtrato/ordinato nel browser
-function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, titolo = "CRM / Allievi" }) {
+function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ricarica, onBack, onApriStoricoAllievi, onCoricata, titolo = "CRM / Allievi" }) {
   const { ordine: ordineCrm, cambiaOrdine: cambiaOrdineCrm, ordina: ordinaCrm } = useOrdinamentoTabella();
   const isMobile = useIsMobile();
   const portrait = useIsPortrait();
+  // il dock delle azioni vive fuori da questa pagina: gli si dice quando
+  // girarsi insieme a lei, e di rimettersi dritto appena si esce
+  const coricata = isMobile && portrait;
+  useEffect(() => {
+    onCoricata?.(coricata);
+    return () => onCoricata?.(false);
+  }, [coricata, onCoricata]);
   const corsoById = useMemo(() => Object.fromEntries(corsi.map((c) => [c.id, c])), [corsi]);
   const locById = useMemo(() => Object.fromEntries(location.map((l) => [l.id, l])), [location]);
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
@@ -33349,7 +33356,7 @@ function PaginaCrmAllievi({ iscritti, allieviCrm, corsi, corsiDate, location, ri
   // gira il contenuto: la pagina viene disegnata coricata e chi la apre
   // ruota il telefono per leggerla. Torna dritta appena il telefono lo è.
   return (
-    <ContenitoreCoricato attivo={isMobile && portrait}>
+    <ContenitoreCoricato attivo={coricata}>
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "20px 16px 60px" : "28px 32px 60px" }}>
       <div style={{ maxWidth: 1280, margin: "0 auto" }}>
         <div style={{ marginBottom: 12 }}><TastoLivelloPrecedente titolo="Home" onClick={onBack} /></div>
@@ -42313,6 +42320,10 @@ export default function App() {
   // home non carica né gli ordini né le spedizioni (sono migliaia di
   // righe per un numero solo), e senza questo il pallino sarebbe rimasto
   // a zero fino a quando non si fosse aperta un'altra pagina
+  // il dock: "coricato" lo mette di traverso insieme alla pagina che si
+  // corica (CRM allievi), "nascosto" lo fa scendere sotto lo schermo
+  const [dockCoricato, setDockCoricato] = useState(false);
+  const [dockNascosto, setDockNascosto] = useState(false);
   const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
   useEffect(() => {
     if (!ok || (view !== "home" && view !== "logisticaprodotti")) return undefined;
@@ -42797,19 +42808,52 @@ export default function App() {
       )}
 
       {isMobile && (
-        <div
-          style={{
-            position: "fixed", bottom: "calc(env(safe-area-inset-bottom, 0px) - 2px)", left: 14, right: 14,
-            zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
-            background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-            border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
-            boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
-            // spinge l'elemento sul proprio livello grafico (GPU): tecnica
-            // nota per evitare che un "position:fixed" resti visibilmente
-            // indietro durante lo scroll touch su iOS
-            transform: "translateZ(0)", WebkitTransform: "translateZ(0)", willChange: "transform",
-          }}
-        >
+        // Il dock delle quattro azioni. Sta dentro un guscio che, quando una
+        // pagina è disegnata coricata (CRM allievi da telefono dritto), si
+        // corica insieme a lei: altrimenti resterebbe attaccato al bordo
+        // fisico dello schermo, in mezzo alla pagina e girato di traverso.
+        //
+        // La linguetta in cima lo fa scendere fuori dallo schermo: quando è
+        // giù resta solo lei, con la freccia che punta in su per riaprirlo —
+        // su una tabella larga il dock copriva proprio le ultime righe.
+        <div style={{ position: "fixed", inset: 0, zIndex: 2000, pointerEvents: "none", transform: "translateZ(0)", WebkitTransform: "translateZ(0)" }}>
+          <div style={dockCoricato
+            ? { position: "absolute", top: 0, left: 0, width: "100dvh", height: "100dvw", transform: "translateX(100dvw) rotate(90deg)", transformOrigin: "top left" }
+            : { position: "absolute", inset: 0 }}
+          >
+            <div
+              style={{
+                position: "absolute", left: 14, right: 14,
+                bottom: dockCoricato ? 8 : "calc(env(safe-area-inset-bottom, 0px) - 2px)",
+                pointerEvents: "auto",
+                transition: "transform 260ms ease",
+                transform: dockNascosto ? "translateY(calc(100% - 22px))" : "translateY(0)",
+              }}
+            >
+              <button
+                onClick={() => setDockNascosto((v) => !v)}
+                aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 74, height: 22, margin: "0 auto", cursor: "pointer",
+                  background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                  border: "1px solid rgba(255,255,255,0.22)", borderBottom: "none",
+                  borderRadius: "12px 12px 0 0", color: "#fff", padding: 0,
+                }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points={dockNascosto ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
+                </svg>
+              </button>
+              <div
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                  background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                  border: "1px solid rgba(255,255,255,0.22)", borderRadius: 30, padding: "10px 14px",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
+                }}
+              >
           <button
             onClick={apriRotellinaPassword}
             aria-label="Password menù"
@@ -42872,6 +42916,9 @@ export default function App() {
               <polyline points="9 22 9 12 15 12 15 22" />
             </svg>
           </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
       {!isMobile && (
@@ -43538,6 +43585,7 @@ export default function App() {
 
       {view === "crmallievielenco" && (
         <PaginaCrmAllievi
+          onCoricata={setDockCoricato}
           iscritti={iscritti} allieviCrm={allieviCrm} corsi={corsi} corsiDate={corsiDate} location={location}
           ricarica={fetchDati} onBack={() => setView("crmallievi")}
           onApriStoricoAllievi={apriStoricoAllievi}
