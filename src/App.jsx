@@ -10732,7 +10732,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, impostazioniMagazzino, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -10741,25 +10741,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     const { error } = await supabase.from("impostazioni_iva").update({ aliquota_default: nuovo }).eq("id", true);
     if (error) { window.alert("Errore: " + error.message); return; }
     ricarica(["impostazioni_iva"]);
-  }
-  // parametri di riordino: valgono per tutto il magazzino e nascono VUOTI.
-  // Finché non sono impostati l'Advisor non calcola nessuna data limite
-  // d'ordine — segnala solo le scorte sotto soglia. È voluto: una data
-  // ricavata da parametri inventati sarebbe peggio del silenzio
-  const [margineSicurezzaInput, setMargineSicurezzaInput] = useState(impostazioniMagazzino?.giorni_sicurezza_default != null ? String(impostazioniMagazzino.giorni_sicurezza_default) : "");
-  const [coperturaInput, setCoperturaInput] = useState(impostazioniMagazzino?.orizzonte_copertura_giorni != null ? String(impostazioniMagazzino.orizzonte_copertura_giorni) : "");
-  useEffect(() => {
-    setMargineSicurezzaInput(impostazioniMagazzino?.giorni_sicurezza_default != null ? String(impostazioniMagazzino.giorni_sicurezza_default) : "");
-    setCoperturaInput(impostazioniMagazzino?.orizzonte_copertura_giorni != null ? String(impostazioniMagazzino.orizzonte_copertura_giorni) : "");
-  }, [impostazioniMagazzino]);
-  async function salvaParametroMagazzino(campo, testo, ripristina) {
-    const t = String(testo || "").trim();
-    const nuovo = t === "" ? null : parseInt(parseNum(t), 10);
-    if (t !== "" && (!Number.isFinite(nuovo) || nuovo < 0)) { window.alert("Scrivi un numero di giorni valido."); ripristina(); return; }
-    if (nuovo === (impostazioniMagazzino?.[campo] ?? null)) return;
-    const { error } = await supabase.from("impostazioni_magazzino").upsert({ id: true, [campo]: nuovo }, { onConflict: "id" });
-    if (error) { window.alert("Errore: " + error.message); ripristina(); return; }
-    ricarica(["impostazioni_magazzino"]);
   }
   const isMobile = useIsMobile();
   const [nomeCorso, setNomeCorso] = useState("");
@@ -11175,30 +11156,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
         <div style={{ display: "flex", gap: 8 }}>
           <input style={{ ...inputStyle, width: 90 }} inputMode="decimal" value={aliquotaIvaDefaultInput} onChange={(e) => setAliquotaIvaDefaultInput(e.target.value)} onBlur={salvaAliquotaIvaDefault} />
           <div style={{ ...fontBody, fontSize: 14, color: NAVY, display: "flex", alignItems: "center" }}>%</div>
-        </div>
-      </div>
-
-      <div style={{ ...cardStyle, padding: 20, maxWidth: 340, marginTop: 14 }}>
-        <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, letterSpacing: 0.3, textTransform: "uppercase", marginBottom: 4 }}>Magazzino e riordini</div>
-        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
-          Servono all'Advisor per dire entro quando ordinare. Finché restano vuoti l'Advisor segnala solo le scorte sotto soglia e non calcola nessuna data.
-        </div>
-        <Field label="Margine di sicurezza (giorni)">
-          <input
-            style={{ ...inputStyle, width: 110 }} inputMode="numeric" placeholder="es. 7"
-            value={margineSicurezzaInput} onChange={(e) => setMargineSicurezzaInput(e.target.value)}
-            onBlur={() => salvaParametroMagazzino("giorni_sicurezza_default", margineSicurezzaInput, () => setMargineSicurezzaInput(impostazioniMagazzino?.giorni_sicurezza_default != null ? String(impostazioniMagazzino.giorni_sicurezza_default) : ""))}
-          />
-        </Field>
-        <Field label="Copertura da ordinare (giorni)">
-          <input
-            style={{ ...inputStyle, width: 110 }} inputMode="numeric" placeholder="es. 60"
-            value={coperturaInput} onChange={(e) => setCoperturaInput(e.target.value)}
-            onBlur={() => salvaParametroMagazzino("orizzonte_copertura_giorni", coperturaInput, () => setCoperturaInput(impostazioniMagazzino?.orizzonte_copertura_giorni != null ? String(impostazioniMagazzino.orizzonte_copertura_giorni) : ""))}
-          />
-        </Field>
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>
-          Il tempo di consegna invece si scrive prodotto per prodotto, nella scheda prodotto: cambia troppo da un articolo all'altro per avere un valore unico.
         </div>
       </div>
 
@@ -27398,17 +27355,17 @@ function TabellaStoricoSpedizioni({ voci, onApriOrdine, isMobile }) {
 // avvisi che si vede là — qui però si agisce solo su quello che è
 // mestiere di chi prepara: aprire un pacco sigillato. Riordinare dal
 // fornitore resta un lavoro d'ufficio, e la riga lo dice e basta.
-function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, ricarica, onBack, onApriAdvisor, titolo = "Advisor" }) {
+function PaginaAvvisiLogistica({ prodottiShop, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, ricarica, onBack, onApriAdvisor, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null);
   const avvisi = useMemo(() => calcolaAvvisiMagazzino(prodottiShop), [prodottiShop]);
   const sintesi = useMemo(() => {
     const oggi = dataOggiStr();
     const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi });
-    const piano = pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi });
+    const piano = pianoRiordino({ prodottiShop, risultato, oggi });
     const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
     return { risultato, daOrdinare: piano.daOrdinare.length, ritardi };
-  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, impostazioniMagazzino]);
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
 
   const { risultato, daOrdinare, ritardi } = sintesi;
   const critico = !!risultato.dataCriticaComplessiva;
@@ -28868,9 +28825,9 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, impostazioniMagazzino, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
   useEffect(() => {
-    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva", "impostazioni_magazzino"]);
+    assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const isMobile = useIsMobile();
@@ -29158,11 +29115,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const sintesiAdvisor = useMemo(() => {
     const oggi = dataOggiStr();
     const risultato = simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi });
-    const piano = pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi });
+    const piano = pianoRiordino({ prodottiShop, risultato, oggi });
     const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
     const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente").length;
     return { risultato, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
-  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, impostazioniMagazzino]);
+  }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
 
   // i totali aggregati contano solo chi ha davvero un magazzino da
   // sommare: un bundle/vetrina con conta_magazzino=false falserebbe la
@@ -30518,9 +30475,13 @@ function kitComponibiliOggi(kitDefinizioni, corsiKitProdotti, prodottiShop) {
 // tempo di consegna del prodotto, margine di sicurezza (suo o generale) e
 // una data critica dalla simulazione. Altrimenti la riga finisce fra i
 // "non posso esprimermi", con scritto cosa manca.
-function pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi }) {
-  const margineGenerale = impostazioniMagazzino?.giorni_sicurezza_default;
-  const orizzonte = impostazioniMagazzino?.orizzonte_copertura_giorni;
+// Margine di sicurezza e quantità da ordinare si leggono dal prodotto, non
+// da un'impostazione generale: cambiano troppo da un articolo all'altro —
+// un dermografo e una confezione di aghi non si riordinano con lo stesso
+// anticipo né nelle stesse quantità. Prima esisteva una coppia di valori
+// unica in Impostazioni ("Magazzino e riordini"); ora quella scheda non c'è
+// più e ogni prodotto porta i suoi.
+function pianoRiordino({ prodottiShop, risultato, oggi }) {
   const daOrdinare = [];
   const nonCalcolabili = [];
 
@@ -30531,7 +30492,7 @@ function pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi })
     // riordino guarda quanti pezzi ci sono davvero rispetto alla soglia
     const disponibile = p.quantita || 0;
     const sottoScorta = p.soglia_riordino != null && disponibile < p.soglia_riordino;
-    const margine = p.giorni_sicurezza != null ? p.giorni_sicurezza : margineGenerale;
+    const margine = p.giorni_sicurezza;
     const haDati = p.lead_time_giorni != null && margine != null;
 
     // criterio 1 — data limite d'ordine (solo con tutti i dati)
@@ -30552,7 +30513,7 @@ function pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi })
     if (previsione?.dataCritica && !haDati) {
       nonCalcolabili.push({
         prodotto: p,
-        motivo: p.lead_time_giorni == null ? "tempo_consegna" : "parametri_generali",
+        motivo: p.lead_time_giorni == null ? "tempo_consegna" : "margine_sicurezza",
         dataCritica: previsione.dataCritica,
       });
     }
@@ -30561,17 +30522,18 @@ function pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi })
     // un solo avviso per prodotto: vince quello più urgente, e si dice
     // sempre quale criterio l'ha generato — mai due righe sovrapposte
     const criterio = perData && (perData.stato === "ritardo" || perData.stato === "urgente" || !perSoglia) ? "data" : "soglia";
-    const fabbisognoFinestra = orizzonte != null && haDati
-      ? fabbisognoEntro(previsione, addGiorni(oggi, p.lead_time_giorni + margine + orizzonte))
-      : null;
-    const suggerita = fabbisognoFinestra != null
-      ? Math.max(0, fabbisognoFinestra - disponibile)
+    // quanto ordinare: se il prodotto ha una sua quantità di riordino è
+    // quella e basta (è la confezione che si compra dal fornitore, decisa
+    // una volta per tutte nella scheda); altrimenti quanto serve per
+    // rientrare in scorta
+    const suggerita = p.quantita_riordino != null
+      ? p.quantita_riordino
       : (p.soglia_riordino != null ? Math.max(0, p.soglia_riordino - disponibile) : null);
     daOrdinare.push({
       prodotto: p, criterio, perData, perSoglia, disponibile,
       fabbisognoTotale: previsione?.fabbisogno || 0,
       quantitaSuggerita: suggerita != null ? arrotondaALotto(suggerita, p.lotto_minimo_ordine) : null,
-      baseQuantita: fabbisognoFinestra != null ? "previsione" : (p.soglia_riordino != null ? "soglia_riordino" : null),
+      baseQuantita: p.quantita_riordino != null ? "quantita_riordino" : (p.soglia_riordino != null ? "soglia_riordino" : null),
     });
   });
 
@@ -30581,7 +30543,7 @@ function pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi })
     if (ga !== gb) return ga - gb;
     return (a.prodotto.nome || "").localeCompare(b.prodotto.nome || "");
   });
-  return { daOrdinare, nonCalcolabili, parametriMancanti: margineGenerale == null || orizzonte == null };
+  return { daOrdinare, nonCalcolabili };
 }
 
 function fabbisognoEntro(previsione, dataLimite) {
@@ -30601,7 +30563,7 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, impostazioniMagazzino, fornitori, ricarica, onApriIscritto, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, ricarica, onApriIscritto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
@@ -30656,8 +30618,8 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
     [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, oggi]
   );
   const piano = useMemo(
-    () => pianoRiordino({ prodottiShop, risultato, impostazioniMagazzino, oggi }),
-    [prodottiShop, risultato, impostazioniMagazzino, oggi]
+    () => pianoRiordino({ prodottiShop, risultato, oggi }),
+    [prodottiShop, risultato, oggi]
   );
   const kitOggi = useMemo(
     () => kitComponibiliOggi(kitDefinizioni, corsiKitProdotti, prodottiShop),
@@ -30840,7 +30802,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
           {risultato.nonRisolti.length > 0 && <><br /><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: valgono come "nessun kit" finché non li assegni qui sotto.</>}
           {risultato.senzaKit > 0 && <><br /><b>{risultato.senzaKit}</b> iscritti senza kit: nessun fabbisogno, nessun problema.</>}
           {risultato.edizioniSenzaIscritti > 0 && <><br /><b>{risultato.edizioniSenzaIscritti}</b> corsi futuri non hanno ancora iscritti: per loro il fabbisogno risulta zero.</>}
-          {piano.parametriMancanti && <><br /><b style={{ color: "#C0392B" }}>Margine di sicurezza e copertura non impostati</b> (Impostazioni → Magazzino e riordini): senza, nessuna data limite d'ordine viene calcolata.</>}
+          {piano.nonCalcolabili.some((n) => n.motivo === "margine_sicurezza") && <><br /><b style={{ color: "#C0392B" }}>{piano.nonCalcolabili.filter((n) => n.motivo === "margine_sicurezza").length} prodotti senza margine di sicurezza</b>: si scrive nella scheda del prodotto, senza non calcolo la data limite d'ordine.</>}
         </div>
       </div>
 
@@ -31057,7 +31019,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                 <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                   {r.quantitaSuggerita != null && <div style={{ fontWeight: 700 }}>ordina {r.quantitaSuggerita}</div>}
                   <div style={{ fontSize: 11.5, color: MUTED }}>
-                    {r.baseQuantita === "previsione" ? "sul fabbisogno previsto" : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta" : "quantità da valutare"}
+                    {r.baseQuantita === "quantita_riordino" ? "quantità di riordino del prodotto" : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta" : "quantità da valutare"}
                   </div>
                 </div>
               </div>
@@ -31142,7 +31104,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       <div style={{ ...cardStyle, padding: 16, marginBottom: 24 }}>
         <div style={titoloBlocco}>Non posso esprimermi</div>
         <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.6 }}>
-          {prodottiDaConfigurare.length === 0 && kitSenzaComposizione.length === 0 && nonRisoltiPerEtichetta.length === 0 && !piano.parametriMancanti && (
+          {prodottiDaConfigurare.length === 0 && kitSenzaComposizione.length === 0 && nonRisoltiPerEtichetta.length === 0 && piano.nonCalcolabili.length === 0 && (
             <span style={{ color: MUTED }}>Niente: tutti i dati necessari sono compilati.</span>
           )}
           {prodottiDaConfigurare.length > 0 && (
@@ -31164,7 +31126,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
           )}
           {piano.nonCalcolabili.length > 0 && (
             <div>
-              <b>{piano.nonCalcolabili.length} prodotti finiscono davvero</b> secondo il calendario, ma senza tempo di consegna non posso dirti entro quando ordinarli.
+              <b>{piano.nonCalcolabili.length} prodotti finiscono davvero</b> secondo il calendario, ma nella loro scheda manca il tempo di consegna o il margine di sicurezza: senza, non posso dirti entro quando ordinarli.
               <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
                 {piano.nonCalcolabili.slice(0, 8).map((n) => `${n.prodotto.nome} (dal ${fmtData(n.dataCritica)})`).join(" · ")}
               </div>
@@ -43074,7 +43036,6 @@ export default function App() {
   const [prodottiCategorie, setProdottiCategorie] = useState([]);
   const [bundleComponenti, setBundleComponenti] = useState([]);
   const [impostazioniIva, setImpostazioniIva] = useState(null);
-  const [impostazioniMagazzino, setImpostazioniMagazzino] = useState(null);
   const [prodottiImmagini, setProdottiImmagini] = useState([]);
   // obiettivi individuali (Target Master/Venditori, Impostazioni > Vendite
   // prodotti) sulle vendite POS: incasso, quantità di prodotto, o entrambi
@@ -43238,7 +43199,6 @@ export default function App() {
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
     impostazioni_iva: async () => setImpostazioniIva((await supabase.from("impostazioni_iva").select("*").maybeSingle()).data || { aliquota_default: 22 }),
-    impostazioni_magazzino: async () => setImpostazioniMagazzino((await supabase.from("impostazioni_magazzino").select("*").maybeSingle()).data || null),
     prodotti_shop: async () => setProdottiShop((await supabase.from("prodotti_shop").select("*").order("nome")).data || []),
     prodotti_categorie: async () => setProdottiCategorie((await supabase.from("prodotti_categorie").select("*")).data || []),
     prodotti_immagini: async () => setProdottiImmagini((await supabase.from("prodotti_immagini").select("*")).data || []),
@@ -43402,7 +43362,7 @@ export default function App() {
     home: [], erp: [], magazzinoshop: [], statistiche: [],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
-    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva", "impostazioni_magazzino"],
+    impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
     schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
@@ -43425,8 +43385,8 @@ export default function App() {
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "impostazioni_magazzino", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
-    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "impostazioni_magazzino", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -43443,7 +43403,7 @@ export default function App() {
     agenda: ["agende", "agenda_voci", "agenda_note_settimanali", "corsi", "location", "corsi_date"],
     gestionemodelle: ["corsi", "location", "corsi_date", "iscritti", "master", "corsi_giorni"],
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
-    avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "impostazioni_magazzino"],
+    avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
     ordiniinarrivo: ["vendite_shop", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
@@ -44337,7 +44297,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni ruoloUtente={ruoloUtente} corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
+        <Impostazioni ruoloUtente={ruoloUtente} corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
       )}
 
       {view === "gestionedate" && (
@@ -44593,7 +44553,7 @@ export default function App() {
           prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
-          impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
+          fornitori={fornitori}
           onApriIscritto={apriIscrittoDaAdvisor}
           // si torna da dove si è entrati: dal magazzino o dagli avvisi in Logistica
           ricarica={fetchDati} onBack={() => setView(viewPrimaDiAdvisor)}
@@ -44604,7 +44564,7 @@ export default function App() {
         <PaginaMagazzino
           ruoloUtente={ruoloUtente}
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
-          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} fornitori={fornitori}
+          bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
@@ -44825,7 +44785,6 @@ export default function App() {
         <PaginaAvvisiLogistica
           prodottiShop={prodottiShop} corsiDate={corsiDate} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
-          impostazioniMagazzino={impostazioniMagazzino}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")} onApriAdvisor={() => apriAdvisorDa("avvisilogistica")}
           titolo={etichettaTasto("logisticaprodotti", "avvisilogistica", "Advisor")}
         />
