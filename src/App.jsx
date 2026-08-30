@@ -1811,7 +1811,7 @@ const campoCompattoStyle = { ...inputStyle, padding: "5px 7px", fontSize: 12.5 }
 // della scheda. Le caselle dentro restano bianche con un filo appena
 // accennato: sul colore basta il bianco a dire dove si scrive.
 const areaSchedaIscritto = {
-  background: "#FFFDF8",
+  background: "#FBF6EA",
   border: `1px solid ${CREAM_BORDER}`,
   borderLeft: `4px solid ${GOLD}`,
   borderRadius: 12,
@@ -18882,7 +18882,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <button
             type="button"
             onClick={() => setAccontoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#FFFDF8", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#FBF6EA", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
           >
             + Aggiungi un altro acconto
           </button>
@@ -18930,7 +18930,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <button
             type="button"
             onClick={() => setPrecorsoExtra((prev) => [...prev, { ...RIGA_PAGAMENTO_EXTRA_VUOTA }])}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#FFFDF8", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, background: "#FBF6EA", border: `1px dashed ${GOLD}`, borderRadius: 10, padding: "10px 12px", cursor: "pointer", width: "100%" }}
           >
             + Aggiungi un'altra quota pre corso
           </button>
