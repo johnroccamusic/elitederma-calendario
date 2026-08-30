@@ -23793,7 +23793,7 @@ async function caricaRicevutaSpesa(file) {
 // (un colore per famiglia di dato) + etichetta, piena in navy quando
 // attiva — stesso principio delle TileHome ma più compatta, per stare
 // in una riga di 6
-function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children, compatto = false }) {
+function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, coloreIcona, children, aiuto, compatto = false }) {
   if (compatto) {
     // variante quadrata per quando serve stare in N per riga anche su
     // mobile (vedi TabsStatisticheVenditeProdotti): icona sopra, testo
@@ -23825,19 +23825,112 @@ function SchedaTabAmministrazione({ attivo, onClick, Icona, sfondo, bordo, color
         <Icona size={16} color={attivo ? "#fff" : coloreIcona} />
       </span>
       <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: attivo ? "#fff" : NAVY }}>{children}</span>
+      {aiuto && <AiutoInfo chiave={aiuto.chiave} predefinito={aiuto.testo} ruoloUtente={aiuto.ruoloUtente} />}
     </button>
   );
 }
-function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount }) {
+// ---------- Aiuti: la "i" con la nuvoletta ----------
+// I testi stanno tutti in una riga sola di impostazioni_layout_tasti
+// (pagina "aiuti"), così chi li riscrive li riscrive per tutti — sono
+// istruzioni di lavoro, non una preferenza del singolo computer. La
+// cache sta qui fuori dai componenti: si legge una volta per sessione e
+// ogni "i" della pagina si aggiorna insieme alle altre.
+let AIUTI_CACHE = null;
+let AIUTI_IN_CARICAMENTO = null;
+const AIUTI_ASCOLTATORI = new Set();
+function notificaAiuti() { AIUTI_ASCOLTATORI.forEach((f) => f(AIUTI_CACHE)); }
+async function caricaAiuti() {
+  if (AIUTI_CACHE) return AIUTI_CACHE;
+  if (!AIUTI_IN_CARICAMENTO) {
+    AIUTI_IN_CARICAMENTO = supabase.from("impostazioni_layout_tasti").select("etichette").eq("pagina", "aiuti").maybeSingle()
+      .then(({ data }) => { AIUTI_CACHE = data?.etichette || {}; notificaAiuti(); return AIUTI_CACHE; })
+      .catch(() => { AIUTI_CACHE = {}; return AIUTI_CACHE; });
+  }
+  return AIUTI_IN_CARICAMENTO;
+}
+async function salvaAiuto(chiave, testo) {
+  const aggiornati = { ...(AIUTI_CACHE || {}) };
+  if (testo && testo.trim()) aggiornati[chiave] = testo.trim(); else delete aggiornati[chiave];
+  AIUTI_CACHE = aggiornati;
+  notificaAiuti();
+  const { error } = await supabase.from("impostazioni_layout_tasti").upsert({ pagina: "aiuti", etichette: aggiornati }, { onConflict: "pagina" });
+  if (error) window.alert("Testo non salvato: " + error.message);
+}
+// la "i" nel cerchietto: il mouse sopra apre la nuvoletta, un clic fuori
+// la chiude, il tasto destro sulla nuvoletta ne riscrive il testo
+function AiutoInfo({ chiave, predefinito, ruoloUtente }) {
+  const [aperta, setAperta] = useState(false);
+  const [testi, setTesti] = useState(AIUTI_CACHE || {});
+  useEffect(() => {
+    AIUTI_ASCOLTATORI.add(setTesti);
+    caricaAiuti();
+    return () => { AIUTI_ASCOLTATORI.delete(setTesti); };
+  }, []);
+  const testo = testi[chiave] || predefinito || "Nessuna spiegazione ancora: tasto destro qui sopra per scriverla.";
+  return (
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", flexShrink: 0 }}>
+      <span
+        onMouseEnter={() => setAperta(true)}
+        onClick={(e) => { e.stopPropagation(); setAperta((v) => !v); }}
+        title="Cosa fa questo tasto"
+        style={{
+          width: 15, height: 15, borderRadius: "50%", border: `1px solid currentColor`, opacity: 0.55,
+          display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "help",
+          ...fontBody, fontSize: 10, fontWeight: 700, lineHeight: 1,
+        }}
+      >i</span>
+      {aperta && (
+        <>
+          {/* il velo invisibile: un clic in qualunque punto vuoto chiude */}
+          <span onClick={(e) => { e.stopPropagation(); setAperta(false); }} style={{ position: "fixed", inset: 0, zIndex: 60 }} />
+          <span
+            onClick={(e) => e.stopPropagation()}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const nuovo = window.prompt("Istruzioni di questo tasto:", testi[chiave] || predefinito || "");
+              if (nuovo !== null) salvaAiuto(chiave, nuovo);
+            }}
+            style={{
+              position: "absolute", top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)",
+              zIndex: 61, width: 260, background: "#fff", color: NAVY, border: `1px solid ${CREAM_BORDER}`,
+              borderRadius: 12, boxShadow: "0 8px 24px rgba(14,27,51,0.18)", padding: "10px 12px",
+              ...fontBody, fontSize: 12.5, fontWeight: 400, lineHeight: 1.45, textAlign: "left", whiteSpace: "normal", textTransform: "none", letterSpacing: 0,
+            }}
+          >
+            {testo}
+            <span style={{ display: "block", marginTop: 6, ...fontBody, fontSize: 10.5, color: MUTED }}>
+              {ruoloUtente === "programmatore" ? "Tasto destro qui per riscrivere · clic fuori per chiudere" : "Clic fuori per chiudere"}
+            </span>
+          </span>
+        </>
+      )}
+    </span>
+  );
+}
+
+// le spiegazioni di partenza delle sette schede: si riscrivono dal
+// programma (tasto destro sulla nuvoletta) e da lì valgono per tutti
+const AIUTI_TAB_AMMINISTRAZIONE = {
+  primanota: "Tutte le spese registrate a mano, con importo, categoria e come sono state pagate. È il registro di cassa: quello che esce, giorno per giorno.",
+  impegni: "I soldi promessi ma non ancora fatturati: compensi master, hotel, viaggi. Nascono dai corsi in calendario e si chiudono quando arriva la fattura del fornitore.",
+  documenti: "Le fatture arrivate da Fatture in Cloud. Da qui si importano in prima nota e si abbinano agli impegni già presi.",
+  notecredito: "Le note di credito ricevute dai fornitori. Si abbinano alle fatture a cui si riferiscono e ne abbassano il residuo da pagare.",
+  passivo: "Cosa dobbiamo pagare e quando: scadenze delle fatture ricevute, rate degli abbonamenti e impegni con una data.",
+  attivo: "Cosa dobbiamo incassare: acconti, quote pre corso e saldi degli allievi, con la data in cui sono attesi.",
+  abbonamenti: "I contratti che si rinnovano da soli — canoni, servizi, licenze — con l'importo e ogni quanto tornano.",
+};
+function TabsAmministrazione({ schedaAttiva, onApriPrimaNotaCassa, onApriScheda, impegniCount, documentiCount, noteCreditoCount, passivoCount, attivoCount, abbonamentiCount, ruoloUtente }) {
+  const aiuto = (chiave) => ({ chiave: `amministrazione.${chiave}`, testo: AIUTI_TAB_AMMINISTRAZIONE[chiave], ruoloUtente });
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Prima nota cassa</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Fatture ricevute ({documentiCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD">Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
-      <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "primanota"} onClick={onApriPrimaNotaCassa} Icona={IconaRicevutaErp} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B" aiuto={aiuto("primanota")}>Prima nota cassa</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "impegni"} onClick={() => onApriScheda("impegni")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("impegni")}>Quadro impegni ({impegniCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "documenti"} onClick={() => onApriScheda("documenti")} Icona={IconaCartellaShop} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E" aiuto={aiuto("documenti")}>Fatture ricevute ({documentiCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "notecredito"} onClick={() => onApriScheda("notecredito")} Icona={IconaCartellaShop} sfondo="#F3EAF6" bordo="#DCC7E3" coloreIcona="#8E44AD" aiuto={aiuto("notecredito")}>Note di credito ({noteCreditoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "passivo"} onClick={() => onApriScheda("passivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("passivo")}>Scadenziario Passivo ({passivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "attivo"} onClick={() => onApriScheda("attivo")} Icona={IconaCalendarioCard} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("attivo")}>Scadenziario Attivo ({attivoCount})</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione attivo={schedaAttiva === "abbonamenti"} onClick={() => onApriScheda("abbonamenti")} Icona={IconaPersonaSemplice} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32" aiuto={aiuto("abbonamenti")}>Abbonamenti e contratti ({abbonamentiCount})</SchedaTabAmministrazione>
     </div>
   );
 }
@@ -24733,7 +24826,7 @@ function PaginaRiconciliazione({
   );
 }
 
-function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
+function PaginaAmministrazione({ ruoloUtente, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, spese, costiCategorie, costiSottocategorie, categorieGruppi, fornitori, abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic, noteCreditoFic, documentoFornitoreTabella, ricarica, onBack, onApriModificaSpesa, onApriPrimaNotaCassa, onApriIscritto, onApriNuovaSpesaDaPagare, onApriNuovoAbbonamento, onApriModificaAbbonamento, onApriNuovaSpesaDaFatturaFic, onApriRiconciliazione, tabIniziale, onCambiaTab, titolo = "Contabilità" }) {
   const isMobile = useIsMobile();
   const [tab, setTab] = useState(tabIniziale || "impegni");
   // tiene sincronizzato il tab iniziale del genitore: se si apre un'altra
@@ -25214,6 +25307,7 @@ function PaginaAmministrazione({ corsi, location, corsiDate, iscritti, master, m
           passivoCount={daPagare.length}
           attivoCount={scadenziarioAttivo.length}
           abbonamentiCount={(abbonamentiContratti || []).length}
+          ruoloUtente={ruoloUtente}
         />
 
         {msg && <div style={{ ...fontBody, fontSize: 13, color: "#C0392B", marginBottom: 12 }}>{msg}</div>}
@@ -25715,6 +25809,7 @@ function ChipSpesa({ children }) {
 }
 const SPESE_PAGINA_INIZIALE = 10;
 function PaginaInserimentoCostiRicavi({
+  ruoloUtente,
   spese, costiCategorie, costiSottocategorie, fornitori,
   corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, categorieGruppi,
   abbonamentiContratti, abbonamentiImporti, fattureRicevuteFic,
@@ -25879,6 +25974,7 @@ function PaginaInserimentoCostiRicavi({
           passivoCount={daPagareVirtualiPerConteggio.length + daPagareRealiPerConteggio + occorrenzeAbbonamentiPerConteggio}
           attivoCount={scadenziarioAttivoPerConteggio}
           abbonamentiCount={(abbonamentiContratti || []).length}
+          ruoloUtente={ruoloUtente}
         />
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
@@ -43644,6 +43740,7 @@ export default function App() {
 
       {view === "amministrazione" && (
         <PaginaAmministrazione
+          ruoloUtente={ruoloUtente}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
           master={master} masterCorsi={masterCorsi} corsiDateDocenti={corsiDateDocenti}
           assistente={assistente} assistenteCorsi={assistenteCorsi} leva={leva} hotel={hotel}
@@ -43782,6 +43879,7 @@ export default function App() {
 
       {view === "inserimentocostiricavi" && (
         <PaginaInserimentoCostiRicavi
+          ruoloUtente={ruoloUtente}
           spese={spese}
           costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} fornitori={fornitori}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
