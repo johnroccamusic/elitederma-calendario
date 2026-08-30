@@ -6570,6 +6570,104 @@ function CardDataMaster({ corsoData, corso, loc, hotelAssociato, iscrittiEdizion
     </div>
   );
 }
+// La classe vista dalla master: stessa card della dashboard — fondo bianco,
+// bordo del colore del corso, targhetta della data in alto a sinistra — solo
+// che dentro, al posto del riepilogo per kit, c'è l'elenco nome per nome.
+// È la lista che la master si porta in aula: chi ha davanti, quale kit gli
+// ha comprato e che taglia di divisa gli tocca. Niente cifre, niente
+// pagamenti: quelli non la riguardano.
+function PaginaClasseMaster({ corsoData, corso, loc, iscrittiEdizione, onApriModelle, onBack }) {
+  const coloreCorso = corso?.colore || NAVY;
+  const { numero, sotto } = etichettaIntervalloGiorni(corsoData.data_inizio, corsoData.data_fine);
+  const oggiStr = dataOggiStr();
+  const inCorso = oggiStr >= corsoData.data_inizio && oggiStr <= corsoData.data_fine;
+  const appenaTerminato = !inCorso && oggiStr > corsoData.data_fine && oggiStr <= addGiorni(corsoData.data_fine, 5);
+  // in ordine alfabetico di cognome: è così che si chiama l'appello, non
+  // nell'ordine in cui sono arrivate le iscrizioni
+  const allievi = [...(iscrittiEdizione || [])].sort((a, b) =>
+    `${a.cognome || ""} ${a.nome || ""}`.localeCompare(`${b.cognome || ""} ${b.nome || ""}`, "it")
+  );
+
+  // stessa riga del riepilogo per kit della dashboard, qui per un allievo
+  // solo: il dermografo attaccato al kit, con dove lo riceve — chi prepara
+  // la scatola e chi lo consegna in aula leggono la stessa frase
+  function descrizioneKit(i) {
+    if (!i.pacchetto_kit) return null;
+    const suffisso = i.dermografo === "nessuno" ? " (senza dermografo)"
+      : !i.dermografo ? ""
+      : i.dermografo_consegna === "casa" ? ` + ${etichettaDermografo(i.dermografo)} già comprato e ricevuto`
+      : i.dermografo_consegna === "corso" ? ` + ${etichettaDermografo(i.dermografo)} da ritirare al corso`
+      : ` + ${etichettaDermografo(i.dermografo)}`;
+    return `${i.pacchetto_kit}${suffisso}`;
+  }
+
+  return (
+    <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 30px" }}>
+      <button onClick={onBack} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4, marginBottom: 10 }}>
+        <IconaFrecciaSinistra size={20} />
+        <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
+      </button>
+
+      <div style={{ border: `2px solid ${coloreCorso}`, borderLeftWidth: 6, borderRadius: 16, padding: 16, background: "#fff" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+            <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
+              <div style={{ ...fontDisplay, fontSize: numero.length > 5 ? 14 : 20, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" }}>{numero}</div>
+              {sotto && <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{sotto}</div>}
+            </div>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{corso?.nome || "—"}</div>
+              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{toTitleCase(loc?.nome || "—")}</div>
+            </div>
+          </div>
+          {(inCorso || appenaTerminato) && (
+            <div style={{ ...fontDisplay, fontSize: inCorso ? 28 : 19, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap" }}>
+              {inCorso ? "IN CORSO" : "Appena terminato"}
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9, marginBottom: 12 }}>
+            <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{allievi.length}</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>Allievi totali</span>
+          </div>
+
+          {allievi.length === 0 ? (
+            <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun allievo iscritto.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {allievi.map((i, idx) => (
+                <div key={i.id} style={{ borderLeft: `3px solid ${GOLD}`, paddingLeft: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3 }}>
+                      <span style={{ color: MUTED, fontWeight: 400, marginRight: 6 }}>{idx + 1}.</span>
+                      {`${i.nome || ""} ${i.cognome || ""}`.trim()}
+                    </div>
+                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: i.taglia_divisa ? NAVY : MUTED, whiteSpace: "nowrap" }}>
+                      Taglia {i.taglia_divisa || "—"}
+                    </div>
+                  </div>
+                  <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>
+                    {descrizioneKit(i) || "Nessun kit"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {onApriModelle && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <div onClick={onApriModelle} style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, cursor: "pointer" }}>
+              Gestione modelle →
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // range di periodo per "Riepilogo vendita prodotti": stessa idea dei
 // periodi già usati altrove nell'ERP, con "Anno accademico" che segue la
 // stessa convenzione settembre→agosto di annoStagioneDaData/stagioneCorrente
@@ -42767,6 +42865,10 @@ export default function App() {
   const [inventarioSede, setInventarioSede] = useState([]);
   const [inventarioSedeCorsoDataId, setInventarioSedeCorsoDataId] = useState(null);
   const [classeMasterCorsoDataId, setClasseMasterCorsoDataId] = useState(null);
+  // dalla classe si può scendere alla gestione modelle dello stesso corso:
+  // era l'unica cosa che si vedeva prima cliccando la card, e resta a un
+  // tocco di distanza invece di sparire
+  const [classeMasterModelle, setClasseMasterModelle] = useState(false);
   // "mucchio" di prodotti aperti (non ripristinabili in magazzino):
   // una riga per prodotto+edizione, sommate per prodotto in Logistica
   // prodotti — alimentato dal tasto "Prodotti rientrati"
@@ -43562,7 +43664,7 @@ export default function App() {
   function apriSpedizioniPos() { setView("spedizionipos"); }
   function apriDashboardMaster() { apriViewProtetta("dashboardmaster"); }
   function apriInventarioSede(corsoDataId) { setInventarioSedeCorsoDataId(corsoDataId); setView("inventariosede"); }
-  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setView("classemaster"); }
+  function apriClasseMaster(corsoDataId) { scrollAppInCima(); setClasseMasterCorsoDataId(corsoDataId); setClasseMasterModelle(false); setView("classemaster"); }
   // "Agenda" non è un tasto TASTI_HOME come gli altri: non c'è un
   // permesso unico "agenda" da spuntare, ma una casella per ciascuna
   // agenda creata dal Programmatore (chiave "agenda_<id>", sia per gli
@@ -44385,16 +44487,26 @@ export default function App() {
         if (!cd || !corso || !loc) return <div style={{ maxWidth: 640, margin: "0 auto", padding: "20px", ...fontBody, color: MUTED }}>Classe non trovata.</div>;
         const [aaaa, mm, gg] = cd.data_inizio.split("-");
         const paramClasse = [slugify(corso.nome), slugify(loc.nome), `${gg}-${mm}-${aaaa}`].join("/");
-        return (
-          <div>
-            <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
-              <button onClick={() => setView("dashboardmaster")} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
-                <IconaFrecciaSinistra size={20} />
-                <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla dashboard</span>
-              </button>
+        if (classeMasterModelle) {
+          return (
+            <div>
+              <div style={{ maxWidth: 640, margin: "0 auto", padding: "4px 20px 0" }}>
+                <button onClick={() => { scrollAppInCima(); setClasseMasterModelle(false); }} title="Indietro" style={{ display: "flex", alignItems: "center", gap: 8, background: "transparent", border: "none", cursor: "pointer", color: NAVY, padding: 4, marginLeft: -4 }}>
+                  <IconaFrecciaSinistra size={20} />
+                  <span style={{ ...fontBody, fontSize: 13, fontWeight: 700 }}>Torna alla classe</span>
+                </button>
+              </div>
+              <VistaRicercaModelle param={paramClasse} />
             </div>
-            <VistaRicercaModelle param={paramClasse} mostraClasse />
-          </div>
+          );
+        }
+        return (
+          <PaginaClasseMaster
+            corsoData={cd} corso={corso} loc={loc}
+            iscrittiEdizione={iscritti.filter((i) => i.corso_data_id === cd.id)}
+            onApriModelle={() => { scrollAppInCima(); setClasseMasterModelle(true); }}
+            onBack={() => setView("dashboardmaster")}
+          />
         );
       })()}
 
