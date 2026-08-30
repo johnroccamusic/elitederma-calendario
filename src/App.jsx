@@ -16079,10 +16079,26 @@ const ORDINE_SEZIONI_ISCRITTO_DEFAULT = ["anagrafica", "contabili", "organizzati
 // campi dentro ciascuna delle tre sezioni (impostazioni_layout_iscrizioni
 // .ordine_righe, forma { anagrafica: [...], contabili: [...], organizzativi: [...] })
 const ORDINE_RIGHE_ISCRITTO_DEFAULT = {
-  anagrafica: ["modulo", "nomeCognome", "tutorTelefono", "fatturazione"],
+  anagrafica: ["modulo", "datiAnagrafici", "fatturazione"],
   contabili: ["totalePattuito", "pacchettoKit", "corsoParziale", "dermografoAParte", "quotaAcconto", "quotaPrecorso", "quotaDermografo", "daAvereAlCorso", "pagheraInTotale"],
   organizzativi: ["accordiCommerciali", "richiedeModelle", "tagliaDivisa", "screenAcconto", "screenRecap", "note"],
 };
+// L'ordine salvato sul database invecchia: una riga può essere stata
+// tolta, o due righe fuse in una sola (è successo con nome/cognome e
+// tutor/telefono, diventate un blocco unico). Qui si tengono solo le
+// chiavi che esistono ancora e si rimettono al loro posto quelle nuove,
+// altrimenti finirebbero in cima alla sezione con ordine -1.
+function ordineRigheNormalizzato(salvato) {
+  const risultato = {};
+  Object.entries(ORDINE_RIGHE_ISCRITTO_DEFAULT).forEach(([sezione, predefinite]) => {
+    const salvate = (Array.isArray(salvato?.[sezione]) ? salvato[sezione] : []).filter((c) => predefinite.includes(c));
+    predefinite.forEach((chiave, indiceDefault) => {
+      if (!salvate.includes(chiave)) salvate.splice(Math.min(indiceDefault, salvate.length), 0, chiave);
+    });
+    risultato[sezione] = salvate;
+  });
+  return risultato;
+}
 // una chiave/default/limite "spazioDopoRiga<Sezione><Riga>" per ciascuna
 // riga elencata sopra, generate qui invece che scritte a mano una per una
 Object.entries(ORDINE_RIGHE_ISCRITTO_DEFAULT).forEach(([sezione, righe]) => {
@@ -17775,9 +17791,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
   // fine: l'ordine delle righe DENTRO ciascuna delle tre sezioni. Un solo
   // set di stato/funzioni generiche, parametrizzate per sezione, invece
   // di tre copie identiche
-  const [ordineRighe, setOrdineRighe] = useState(() => ({ ...ORDINE_RIGHE_ISCRITTO_DEFAULT, ...(layoutIscrizioni?.ordine_righe || {}) }));
+  const [ordineRighe, setOrdineRighe] = useState(() => ordineRigheNormalizzato(layoutIscrizioni?.ordine_righe));
   useEffect(() => {
-    setOrdineRighe({ ...ORDINE_RIGHE_ISCRITTO_DEFAULT, ...(layoutIscrizioni?.ordine_righe || {}) });
+    setOrdineRighe(ordineRigheNormalizzato(layoutIscrizioni?.ordine_righe));
   }, [layoutIscrizioni]);
   const trascinamentoRigaRef = React.useRef(null);
   const [rigaTrascinata, setRigaTrascinata] = useState(null); // { sezione, chiave }
@@ -18383,52 +18399,51 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
             {spaziatoreRiga("anagrafica", "modulo")}
           </div>
 
-          <div {...propsRiga("anagrafica", "nomeCognome")}>
+          {/* nome, cognome, tutor, telefono e la spunta della fattura sono
+              una cosa sola: chi compila la scheda li legge insieme, e due
+              riquadri separati facevano sembrare due argomenti diversi */}
+          <div {...propsRiga("anagrafica", "datiAnagrafici")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-              {manigliaRiga("anagrafica", "nomeCognome")}
-              <div style={{ ...areaSchedaIscritto, display: "flex", gap: 14, flex: 1 }}>
-                <div style={{ flex: 1 }}>
-                  <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+              {manigliaRiga("anagrafica", "datiAnagrafici")}
+              <div style={{ ...areaSchedaIscritto, flex: 1 }}>
+                <div style={{ display: "flex", gap: 14 }}>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Nome"><input value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <Field label="Cognome"><input value={cognome} onChange={(e) => setCognome(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div style={{ flex: "2 1 140px" }}>
+                    <Field label="Tutor">
+                      <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...campoAreaScheda, textTransform: "uppercase" }}>
+                        <option value="">— scegli venditore —</option>
+                        {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
+                        {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
+                        {tutor && !(venditori || []).some((v) => v.nome.toUpperCase() === tutor.toUpperCase()) && (
+                          <option value={tutor}>{tutor} (non in elenco)</option>
+                        )}
+                      </select>
+                    </Field>
+                  </div>
+                  <div style={{ flex: "2 1 140px" }}>
+                    <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
+                  </div>
+                  <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
+                      <input
+                        type="checkbox"
+                        checked={richiedeFattura}
+                        onChange={(e) => { setRichiedeFattura(e.target.checked); if (!e.target.checked) svuotaCampiFattura(); }}
+                      />
+                      Richiede fattura
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
-            {spaziatoreRiga("anagrafica", "nomeCognome")}
-          </div>
-          <div {...propsRiga("anagrafica", "tutorTelefono")}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
-              {manigliaRiga("anagrafica", "tutorTelefono")}
-              <div style={{ ...areaSchedaIscritto, display: "flex", gap: 14, flexWrap: "wrap", alignItems: "flex-end", flex: 1 }}>
-                <div style={{ flex: "2 1 140px" }}>
-                  <Field label="Tutor">
-                    <select value={tutor} onChange={(e) => setTutor(e.target.value)} style={{ ...campoAreaScheda, textTransform: "uppercase" }}>
-                      <option value="">— scegli venditore —</option>
-                      {(venditori || []).map((v) => <option key={v.id} value={v.nome.toUpperCase()}>{v.nome.toUpperCase()}</option>)}
-                      {/* valore già presente ma non (più) in elenco: resta visibile invece di sparire silenziosamente */}
-                      {tutor && !(venditori || []).some((v) => v.nome.toUpperCase() === tutor.toUpperCase()) && (
-                        <option value={tutor}>{tutor} (non in elenco)</option>
-                      )}
-                    </select>
-                  </Field>
-                </div>
-                <div style={{ flex: "2 1 140px" }}>
-                  <Field label="Numero di telefono"><input value={telefono} onChange={(e) => setTelefono(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} /></Field>
-                </div>
-                <div style={{ flex: "1 1 130px", marginBottom: 14 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, whiteSpace: "nowrap" }}>
-                    <input
-                      type="checkbox"
-                      checked={richiedeFattura}
-                      onChange={(e) => { setRichiedeFattura(e.target.checked); if (!e.target.checked) svuotaCampiFattura(); }}
-                    />
-                    Richiede fattura
-                  </label>
-                </div>
-              </div>
-            </div>
-            {spaziatoreRiga("anagrafica", "tutorTelefono")}
+            {spaziatoreRiga("anagrafica", "datiAnagrafici")}
           </div>
 
           {richiedeFattura && (
