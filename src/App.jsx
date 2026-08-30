@@ -40065,7 +40065,9 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     const posizione = (kit.ordine || 0) + 1;
     const { data: creato, error } = await supabase
       .from("kit_definizioni")
-      .insert({ nome: nomeCopia, corso_id: kit.corso_id || null, ordine: posizione, tipo: kit.tipo || "kit" })
+      // la copia si porta dietro anche il diploma: un pacchetto duplicato
+      // nasce per somigliare all'originale, foglio stampato compreso
+      .insert({ nome: nomeCopia, corso_id: kit.corso_id || null, ordine: posizione, tipo: kit.tipo || "kit", diploma_path: kit.diploma_path || null, diploma_nome: kit.diploma_nome || null })
       .select().single();
     if (error) { window.alert("Non è stato possibile duplicare: " + error.message); return; }
 
@@ -40133,6 +40135,31 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     ? prodottiShop.filter((p) => !idsUsati.has(p.id) && p.nome.toLowerCase().includes(ricercaKit.trim().toLowerCase())).slice(0, 8)
     : [];
   const pillBtn = { ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: "5px 10px", cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" };
+
+  // il diploma di questo pacchetto: il file va nello stesso bucket dei
+  // diplomi di corso, ma il percorso resta scritto sul pacchetto — nella
+  // stessa edizione convivono allievi con pacchetti diversi, e il foglio
+  // che si stampa non è lo stesso per tutti
+  const [caricandoDiploma, setCaricandoDiploma] = useState(false);
+  async function associaDiploma(file) {
+    if (!file) return;
+    setCaricandoDiploma(true);
+    const percorso = `kit-${kit.id}/diploma-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
+    const { error: erroreUpload } = await supabase.storage.from("diploma-templates").upload(percorso, file);
+    if (erroreUpload) { setCaricandoDiploma(false); window.alert("Errore nel caricamento: " + erroreUpload.message); return; }
+    const { error } = await supabase.from("kit_definizioni").update({ diploma_path: percorso, diploma_nome: file.name }).eq("id", kit.id);
+    setCaricandoDiploma(false);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["kit_definizioni"]);
+  }
+  // il file caricato non si cancella dal bucket: se qualcuno ha stampato
+  // dei diplomi con quel modello, il modello deve restare rintracciabile
+  async function togliDiploma() {
+    if (!window.confirm(`Togliere il diploma associato a "${kit.nome}"?`)) return;
+    const { error } = await supabase.from("kit_definizioni").update({ diploma_path: null, diploma_nome: null }).eq("id", kit.id);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    ricarica(["kit_definizioni"]);
+  }
   const rigaRisultato = { padding: "8px 10px", cursor: "pointer", ...fontBody, fontSize: 13, color: NAVY, borderBottom: `1px solid ${CREAM_BORDER}` };
 
   return (
@@ -40184,8 +40211,31 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
         <button onClick={elimina} title="Elimina pacchetto" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 15, padding: "4px 2px", flexShrink: 0 }}>✕</button>
       </div>
 
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 8, paddingLeft: 22 }}>
+        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Associa diploma</span>
+        {kit.diploma_path ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12, color: NAVY }}>
+            <span style={{ color: MUTED }}>Diploma associato:</span>
+            <AllegatoLink bucket="diploma-templates" percorso={kit.diploma_path} etichetta={kit.diploma_nome || "apri il file"} />
+            <CampoFileTrascinabile
+              accept="application/pdf"
+              style={{ ...fontBody, fontSize: 11.5, color: MUTED, maxWidth: 190 }}
+              onChange={(e) => associaDiploma(e.target.files?.[0] || null)}
+            />
+            <button onClick={togliDiploma} title="Togli il diploma associato" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 13, padding: "2px 4px" }}>✕</button>
+          </span>
+        ) : (
+          <CampoFileTrascinabile
+            accept="application/pdf"
+            style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", minWidth: 180, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 10px" }}
+            onChange={(e) => associaDiploma(e.target.files?.[0] || null)}
+          />
+        )}
+        {caricandoDiploma && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Carico…</span>}
+      </div>
+
       {aperto && mostraRicercaKit && (
-        <div style={{ marginBottom: 10 }}>
+        <div style={{ marginTop: 10, marginBottom: 10 }}>
           <CampoRicerca value={ricercaKit} onChange={(e) => setRicercaKit(e.target.value)} placeholder="Cerca prodotto nel magazzino…" />
           {risultatiKit.map((p) => (
             <div key={p.id} onClick={() => aggiungiProdotto(p.id)} style={rigaRisultato}>
