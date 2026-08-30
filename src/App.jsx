@@ -10732,7 +10732,7 @@ function CardCorso({ corso, onModifica, onElimina }) {
   );
 }
 
-function Impostazioni({ corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, impostazioniMagazzino, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
+function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel, assistente, leva, corsiGiorni, tipiModella, corsiTipiModella, venditori, prodottiShop, targetVenditeProdotti, costiCategorie, costiSottocategorie, categorieGruppi, impostazioniIva, impostazioniMagazzino, ricarica, onBack, onApriFontDiplomi, onApriSettingLoghi, onApriTipologieKit, onApriGestioneMaster, onApriGestioneVenditori, onApriGestioneLeve, onApriGestioneAssistenti, onApriGestioneHotel, onApriGestioneLocation, registraInterceptaIndietro, titolo = "Setting" }) {
   const [aliquotaIvaDefaultInput, setAliquotaIvaDefaultInput] = useState(String(impostazioniIva?.aliquota_default ?? 22));
   useEffect(() => { setAliquotaIvaDefaultInput(String(impostazioniIva?.aliquota_default ?? 22)); }, [impostazioniIva]);
   async function salvaAliquotaIvaDefault() {
@@ -11000,42 +11000,112 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
     }
   }
 
-  const gruppiSetting = [
+  // I gruppi come sono nati. Nomi e collocazione delle voci non stanno più
+  // qui: chi programma li cambia dalla pagina stessa (tasto destro per
+  // rinominare, trascinamento per spostare una voce in un altro gruppo) e
+  // quello che decide vale per tutti — è la riga "impostazioni_gruppi" di
+  // impostazioni_layout_tasti, la stessa meccanica delle colonne di
+  // magazzino. La "chiave" di ogni voce non cambia mai: è lei a reggere il
+  // collegamento con il tasto giusto anche dopo che il nome è cambiato.
+  const gruppiOriginali = [
     {
       chiave: "team", titolo: "Team", coloreBg: "#F5E6C8", Icona: IconaGruppoTeam,
       voci: [
-        { etichetta: "Gestione Leve", Icona: IconaLeveRiga, onClick: onApriGestioneLeve },
-        { etichetta: "Gestione Assistenti", Icona: IconaAssistentiRiga, onClick: onApriGestioneAssistenti },
-        { etichetta: "Gestione Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
-        { etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: onApriGestioneVenditori },
+        { chiave: "leve", etichetta: "Gestione Leve", Icona: IconaLeveRiga, onClick: onApriGestioneLeve },
+        { chiave: "assistenti", etichetta: "Gestione Assistenti", Icona: IconaAssistentiRiga, onClick: onApriGestioneAssistenti },
+        { chiave: "master", etichetta: "Gestione Master", Icona: IconaMasterRiga, onClick: onApriGestioneMaster },
+        { chiave: "venditori", etichetta: "Gestione venditori", Icona: IconaVenditoreRiga, onClick: onApriGestioneVenditori },
       ],
     },
     {
       chiave: "sedi", titolo: "Sedi e corsi", coloreBg: "#D9E8F5", Icona: IconaGruppoSediCorsi,
       voci: [
-        { etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
-        { etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
-        { etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
-        { etichetta: "Definisci Location", Icona: IconaPin, onClick: onApriGestioneLocation },
-        { etichetta: "Definisci magazzini distaccati", Icona: IconaPin, onClick: () => setShowMagazziniModal(true) },
+        { chiave: "corsi", etichetta: "Definisci corsi", Icona: IconaCorsoRiga, onClick: () => { setShowCorsoModal(true); setVistaCorsiModal("griglia"); } },
+        { chiave: "tipimodelle", etichetta: "Definisci tipi di modelle", Icona: IconaTipoModellaRiga, onClick: () => setShowTipiModellaModal(true) },
+        { chiave: "hotel", etichetta: "Gestione Hotel", Icona: IconaHotelRiga, onClick: onApriGestioneHotel },
+        { chiave: "location", etichetta: "Definisci Location", Icona: IconaPin, onClick: onApriGestioneLocation },
+        { chiave: "magazzini", etichetta: "Definisci magazzini distaccati", Icona: IconaPin, onClick: () => setShowMagazziniModal(true) },
       ],
     },
     {
       chiave: "documenti", titolo: "Documenti e brand", coloreBg: "#DCEEDD", Icona: IconaGruppoDocumenti,
       voci: [
-        { etichetta: "Setting diplomi", Icona: IconaDiplomaRiga, onClick: onApriFontDiplomi },
-        { etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
-        { etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
+        { chiave: "diplomi", etichetta: "Setting diplomi", Icona: IconaDiplomaRiga, onClick: onApriFontDiplomi },
+        { chiave: "loghi", etichetta: "Setting loghi", Icona: IconaFormeRiga, onClick: onApriSettingLoghi },
+        { chiave: "kit", etichetta: "Tipologie di kit", Icona: IconaPacchettoRiga, onClick: onApriTipologieKit },
       ],
     },
     {
       chiave: "venditeprodotti", titolo: "Vendite prodotti", coloreBg: "#F5DCC8", Icona: IconaGruppoVenditeProdotti,
       voci: [
-        { etichetta: "Target Master", Icona: IconaTargetRiga, onClick: () => setShowTargetMasterModal(true) },
-        { etichetta: "Target Venditori", Icona: IconaTargetRiga, onClick: () => setShowTargetVenditoriModal(true) },
+        { chiave: "targetmaster", etichetta: "Target Master", Icona: IconaTargetRiga, onClick: () => setShowTargetMasterModal(true) },
+        { chiave: "targetvenditori", etichetta: "Target Venditori", Icona: IconaTargetRiga, onClick: () => setShowTargetVenditoriModal(true) },
       ],
     },
   ];
+
+  const [layoutGruppi, setLayoutGruppi] = useLayoutCondiviso("impostazioni_gruppi", {});
+  const programmatore = ruoloUtente === "programmatore";
+  const [voceTrascinata, setVoceTrascinata] = useState(null);
+
+  // l'ordine salvato è una lista di chiavi per gruppo: si applica alle voci
+  // vere, e quelle che nessuno ha mai spostato (una voce nuova aggiunta al
+  // codice dopo l'ultimo trascinamento) restano dove le mette il codice
+  const gruppiSetting = (() => {
+    const tutte = gruppiOriginali.flatMap((g) => g.voci.map((v) => ({ ...v, gruppoOriginale: g.chiave })));
+    const perChiave = Object.fromEntries(tutte.map((v) => [v.chiave, v]));
+    const ordini = layoutGruppi.ordini || {};
+    const usate = new Set();
+    return gruppiOriginali.map((g) => {
+      const salvato = Array.isArray(ordini[g.chiave]) ? ordini[g.chiave] : null;
+      const voci = [];
+      if (salvato) {
+        salvato.forEach((k) => { if (perChiave[k] && !usate.has(k)) { voci.push(perChiave[k]); usate.add(k); } });
+      }
+      g.voci.forEach((v) => {
+        const spostataAltrove = salvato !== null && Object.values(ordini).some((lista) => Array.isArray(lista) && lista.includes(v.chiave));
+        if (!usate.has(v.chiave) && !spostataAltrove) { voci.push(perChiave[v.chiave]); usate.add(v.chiave); }
+      });
+      return {
+        ...g,
+        titolo: (layoutGruppi.titoli || {})[g.chiave] || g.titolo,
+        voci: voci.map((v) => ({ ...v, etichetta: (layoutGruppi.etichette || {})[v.chiave] || v.etichetta })),
+      };
+    });
+  })();
+
+  function rinominaGruppo(e, gruppo) {
+    if (!programmatore) return;
+    e.preventDefault();
+    const nuovo = window.prompt(`Nome del gruppo "${gruppo.titolo}":`, gruppo.titolo);
+    if (nuovo === null) return;
+    const titoli = { ...(layoutGruppi.titoli || {}) };
+    if (nuovo.trim()) titoli[gruppo.chiave] = nuovo.trim(); else delete titoli[gruppo.chiave];
+    setLayoutGruppi({ ...layoutGruppi, titoli });
+  }
+  function rinominaVoce(e, voce) {
+    if (!programmatore) return;
+    e.preventDefault();
+    const nuovo = window.prompt(`Nome della voce "${voce.etichetta}":`, voce.etichetta);
+    if (nuovo === null) return;
+    const etichette = { ...(layoutGruppi.etichette || {}) };
+    if (nuovo.trim()) etichette[voce.chiave] = nuovo.trim(); else delete etichette[voce.chiave];
+    setLayoutGruppi({ ...layoutGruppi, etichette });
+  }
+  // sposta la voce trascinata nel gruppo di arrivo, prima della voce su cui
+  // è stata lasciata (o in fondo, se lasciata sullo sfondo della colonna)
+  function spostaVoce(gruppoDestinazione, primaDi) {
+    const chiave = voceTrascinata;
+    setVoceTrascinata(null);
+    if (!chiave || chiave === primaDi) return;
+    const ordini = {};
+    gruppiSetting.forEach((g) => { ordini[g.chiave] = g.voci.map((v) => v.chiave).filter((k) => k !== chiave); });
+    const destinazione = ordini[gruppoDestinazione] || [];
+    const posizione = primaDi ? destinazione.indexOf(primaDi) : -1;
+    if (posizione >= 0) destinazione.splice(posizione, 0, chiave); else destinazione.push(chiave);
+    ordini[gruppoDestinazione] = destinazione;
+    setLayoutGruppi({ ...layoutGruppi, ordini });
+  }
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 20px" }}>
@@ -11043,8 +11113,13 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 16, marginBottom: 18, alignItems: "start" }}>
         {gruppiSetting.map((g) => (
-          <div key={g.chiave} style={{ ...cardStyle, padding: 20, marginBottom: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <div
+            key={g.chiave}
+            onDragOver={programmatore ? (e) => e.preventDefault() : undefined}
+            onDrop={programmatore ? (e) => { e.preventDefault(); spostaVoce(g.chiave, null); } : undefined}
+            style={{ ...cardStyle, padding: 20, marginBottom: 0 }}
+          >
+            <div onContextMenu={(e) => rinominaGruppo(e, g)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: g.coloreBg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                   <g.Icona size={22} color={NAVY} />
@@ -11056,12 +11131,19 @@ function Impostazioni({ corsi, location, setLocation, master, hotel, assistente,
             <div style={{ borderTop: `1px solid ${CREAM_BORDER}` }}>
               {g.voci.map((v, i) => (
                 <button
-                  key={v.etichetta}
+                  key={v.chiave}
                   onClick={v.onClick}
+                  onContextMenu={(e) => rinominaVoce(e, v)}
+                  draggable={programmatore}
+                  onDragStart={programmatore ? () => setVoceTrascinata(v.chiave) : undefined}
+                  onDragEnd={programmatore ? () => setVoceTrascinata(null) : undefined}
+                  onDragOver={programmatore ? (e) => e.preventDefault() : undefined}
+                  onDrop={programmatore ? (e) => { e.preventDefault(); e.stopPropagation(); spostaVoce(g.chiave, v.chiave); } : undefined}
                   style={{
                     width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "14px 0",
                     border: "none", borderBottom: i < g.voci.length - 1 ? `1px solid ${CREAM_BORDER}` : "none",
-                    background: "transparent", cursor: "pointer", textAlign: "left",
+                    background: "transparent", cursor: programmatore ? "grab" : "pointer", textAlign: "left",
+                    opacity: voceTrascinata === v.chiave ? 0.4 : 1,
                   }}
                 >
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: "#F7EDDB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -44244,7 +44326,7 @@ export default function App() {
       )}
 
       {view === "impostazioni" && (
-        <Impostazioni corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
+        <Impostazioni ruoloUtente={ruoloUtente} corsi={corsi} location={location} setLocation={setLocation} master={master} hotel={hotel} assistente={assistente} leva={leva} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella} venditori={venditori} prodottiShop={prodottiShop} targetVenditeProdotti={targetVenditeProdotti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie} categorieGruppi={categorieGruppi} impostazioniIva={impostazioniIva} impostazioniMagazzino={impostazioniMagazzino} ricarica={fetchDati} onBack={() => setView("home")} onApriFontDiplomi={() => setView("fontdiplomi")} onApriSettingLoghi={() => setView("settingloghi")} onApriTipologieKit={() => setView("contenutokit")} onApriGestioneMaster={apriGestioneMaster} onApriGestioneVenditori={apriGestioneVenditori} onApriGestioneLeve={apriGestioneLeve} onApriGestioneAssistenti={apriGestioneAssistenti} onApriGestioneHotel={apriGestioneHotel} onApriGestioneLocation={apriGestioneLocation} registraInterceptaIndietro={registraInterceptaIndietro} titolo={etichettaTasto("home", "impostazioni", "Impostazioni")} />
       )}
 
       {view === "gestionedate" && (
