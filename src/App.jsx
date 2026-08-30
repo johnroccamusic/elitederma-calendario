@@ -19076,10 +19076,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("organizzativi", "accordiCommerciali")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "accordiCommerciali")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-          <Field label="Accordi commerciali">
-            <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} />
-          </Field>
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaRicevutaErp}>Accordi commerciali</IntestazioneArea>
+          <input value={accordiCommerciali} onChange={(e) => setAccordiCommerciali(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "accordiCommerciali")}
@@ -19087,8 +19086,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("organizzativi", "richiedeModelle")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "richiedeModelle")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-          <Field label="Richiede modelle a pagamento?">
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaTileModelle}>Richiede modelle a pagamento?</IntestazioneArea>
+          <div>
             <div style={{ display: "flex", gap: 16, ...fontBody, fontSize: 14, color: NAVY }}>
               {[["si", "Sì"], ["no", "No"]].map(([val, lab]) => (
                 <label key={val} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
@@ -19097,7 +19097,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </label>
               ))}
             </div>
-          </Field>
+          </div>
 
           {richiedeModelle === "si" && (
             <>
@@ -19177,8 +19177,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("organizzativi", "tagliaDivisa")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "tagliaDivisa")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-          <Field label="Taglia divisa">
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaPacchettoRiga}>Taglia divisa</IntestazioneArea>
+          <div>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", ...fontBody, fontSize: 14, color: NAVY }}>
               {["NO DIVISA", "XS", "S", "M", "L", "XL", "XXL", "XXXL"].map((taglia) => (
                 <label key={taglia} style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
@@ -19187,7 +19188,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 </label>
               ))}
             </div>
-          </Field>
+          </div>
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "tagliaDivisa")}
@@ -19195,8 +19196,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("organizzativi", "screenAcconto")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "screenAcconto")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-          <Field label="Screen acconto (opzionale)">
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaImmagineShop}>Screen acconto (opzionale)</IntestazioneArea>
+          <div>
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto && !fileScreenAcconto && (
               <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_acconto} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
@@ -19204,7 +19206,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenAcconto(e.target.files?.[0] || null)} />
               {(fileScreenAcconto || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_acconto)) && <BadgeFileCaricato />}
             </div>
-          </Field>
+          </div>
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "screenAcconto")}
@@ -19212,8 +19214,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("organizzativi", "screenRecap")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "screenRecap")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-          <Field label="Screen di recap (opzionale)">
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaImmagineShop}>Screen di recap (opzionale)</IntestazioneArea>
+          <div>
             {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap && !fileScreenRecap && (
               <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_screen_recap} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
             )}
@@ -19221,7 +19224,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
               <CampoFileTrascinabile accept="image/*,application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileScreenRecap(e.target.files?.[0] || null)} />
               {(fileScreenRecap || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_screen_recap)) && <BadgeFileCaricato />}
             </div>
-          </Field>
+          </div>
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "screenRecap")}
@@ -19229,8 +19232,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("organizzativi", "note")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("organizzativi", "note")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-          <Field label="Note (opzionale)"><input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...inputStyle, textTransform: "uppercase" }} /></Field>
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+          <IntestazioneArea Icona={IconaClipboardErp}>Note (opzionale)</IntestazioneArea>
+          <input value={note} onChange={(e) => setNote(e.target.value.toUpperCase())} style={{ ...campoAreaScheda, textTransform: "uppercase" }} />
               </div>
             </div>
             {spaziatoreRiga("organizzativi", "note")}
