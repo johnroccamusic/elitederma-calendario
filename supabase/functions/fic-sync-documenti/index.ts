@@ -142,10 +142,6 @@ async function trovaOCreaFornitore(entity: any) {
   return data.id;
 }
 
-// da ReceivedDocument alla riga di documento_fornitore (spec
-// §4.1) — righe e data_scadenza_prevista sono i campi che userà il
-// motore di match (§6.1 "Origine") e la generazione delle scadenze
-// (§8 punto 5); "rate" solo se il documento ha più di un pagamento
 // La scadenza vera, distinta da quella che Fatture in Cloud si inventa.
 //
 // FIC non lascia mai una spesa senza scadenza. Se l'XML del fornitore non
@@ -174,6 +170,10 @@ function scadenzaPrevistaVera(d: any): string | null {
   return giorni > 0 ? scadenza : null;
 }
 
+// da ReceivedDocument alla riga di documento_fornitore (spec
+// §4.1) — righe e data_scadenza_prevista sono i campi che userà il
+// motore di match (§6.1 "Origine") e la generazione delle scadenze
+// (§8 punto 5); "rate" solo se il documento ha più di un pagamento
 function mappaDocumentoFornitore(d: any, fornitoreId: string) {
   const righe = Array.isArray(d.items_list)
     ? d.items_list.map((r: any) => ({ descrizione: r.name || "", importo: r.net_price ?? null }))
