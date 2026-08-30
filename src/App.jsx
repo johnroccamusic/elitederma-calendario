@@ -40212,24 +40212,25 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 8, paddingLeft: 22 }}>
-        <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Associa diploma</span>
+        {/* a diploma associato resta solo la frase con il nome del file: la
+            casella di scelta e l'etichetta servivano a chiedere qualcosa che
+            e' gia' stato dato. Per cambiarlo si toglie con la crocetta e si
+            ricarica */}
         {kit.diploma_path ? (
           <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", ...fontBody, fontSize: 12, color: NAVY }}>
             <span style={{ color: MUTED }}>Diploma associato:</span>
             <AllegatoLink bucket="diploma-templates" percorso={kit.diploma_path} etichetta={kit.diploma_nome || "apri il file"} />
-            <CampoFileTrascinabile
-              accept="application/pdf"
-              style={{ ...fontBody, fontSize: 11.5, color: MUTED, maxWidth: 190 }}
-              onChange={(e) => associaDiploma(e.target.files?.[0] || null)}
-            />
             <button onClick={togliDiploma} title="Togli il diploma associato" style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 13, padding: "2px 4px" }}>✕</button>
           </span>
         ) : (
-          <CampoFileTrascinabile
-            accept="application/pdf"
-            style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", minWidth: 180, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 10px" }}
-            onChange={(e) => associaDiploma(e.target.files?.[0] || null)}
-          />
+          <>
+            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Associa diploma</span>
+            <CampoFileTrascinabile
+              accept="application/pdf"
+              style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", minWidth: 180, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 10px" }}
+              onChange={(e) => associaDiploma(e.target.files?.[0] || null)}
+            />
+          </>
         )}
         {caricandoDiploma && <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Carico…</span>}
       </div>
