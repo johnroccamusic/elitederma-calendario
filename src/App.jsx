@@ -16222,7 +16222,7 @@ function ManigliaRidimensionaOrizzontale({ cursore = "ew-resize", onPointerDown,
     />
   );
 }
-function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -18006,7 +18006,9 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           { chiave: "vediclasse", etichetta: "Vedi classe", Icona: IconaGruppoTeam, onClick: () => { setMostraGestione(false); setCostiAperto(false); setVista("lista"); }, primario: true, attivo: vista === "lista" && !mostraGestione && !costiAperto },
           { chiave: "contabilita", etichetta: "Contabilità classe", Icona: IconaLibroContabile, onClick: apriGestioneClasse, primario: true, attivo: vista === "lista" && mostraGestione },
           ...(adminSbloccato ? [{ chiave: "riepilogo", etichetta: "Riepilogo amministrativo", Icona: IconaRiepilogoCircolare, onClick: apriRiepilogoAmministrativo, primario: true, attivo: vista === "lista" && costiAperto }] : []),
-          { chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" },
+          // "Assegna modelle" è un lavoro suo, con il suo tasto in home: chi
+          // non ha quel permesso non deve trovarne la porta di servizio qui
+          ...(puoAssegnareModelle ? [{ chiave: "modelle", etichetta: "Assegna modelle", Icona: IconaPersonaAggiungi, onClick: () => setVista("modelle"), primario: true, attivo: vista === "modelle" }] : []),
         ];
 
         return (
@@ -42453,6 +42455,7 @@ function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreA
             return (
               <div key={iscritto.id} style={{ flex: "0 0 680px", width: 680 }}>
                 <SchedaData
+                  puoAssegnareModelle={puoAprireVista("gestionemodelle")}
                   ruoloUtente={ruoloUtente}
                   codiceAmministratoreAttuale={codiceAmministratoreAttuale}
                   corsoData={cd}
@@ -43328,6 +43331,15 @@ export default function App() {
   // bypass automatico per Programmatore e Amministratore, altrimenti il
   // classico prompt password (per-voce, o il codice Amministratore
   // attuale come fallback)
+  // stessa regola di apriViewProtetta, ma solo per rispondere "questo
+  // utente ci può entrare?" — serve a nascondere i tasti che porterebbero
+  // dove poi verrebbe chiesto un codice
+  function puoAprireVista(nomeView) {
+    if (ruoloUtente === "programmatore" || ruoloUtente === "amministratore") return true;
+    if (utenteLoggato && (utenteLoggato.permessi || []).includes(nomeView)) return true;
+    const areeMadri = AREA_MADRE_VISTA[nomeView];
+    return !!(areeMadri && utenteLoggato && areeMadri.some((area) => (utenteLoggato.permessi || []).includes(area)));
+  }
   function apriViewProtetta(nomeView) {
     if (ruoloUtente === "programmatore") { setView(nomeView); return; }
     if (TASTI_HOME.some((t) => t.chiave === nomeView)) {
@@ -44505,6 +44517,7 @@ export default function App() {
         <SchedaData
           key={schedaKey}
           ruoloUtente={ruoloUtente}
+          puoAssegnareModelle={puoAprireVista("gestionemodelle")}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
           kitDefinizioni={kitDefinizioni}
           corsoData={corsoDataApertaObj}
