@@ -18434,7 +18434,11 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("contabili", "totalePattuito")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("contabili", "totalePattuito")}
-              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 14, flex: 1 }}>
+              {/* fondo carta da zucchero: è il blocco che dice quanto vale
+                  la vendita, e deve staccarsi dalle quote che stanno sotto.
+                  Le caselle dei numeri restano bianche, o il dato si
+                  perderebbe nel colore */}
+              <div style={{ background: "#DDE7EE", border: `1px solid #C4D4DF`, borderRadius: 10, padding: 14, flex: 1 }}>
             <div style={{ display: "flex", gap: 14 }}>
               <div style={{ flex: 1 }}>
                 <Field label="Totale pattuito per la vendita (senza IVA)" minLabelHeight={34}>
@@ -18445,7 +18449,7 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
                 <>
                   <div style={{ flex: 1 }}>
                     <Field label="Quota venditore (7%)" minLabelHeight={34}>
-                      <input style={{ ...inputStyle, background: "#EFEFEF", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
+                      <input style={{ ...inputStyle, background: "#F4F6F8", color: MUTED }} value={totalePattuito === "" ? "" : quotaVenditoreDi(totalePattuito).toFixed(2)} disabled />
                     </Field>
                   </div>
                   <div style={{ flex: 1 }}>
