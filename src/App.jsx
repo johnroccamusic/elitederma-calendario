@@ -1072,6 +1072,16 @@ function IconaCalendarioLeve({ size = 16, color = "currentColor" }) {
     </svg>
   );
 }
+// freccia che sale: il gesto di caricare un file
+function IconaCaricaFile({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 9 12 4 17 9" />
+      <line x1="12" y1="4" x2="12" y2="16" />
+    </svg>
+  );
+}
 function IconaCopiaFile({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -18410,20 +18420,21 @@ function SchedaData({ ruoloUtente, codiceAmministratoreAttuale, corsoData, corsi
           <div {...propsRiga("anagrafica", "modulo")}>
             <div style={{ display: "flex", alignItems: "flex-start", gap: 4 }}>
               {manigliaRiga("anagrafica", "modulo")}
-              <div style={{ flex: 1, minWidth: 0 }}>
-              <Field label="Modulo iscrizione (PDF)">
+              <div style={{ ...areaSchedaIscritto, flex: 1, minWidth: 0 }}>
+              <IntestazioneArea Icona={IconaCaricaFile}>Carica modulo di iscrizione</IntestazioneArea>
+              <div>
                 {modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione && !fileIscrizione && (
                   <div style={{ paddingBottom: 6, marginBottom: 6, borderBottom: `1px dashed ${CREAM_BORDER}` }}>Attuale: <AllegatoLink percorso={iscritti.find((x) => x.id === modificandoId).file_iscrizione} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
                 )}
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
+                  <CampoFileTrascinabile accept="application/pdf,image/*" style={{ ...campoAreaScheda, flex: 1, minWidth: 200 }} onChange={(e) => gestisciFileModulo(e.target.files?.[0] || null)} />
                   <Button variant="ghost" onClick={rileggiModuloForzato} disabled={!fileIscrizione || soloLettura}>Leggi dati dal modulo</Button>
                   {(fileIscrizione || (modificandoId && iscritti.find((x) => x.id === modificandoId)?.file_iscrizione)) && <BadgeFileCaricato />}
                 </div>
                 <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginTop: 4 }}>
                   <b style={{ color: NAVY }}>Attenzione: i dati importati dal modulo con "Leggi dati dal modulo" sovrascriveranno i dati scritti a mano.</b>
                 </div>
-              </Field>
+              </div>
               </div>
             </div>
             {spaziatoreRiga("anagrafica", "modulo")}
