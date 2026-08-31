@@ -27468,23 +27468,29 @@ function PaginaVenditeShop({ venditeShop, origine, ricarica, onBack, titolo = (o
           </select>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(4, minmax(0,1fr))", gap: 14, marginBottom: 22 }}>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Ordini</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{kpi.nOrdini}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Totale incassato</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.totale)}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Imponibile</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.imponibile)}</div>
-          </div>
-          <div style={{ ...cardStyle, marginBottom: 0 }}>
-            <div style={{ ...fontBody, fontSize: 11, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>IVA</div>
-            <div style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(kpi.iva)}</div>
-          </div>
+        {/* i quattro numeri: da telefono stavano uno sotto l'altro e
+            riempivano lo schermo intero prima di far vedere una riga di
+            vendite. Ora sono quattro quadrati sulla stessa riga — la
+            colonna è un quarto di schermo, quindi il testo si rimpicciolisce
+            di conseguenza, e l'importo va a capo invece di uscire */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(4, minmax(0,1fr))" : "repeat(4, minmax(0,1fr))", gap: isMobile ? 6 : 14, marginBottom: isMobile ? 16 : 22 }}>
+          {[
+            { etichetta: "Ordini", valore: kpi.nOrdini },
+            { etichetta: "Totale incassato", valore: fmtEuroErp2(kpi.totale) },
+            { etichetta: "Imponibile", valore: fmtEuroErp2(kpi.imponibile) },
+            { etichetta: "IVA", valore: fmtEuroErp2(kpi.iva) },
+          ].map((k) => (
+            <div key={k.etichetta} style={{
+              ...cardStyle, marginBottom: 0, minWidth: 0,
+              ...(isMobile ? {
+                aspectRatio: "1 / 1", padding: 8,
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center",
+              } : {}),
+            }}>
+              <div style={{ ...fontBody, fontSize: isMobile ? 8 : 11, color: MUTED, textTransform: "uppercase", letterSpacing: isMobile ? 0.2 : 0.5, marginBottom: 4, lineHeight: 1.2 }}>{k.etichetta}</div>
+              <div style={{ ...fontDisplay, fontSize: isMobile ? 13 : 22, fontWeight: 700, color: NAVY, lineHeight: 1.15, overflowWrap: "anywhere" }}>{k.valore}</div>
+            </div>
+          ))}
         </div>
 
         <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
