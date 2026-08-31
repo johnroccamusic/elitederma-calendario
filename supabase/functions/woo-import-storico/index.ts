@@ -117,8 +117,53 @@ Deno.serve(async (req) => {
     pagina += 1;
   }
 
+  // SECONDA PASSATA — gli ordini che da noi risultano ancora aperti.
+  //
+  // "after" guarda la data di CREAZIONE: un ordine vecchio che cambia stato
+  // sul sito non viene mai più riletto da qui. È così che l'ordine 10130,
+  // creato il 14 agosto e completato qualche giorno dopo, è rimasto "in
+  // lavorazione" in app per due settimane — il webhook di WooCommerce
+  // manda l'ordine appena creato, l'aggiornamento evidentemente no.
+  //
+  // Qui si chiedono a WooCommerce esattamente quegli ordini, per id
+  // (parametro "include"), e si riallinea il loro stato. Sono pochi per
+  // definizione: quelli ancora da evadere.
+  //
+  // Come tutto il resto di questa funzione NON si tocca il magazzino: gli
+  // scarichi e i ripristini restano del webhook, che li applica nel momento
+  // in cui lo stato cambia davvero.
+  let ordiniRiallineati = 0;
+  const { data: aperti } = await supabase
+    .from("vendite_shop")
+    .select("woo_order_id")
+    .not("woo_order_id", "is", null)
+    .in("stato", ["processing", "on-hold", "pending"]);
+  const idsAperti = (aperti || []).map((r: any) => r.woo_order_id).filter(Boolean);
+  for (let i = 0; i < idsAperti.length; i += PER_PAGE) {
+    const lotto = idsAperti.slice(i, i + PER_PAGE);
+    const url = `${siteUrl}/wp-json/wc/v3/orders?per_page=${PER_PAGE}&include=${lotto.join(",")}`;
+    const risposta = await fetch(url, { headers: { Authorization: auth } });
+    // se il sito non risponde si esce senza errore: la prima passata è già
+    // salvata, e questa è una rifinitura che si riproverà al giro dopo
+    if (!risposta.ok) break;
+    const ordini = await risposta.json();
+    if (!Array.isArray(ordini) || ordini.length === 0) continue;
+    const righe: Record<string, unknown>[] = [];
+    for (const o of ordini) {
+      const riga = mappaOrdine(o);
+      if (!riga) continue;
+      await attribuisciMasterReferral(supabase, o, riga);
+      righe.push(riga);
+    }
+    if (righe.length > 0) {
+      const { error } = await supabase.from("vendite_shop").upsert(righe, { onConflict: "woo_order_id" });
+      if (error) break;
+      ordiniRiallineati += righe.length;
+    }
+  }
+
   return new Response(
-    JSON.stringify({ ordiniImportati, pagineProcessate: pagina, completato, dopoData: after }),
+    JSON.stringify({ ordiniImportati, ordiniRiallineati, pagineProcessate: pagina, completato, dopoData: after }),
     { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
   );
 });
