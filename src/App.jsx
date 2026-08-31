@@ -10834,14 +10834,6 @@ function CardCorso({ corso, onModifica, onElimina }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21a8 8 0 0 0-16 0" /><circle cx="12" cy="8" r="4" /></svg>
             {corso.posti_max} posti
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 13, color: corso.diploma_template_path ? "#2E7D32" : MUTED }}>
-            {corso.diploma_template_path ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" /></svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v12" /><path d="m7 8 5-5 5 5" /><path d="M5 21h14" /></svg>
-            )}
-            {corso.diploma_template_path ? "Diploma caricato" : "Diploma da caricare"}
-          </div>
         </div>
         <button onClick={onModifica} style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", cursor: "pointer", padding: 0 }}>Modifica</button>
       </div>
@@ -10910,8 +10902,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   const [modNomeCorso, setModNomeCorso] = useState("");
   const [modColoreCorso, setModColoreCorso] = useState("");
   const [modPostiCorso, setModPostiCorso] = useState("");
-  const [diplomaCorsoNuovo, setDiplomaCorsoNuovo] = useState(null); // File scelto in "Aggiungi corso", non ancora caricato
-  const [diplomaCorsoModifica, setDiplomaCorsoModifica] = useState(null); // File scelto per sostituire il diploma di un corso esistente
   const [salvandoCorso, setSalvandoCorso] = useState(false);
 
   const coloriUsati = useMemo(() => corsi.map((c) => c.colore.toLowerCase()), [corsi]);
@@ -11021,12 +11011,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
   }
   // carica il template PDF del diploma di un corso nello storage
   // "diploma-templates" e restituisce il percorso salvato
-  async function caricaTemplateDiploma(file, corsoId) {
-    const percorso = `${corsoId}/template-${Date.now()}-${sanitizzaNomeFile(file.name)}`;
-    const { error } = await supabase.storage.from("diploma-templates").upload(percorso, file);
-    if (error) throw error;
-    return percorso;
-  }
   async function salvaModificaCorso(id) {
     if (!modNomeCorso.trim()) { setMsg("Il nome del corso non può essere vuoto."); return; }
     if (giorniCorsoNonValidi(giorniCorsoModifica)) { setMsg("Scegli il tipo di modella per ogni giorno che la richiede."); return; }
@@ -11037,11 +11021,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
       posti_max: Number(modPostiCorso) || 10,
       categoria: modCategoriaCorso.trim() || null,
     };
-    if (diplomaCorsoModifica) {
-      try {
-        payload.diploma_template_path = await caricaTemplateDiploma(diplomaCorsoModifica, id);
-      } catch (e) { setMsg("Errore nel caricamento del diploma: " + e.message); setSalvandoCorso(false); return; }
-    }
     const { error } = await supabase.from("corsi").update(payload).eq("id", id);
     if (error) { setMsg("Errore: " + error.message); setSalvandoCorso(false); return; }
     const erroreGiorni = await salvaGiorniCorso(id, giorniCorsoModifica);
@@ -11051,7 +11030,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     await ricarica(["corsi"]);
     setSalvandoCorso(false);
     setCorsoInModifica(null);
-    setDiplomaCorsoModifica(null);
     setVistaCorsiModal("griglia");
     setMsg("Corso aggiornato.");
   }
@@ -11069,18 +11047,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
     if (erroreGiorni) { setMsg("Corso aggiunto, ma errore nel salvataggio dei giorni: " + erroreGiorni.message); }
     const erroreTipi = await salvaTipiModellaCorso(ins.data.id, tipiModellaSelCorso);
     if (erroreTipi) { setMsg("Corso aggiunto, ma errore nel salvataggio dei tipi di modella: " + erroreTipi.message); }
-    if (diplomaCorsoNuovo) {
-      try {
-        const percorso = await caricaTemplateDiploma(diplomaCorsoNuovo, ins.data.id);
-        await supabase.from("corsi").update({ diploma_template_path: percorso }).eq("id", ins.data.id);
-      } catch (e) {
-        setMsg("Corso aggiunto, ma errore nel caricamento del diploma: " + e.message);
-        setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso(""); setTipiModellaSelCorso([]);
-        ricarica(["corsi"]);
-        return;
-      }
-    }
-    setNomeCorso(""); setDiplomaCorsoNuovo(null); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso(""); setTipiModellaSelCorso([]);
+    setNomeCorso(""); setDurataCorso(""); setGiorniCorso([]); setCategoriaCorso(""); setTipiModellaSelCorso([]);
     if (!erroreGiorni && !erroreTipi) { setMsg("Corso aggiunto."); setVistaCorsiModal("griglia"); }
     ricarica(["corsi"]);
   }
@@ -11330,12 +11297,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                   </Field>
                 </div>
               </div>
-              <Field label="Diploma (PDF, opzionale)">
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoNuovo(e.target.files?.[0] || null)} />
-                  {diplomaCorsoNuovo ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
-                </div>
-              </Field>
               <SceltaTipiEDurata
                 tipiModella={tipiModella}
                 selezionati={tipiModellaSelCorso} onCambiaSelezionati={setTipiModellaSelCorso}
@@ -11359,7 +11320,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
             if (!c) return null;
             return (
               <div style={{ maxWidth: 560, margin: "0 auto" }}>
-                <button onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); setVistaCorsiModal("griglia"); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 0, marginBottom: 14, ...fontBody, fontSize: 13, fontWeight: 600 }}>
+                <button onClick={() => { setCorsoInModifica(null); setVistaCorsiModal("griglia"); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", color: NAVY, padding: 0, marginBottom: 14, ...fontBody, fontSize: 13, fontWeight: 600 }}>
                   <IconaFrecciaSinistra size={15} /> Tutti i corsi
                 </button>
                 <div style={hStyle}>Modifica corso</div>
@@ -11382,15 +11343,6 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                     </Field>
                   </div>
                 </div>
-                <Field label="Diploma (PDF, opzionale)">
-                  {c.diploma_template_path && !diplomaCorsoModifica && (
-                    <div style={{ marginBottom: 6 }}>Attuale: <AllegatoLink bucket="diploma-templates" percorso={c.diploma_template_path} etichetta="apri il file" /> — scegline uno nuovo per sostituirlo</div>
-                  )}
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setDiplomaCorsoModifica(e.target.files?.[0] || null)} />
-                    {(diplomaCorsoModifica || c.diploma_template_path) ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun diploma caricato — caricalo qui</span>}
-                  </div>
-                </Field>
                 <SceltaTipiEDurata
                   tipiModella={tipiModella}
                   selezionati={tipiModellaSelCorsoModifica} onCambiaSelezionati={setTipiModellaSelCorsoModifica}
@@ -11406,7 +11358,7 @@ function Impostazioni({ ruoloUtente, corsi, location, setLocation, master, hotel
                 )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <Button onClick={() => salvaModificaCorso(c.id)} disabled={salvandoCorso}>{salvandoCorso ? "Salvataggio…" : "Salva"}</Button>
-                  <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setDiplomaCorsoModifica(null); setVistaCorsiModal("griglia"); }}>Annulla</Button>
+                  <Button variant="ghost" disabled={salvandoCorso} onClick={() => { setCorsoInModifica(null); setVistaCorsiModal("griglia"); }}>Annulla</Button>
                 </div>
                 {msg && <div style={{ ...fontBody, fontSize: 13, color: NAVY, marginTop: 12 }}>{msg}</div>}
               </div>
@@ -17194,9 +17146,18 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     page.drawText(testo, { x, y, size: fontSize, font, color: rgbFn(r, g, b) });
   }
 
+  // il modello di diploma di un allievo: prima il suo pacchetto (il posto
+  // dove si carica oggi, in Impostazioni → Tipologie di kit), poi quello
+  // del corso, che resta come ripiego per i pacchetti che non ne hanno uno
+  const kitPerIdDiplomi = Object.fromEntries((kitDefinizioni || []).map((k) => [k.id, k]));
+  const percorsoDiplomaDi = (iscritto) => {
+    const kit = iscritto?.kit_id ? kitPerIdDiplomi[iscritto.kit_id] : null;
+    return kit?.diploma_path || corso?.diploma_template_path || null;
+  };
+
   async function stampaDiplomi() {
-    if (!corso?.diploma_template_path) {
-      window.alert('Nessun template diploma collegato a questo corso — impostalo da Impostazioni.');
+    if (listaIscritti.length > 0 && !listaIscritti.some((i) => percorsoDiplomaDi(i))) {
+      window.alert('Nessun modello di diploma: si carica sul pacchetto, in Impostazioni → Tipologie di kit.');
       return;
     }
     if (listaIscritti.length === 0) {
@@ -17223,9 +17184,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
 
       const scaricaBytes = scaricaBytesStorage;
 
-      const templateBytes = await scaricaBytes("diploma-templates", corso.diploma_template_path);
-      const templateDoc = await PDFDocument.load(templateBytes);
-
       const outputPdf = await PDFDocument.create();
       outputPdf.registerFontkit(fontkit);
 
@@ -17249,17 +17207,25 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       // scarica una sola volta per eccezione, anche se piu' iscritti la
       // condividono. Nome allievo e master restano quelli calcolati
       // normalmente: cambiano solo il template e/o la data
-      const cacheDocEccezioni = new Map();
+      // un file caricato una volta sola, anche se lo condividono in dieci:
+      // la cache è sul percorso, non sull'allievo
+      const cacheDoc = new Map();
+      async function docDaPercorso(percorso) {
+        if (!percorso) return null;
+        if (!cacheDoc.has(percorso)) {
+          cacheDoc.set(percorso, await PDFDocument.load(await scaricaBytes("diploma-templates", percorso)));
+        }
+        return cacheDoc.get(percorso);
+      }
+      // l'ordine è: l'eccezione assegnata all'allievo (da Contabilità
+      // classe) vince su tutto; poi il diploma del suo pacchetto; per
+      // ultimo quello del corso. Nome allievo e master restano quelli
+      // calcolati normalmente: cambia solo il modello, e/o la data
       async function docTemplatePer(iscritto) {
         const eccezione = iscritto.diploma_eccezione_id
           ? (diplomaEccezioni || []).find((d) => d.id === iscritto.diploma_eccezione_id)
           : null;
-        if (!eccezione) return templateDoc;
-        if (!cacheDocEccezioni.has(eccezione.id)) {
-          const bytesEccezione = await scaricaBytes("diploma-templates", eccezione.file_path);
-          cacheDocEccezioni.set(eccezione.id, await PDFDocument.load(bytesEccezione));
-        }
-        return cacheDocEccezioni.get(eccezione.id);
+        return docDaPercorso(eccezione ? eccezione.file_path : percorsoDiplomaDi(iscritto));
       }
 
       // se uno o più iscritti hanno "Ristampa solo questo" spuntato, il PDF
@@ -17267,9 +17233,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       // come sempre
       const flaggati = listaIscritti.filter((i) => i.ristampa_diploma);
       const iscrittiDaStampare = flaggati.length > 0 ? flaggati : listaIscritti;
+      const senzaModello = [];
 
       for (const iscritto of iscrittiDaStampare) {
         const docDaUsare = await docTemplatePer(iscritto);
+        // nessun modello né sul pacchetto né sul corso: si salta, invece di
+        // far fallire l'intera stampa per un allievo solo
+        if (!docDaUsare) { senzaModello.push(`${iscritto.nome} ${iscritto.cognome}`.trim()); continue; }
         const [pagina] = await outputPdf.copyPages(docDaUsare, [0]);
         outputPdf.addPage(pagina);
         const { width: larghezzaPaginaDiploma } = pagina.getSize();
@@ -17310,6 +17280,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         }
       }
 
+      if (outputPdf.getPageCount() === 0) {
+        window.alert(`Nessun diploma generato: ${senzaModello.join(", ")} non ha un modello, né sul pacchetto né sul corso.`);
+        return;
+      }
+      if (senzaModello.length > 0) {
+        window.alert(`Diplomi generati, tranne per: ${senzaModello.join(", ")} — al loro pacchetto non è associato nessun modello.`);
+      }
       const bytesFinali = await outputPdf.save();
       const blob = new Blob([bytesFinali], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
