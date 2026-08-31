@@ -43960,10 +43960,16 @@ export default function App() {
     const cd = corsiDate.find((x) => x.id === id);
     const numIscritti = iscritti.filter((i) => i.corso_data_id === id).length;
     const etichetta = cd ? (cd.data_inizio === cd.data_fine ? fmtData(cd.data_inizio) : `${fmtData(cd.data_inizio)} → ${fmtData(cd.data_fine)}`) : "";
-    if (!window.confirm(`Stai per cancellare definitivamente una data GIÀ CONCLUSA (${etichetta}) insieme a ${numIscritti} iscritt${numIscritti === 1 ? "o" : "i"} e a tutti i loro dati di pagamento. L'operazione non è reversibile. Continuare?`)) return;
+    if (!window.confirm(`Stai per cancellare definitivamente una data GIÀ CONCLUSA (${etichetta}) insieme a ${numIscritti} iscritt${numIscritti === 1 ? "o" : "i"}, ai loro dati di pagamento e al codice referral di questa edizione. L'operazione non è reversibile. Continuare?`)) return;
     const { error } = await supabase.from("corsi_date").delete().eq("id", id);
-    if (error) { window.alert("Errore: " + error.message); return; }
-    fetchDati(["corsi_date", "iscritti"]);
+    if (error) {
+      // il messaggio grezzo del database ("violates foreign key
+      // constraint...") non dice niente a chi lo legge: si dice cosa
+      // sta trattenendo la riga, o almeno che qualcosa la trattiene
+      window.alert(`Non è stato possibile cancellare questa data: qualcosa nel database è ancora collegato a lei.\n\nDettaglio tecnico: ${error.message}`);
+      return;
+    }
+    fetchDati(["corsi_date", "iscritti", "coupon", "vendite_shop"]);
   }
 
   // tabelle piccole che servono anche da Home, prima ancora di aprire una
