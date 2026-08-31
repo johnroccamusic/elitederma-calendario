@@ -367,6 +367,18 @@ function IconaWhatsapp({ size = 16 }) {
     </svg>
   );
 }
+// cestino: fin qui disegnato a mano dove serviva, qui diventa un
+// componente perche' lo usa anche la scheda di una vendita di prova
+function IconaCestino({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" /><path d="M14 11v6" />
+      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </svg>
+  );
+}
 // maglietta: la taglia della divisa dell'allievo, nell'elenco classe
 function IconaMaglietta({ size = 16, color = "#2E7D32" }) {
   return (
@@ -27106,7 +27118,7 @@ function NuvolaOrdineShop({ vendita, grezzo, onCambiaStato, occupato, isMobile, 
 // quella dello shop, ma i dati del cliente arrivano da quanto scritto al
 // banco (spedizioni_pos) e non c'è nessuno stato da cambiare sul sito —
 // c'è solo da dire se il pacco è partito
-function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, occupato, isMobile, presi = {}, onSegnaRiga }) {
+function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSegnaSpedita, onButtaProva, occupato, isMobile, presi = {}, onSegnaRiga }) {
   const righe = Array.isArray(spedizione?.prodotti) ? spedizione.prodotti : [];
   const quantiPresi = righe.filter((_, i) => presi[i]).length;
   const spedita = spedizione?.stato === "spedito";
@@ -27117,6 +27129,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
     [spedizione?.cap, spedizione?.citta, spedizione?.provincia && `(${spedizione.provincia})`].filter(Boolean).join(" "),
     spedizione?.cellulare || iscritto?.telefono,
   ].filter(Boolean);
+  const senzaSpedizione = !!spedizione?.senzaSpedizione;
   const righeFattura = spedizione?.richiede_fattura ? [
     spedizione?.fattura_ditta,
     spedizione?.fattura_piva && `P. IVA ${spedizione.fattura_piva}`,
@@ -27129,7 +27142,20 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 17 : 21, fontWeight: 700, color: NAVY }}>Vendita al banco</div>
         <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "#EFEFEF", borderRadius: 20, padding: "3px 12px" }}>POS</span>
+        {spedizione?.simulazione && (
+          <span title="Vendita di prova: nessun incasso, nessuno scarico di magazzino" style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#8A6D1D", background: "#FBF1D9", border: `1px solid ${GOLD}`, borderRadius: 20, padding: "3px 12px" }}>PROVA</span>
+        )}
         <span style={{ ...fontBody, fontSize: 13, color: MUTED }}>{spedizione?.ts ? fmtData(spedizione.ts.slice(0, 10)) : "—"}</span>
+        {/* il cestino sta solo sulle prove, e solo per chi programma: una
+            vendita vera non si cancella, si annulla — resta scritta */}
+        {onButtaProva && (
+          <button
+            onClick={onButtaProva} title="Cancella questa prova, senza lasciarne traccia"
+            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
+          >
+            <IconaCestino size={18} />
+          </button>
+        )}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1.15fr 1.15fr 1fr 1fr", gap: 8, marginBottom: 18 }}>
@@ -27182,30 +27208,36 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
         </div>
       </div>
 
-      <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato della spedizione</div>
-      <div style={{ display: "flex", gap: 8, alignItems: "stretch", maxWidth: 360 }}>
-        <div style={{
-          ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
-          lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-          background: spedita ? "#F2F2F4" : "#FCF3D4", border: `1px solid ${spedita ? "#E2E2E7" : "#E0A72B"}`, color: spedita ? "#8B8FA3" : "#D2731A",
-        }}>
-          <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
-          <span>Da spedire</span>
-        </div>
-        <button
-          onClick={spedita || occupato ? undefined : onSegnaSpedita}
-          title={spedita ? "Già spedita" : "Segna il pacco come partito"}
-          style={{
+      {/* una prova consegnata a mano non ha nessuna spedizione da seguire:
+          i due tasti la farebbero solo sembrare un pacco che non esiste */}
+      {!senzaSpedizione && (
+        <>
+        <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, margin: "20px 0 7px" }}>Stato della spedizione</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "stretch", maxWidth: 360 }}>
+          <div style={{
             ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
             lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
-            cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
-            background: spedita ? "#E3F3E5" : "#F2F2F4", border: `1px solid ${spedita ? "#2E7D32" : "#E2E2E7"}`, color: spedita ? "#2E7D32" : "#8B8FA3",
-          }}
-        >
-          <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
-          <span>Spedita</span>
-        </button>
-      </div>
+            background: spedita ? "#F2F2F4" : "#FCF3D4", border: `1px solid ${spedita ? "#E2E2E7" : "#E0A72B"}`, color: spedita ? "#8B8FA3" : "#D2731A",
+          }}>
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "○" : "✓"}</span>
+            <span>Da spedire</span>
+          </div>
+          <button
+            onClick={spedita || occupato ? undefined : onSegnaSpedita}
+            title={spedita ? "Già spedita" : "Segna il pacco come partito"}
+            style={{
+              ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 9, padding: "8px 6px", textAlign: "center", flex: 1, minWidth: 0,
+              lineHeight: 1.15, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 1,
+              cursor: spedita || occupato ? "default" : "pointer", opacity: occupato ? 0.5 : 1,
+              background: spedita ? "#E3F3E5" : "#F2F2F4", border: `1px solid ${spedita ? "#2E7D32" : "#E2E2E7"}`, color: spedita ? "#2E7D32" : "#8B8FA3",
+            }}
+          >
+            <span style={{ fontSize: 13, lineHeight: 1 }}>{spedita ? "✓" : "○"}</span>
+            <span>Spedita</span>
+          </button>
+        </div>
+        </>
+      )}
     </div>
   );
 }
@@ -27214,7 +27246,7 @@ function NuvolaSpedizionePos({ spedizione, vendita, corso, sede, iscritto, onSeg
 // In pagina restano solo quelli in lavorazione — cioè pagati e in attesa
 // di partire; le vendite già chiuse si guardano dal tasto "Storico", che
 // non deve rubare spazio a quello che c'è da fare oggi.
-function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, location, iscritti, ricarica, onBack, titolo = "Ordini in arrivo" }) {
+function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, corsi, corsiDate, location, iscritti, ruoloUtente, ricarica, onBack, titolo = "Ordini in arrivo" }) {
   const isMobile = useIsMobile();
   const [vista, setVista] = useState("dagestire"); // dagestire | storico
   const [payloadPerId, setPayloadPerId] = useState({});
@@ -27226,7 +27258,26 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
   // per conto suo. Se il sito rifiuta, la scheda torna e lo dice.
   const [statiOttimisti, setStatiOttimisti] = useState({});
 
-  const venditaPerId = useMemo(() => Object.fromEntries((venditeShop || []).map((v) => [v.id, v])), [venditeShop]);
+  // le vendite di prova stanno fuori da venditeShop (non devono entrare in
+  // nessun conto), ma qui servono: la scheda di una spedizione nata da una
+  // prova deve poter mostrare chi l'ha fatta e come
+  const venditaPerId = useMemo(
+    () => Object.fromEntries([...(venditeShop || []), ...(venditeSimulate || [])].map((v) => [v.id, v])),
+    [venditeShop, venditeSimulate]
+  );
+  const programmatore = ruoloUtente === "programmatore";
+  // una prova si butta davvero: vendita, spedizione e righe gia' spuntate.
+  // È il senso della modalità simulazione — non deve restarne niente
+  async function buttaProva(spedizione) {
+    const vendita = spedizione?.vendita_id ? venditaPerId[spedizione.vendita_id] : null;
+    if (!window.confirm("Questa è una vendita di prova: la cancello del tutto, senza lasciarne traccia. Confermi?")) return;
+    if (!spedizione.senzaSpedizione) {
+      await supabase.from("righe_preparate_spedizione").delete().eq("spedizione_pos_id", spedizione.id);
+      await supabase.from("spedizioni_pos").delete().eq("id", spedizione.id);
+    }
+    if (vendita) await supabase.from("vendite_shop").delete().eq("id", vendita.id);
+    await ricarica(["vendite_shop", "vendite_simulate", "spedizioni_pos"]);
+  }
   const corsoById = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const corsoDataById = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
   const locById = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
@@ -27247,7 +27298,20 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
     const daPos = (spedizioniPos || [])
       .filter((sp) => (vista === "dagestire" ? statoDi(sp) === "da_spedire" : statoDi(sp) === "spedito"))
       .map((sp) => ({ tipo: "pos", chiave: `p${sp.id}`, data: sp.ts || "", spedizione: sp, vendita: sp.vendita_id ? venditaPerId[sp.vendita_id] : null }));
-    const tutte = [...daShop, ...daPos].sort((a, b) => String(b.data).localeCompare(String(a.data)));
+    // una prova consegnata a mano non genera nessuna spedizione: senza
+    // questa riga resterebbe invisibile ovunque, e nessuno potrebbe piu'
+    // buttarla. Si mostra come le altre, con la sua etichetta e il cestino
+    const proveSenzaSpedizione = (vista === "dagestire" ? (venditeSimulate || []) : [])
+      .filter((v) => !(spedizioniPos || []).some((sp) => sp.vendita_id === v.id))
+      .map((v) => ({
+        tipo: "pos", chiave: `s${v.id}`, data: v.data_ordine || "",
+        spedizione: {
+          id: v.id, vendita_id: v.id, simulazione: true, senzaSpedizione: true,
+          prodotti: v.prodotti, destinatario_nome: v.cliente_nome, ts: v.data_ordine, stato: "da_spedire",
+        },
+        vendita: v,
+      }));
+    const tutte = [...daShop, ...daPos, ...proveSenzaSpedizione].sort((a, b) => String(b.data).localeCompare(String(a.data)));
     return vista === "storico" ? tutte.slice(0, 200) : tutte;
   }, [soloShop, spedizioniPos, vista, venditaPerId, statiOttimisti]);
   const ordini = useMemo(() => voci.filter((v) => v.tipo === "woo").map((v) => v.vendita), [voci]);
@@ -27417,6 +27481,7 @@ function PaginaOrdiniInArrivo({ venditeShop, spedizioniPos, corsi, corsiDate, lo
                   onSegnaSpedita={() => segnaSpeditaPos(sp)}
                   presi={righePrese[voce.chiave] || {}}
                   onSegnaRiga={(indice, valore) => segnaRigaPresa(voce, indice, valore)}
+                  onButtaProva={sp.simulazione && programmatore ? () => buttaProva(sp) : null}
                   isMobile={isMobile}
                 />
               );
@@ -35412,7 +35477,16 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // Quindi la vendita si registra, l'incasso pure, ma il magazzino non si
   // tocca — il pezzo esce dall'atteso di rientro alla chiusura del corso
   const [prelevatoDaiKit, setPrelevatoDaiKit] = useState(false);
-  const senzaScaricoMagazzino = !!corsoPosSel && prelevatoDaiKit;
+  // Modalità simulazione: il POS è l'unica parte dell'app che non si può
+  // provare senza fare danni — ogni prova era un incasso in più nei conti e
+  // un pezzo in meno in magazzino (e sul sito). Con questa accesa la
+  // vendita si registra dichiarata "di prova": non scarica niente, non
+  // entra in nessun totale, e da Logistica si cancella senza lasciare
+  // traccia. La spunta la vede solo chi programma: per tutti gli altri non
+  // esiste, quindi nessuna vendita vera può finire registrata come prova
+  const [simulazione, setSimulazione] = useState(false);
+  const puoSimulare = ruoloUtente === "programmatore";
+  const senzaScaricoMagazzino = (!!corsoPosSel && prelevatoDaiKit) || (puoSimulare && simulazione);
   const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
   const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
 
@@ -35597,6 +35671,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
     setSpedRichiedeFattura(false); setSpedDitta(""); setSpedPiva(""); setSpedCodDest(""); setSpedPec("");
     setOmaggioAttivo(false);
     setPrelevatoDaiKit(false);
+    // la simulazione non si spegne da sola: chi prova fa piu' prove di
+    // fila, e riaccenderla ogni volta sarebbe il modo di dimenticarsene
   }
 
   const subtotale = round2(carrello.reduce((s, r) => s + r.prezzo * r.quantita, 0));
@@ -35662,12 +35738,14 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       corso_data_id: corsoPosSel?.id || null,
       // le due indicazioni che servono alla chiusura del corso: da dove è
       // uscito il pezzo, e se l'allievo se l'è portato via subito
-      prelevato_dai_kit: senzaScaricoMagazzino,
+      prelevato_dai_kit: !!corsoPosSel && prelevatoDaiKit,
       consegnato_in_aula: corsoPosSel ? !spedizioneAttiva : null,
+      simulazione: puoSimulare && simulazione,
       coupon_id: omaggioAttivo ? null : (couponAttivo?.id || null),
       codice_coupon: omaggioAttivo ? null : (couponAttivo?.codice || null),
     };
     const datiSpedizione = spedizioneAttiva ? {
+      simulazione: puoSimulare && simulazione,
       corso_data_id: corsoPosSel?.id || null,
       iscritto_id: spedIscrittoId || null,
       destinatario_nome: spedDestinatario,
@@ -35689,7 +35767,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
       prodotti: prodottiRiga,
     } : null;
     const nomeOperatore = operatore?.nome || null;
-    const etichettaEsito = omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
+    const etichettaEsito = (puoSimulare && simulazione) ? "PROVA registrata (nessun incasso, nessuno scarico)"
+      : omaggioAttivo ? "Omaggio registrato" : "Vendita registrata";
 
     nuovaVendita();
     setMsg(datiSpedizione ? `${etichettaEsito} e spedizione inviata a Raf.` : `${etichettaEsito}.`);
@@ -35791,6 +35870,32 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   // l'involucro intorno cambia
   const contenutoCarrelloCorpo = (
     <>
+      {/* la spunta della simulazione sta in cima al carrello e, quando è
+          accesa, si vede da lontano: una prova dimenticata accesa è una
+          vendita vera che sparisce dai conti, ed è il danno peggiore di
+          tutti quelli che questa modalità serve a evitare */}
+      {puoSimulare && (
+        <div style={{
+          marginBottom: isMobile ? 8 : 14, borderRadius: 12, padding: "10px 12px",
+          background: simulazione ? "#FBF1D9" : "transparent",
+          border: `1px ${simulazione ? "solid" : "dashed"} ${simulazione ? GOLD : CREAM_BORDER}`,
+        }}>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer" }}>
+            <input type="checkbox" checked={simulazione} onChange={(e) => setSimulazione(e.target.checked)} style={{ marginTop: 3 }} />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: simulazione ? "#8A6D1D" : NAVY }}>
+                {simulazione ? "MODALITÀ SIMULAZIONE ATTIVA" : "Modalità simulazione"}
+              </span>
+              <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1, lineHeight: 1.4 }}>
+                {simulazione
+                  ? "Quello che vendi ora è una prova: nessun incasso nei conti, nessun pezzo scaricato dal magazzino. Si cancella da Logistica, senza lasciare traccia."
+                  : "Solo per chi programma: registra vendite di prova che non toccano né i conti né il magazzino."}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
+
       {corsiEleggibiliPos.length > 0 && (
         <div style={{ marginBottom: isMobile ? 8 : 14 }}>
           <Field label="Collega la vendita al corso">
@@ -43499,6 +43604,7 @@ export default function App() {
   // causali assegnate ai pezzi "da giustificare" nella verifica di
   // congruità dell'Inventario Post Corso
   const [spedizioniPos, setSpedizioniPos] = useState([]);
+  const [venditeSimulate, setVenditeSimulate] = useState([]);
   const [masterCorsi, setMasterCorsi] = useState([]);
   const [assistenteCorsi, setAssistenteCorsi] = useState([]);
   const [corsiDateDocenti, setCorsiDateDocenti] = useState([]);
@@ -43606,7 +43712,13 @@ export default function App() {
     // WooCommerce, di gran lunga la colonna più pesante del database, letta
     // in un solo punto di tutta l'app (CRM Shop). Caricata a parte, vedi
     // "vendite_shop_crm" sotto
-    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id, prelevato_dai_kit, consegnato_in_aula").order("data_ordine", { ascending: false })).data || []),
+    // le vendite di prova (modalità simulazione, solo programmatore) non
+    // entrano qui: escludendole alla fonte non c'è nessun totale, nessuna
+    // statistica e nessun target che debba ricordarsi di saltarle
+    vendite_shop: async () => setVenditeShop((await supabase.from("vendite_shop").select("id, woo_order_id, numero_ordine, data_ordine, stato, cliente_nome, cliente_email, totale, totale_imponibile, totale_iva, prodotti, ts_ricevuto, origine, metodo_pagamento, note, operatore_tipo, operatore_id, operatore_nome, tipo_movimento, vendita_collegata_id, corso_data_id, prelevato_dai_kit, consegnato_in_aula").eq("simulazione", false).order("data_ordine", { ascending: false })).data || []),
+    // le prove, a parte: servono solo a Logistica, per mostrarle e per
+    // poterle buttare
+    vendite_simulate: async () => setVenditeSimulate((await supabase.from("vendite_shop").select("*").eq("simulazione", true).order("data_ordine", { ascending: false })).data || []),
     vendite_shop_crm: async () => setVenditeShopCrm((await supabase.from("vendite_shop").select("id, payload_raw")).data || []),
     categorie_prodotti: async () => setCategorieProdotti((await supabase.from("categorie_prodotti").select("*").order("nome")).data || []),
     bundle_componenti: async () => setBundleComponenti((await supabase.from("bundle_componenti").select("*")).data || []),
@@ -43822,7 +43934,7 @@ export default function App() {
     logisticaprodotti: ["vendite_shop", "spedizioni_pos", "prodotti_shop"],
     avvisilogistica: ["prodotti_shop", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     spedizionicorsi: ["corsi", "location", "corsi_date", "iscritti", "corsi_kit_prodotti", "kit_definizioni", "logistica_kit_edizioni", "prodotti_shop", "inventario_sede", "prodotti_aperti_magazzino", "spedizioni_pos"],
-    ordiniinarrivo: ["vendite_shop", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
+    ordiniinarrivo: ["vendite_shop", "vendite_simulate", "spedizioni_pos", "corsi", "corsi_date", "location", "iscritti"],
     magazzinilocali: ["location", "inventario_sede", "magazzino_locale_consumabili", "prodotti_shop", "costi_sottocategorie"],
     spedizionipos: ["spedizioni_pos", "corsi", "corsi_date", "location"],
     contenutokit: ["corsi", "kit_definizioni", "corsi_kit_prodotti", "prodotti_shop"],
@@ -45226,8 +45338,8 @@ export default function App() {
 
       {view === "ordiniinarrivo" && (
         <PaginaOrdiniInArrivo
-          venditeShop={venditeShop} spedizioniPos={spedizioniPos}
-          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
+          venditeShop={venditeShop} venditeSimulate={venditeSimulate} spedizioniPos={spedizioniPos}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} ruoloUtente={ruoloUtente}
           ricarica={fetchDati} onBack={() => setView("logisticaprodotti")}
           titolo={etichettaTasto("logisticaprodotti", "ordiniinarrivo", "Ordini in arrivo")}
         />
