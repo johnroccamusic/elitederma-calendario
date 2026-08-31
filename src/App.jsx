@@ -12038,15 +12038,9 @@ function calcolaCodiceLogo(masterNome, allievaNome, numero) {
 // colore/allineamento di nome/città-data/firma — sempre gli stessi su
 // tutti i corsi, calibrati qui trascinando 3 testi di prova sopra
 // l'anteprima di un diploma di riferimento caricato apposta per questo
-function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBack }) {
+function FontDiplomi({ fontDiplomi, segnaposti, ricarica, onBack }) {
   const [config, setConfig] = useState(fontDiplomi || CONFIG_DIPLOMI_DEFAULT);
   const [msg, setMsg] = useState("");
-  const [nomeEccezione, setNomeEccezione] = useState("");
-  const [fileEccezione, setFileEccezione] = useState(null);
-  const [salvandoEccezione, setSalvandoEccezione] = useState(false);
-  const [eccezioneInModifica, setEccezioneInModifica] = useState(null);
-  const [nomeModificaEccezione, setNomeModificaEccezione] = useState("");
-  const [fileModificaEccezione, setFileModificaEccezione] = useState(null);
   const [fileRiferimentoNuovo, setFileRiferimentoNuovo] = useState(null);
   const [dimensioniCanvas, setDimensioniCanvas] = useState(null);
   const [larghezzaMostrata, setLarghezzaMostrata] = useState(null);
@@ -12132,57 +12126,6 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
     const { error } = await supabase.storage.from(bucket).upload(percorso, file);
     if (error) throw error;
     return percorso;
-  }
-
-  // "Eccezioni diplomi": diplomi caricati qui una volta per tutte, poi
-  // scelti sul singolo iscritto (in Contabilità classe) al posto del
-  // template normale del corso
-  async function aggiungiEccezione() {
-    if (!nomeEccezione.trim()) { setMsg("Dai un nome all'eccezione."); return; }
-    if (!fileEccezione) { setMsg("Scegli il file PDF dell'eccezione."); return; }
-    setSalvandoEccezione(true);
-    try {
-      const percorso = await caricaFile(fileEccezione, "diploma-templates", "eccezione");
-      const { error } = await supabase.from("diploma_eccezioni").insert({ nome: nomeEccezione.trim(), file_path: percorso });
-      if (error) { setMsg("Errore: " + error.message); setSalvandoEccezione(false); return; }
-      // il ricaricamento completo dei dati dell'app (9 tabelle) non serve
-      // per mostrare subito il salvataggio: la lista qui sotto si
-      // aggiorna da sola non appena la risposta arriva, senza dover
-      // bloccare l'utente in attesa
-      ricarica(["diploma_eccezioni"]);
-      setNomeEccezione(""); setFileEccezione(null);
-      setMsg("Eccezione diploma aggiunta.");
-    } catch (e) {
-      setMsg("Errore nel caricamento dell'eccezione: " + e.message);
-    }
-    setSalvandoEccezione(false);
-  }
-  async function eliminaEccezione(id) {
-    if (!window.confirm("Eliminare questa eccezione diploma? Gli iscritti che la usano torneranno al template normale del corso.")) return;
-    const { error } = await supabase.from("diploma_eccezioni").delete().eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["diploma_eccezioni"]);
-    setMsg("Eccezione diploma eliminata.");
-  }
-  function apriModificaEccezione(d) {
-    setEccezioneInModifica(d.id);
-    setNomeModificaEccezione(d.nome);
-    setFileModificaEccezione(null);
-  }
-  async function salvaModificaEccezione(id) {
-    if (!nomeModificaEccezione.trim()) { setMsg("Dai un nome all'eccezione."); return; }
-    const payload = { nome: nomeModificaEccezione.trim() };
-    if (fileModificaEccezione) {
-      try {
-        payload.file_path = await caricaFile(fileModificaEccezione, "diploma-templates", "eccezione");
-      } catch (e) { setMsg("Errore nel caricamento del file: " + e.message); return; }
-    }
-    const { error } = await supabase.from("diploma_eccezioni").update(payload).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    setEccezioneInModifica(null);
-    setFileModificaEccezione(null);
-    ricarica(["diploma_eccezioni"]);
-    setMsg("Eccezione diploma aggiornata.");
   }
 
   async function gestisciUploadFont(file, campo) {
@@ -12483,78 +12426,6 @@ function FontDiplomi({ fontDiplomi, diplomaEccezioni, segnaposti, ricarica, onBa
         Impostazioni globali per la stampa dei diplomi: i 3 font e la posizione di nome, città/data e firma sono
         uguali per tutti i corsi. Carica qui un diploma di riferimento per vedere dove finiranno i testi e
         trascinarli nel punto giusto.
-      </div>
-
-      <div style={cardStyle}>
-        <div style={hStyle}>Eccezioni diplomi</div>
-        <div style={subStyle}>
-          Diplomi alternativi, caricati qui una volta per tutte: da "Contabilità classe" si può assegnare
-          un'eccezione a un singolo iscritto, che verrà stampata al posto del template normale del corso.
-        </div>
-        <Field label="Nome eccezione">
-          <input style={inputStyle} value={nomeEccezione} onChange={(e) => setNomeEccezione(e.target.value)} placeholder="es. Diploma rifatto per errore stampa" />
-        </Field>
-        <Field label="File diploma (PDF)">
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileEccezione(e.target.files?.[0] || null)} />
-            {fileEccezione ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file caricato</span>}
-          </div>
-        </Field>
-        <Button onClick={aggiungiEccezione} disabled={salvandoEccezione}>{salvandoEccezione ? "Salvataggio…" : "Salva eccezione"}</Button>
-
-        {(diplomaEccezioni || []).length > 0 && (
-          <div style={{ marginTop: 14 }}>
-            {diplomaEccezioni.map((d) => (
-              <div key={d.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 0", borderTop: `1px solid ${CREAM_BORDER}`, gap: 10 }}>
-                  <div style={{ ...fontBody, fontSize: 14, color: NAVY }}>{d.nome}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    <BadgeFileCaricato />
-                    <button
-                      onClick={() => apriModificaEccezione(d)}
-                      title="Modifica"
-                      style={{ border: "none", background: "none", cursor: "pointer", color: NAVY, padding: 4, display: "flex", alignItems: "center" }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => eliminaEccezione(d.id)}
-                      title="Elimina"
-                      style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6" /><path d="M14 11v6" />
-                        <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-                {eccezioneInModifica === d.id && (
-                  <div style={{ padding: "10px 0 14px" }}>
-                    <Field label="Nome eccezione">
-                      <input style={inputStyle} value={nomeModificaEccezione} onChange={(e) => setNomeModificaEccezione(e.target.value)} />
-                    </Field>
-                    <Field label="File diploma (PDF) — scegline uno nuovo solo se vuoi sostituire la grafica">
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <CampoFileTrascinabile accept="application/pdf" style={{ ...inputStyle, flex: 1, minWidth: 200 }} onChange={(e) => setFileModificaEccezione(e.target.files?.[0] || null)} />
-                        {fileModificaEccezione ? <BadgeFileCaricato /> : <span style={{ ...fontBody, fontSize: 12, color: MUTED }}>Nessun file nuovo scelto — resta quello attuale</span>}
-                      </div>
-                    </Field>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <Button onClick={() => salvaModificaEccezione(d.id)}>Salva</Button>
-                      <Button variant="ghost" onClick={() => setEccezioneInModifica(null)}>Annulla</Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div style={cardStyle}>
@@ -15943,85 +15814,6 @@ function AllegatoLink({ percorso, etichetta, bucket = "allegati-iscritti", style
   );
 }
 
-// calendario sempre visibile (non il picker nativo del browser, che su
-// alcuni dispositivi/browser non risponde in modo affidabile) per scegliere
-// la data eccezione da mostrare sul diploma: evidenzia i giorni in cui il
-// corso si sta davvero svolgendo
-function SelettoreDataDiploma({ valore, dataInizio, dataFine, onCambia }) {
-  const partenza = valore || dataInizio;
-  const [pAnno, pMese] = partenza.split("-").map(Number);
-  const [vista, setVista] = useState({ anno: pAnno, mese: pMese - 1 });
-  const settimane = generaSettimane(vista.anno, vista.mese);
-  const meseVuoto = (d) => (d ? d : "");
-  return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, padding: 12, background: "#fff" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <button
-          type="button"
-          onClick={() => setVista((v) => (v.mese === 0 ? { anno: v.anno - 1, mese: 11 } : { anno: v.anno, mese: v.mese - 1 }))}
-          style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY, fontSize: 16, padding: 4 }}
-        >
-          &larr;
-        </button>
-        <div style={{ ...fontBody, fontSize: 13, fontWeight: 600, color: NAVY }}>{MESI[vista.mese]} {vista.anno}</div>
-        <button
-          type="button"
-          onClick={() => setVista((v) => (v.mese === 11 ? { anno: v.anno + 1, mese: 0 } : { anno: v.anno, mese: v.mese + 1 }))}
-          style={{ ...fontBody, border: "none", background: "none", cursor: "pointer", color: NAVY, fontSize: 16, padding: 4 }}
-        >
-          &rarr;
-        </button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
-        {GIORNI_ABBR.map((g) => (
-          <div key={g} style={{ ...fontBody, textAlign: "center", fontSize: 10, color: MUTED }}>{g}</div>
-        ))}
-      </div>
-      {settimane.map((sett, wi) => (
-        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 2 }}>
-          {sett.map((d, di) => {
-            if (!d) return <div key={di} />;
-            const ds = dateStrFor(vista.anno, vista.mese, d);
-            const inCorso = ds >= dataInizio && ds <= dataFine;
-            const selezionato = ds === valore;
-            return (
-              <button
-                type="button"
-                key={di}
-                disabled={!inCorso}
-                onClick={() => onCambia(ds)}
-                title={inCorso ? "" : "Fuori dalle date del corso"}
-                style={{
-                  ...fontBody,
-                  aspectRatio: "1",
-                  border: "none",
-                  borderRadius: 6,
-                  cursor: inCorso ? "pointer" : "default",
-                  background: selezionato ? NAVY : inCorso ? "#DCE8FB" : "transparent",
-                  color: selezionato ? "#fff" : inCorso ? NAVY : "#C9C9C9",
-                  fontSize: 12,
-                  fontWeight: selezionato ? 700 : 400,
-                }}
-              >
-                {meseVuoto(d)}
-              </button>
-            );
-          })}
-        </div>
-      ))}
-      {valore && (
-        <button
-          type="button"
-          onClick={() => onCambia(null)}
-          style={{ ...fontBody, marginTop: 8, width: "100%", padding: "6px 0", border: "none", background: "none", color: "#C0392B", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
-        >
-          Cancella (usa la data del corso)
-        </button>
-      )}
-    </div>
-  );
-}
-
 // riga "etichetta / importo / metodo" della sezione Pagamenti: da mobile
 // importo e metodo scendono sulla stessa riga sotto l'etichetta (3
 // colonne fisse non ci stanno), da desktop restano affiancati
@@ -16599,7 +16391,7 @@ function ManigliaRidimensionaOrizzontale({ cursore = "ew-resize", onPointerDown,
     />
   );
 }
-function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
+function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministratoreAttuale, corsoData, corsi, location, corsiDate, iscritti, master, masterCorsi, corsiDateDocenti, assistente, assistenteCorsi, leva, hotel, layoutIscrizioni, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, venditeShop, accontiDaVerificare, ricarica, onBack, sottoVistaIniziale, onCambiaSottoVista, onApriNuovaSpesaPerClasse, onApriModificaSpesaPerClasse, origineGestioneModelle, onTornaGestioneModelle }) {
   // vista/modificandoId/mostraGestione partono dal valore iniziale ricevuto
   // dal genitore (App) invece che sempre dai default: quando i pulsanti
   // Indietro/Avanti riportano qui con uno stato salvato, il genitore
@@ -16707,7 +16499,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   const [caricando, setCaricando] = useState(false);
 
   const [spostaIscrittoId, setSpostaIscrittoId] = useState(null); // id dell'iscritto per cui si sta scegliendo la nuova data
-  const [eccezioneApertaId, setEccezioneApertaId] = useState(null); // id dell'iscritto per cui si sta scegliendo l'eccezione diploma
   const [msg, setMsg] = useState("");
   // Programmatore e Amministratore saltano subito la richiesta della
   // password di "Contabilità classe" (come già succede per tutti i tasti
@@ -17202,11 +16993,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
       const fontData = await embedFontOFallback(config.font_data_path);
       const fontFirma = await embedFontOFallback(config.font_firma_path);
 
-      // un iscritto con un'"eccezione diploma" assegnata (da Contabilità
-      // classe) usa quel template al posto di quello del corso: si
-      // scarica una sola volta per eccezione, anche se piu' iscritti la
-      // condividono. Nome allievo e master restano quelli calcolati
-      // normalmente: cambiano solo il template e/o la data
       // un file caricato una volta sola, anche se lo condividono in dieci:
       // la cache è sul percorso, non sull'allievo
       const cacheDoc = new Map();
@@ -17217,15 +17003,12 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         }
         return cacheDoc.get(percorso);
       }
-      // l'ordine è: l'eccezione assegnata all'allievo (da Contabilità
-      // classe) vince su tutto; poi il diploma del suo pacchetto; per
-      // ultimo quello del corso. Nome allievo e master restano quelli
-      // calcolati normalmente: cambia solo il modello, e/o la data
+      // il modello è quello del pacchetto dell'allievo, e per ultimo quello
+      // del corso: le "eccezioni diploma" non esistono più — erano il modo
+      // di dare un foglio diverso a un allievo, e ora quel foglio ce l'ha
+      // già il suo pacchetto
       async function docTemplatePer(iscritto) {
-        const eccezione = iscritto.diploma_eccezione_id
-          ? (diplomaEccezioni || []).find((d) => d.id === iscritto.diploma_eccezione_id)
-          : null;
-        return docDaPercorso(eccezione ? eccezione.file_path : percorsoDiplomaDi(iscritto));
+        return docDaPercorso(percorsoDiplomaDi(iscritto));
       }
 
       // se uno o più iscritti hanno "Ristampa solo questo" spuntato, il PDF
@@ -17244,9 +17027,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         outputPdf.addPage(pagina);
         const { width: larghezzaPaginaDiploma } = pagina.getSize();
 
-        const testoDataIscritto = iscritto.diploma_eccezione_data
-          ? `${toTitleCase(loc?.nome || "")}, ${fmtData(iscritto.diploma_eccezione_data)}`
-          : testoData;
+        const testoDataIscritto = testoData;
 
         // solo il nome allievo è limitato dalle 2 linee di "Diploma di
         // riferimento": se supera quella larghezza si rimpicciolisce
@@ -18142,24 +17923,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     ricarica(["iscritti"]);
   }
 
-  // eccezione diploma: sostituisce, solo per questo iscritto, il template
-  // del corso e/o la data mostrata sul diploma stampato — nome allievo e
-  // master restano quelli calcolati normalmente
-  async function impostaEccezioneDiploma(id, eccezioneId) {
-    const { error } = await supabase.from("iscritti").update({ diploma_eccezione_id: eccezioneId || null }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["iscritti"]);
-  }
-  async function impostaEccezioneData(id, data) {
-    const { error } = await supabase.from("iscritti").update({ diploma_eccezione_data: data || null }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["iscritti"]);
-  }
-  async function rimuoviEccezioneDiploma(id) {
-    const { error } = await supabase.from("iscritti").update({ diploma_eccezione_id: null, diploma_eccezione_data: null }).eq("id", id);
-    if (error) { setMsg("Errore: " + error.message); return; }
-    ricarica(["iscritti"]);
-  }
 
   async function eseguiSpostamento(iscritto, cdTarget, corsoTarget, locTarget) {
     const etichetta = cdTarget.data_inizio === cdTarget.data_fine ? fmtData(cdTarget.data_inizio) : `${fmtData(cdTarget.data_inizio)} → ${fmtData(cdTarget.data_fine)}`;
@@ -20197,13 +19960,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                       />
 
                       {i.richiede_fattura && (
-                        // marginBottom generoso: "Eccezione diploma" più sotto
-                        // è posizionato in absolute (bottom:20) rispetto
-                        // all'intera colonna, quindi NON riserva da solo lo
-                        // spazio necessario nel flusso normale — senza questo
-                        // margine il testo di questo riquadro (specie con PEC)
-                        // finirebbe nascosto dietro al tasto/dettagli sotto
-                        <div style={{ marginTop: 12, marginBottom: 100, padding: 10, borderRadius: 8, background: "#fff", border: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.6 }}>
+                        <div style={{ marginTop: 12, padding: 10, borderRadius: 8, background: "#fff", border: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 11, color: NAVY, lineHeight: 1.6 }}>
                           <div style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4, textAlign: "center" }}>Dati fatturazione</div>
                           <div>Ditta: {i.fattura_ditta || "—"}</div>
                           <div>Ind. {i.fattura_indirizzo || "—"} n. {i.fattura_civico || "—"}</div>
@@ -20213,46 +19970,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                         </div>
                       )}
 
-                      {(() => {
-                        const eccezioneAttiva = i.diploma_eccezione_id ? (diplomaEccezioni || []).find((d) => d.id === i.diploma_eccezione_id) : null;
-                        const impostata = i.diploma_eccezione_id || i.diploma_eccezione_data;
-                        return (
-                          <div style={{ position: "absolute", left: 20, right: 20, bottom: 20 }}>
-                            <Button
-                              onClick={() => setEccezioneApertaId(eccezioneApertaId === i.id ? null : i.id)}
-                              style={impostata
-                                ? { width: "100%", padding: "8px 6px", fontSize: 10.5, lineHeight: 1.25, whiteSpace: isMobile ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#6FA8DC", border: "1px solid #6FA8DC", color: "#fff" }
-                                : { width: "100%", padding: "8px 6px", fontSize: 10.5, lineHeight: 1.25, whiteSpace: isMobile ? "normal" : "nowrap", overflow: "hidden", textOverflow: "ellipsis", background: "#fff", border: "1px solid #1D4ED8", color: "#1D4ED8" }
-                              }
-                            >
-                              {impostata ? "Eccezione diploma impostata" : "Carica eccezione diploma"}
-                            </Button>
-                            {impostata && (
-                              <div style={{ marginTop: 6, width: "100%" }}>
-                                <div style={{ ...fontBody, fontSize: 10, color: MUTED, textAlign: "right" }}>
-                                  {eccezioneAttiva ? eccezioneAttiva.nome : ""}
-                                  {eccezioneAttiva && i.diploma_eccezione_data ? " · " : ""}
-                                  {i.diploma_eccezione_data ? fmtData(i.diploma_eccezione_data) : ""}
-                                </div>
-                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                                  <button
-                                    onClick={() => { if (window.confirm("Rimuovere l'eccezione diploma per questo iscritto?")) rimuoviEccezioneDiploma(i.id); }}
-                                    title="Rimuovi eccezione diploma"
-                                    style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 4, display: "flex", alignItems: "center" }}
-                                  >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                      <polyline points="3 6 5 6 21 6" />
-                                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                      <path d="M10 11v6" /><path d="M14 11v6" />
-                                      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()}
                     </div>
 
                     {/* colonna destra: pacchetto, pagamenti, allegati */}
@@ -20294,37 +20011,6 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                   </div>
                   </div>
 
-                  {eccezioneApertaId === i.id && (
-                    <div style={{ margin: "0 20px 20px", padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
-                      <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>
-                        Eccezione diploma per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:
-                      </div>
-                      <Field label="Diploma da usare (al posto del template normale del corso)">
-                        <select
-                          value={i.diploma_eccezione_id || ""}
-                          onChange={(e) => impostaEccezioneDiploma(i.id, e.target.value || null)}
-                          style={inputStyle}
-                        >
-                          <option value="">Nessuna — usa il template normale del corso</option>
-                          {(diplomaEccezioni || []).map((d) => (
-                            <option key={d.id} value={d.id}>{d.nome}</option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Data da mostrare sul diploma (opzionale — se vuota resta la data del corso)">
-                        <SelettoreDataDiploma
-                          valore={i.diploma_eccezione_data || null}
-                          dataInizio={corsoData.data_inizio}
-                          dataFine={corsoData.data_fine}
-                          onCambia={(data) => impostaEccezioneData(i.id, data)}
-                        />
-                      </Field>
-                      <div style={{ ...fontBody, fontSize: 11, color: MUTED, marginBottom: 10 }}>
-                        Il nome dell'allievo e il nome della master restano invariati: cambiano solo il template del diploma e/o la data.
-                      </div>
-                      <Button onClick={() => setEccezioneApertaId(null)}>Salva</Button>
-                    </div>
-                  )}
                   {spostaIscrittoId === i.id && (
                     <div style={{ margin: "0 20px 20px", padding: 14, border: `1px solid ${CREAM_BORDER}`, borderRadius: 10, background: BG_CHIARO }}>
                       <div style={{ ...fontBody, fontSize: 13, color: NAVY, fontWeight: 500, marginBottom: 10 }}>Scegli il nuovo corso/data per {i.nome.toUpperCase()} {i.cognome.toUpperCase()}:</div>
@@ -43356,7 +43042,7 @@ function PannelloImportCsv({ costiCategorie, costiSottocategorie, spese, onClose
 // callback di navigazione interna (onBack/onCambiaSottoVista/…) sono no-op
 // qui, perché in questa vista non esiste una cronologia condivisa tra le
 // colonne — "← Indietro" in alto chiude l'intera vista e basta
-function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, fontDiplomi, diplomaEccezioni, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
+function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreAttuale, corsi, location, corsiDate, iscritti, master, fontDiplomi, segnaposti, costiCategorie, costiSottocategorie, spese, corsiGiorni, tipiModella, corsiTipiModella, venditori, kitDefinizioni, prodottiShop, accontiDaVerificare, ricarica, onBack }) {
   const cdById = useMemo(() => Object.fromEntries(corsiDate.map((cd) => [cd.id, cd])), [corsiDate]);
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: "24px 0 60px" }}>
@@ -43377,7 +43063,7 @@ function VistaSchedeAffiancate({ iscrittiArr, ruoloUtente, codiceAmministratoreA
                   codiceAmministratoreAttuale={codiceAmministratoreAttuale}
                   corsoData={cd}
                   corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-                  master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
+                  master={master} fontDiplomi={fontDiplomi}
                   segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
                   spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
                   venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
@@ -43468,7 +43154,6 @@ export default function App() {
   const [assistente, setAssistente] = useState([]);
   const [leva, setLeva] = useState([]);
   const [fontDiplomi, setFontDiplomi] = useState(null); // riga singola di impostazioni globali stampa diplomi, o null se non ancora creata
-  const [diplomaEccezioni, setDiplomaEccezioni] = useState([]); // diplomi "eccezione" caricabili sul singolo iscritto, al posto del template del corso
   const [segnaposti, setSegnaposti] = useState(null); // riga singola di impostazioni globali stampa segnaposti, o null se non ancora creata
   const [loghiImpostazioni, setLoghiImpostazioni] = useState(null); // riga singola: font condivisi + contatore progressivo globale dei loghi
   const [categorieGruppi, setCategorieGruppi] = useState(null); // riga singola: "Associa il gruppo a una categoria di spesa" per assistenti/master/hotel/location
@@ -43661,7 +43346,6 @@ export default function App() {
     assistente: async () => setAssistente((await supabase.from("assistente").select("*").order("nome")).data || []),
     leva: async () => setLeva((await supabase.from("leva").select("*").order("nome")).data || []),
     font_diplomi: async () => setFontDiplomi((await supabase.from("font_diplomi").select("*").limit(1)).data?.[0] || null),
-    diploma_eccezioni: async () => setDiplomaEccezioni((await supabase.from("diploma_eccezioni").select("*").order("nome")).data || []),
     segnaposti_config: async () => setSegnaposti((await supabase.from("segnaposti_config").select("*").limit(1)).data?.[0] || null),
     loghi_impostazioni: async () => setLoghiImpostazioni((await supabase.from("loghi_impostazioni").select("*").limit(1)).data?.[0] || null),
     loghi_categorie: async () => setLoghiCategorie((await supabase.from("loghi_categorie").select("*")).data || []),
@@ -43871,7 +43555,7 @@ export default function App() {
     impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
     gestionedate: ["corsi", "location", "corsi_date", "iscritti", "master", "acconti_da_verificare"],
     verificaacconti: ["corsi", "location", "corsi_date", "iscritti", "acconti_da_verificare"],
-    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
+    schedeaffiancate: ["corsi", "location", "corsi_date", "iscritti", "master", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "kit_definizioni", "prodotti_shop", "acconti_da_verificare"],
     amministrazione: ["corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "spese", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "fornitori", "abbonamenti_contratti", "abbonamenti_importi", "fatture_ricevute_fic", "documento_fornitore", "note_credito_fic"],
     riconciliazione: ["documento_fornitore", "impegno", "riconciliazione", "scadenza_passiva", "preferenze_match_fornitore", "rettifica_scadenza_nota_credito", "fornitori", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi"],
     anagrafiche: ["master", "assistente", "hotel", "location", "venditori", "fornitori", "spese", "citta", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi"],
@@ -43900,7 +43584,7 @@ export default function App() {
     budgetcosti: ["costi_categorie", "location", "corsi", "costi_budget"],
     spesaform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "spese", "spese_attribuzioni"],
     abbonamentoform: ["corsi", "location", "corsi_date", "eventi", "fornitori", "costi_categorie", "costi_sottocategorie", "abbonamenti_contratti", "abbonamenti_importi", "abbonamenti_attribuzioni"],
-    fontdiplomi: ["font_diplomi", "diploma_eccezioni", "segnaposti_config"],
+    fontdiplomi: ["font_diplomi", "segnaposti_config"],
     settingloghi: ["loghi_impostazioni", "loghi_categorie"],
     generazioneloghi: ["master", "loghi_categorie", "loghi_impostazioni"],
     dashboardvenditori: ["corsi", "location", "corsi_date", "iscritti", "master", "venditori", "vendite_shop", "prodotti_shop", "target_vendite_prodotti"],
@@ -43932,7 +43616,7 @@ export default function App() {
     calendario: ["corsi", "location", "corsi_date", "iscritti", "master"],
     cerca: ["corsi", "location", "corsi_date", "iscritti"],
     cercaiscritto: ["corsi", "location", "corsi_date", "iscritti"],
-    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "diploma_eccezioni", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare"],
+    scheda: ["kit_definizioni", "corsi", "location", "corsi_date", "iscritti", "master", "master_corsi", "corsi_date_docenti", "assistente", "assistente_corsi", "leva", "hotel", "impostazioni_layout_iscrizioni", "font_diplomi", "segnaposti_config", "costi_categorie", "costi_sottocategorie", "spese", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "acconti_da_verificare"],
   };
 
   async function caricaIniziale() {
@@ -44846,7 +44530,7 @@ export default function App() {
           ruoloUtente={ruoloUtente}
           codiceAmministratoreAttuale={passwordAmministratoreAttuale()}
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti}
-          master={master} fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni}
+          master={master} fontDiplomi={fontDiplomi}
           segnaposti={segnaposti} costiCategorie={costiCategorie} costiSottocategorie={costiSottocategorie}
           spese={spese} corsiGiorni={corsiGiorni} tipiModella={tipiModella} corsiTipiModella={corsiTipiModella}
           venditori={venditori} kitDefinizioni={kitDefinizioni} prodottiShop={prodottiShop}
@@ -45151,7 +44835,7 @@ export default function App() {
       )}
 
       {view === "fontdiplomi" && (
-        <FontDiplomi fontDiplomi={fontDiplomi} diplomaEccezioni={diplomaEccezioni} segnaposti={segnaposti} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
+        <FontDiplomi fontDiplomi={fontDiplomi} segnaposti={segnaposti} ricarica={fetchDati} onBack={() => setView("impostazioni")} />
       )}
 
       {view === "settingloghi" && (
@@ -45491,7 +45175,6 @@ export default function App() {
           hotel={hotel}
           layoutIscrizioni={layoutIscrizioni}
           fontDiplomi={fontDiplomi}
-          diplomaEccezioni={diplomaEccezioni}
           segnaposti={segnaposti}
           costiCategorie={costiCategorie}
           costiSottocategorie={costiSottocategorie}
