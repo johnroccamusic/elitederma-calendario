@@ -43770,7 +43770,13 @@ export default function App() {
   // tabella. Vedi il piano "Ridurre il peso del caricamento iniziale" per
   // il contesto di questa scelta
   const TABELLE_PER_VIEW = {
-    home: [], erp: [], magazzinoshop: [], statistiche: [],
+    home: [], erp: [], statistiche: [],
+    // "Magazzino/shop" e' una pagina di sola navigazione, ma il tasto
+    // "Gestione magazzino" porta il pallino rosso degli avvisi: senza i
+    // prodotti in memoria il conto e' sempre zero, e il tasto non lampeggia
+    // mai. E' la stessa tabella che carica l'hub della logistica per il suo
+    // tasto Advisor, che infatti il pallino lo mostrava
+    magazzinoshop: ["prodotti_shop"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
