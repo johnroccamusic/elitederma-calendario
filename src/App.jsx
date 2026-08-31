@@ -7153,7 +7153,7 @@ const MOTIVI_SCOSTAMENTO = [
   "Mai arrivato nel pacco",
 ];
 
-function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizioni, logisticaKitEdizioni, prodottiShop, venditeShop, masterLoggataId, nomeUtente, onBack, onApriInventarioSede }) {
+function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop, venditeShop, masterLoggataId, nomeUtente, onBack, onApriInventarioSede }) {
   const isMobile = useIsMobile();
   const [chiusura, setChiusura] = useState(null);
   const [consegne, setConsegne] = useState([]);
@@ -7453,6 +7453,9 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
           const riga = consegnaDi(i.id);
           const modello = dermografoAcquistato(i);
           const dermografoQui = modello && i.dermografo_consegna !== "casa";
+          // se non ne ha comprato uno a parte, può averlo lo stesso: dentro
+          // il kit. In quel caso non c'è niente da spuntare — segue il kit
+          const nelKit = !modello ? dermografoDelKit(i.kit_id, corsiKitProdotti, prodottiShop) : null;
           return (
             <div key={i.id} style={rigaBase}>
               <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: confermata ? "default" : "pointer", flex: "1 1 220px", minWidth: 0 }}>
@@ -7468,8 +7471,10 @@ function PaginaChiusuraCorso({ corsoData, corso, location, iscritti, kitDefinizi
                   {etichettaDermografo(modello)}
                 </label>
               ) : (
-                <span style={{ ...fontBody, fontSize: 12, color: MUTED, flexShrink: 0 }}>
-                  {modello ? "dermografo ricevuto a casa" : "nessun dermografo"}
+                <span style={{ ...fontBody, fontSize: 12, color: nelKit ? NAVY : MUTED, flexShrink: 0 }}>
+                  {modello ? "dermografo ricevuto a casa"
+                    : nelKit ? `${nelKit.etichetta} — compreso nel kit`
+                      : "nessun dermografo"}
                 </span>
               )}
             </div>
@@ -38997,6 +39002,24 @@ function dermografoAcquistato(i) {
   if (scelta !== "tekna" && scelta !== "horus") return null;
   return i.dermografo || scelta;
 }
+// Il dermografo che sta DENTRO un kit: non lo compra nessuno a parte, è
+// uno dei prodotti della distinta ("KIT PRO vecchio con Tekna" contiene
+// Dermografo Tekna Elitederma, come altri dodici pacchetti). Chi lo riceve
+// così non ha nessuna scelta da fare in scheda — il dermografo segue il
+// kit, parte col kit e, se il kit non viene consegnato, torna col kit.
+// Dire a quell'allievo "nessun dermografo" era falso.
+function dermografoDelKit(kitId, corsiKitProdotti, prodottiShop) {
+  if (!kitId) return null;
+  const righe = (corsiKitProdotti || []).filter((r) => r.kit_id === kitId && (r.tipo === "kit" || r.tipo === "accessorio"));
+  for (const r of righe) {
+    const prodotto = (prodottiShop || []).find((x) => x.id === r.prodotto_id);
+    if (prodotto && /dermografo/i.test(prodotto.nome || "")) {
+      const regola = DERMOGRAFI.find((d) => d.cercaNome.test(prodotto.nome || ""));
+      return { prodotto, modello: regola?.chiave || null, etichetta: regola?.etichetta || prodotto.nome };
+    }
+  }
+  return null;
+}
 // il prodotto di magazzino che corrisponde a un modello. Si riconosce dal
 // nome perché è così che sono stati inseriti ("Dermografo Tekna
 // Elitederma"): se un domani ne comparissero due uguali non si tira a
@@ -45139,7 +45162,7 @@ export default function App() {
         <PaginaChiusuraCorso
           corsoData={corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId) || null}
           corso={corsi.find((c) => c.id === corsiDate.find((cd) => cd.id === inventarioSedeCorsoDataId)?.corso_id)}
-          location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
+          location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti}
           logisticaKitEdizioni={logisticaKitEdizioni} prodottiShop={prodottiShop} venditeShop={venditeShop}
           masterLoggataId={utenteLoggato?.masterId || null} nomeUtente={utenteLoggato?.nome || null}
           onBack={() => setView("dashboardmaster")}
