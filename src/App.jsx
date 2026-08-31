@@ -7742,9 +7742,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     ricarica(["magazzino_locale_consumabili"]);
   }
 
-  // "Prodotti del corso": merce vendibile davvero inviata a questa
-  // edizione (kit scelto + accessori didattica) — unica fonte per
-  // "Prodotti mancanti" e per la verifica di congruità
   const statoEdizione = (logisticaKitEdizioni || []).find((e) => e.corso_data_id === corsoData?.id) || null;
   const nomeKit = (id) => (kitDefinizioni || []).find((k) => k.id === id)?.nome || "—";
   const consulenzeEdizione = statoEdizione?.consulenze_edizione || [];
@@ -7767,10 +7764,6 @@ function PaginaInventarioSede({ corsoData, corso, location, prodottiShop, costiS
     salvaCampiStatoEdizione({ consulenze_edizione: consulenzeEdizione.map((r) => (r.id === id ? { ...r, livello } : r)) });
   }
 
-  // "Trasmetti inventario": finché non si preme, "Materiali da
-  // rientrare" in Logistica prodotti resta nascosta — Raf non deve
-  // vedere Prodotti interi/mancanti a metà lavoro, solo quando la
-  // master dichiara di aver finito
   // "Segnalazioni": problemi sulla sede visti durante il corso (uno
   // sgabello senza rotellina, un lettino tagliato…) — appartengono alla
   // sede del corso, non a questa singola edizione: compaiono nella
@@ -15901,8 +15894,8 @@ const AREA_MADRE_VISTA = {
   gestioneshop: ["magazzinoshop"],
   gestioneiva: ["erp"],
 };
-// Logistica prodotti: le 4 fasi di spedizione di un'edizione (in
-// ordine) e i 3 elementi della checklist di preparazione kit. Ogni
+// Logistica prodotti: le 4 fasi di spedizione di un'edizione, in
+// ordine. Ogni
 // fase ha un'etichetta diversa a seconda che sia ancora da raggiungere
 // (etichettaPending, pillola rossa "!") o già superata (etichettaFatto,
 // pillola verde) — stesso principio di FASI_RIENTRO sotto
@@ -15951,11 +15944,6 @@ function faseIndietroLogistica(fasi, faseCorrente) {
   if (idx <= 0) return null;
   return fasi[idx - 1].chiave;
 }
-const CHECKLIST_KIT_ITEMS = [
-  { chiave: "tovagliette", etichetta: "Tovagliette inserite" },
-  { chiave: "materiali_consumo", etichetta: "Materiali di consumo" },
-  { chiave: "materiale_didattico", etichetta: "Materiale didattico" },
-];
 // unica password "di sistema" rimasta fuori dalla tabella "Gestione
 // utenti" (Utente generico/Amministratore/Programmatore sono righe di
 // quella tabella, in utenti_app): il codice per aprire questa stessa
@@ -39242,7 +39230,7 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
   );
 }
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
-// iscritti/di riserva, checklist, contenuto kit (sola lettura, si edita
+// iscritti/di riserva, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
 // Il ricevimento del pacco di rientro, in Logistica prodotti. È qui che il
 // corso si chiude davvero: non alla conferma della master, che dichiara
@@ -39412,9 +39400,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
   // card orizzontale a cui questo pannello si riferisce, vedi RigaCorsoLogistica
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
   const coloreCorso = corso?.colore || NAVY;
-  const checklist = statoEdizione.checklist || {};
-  const completati = CHECKLIST_KIT_ITEMS.filter((c) => checklist[c.chiave]).length;
-  const mancanti = CHECKLIST_KIT_ITEMS.length - completati;
   const nomeProdotto = (id) => prodottiShop.find((p) => p.id === id)?.nome || "—";
   // quanto la master ha dichiarato già presente in questa sede l'ultima
   // volta che c'è stata (Dashboard master > Inventario corso corrente):
@@ -39524,12 +39509,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
         </div>
         <RiepilogoKitPacchetti iscrittiEdizione={iscrittiEdizione} />
       </div>
-
-      {mancanti > 0 && (
-        <div style={{ background: "#FBEAE4", border: "1px solid #C0392B", borderRadius: 10, padding: 12, marginBottom: 18, ...fontBody, fontSize: 13, fontWeight: 600, color: "#C0392B" }}>
-          Mancano {mancanti} element{mancanti === 1 ? "o" : "i"}: il kit non è ancora pronto.
-        </div>
-      )}
 
       <div style={labelStyle}>Kit previsti (dagli iscritti)</div>
       <div style={{ marginBottom: 20 }}>
@@ -39656,16 +39635,6 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
           </button>
         )}
       </div>
-
-      {CHECKLIST_KIT_ITEMS.map((c) => (
-        <label key={c.chiave} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${CREAM_BORDER}`, cursor: "pointer" }}>
-          <input
-            type="checkbox" checked={!!checklist[c.chiave]}
-            onChange={(e) => onSalvaCampi({ checklist: { ...checklist, [c.chiave]: e.target.checked } })}
-          />
-          <span style={{ ...fontBody, fontSize: 14, color: NAVY }}>{c.etichetta}</span>
-        </label>
-      ))}
 
       <div style={{ marginTop: 12 }}>
         {prodottiExtraIds.map((prodottoId) => (
