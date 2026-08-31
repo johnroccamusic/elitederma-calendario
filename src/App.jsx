@@ -40284,8 +40284,31 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
     const { error: erroreUpload } = await supabase.storage.from("diploma-templates").upload(percorso, file);
     if (erroreUpload) { setCaricandoDiploma(false); window.alert("Errore nel caricamento: " + erroreUpload.message); return; }
     const { error } = await supabase.from("kit_definizioni").update({ diploma_path: percorso, diploma_nome: file.name }).eq("id", kit.id);
+    if (error) { setCaricandoDiploma(false); window.alert("Errore: " + error.message); return; }
+
+    // Il primo diploma di un corso vale per tutti i suoi pacchetti: quasi
+    // sempre il foglio è lo stesso, e caricarlo dieci volte sarebbe solo
+    // lavoro. Ma si assegna SOLO ai pacchetti che non ne hanno ancora uno:
+    // quelli che un diploma proprio ce l'hanno — perché lo hai sostituito
+    // apposta su "solo sopracciglia", o su "individuale" — non si toccano
+    // mai più. Così il caso normale costa un caricamento, e le eccezioni
+    // restano eccezioni.
+    let quantiAltri = 0;
+    if (kit.corso_id) {
+      const { data: senzaDiploma } = await supabase
+        .from("kit_definizioni").select("id")
+        .eq("corso_id", kit.corso_id).is("diploma_path", null).neq("id", kit.id);
+      quantiAltri = (senzaDiploma || []).length;
+      if (quantiAltri > 0) {
+        await supabase.from("kit_definizioni")
+          .update({ diploma_path: percorso, diploma_nome: file.name })
+          .eq("corso_id", kit.corso_id).is("diploma_path", null).neq("id", kit.id);
+      }
+    }
     setCaricandoDiploma(false);
-    if (error) { window.alert("Errore: " + error.message); return; }
+    if (quantiAltri > 0) {
+      window.alert(`Diploma associato a "${kit.nome}" e anche agli altri ${quantiAltri} pacchetti di questo corso che non ne avevano uno.\n\nSe per qualcuno serve un diploma diverso, sostituiscilo lì: cambierà solo quello.`);
+    }
     ricarica(["kit_definizioni"]);
   }
   // il file caricato non si cancella dal bucket: se qualcuno ha stampato
@@ -40360,7 +40383,7 @@ function SchedaPacchetto({ kit, righe, prodottiShop, ricarica, onDragStart, onDr
           </span>
         ) : (
           <>
-            <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Associa diploma</span>
+            <span title="Il primo diploma caricato vale anche per gli altri pacchetti di questo corso che non ne hanno uno; quelli con un diploma proprio non si toccano" style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, flexShrink: 0 }}>Associa diploma</span>
             <CampoFileTrascinabile
               accept="application/pdf"
               style={{ ...fontBody, fontSize: 11.5, color: MUTED, flex: "1 1 220px", minWidth: 180, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 10, padding: "7px 10px" }}
