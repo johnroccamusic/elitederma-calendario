@@ -26929,6 +26929,28 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
     [venditeShop, venditeSimulate]
   );
   const programmatore = ruoloUtente === "programmatore";
+  // Il webhook di WooCommerce consegna l'ordine appena creato, ma i cambi
+  // di stato successivi non sempre arrivano (il sito li perde quando è giù,
+  // e dopo cinque tentativi falliti WooCommerce smette del tutto). Questo
+  // tasto rilegge dal sito gli ordini che qui risultano ancora aperti e ne
+  // riallinea lo stato: è la stessa funzione del "Recupera ordini mancanti"
+  // di Vendite Shop Online, messa dove il problema si vede
+  const [ricontrollando, setRicontrollando] = useState(false);
+  const [msgRicontrollo, setMsgRicontrollo] = useState("");
+  async function ricontrollaSulSito() {
+    setRicontrollando(true);
+    setMsgRicontrollo("");
+    const { data, error } = await supabase.functions.invoke("woo-import-storico");
+    setRicontrollando(false);
+    if (error || data?.errore) {
+      setMsgRicontrollo("Il sito non risponde: " + (data?.errore || error.message));
+      return;
+    }
+    await ricarica(["vendite_shop", "vendite_simulate", "spedizioni_pos"]);
+    const nuovi = data?.ordiniImportati || 0;
+    const riallineati = data?.ordiniRiallineati || 0;
+    setMsgRicontrollo(`Controllati ${riallineati} ordini aperti${nuovi > 0 ? `, ${nuovi} nuovi importati` : ""}.`);
+  }
   // una prova si butta davvero: vendita, spedizione e righe gia' spuntate.
   // È il senso della modalità simulazione — non deve restarne niente
   async function buttaProva(spedizione) {
@@ -27094,8 +27116,21 @@ function PaginaOrdiniInArrivo({ venditeShop, venditeSimulate, spedizioniPos, cor
           <TastoLivelloPrecedente titolo="Logistica prodotti" onClick={onBack} />
         </div>
         <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
-        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 16 }}>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: 12 }}>
           I pacchi da preparare: gli ordini dello shop online in lavorazione e le spedizioni vendute al banco, con i dati del cliente presi dal sito o scritti al POS.
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <button
+            onClick={ricontrollaSulSito} disabled={ricontrollando}
+            title="Rilegge da WooCommerce lo stato degli ordini che qui risultano ancora aperti"
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 16, padding: "8px 14px", cursor: ricontrollando ? "default" : "pointer", opacity: ricontrollando ? 0.6 : 1 }}
+          >
+            {ricontrollando ? "Controllo il sito…" : "Ricontrolla gli stati sul sito"}
+          </button>
+          {msgRicontrollo && (
+            <div style={{ ...fontBody, fontSize: 11.5, color: msgRicontrollo.startsWith("Il sito non risponde") ? "#C0392B" : "#2E7D32", marginTop: 5 }}>{msgRicontrollo}</div>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
