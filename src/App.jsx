@@ -39148,11 +39148,15 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true })
   const totale = voci.reduce((s, [, n]) => s + n, 0);
   const righe = [...voci.map(([nome, n]) => [n, `KIT ${nome.toUpperCase()}`]), ...(mostraTotale ? [[totale, "KIT TOTALI"]] : [])];
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 5, ...style }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 0, ...style }}>
       {righe.map(([n, etichetta], idx) => (
-        <div key={idx} style={{ display: "flex", alignItems: "center", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9 }}>
-          <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1 }}>{n}</span>
-          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, whiteSpace: "nowrap" }}>{etichetta}</span>
+        // niente "nowrap" sull'etichetta: un nome lungo ("KIT PMU parz.
+        // Sopracciglia - 3 gg + Dermografo Tekna da ritirare al corso")
+        // allargava il riquadro oltre lo schermo, e su mobile finivano
+        // fuori vista le quantità e le caselle da spuntare alla sua destra
+        <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: 9, borderLeft: `3px solid ${GOLD}`, paddingLeft: 9, minWidth: 0 }}>
+          <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, lineHeight: 1, flexShrink: 0 }}>{n}</span>
+          <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, lineHeight: 1.35, minWidth: 0, overflowWrap: "anywhere" }}>{etichetta}</span>
         </div>
       ))}
     </div>
@@ -39507,8 +39511,8 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, flexWrap: "wrap", marginBottom: 18 }}>
-        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 14, flexWrap: "wrap", marginBottom: 18, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: 14, alignItems: "center", minWidth: 0 }}>
           <div style={{ background: coloreCorso, borderRadius: 12, padding: "10px 14px", textAlign: "center", flexShrink: 0 }}>
             <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: "#fff" }}>{gg}</div>
             <div style={{ ...fontBody, fontSize: 10, fontWeight: 700, color: "#fff", textTransform: "uppercase" }}>{MESI_ABBR[Number(mm) - 1]}</div>
@@ -39540,12 +39544,12 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
               const espanso = kitEspansi.has(kitId);
               const contenutoKit = corsiKitProdotti.filter((r) => r.kit_id === kitId && r.tipo === "kit");
               return (
-                <div key={kitId} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                <div key={kitId} style={{ padding: "8px 0", borderBottom: `1px solid ${CREAM_BORDER}`, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", minWidth: 0 }}>
                     <span
                       onClick={() => setKitEspansi((prev) => { const n = new Set(prev); if (n.has(kitId)) n.delete(kitId); else n.add(kitId); return n; })}
                       title="Clicca per vedere il contenuto del kit"
-                      style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1 }}
+                      style={{ ...fontBody, fontSize: 14, fontWeight: 600, color: NAVY, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}
                     >
                       {nomeKit(kitId)}
                     </span>
@@ -39665,8 +39669,8 @@ function PannelloPreparazioneKit({ corsoData, corso, loc, statoEdizione, kitDefi
 
       <div style={{ marginTop: 12 }}>
         {prodottiExtraIds.map((prodottoId) => (
-          <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-            <span style={{ ...fontBody, fontSize: 13, color: NAVY, minWidth: 0 }}>{nomeProdotto(prodottoId)}</span>
+          <div key={prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+            <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}>{nomeProdotto(prodottoId)}</span>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <label title="Parte per essere venduto al corso: non scarica il magazzino alla spedizione, scarica quando viene venduto" style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", ...fontBody, fontSize: 11.5, color: extraDaVendita[prodottoId] ? NAVY : MUTED, whiteSpace: "nowrap" }}>
                 <input type="checkbox" checked={!!extraDaVendita[prodottoId]} onChange={(e) => cambiaExtraDaVendita(prodottoId, e.target.checked)} />
