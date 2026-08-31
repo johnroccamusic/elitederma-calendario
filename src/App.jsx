@@ -29116,42 +29116,17 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             : "Gli stessi prodotti ordinati per categoria dello shop. Clicca un prodotto per aprirne la scheda completa."}
         </div>
 
-        {(() => {
-          const { risultato, daOrdinare, ritardi } = sintesiAdvisor;
-          const critico = !!risultato.dataCriticaComplessiva;
-          const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
-          const sfondo = ritardi || critico ? "#FBE4E1" : daOrdinare ? "#FBF1D9" : "#E3F3E5";
-          return (
-            <button
-              onClick={onApriAdvisor}
-              style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "12px 16px", marginBottom: 22, borderRadius: 12, border: `1px solid ${colore}44`, background: sfondo, cursor: "pointer" }}
-            >
-              <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, minWidth: 0 }}>
-                <b style={{ color: colore }}>Advisor</b>{" — "}
-                {risultato.modalita === "senza_date"
-                  ? "nessun corso futuro in calendario: nessuna previsione possibile"
-                  : critico
-                    ? `autonomia fino al ${fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}, poi un corso resta scoperto`
-                    : `copri tutti i ${risultato.edizioniConsiderate} corsi in calendario`}
-                {daOrdinare > 0 && <> · <b>{daOrdinare}</b> prodotti da ordinare{ritardi > 0 ? `, ${ritardi} in ritardo` : ""}</>}
-              </span>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>apri ›</span>
-            </button>
-          );
-        })()}
-
-        {vistaProdotti === "elenco" && (<>
-        {/* due colonne: a sinistra quello che descrive il magazzino (le tre
-            liste da sfoltire e i tre numeri di sintesi), a destra le azioni
-            da fare adesso. Prima stavano incolonnate e gli avvisi — la parte
-            che chiede un gesto — finivano sotto la piega */}
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : `minmax(0,${divisioneColonne}fr) 14px minmax(0,${100 - divisioneColonne}fr)`, gap: isMobile ? 18 : 0, alignItems: "start", marginBottom: 24, position: "relative" }}>
-          <div>
+        {/* "Da gestire oggi": sei tessere su una riga sola, subito sotto al
+            titolo. Prima erano due file da tre dentro la colonna di
+            sinistra, e per vederle tutte bisognava scendere — sono il primo
+            sguardo alla pagina, devono stare in cima */}
+        {vistaProdotti === "elenco" && (
+          <div style={{ marginBottom: 22 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
               <div style={{ ...fontDisplay, fontSize: 20, fontWeight: 700, color: NAVY }}>Da gestire oggi</div>
               {totSegnalazioni > 0 && <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FBE4E1", borderRadius: 10, padding: "2px 9px" }}>{totSegnalazioni}</span>}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(6, minmax(0,1fr))", gap: 10, alignItems: "stretch" }}>
               {[
                 { chiave: "sottoscorta", segno: "⚠️", etichetta: "Prodotti sotto scorta", n: sottoScorta.length },
                 { chiave: "fermi", segno: "⏱", etichetta: "Fermi da oltre 90 giorni", n: fermi.length },
@@ -29160,7 +29135,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 <button
                   key={c.chiave}
                   onClick={() => setFiltroRapido(c.chiave)}
-                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 12, padding: "12px 14px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === c.chiave ? BG : "#fff", cursor: "pointer", textAlign: "left", minHeight: 96 }}
+                  style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 10, padding: "12px 14px", borderRadius: 12, border: `1px solid ${CREAM_BORDER}`, background: filtroRapido === c.chiave ? BG : "#fff", cursor: "pointer", textAlign: "left", minHeight: 96 }}
                 >
                   <span style={{ display: "flex", alignItems: "flex-start", gap: 7, ...fontBody, fontSize: 12, color: NAVY, lineHeight: 1.3 }}>
                     <span aria-hidden="true" style={{ flexShrink: 0 }}>{c.segno}</span>{c.etichetta}
@@ -29170,10 +29145,8 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   </span>
                 </button>
               ))}
-            </div>
-            {/* il valore stimato del magazzino non sta più qui: è un dato
-                economico, e vive nelle Statistiche totali vendite prodotti */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 10 }}>
+              {/* il valore stimato del magazzino non sta più qui: è un dato
+                  economico, e vive nelle Statistiche totali vendite prodotti */}
               <RiquadroKpi
                 aSinistra
                 etichetta="Stock totale"
@@ -29203,16 +29176,52 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               />
             </div>
           </div>
+        )}
 
-          {/* la maniglia fra le due colonne: si vede solo in modalità
-              programmatore, si trascina e resta dove la si lascia */}
+        {(() => {
+          const { risultato, daOrdinare, ritardi } = sintesiAdvisor;
+          const critico = !!risultato.dataCriticaComplessiva;
+          const colore = ritardi || critico ? "#C0392B" : daOrdinare ? "#B8860B" : "#2E7D32";
+          const sfondo = ritardi || critico ? "#FBE4E1" : daOrdinare ? "#FBF1D9" : "#E3F3E5";
+          return (
+            <button
+              onClick={onApriAdvisor}
+              style={{ width: "100%", textAlign: "left", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", padding: "12px 16px", marginBottom: 22, borderRadius: 12, border: `1px solid ${colore}44`, background: sfondo, cursor: "pointer" }}
+            >
+              <span style={{ ...fontBody, fontSize: 13.5, color: NAVY, minWidth: 0 }}>
+                <b style={{ color: colore }}>Advisor</b>{" — "}
+                {risultato.modalita === "senza_date"
+                  ? "nessun corso futuro in calendario: nessuna previsione possibile"
+                  : critico
+                    ? `autonomia fino al ${fmtData(addGiorni(risultato.dataCriticaComplessiva, -1))}, poi un corso resta scoperto`
+                    : `copri tutti i ${risultato.edizioniConsiderate} corsi in calendario`}
+                {daOrdinare > 0 && <> · <b>{daOrdinare}</b> prodotti da ordinare{ritardi > 0 ? `, ${ritardi} in ritardo` : ""}</>}
+              </span>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: colore, whiteSpace: "nowrap" }}>apri ›</span>
+            </button>
+          );
+        })()}
+
+        {vistaProdotti === "elenco" && (<>
+        {/* gli avvisi ora stanno a sinistra: sono la parte che chiede un
+            gesto, e la si legge partendo dal margine come tutto il resto
+            della pagina. La maniglia resta, a destra del pannello, per
+            deciderne la larghezza — la trascina chi programma, e la
+            larghezza scelta vale per tutti */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : `minmax(0,${divisioneColonne}fr) 14px minmax(0,${100 - divisioneColonne}fr)`, gap: isMobile ? 18 : 0, alignItems: "start", marginBottom: 24, position: "relative" }}>
+          <PannelloAvvisiMagazzino
+            avvisi={avvisiMagazzino}
+            immaginePerProdotto={immaginePerProdottoMagazzino}
+            onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
+            onApriScheda={(p) => apriScheda(p)}
+          />
           {!isMobile && (
             <div
               onPointerDown={ruoloUtente === "programmatore" ? iniziaTrascinamentoDivisione : undefined}
               onPointerMove={ruoloUtente === "programmatore" ? muoviTrascinamentoDivisione : undefined}
               onPointerUp={ruoloUtente === "programmatore" ? fineTrascinamentoDivisione : undefined}
               onPointerCancel={ruoloUtente === "programmatore" ? fineTrascinamentoDivisione : undefined}
-              title={ruoloUtente === "programmatore" ? "Trascina per stringere o allargare le due colonne" : undefined}
+              title={ruoloUtente === "programmatore" ? "Trascina per stringere o allargare il pannello" : undefined}
               style={{
                 alignSelf: "stretch", display: "flex", alignItems: "center", justifyContent: "center",
                 cursor: ruoloUtente === "programmatore" ? "col-resize" : "default", touchAction: "none", minHeight: 120,
@@ -29223,12 +29232,6 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               )}
             </div>
           )}
-          <PannelloAvvisiMagazzino
-            avvisi={avvisiMagazzino}
-            immaginePerProdotto={immaginePerProdottoMagazzino}
-            onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
-            onApriScheda={(p) => apriScheda(p)}
-          />
         </div>
         </>)}
 
