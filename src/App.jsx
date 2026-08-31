@@ -38963,10 +38963,34 @@ function RiepilogoKitPacchetti({ iscrittiEdizione, style, mostraTotale = true })
 // attuale in etichetta e le 4 pillole cliccabili per cambiarla — solo
 // la pillola della fase corrente è cliccabile, mai una a caso: l'ordine
 // va sempre rispettato, un passo alla volta (vedi PillaFaseLogistica)
-function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro }) {
+// un tasto dei corsi in sede: rosso finché la cosa è da fare, verde quando
+// è fatta — la stessa lettura a colpo d'occhio delle pillole di spedizione,
+// senza la sequenza che per un corso in sede non esiste
+function TastoFaseSede({ fatto, spento, etichettaDaFare, etichettaFatto, onClick }) {
+  return (
+    <button
+      onClick={spento ? (e) => e.stopPropagation() : onClick}
+      style={{
+        ...fontBody, fontSize: 12.5, fontWeight: 700, borderRadius: 10, padding: "10px 12px", flex: "1 1 140px", minWidth: 120,
+        cursor: spento ? "default" : "pointer", textAlign: "center", lineHeight: 1.2,
+        background: spento ? "#F4F4F6" : fatto ? "#E3F3E5" : "#FBE4E1",
+        border: `1px solid ${spento ? CREAM_BORDER : fatto ? "#A8D5AE" : "#F0C6C0"}`,
+        color: spento ? MUTED : fatto ? "#2E7D32" : "#C0392B",
+        opacity: spento ? 0.6 : 1,
+      }}
+    >
+      <span style={{ display: "block", fontSize: 13, lineHeight: 1 }}>{fatto ? "✓" : "!"}</span>
+      {fatto ? etichettaFatto : etichettaDaFare}
+    </button>
+  );
+}
+function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorrente, selezionato, onSeleziona, onCambiaFase, onTornaIndietroFase, gestioneRientroAttiva, faseRientroCorrente, onToggleGestioneRientro, onCambiaFaseRientro, onTornaIndietroFaseRientro, allestitoTs, inventarioTs, onAllestisci, onApriInventarioSede, onAnnullaInventario }) {
   const [gg, mm] = (corsoData.data_inizio || "").split("-").slice(1).reverse();
+  const inSede = !!loc?.sede_centrale;
   const completata = faseCorrente === FASE_LOGISTICA_COMPLETATA;
-  const etichettaFase = completata
+  const etichettaFase = inSede
+    ? (inventarioTs ? "Inventario eseguito" : allestitoTs ? "Inventario da fare" : "Corso da allestire")
+    : completata
     ? FASI_LOGISTICA[FASI_LOGISTICA.length - 1].etichettaFatto
     : (FASI_LOGISTICA.find((f) => f.chiave === faseCorrente)?.etichettaPending || "");
   // "Gestione rientro" si sblocca solo a spedizione completata: prima
@@ -38994,8 +39018,35 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
         </div>
         <div style={{ flexShrink: 0, marginLeft: "auto", textAlign: "right" }}>
           <div style={{ ...fontDisplay, fontSize: 19, fontWeight: 700, color: NAVY, lineHeight: 1.25 }}>{kitTotali} KIT</div>
-          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: completata ? "#2E7D32" : "#C0392B" }}>{etichettaFase}</div>
+          <div style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: (inSede ? !!inventarioTs : completata) ? "#2E7D32" : "#C0392B" }}>{etichettaFase}</div>
         </div>
+        {inSede ? (
+          // Corso in sede centrale: non si spedisce niente, il materiale
+          // attraversa un corridoio. Due passaggi soli — l'aula allestita
+          // (ed è lì che il magazzino si scarica) e l'inventario di fine
+          // corso, che rimette dentro quello che è avanzato
+          <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280, alignItems: "stretch", flexWrap: "wrap" }}>
+            <TastoFaseSede
+              fatto={!!allestitoTs}
+              etichettaDaFare="Corso da allestire" etichettaFatto="Corso allestito"
+              onClick={(e) => { e.stopPropagation(); onAllestisci(!allestitoTs); }}
+            />
+            <TastoFaseSede
+              fatto={!!inventarioTs}
+              spento={!allestitoTs}
+              etichettaDaFare="Inventario da fare" etichettaFatto="Inventario eseguito"
+              onClick={(e) => { e.stopPropagation(); if (allestitoTs && inventarioTs) onAnnullaInventario(); }}
+            />
+            {allestitoTs && !inventarioTs && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onApriInventarioSede(); }}
+                style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", alignSelf: "center", padding: "0 4px", whiteSpace: "nowrap" }}
+              >
+                Cosa torna in magazzino →
+              </button>
+            )}
+          </div>
+        ) : (
         <div style={{ display: "flex", gap: 6, flex: "1 1 320px", minWidth: 280, alignItems: "stretch" }}>
           {FASI_LOGISTICA.map((f) => (
             <PillaFaseLogistica key={f.chiave} fase={f} faseCorrente={faseCorrente} onClick={(e) => { e.stopPropagation(); onCambiaFase(prossimaFaseLogistica(FASI_LOGISTICA, faseCorrente)); }} />
@@ -39010,8 +39061,9 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
             </button>
           )}
         </div>
+        )}
       </div>
-      {speditoCompletamente && (
+      {!inSede && speditoCompletamente && (
         <>
           <label style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 12, cursor: "pointer" }} onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={!!gestioneRientroAttiva} onChange={(e) => onToggleGestioneRientro(e.target.checked)} style={{ width: 15, height: 15 }} />
@@ -39041,6 +39093,79 @@ function RigaCorsoLogistica({ corsoData, corso, loc, iscrittiEdizione, faseCorre
 // pannello destro "Preparazione kit" per l'edizione selezionata: kit per
 // iscritti/di riserva, contenuto kit (sola lettura, si edita
 // da Setting > "Tipologie di kit"), accessori con quantità inviata, scarico magazzino
+// L'inventario di fine corso quando il corso si è tenuto in sede: non c'è
+// nessun pacco che torna, c'è uno scaffale a due passi. Si mostra quello
+// che era uscito per il corso e si scrive quanti pezzi rientrano; alla
+// conferma il magazzino si ricarica di quella differenza.
+//
+// Niente "atteso" calcolato come nella bolla delle master: qui chi conta è
+// la stessa persona che rimette i pezzi sullo scaffale, e conta davvero.
+function ModaleInventarioSede({ corsoData, corso, inviatiPerProdotto, prodottiShop, nomeUtente, onChiudi, onConfermato }) {
+  const [quantita, setQuantita] = useState({});
+  const [salvando, setSalvando] = useState(false);
+  const righe = Object.entries(inviatiPerProdotto || {})
+    .map(([prodottoId, inviati]) => ({ prodotto: (prodottiShop || []).find((p) => p.id === prodottoId), prodottoId, inviati }))
+    .filter((r) => r.prodotto && r.inviati > 0)
+    .sort((a, b) => (a.prodotto.nome || "").localeCompare(b.prodotto.nome || ""));
+
+  const totaleRientro = righe.reduce((s, r) => s + (Number(quantita[r.prodottoId]) || 0), 0);
+
+  async function conferma() {
+    const daRimettere = righe
+      .map((r) => ({ ...r, q: Number(quantita[r.prodottoId]) || 0 }))
+      .filter((r) => r.q > 0);
+    const messaggio = daRimettere.length === 0
+      ? "Nessun pezzo rientra in magazzino: chiudo l'inventario così?"
+      : `Rimetto in magazzino ${totaleRientro} pezzi. Confermi?`;
+    if (!window.confirm(messaggio)) return;
+    setSalvando(true);
+    for (const r of daRimettere) {
+      const errore = await muoviStock(r.prodotto, r.q, {
+        origine: "rientro_corso_sede", nota: `Inventario fine corso — ${corso?.nome || ""}`.trim(),
+        riferimento: corsoData.id, utente: nomeUtente || null,
+      });
+      if (errore) { window.alert("Attenzione: " + errore); setSalvando(false); return; }
+    }
+    await onConfermato(Object.fromEntries(daRimettere.map((r) => [r.prodottoId, r.q])));
+    setSalvando(false);
+  }
+
+  return (
+    <Modal title={`Inventario fine corso — ${corso?.nome || ""}`} onClose={onChiudi}>
+      <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+        Questo è il materiale uscito dal magazzino per il corso. Scrivi quanti pezzi rientrano: alla conferma tornano dentro.
+      </div>
+      {righe.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "10px 0" }}>
+          Per questo corso non risulta uscito niente dal magazzino.
+        </div>
+      ) : (
+        <div style={{ maxHeight: 380, overflowY: "auto", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 18, ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, paddingRight: 2, marginBottom: 4 }}>
+            <span>Usciti</span><span>Rientrano</span>
+          </div>
+          {righe.map((r) => (
+            <div key={r.prodottoId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+              <span style={{ ...fontBody, fontSize: 13, color: NAVY, flex: "1 1 140px", minWidth: 0, overflowWrap: "anywhere" }}>{r.prodotto.nome}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                <span style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY, width: 26, textAlign: "center" }}>{r.inviati}</span>
+                <input
+                  type="number" min="0" max={r.inviati} placeholder="0"
+                  value={quantita[r.prodottoId] ?? ""}
+                  onChange={(e) => setQuantita((prev) => ({ ...prev, [r.prodottoId]: e.target.value === "" ? "" : Math.max(0, Number(e.target.value)) }))}
+                  style={{ ...inputStyle, width: 66, padding: "6px 8px" }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Button onClick={conferma} disabled={salvando} style={{ width: "100%" }}>
+        {salvando ? "Rimetto in magazzino…" : `Conferma${totaleRientro > 0 ? ` — ${totaleRientro} pezzi in magazzino` : ""}`}
+      </Button>
+    </Modal>
+  );
+}
 // Il ricevimento del pacco di rientro, in Logistica prodotti. È qui che il
 // corso si chiude davvero: non alla conferma della master, che dichiara
 // senza contare, ma allo scaffale — Raf apre gli scatoloni, scrive cosa è
@@ -39762,6 +39887,51 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
   // parte davvero, quindi è qui che si chiede se scaricare i prodotti
   // dal magazzino — non più un tasto separato ("Modifica quantità di
   // magazzino"), lo scarico è legato all'avanzamento della fase stessa
+  // Corsi in sede centrale: niente spedizione, due soli passaggi.
+  // "Corso allestito" è il momento in cui il materiale esce dal magazzino —
+  // lo stesso scarico che per gli altri corsi scatta al ritiro del corriere,
+  // perché è lo stesso fatto: i pezzi non sono più sullo scaffale.
+  const [inventarioSedeCorsoId, setInventarioSedeCorsoId] = useState(null);
+  async function allestisciCorso(corsoData, allestire) {
+    if (allestire) {
+      if (!window.confirm("L'aula è allestita: scarico dal magazzino il materiale di questo corso?")) return;
+      const ok = await sincronizzaMagazzino(corsoData);
+      if (ok === false) return;
+      const foto = componiSpedizione({
+        stato: statoDi(corsoData.id),
+        iscrittiEdizione: (iscritti || []).filter((i) => i.corso_data_id === corsoData.id),
+        kitDefinizioni, corsoId: corsoData.corso_id,
+      });
+      await salvaCampiEdizione(corsoData.id, {
+        allestito_ts: new Date().toISOString(), spedizione_snapshot: foto, spedizione_snapshot_ts: new Date().toISOString(),
+      });
+      return;
+    }
+    if (!window.confirm("Tornando indietro il materiale rientra tutto in magazzino. Confermi?")) return;
+    await ripristinaMagazzinoDaScarico(corsoData);
+    await salvaCampiEdizione(corsoData.id, { allestito_ts: null });
+  }
+  // rifare l'inventario: prima si toglie di nuovo dal magazzino quello che
+  // il conteggio precedente ci aveva rimesso, altrimenti la seconda
+  // conferma sommerebbe i pezzi una seconda volta
+  async function annullaInventarioSede(corsoData) {
+    const stato = statoDi(corsoData.id);
+    const rientrati = stato.rientro_sede || {};
+    const quanti = Object.values(rientrati).reduce((s, q) => s + (Number(q) || 0), 0);
+    if (!window.confirm(quanti > 0
+      ? `Rifare l'inventario? I ${quanti} pezzi rimessi dentro l'ultima volta vengono tolti di nuovo dal magazzino.`
+      : "Rifare l'inventario di questo corso?")) return;
+    for (const [prodottoId, q] of Object.entries(rientrati)) {
+      const prodotto = prodottiShop.find((p) => p.id === prodottoId);
+      if (!prodotto || !q) continue;
+      const errore = await muoviStock(prodotto, -Number(q), {
+        origine: "rientro_corso_sede", nota: "Inventario annullato", riferimento: corsoData.id, utente: utenteLoggato?.nome || null,
+      });
+      if (errore) { window.alert("Attenzione: " + errore); return; }
+    }
+    await salvaCampiEdizione(corsoData.id, { inventario_sede_ts: null, rientro_sede: {} });
+    ricarica(["prodotti_shop"]);
+  }
   async function cambiaFaseLogistica(corsoData, fase) {
     if (fase === "ritirato_corriere") {
       if (!window.confirm("Vuoi scaricare i prodotti in partenza dal magazzino?")) return;
@@ -39905,6 +40075,11 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
                   // nessuna pillola risulterebbe quella corrente
                   ...(attivo && !statoDi(cd.id).fase_rientro ? { fase_rientro: FASI_RIENTRO[0].chiave } : {}),
                 })}
+                allestitoTs={statoDi(cd.id).allestito_ts}
+                inventarioTs={statoDi(cd.id).inventario_sede_ts}
+                onAllestisci={(allestire) => { setEdizioneSelId(cd.id); allestisciCorso(cd, allestire); }}
+                onApriInventarioSede={() => { setEdizioneSelId(cd.id); setInventarioSedeCorsoId(cd.id); }}
+                onAnnullaInventario={() => annullaInventarioSede(cd)}
                 onCambiaFaseRientro={(fase) => { setEdizioneSelId(cd.id); cambiaFaseRientro(cd, fase); }}
                 onTornaIndietroFaseRientro={(fase) => { setEdizioneSelId(cd.id); tornaIndietroFaseRientro(cd, fase); }}
               />
@@ -39954,6 +40129,27 @@ function PaginaLogisticaProdotti({ corsi, location, corsiDate, iscritti, corsiKi
           </div>
         )}
       </div>
+
+      {/* l'inventario di fine corso per i corsi in sede: si apre dal link
+          accanto a "Inventario da fare" */}
+      {inventarioSedeCorsoId && (() => {
+        const cd = corsiDate.find((c) => c.id === inventarioSedeCorsoId);
+        if (!cd) return null;
+        const corsoDiQui = corsoById[cd.corso_id];
+        const inviati = quantitaInviataPerProdotto(cd, corsoDiQui, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, iscritti);
+        return (
+          <ModaleInventarioSede
+            corsoData={cd} corso={corsoDiQui} inviatiPerProdotto={inviati}
+            prodottiShop={prodottiShop} nomeUtente={utenteLoggato?.nome || null}
+            onChiudi={() => setInventarioSedeCorsoId(null)}
+            onConfermato={async (rientrati) => {
+              await salvaCampiEdizione(cd.id, { inventario_sede_ts: new Date().toISOString(), rientro_sede: rientrati });
+              setInventarioSedeCorsoId(null);
+              ricarica(["prodotti_shop"]);
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }
