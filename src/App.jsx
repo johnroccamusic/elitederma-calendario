@@ -29129,6 +29129,10 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     return (va - vb) * dir;
   });
 
+  // l'ordine per fornitore aperto di fianco agli avvisi: { fornitoreId,
+  // suggerimenti } — i suggerimenti sono le quantità già spuntate
+  const [ordineFornitore, setOrdineFornitore] = useState(null);
+
   // 15 righe per pagina, con la stessa impaginazione a cerchi numerati
   // già usata altrove nell'app — evita di scorrere centinaia di prodotti
   const PER_PAGINA_MAGAZZINO = 15;
@@ -29265,6 +29269,14 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             immaginePerProdotto={immaginePerProdottoMagazzino}
             onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
             onApriScheda={(p) => apriScheda(p)}
+            fornitoreApertoId={ordineFornitore?.fornitoreId || null}
+            onOrdineFornitore={(p) => setOrdineFornitore(
+              ordineFornitore?.fornitoreId === p.fornitore_id
+                ? null
+                // il prodotto da cui si è partiti arriva già spuntato, con
+                // la quantità che serve per rientrare in scorta
+                : { fornitoreId: p.fornitore_id, suggerimenti: { [p.id]: p.quantita_riordino || Math.max(1, (p.soglia_riordino || 0) - (p.quantita || 0)) } }
+            )}
           />
           {!isMobile && (
             <div
@@ -29282,6 +29294,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                 <span style={{ width: 4, height: 46, borderRadius: 3, background: CREAM_BORDER }} />
               )}
             </div>
+          )}
+          {/* lo spazio a destra degli avvisi: qui si apre l'ordine del
+              fornitore, di fianco alla riga che l'ha fatto scattare */}
+          {ordineFornitore && (
+            <PannelloOrdineFornitore
+              fornitore={(fornitori || []).find((f) => f.id === ordineFornitore.fornitoreId) || null}
+              prodottiShop={prodottiShop}
+              suggerimenti={ordineFornitore.suggerimenti}
+              onChiudi={() => setOrdineFornitore(null)}
+            />
           )}
         </div>
         </>)}
@@ -29888,7 +29910,152 @@ function bundleVirtuale(p) {
 // fornitore), "Pacchi da aprire" è roba da magazzino (si prende un pacco
 // dallo scaffale e lo si apre): mescolarli obbligava a rileggere ogni
 // riga per capire di chi fosse il turno.
-function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco, onApriScheda }) {
+// "Associa con altri prodotti dello stesso fornitore": un ordine si fa al
+// fornitore, non al singolo prodotto. Se devo chiamare Tekna per un
+// pigmento sotto scorta, tanto vale guardare cos'altro di suo sta finendo
+// e mettere tutto nella stessa telefonata — spedizione compresa.
+//
+// Si apre di fianco all'elenco da cui si è partiti, mai al suo posto: a
+// sinistra resta la riga che ha fatto scattare l'ordine, a destra il
+// pannello. Alla fine genera la proforma in PDF, pronta da mandare.
+function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiudi }) {
+  const [quantita, setQuantita] = useState(suggerimenti || {});
+  const [generando, setGenerando] = useState(false);
+  // cambiando fornitore il pannello riparte dai suoi suggerimenti: senza
+  // questo resterebbero selezionati i prodotti del fornitore precedente
+  useEffect(() => { setQuantita(suggerimenti || {}); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [fornitore?.id]);
+
+  // quanto un prodotto è sotto la sua scorta: è l'ordine con cui si
+  // guardano i prodotti di un fornitore — prima quelli che mancano di più
+  function mancanzaDi(p) {
+    const stock = p.quantita || 0;
+    if (p.soglia_riordino != null) return p.soglia_riordino - stock;
+    return -stock;
+  }
+  const prodottiFornitore = (prodottiShop || [])
+    .filter((p) => p.fornitore_id === fornitore?.id && p.attivo !== false && p.conta_magazzino !== false)
+    .sort((a, b) => mancanzaDi(b) - mancanzaDi(a) || (a.nome || "").localeCompare(b.nome || ""));
+  const scelti = prodottiFornitore
+    .filter((p) => Number(quantita[p.id]) > 0)
+    .map((p) => ({ prodotto: p, quantita: Number(quantita[p.id]) }));
+  const totalePezzi = scelti.reduce((s, r) => s + r.quantita, 0);
+
+  async function generaProforma() {
+    if (scelti.length === 0) { window.alert("Scegli almeno un prodotto da ordinare."); return; }
+    setGenerando(true);
+    try {
+      const { PDFDocument, StandardFonts } = await getPdfLib();
+      const doc = await PDFDocument.create();
+      const normale = await doc.embedFont(StandardFonts.Helvetica);
+      const grassetto = await doc.embedFont(StandardFonts.HelveticaBold);
+      const A4 = [595.28, 841.89];
+      let pagina = doc.addPage(A4);
+      let y = A4[1] - 60;
+      const scrivi = (testo, { x = 50, size = 11, font = normale } = {}) => {
+        pagina.drawText(String(testo), { x, y, size, font });
+      };
+      const nuovaRiga = (quanto = 16) => {
+        y -= quanto;
+        if (y < 70) { pagina = doc.addPage(A4); y = A4[1] - 60; }
+      };
+      scrivi("PROFORMA D'ORDINE", { size: 18, font: grassetto });
+      nuovaRiga(26);
+      scrivi("Accademia Elitederma", { size: 11, font: grassetto });
+      nuovaRiga();
+      scrivi(`Fornitore: ${fornitore?.nome || "—"}`);
+      nuovaRiga();
+      if (fornitore?.email) { scrivi(`Email: ${fornitore.email}`); nuovaRiga(); }
+      scrivi(`Data: ${fmtData(dataOggiStr())}`);
+      nuovaRiga(28);
+      scrivi("Q.tà", { x: 50, font: grassetto });
+      scrivi("Prodotto", { x: 100, font: grassetto });
+      nuovaRiga(8);
+      pagina.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 0.7 });
+      nuovaRiga(16);
+      scelti.forEach((r) => {
+        scrivi(r.quantita, { x: 50 });
+        // il nome si taglia solo se davvero non entra nella riga
+        const nome = String(r.prodotto.nome || "");
+        const massimo = 70;
+        scrivi(nome.length > massimo ? `${nome.slice(0, massimo - 1)}…` : nome, { x: 100 });
+        nuovaRiga();
+      });
+      nuovaRiga(6);
+      pagina.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 0.7 });
+      nuovaRiga(18);
+      scrivi(`Totale: ${scelti.length} prodotti, ${totalePezzi} pezzi`, { font: grassetto });
+      const bytes = await doc.save();
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `proforma-${slugify(fornitore?.nome || "fornitore")}-${dataOggiStr()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      window.alert("Errore nella generazione della proforma: " + e.message);
+    }
+    setGenerando(false);
+  }
+
+  return (
+    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, background: BG_CHIARO }}>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fornitore?.nome || "Fornitore"}</div>
+        <button onClick={onChiudi} title="Chiudi" style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
+      </div>
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
+        Tutti i suoi prodotti, dal più scoperto in giù. Spunta quelli da mettere nello stesso ordine e correggi le quantità.
+      </div>
+      {prodottiFornitore.length === 0 ? (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto collegato a questo fornitore.</div>
+      ) : (
+        <div style={{ maxHeight: 420, overflowY: "auto", marginBottom: 12 }}>
+          {prodottiFornitore.map((p) => {
+            const scelto = Number(quantita[p.id]) > 0;
+            const manca = mancanzaDi(p);
+            return (
+              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+                <input
+                  type="checkbox" checked={scelto}
+                  onChange={(e) => setQuantita((prev) => {
+                    const copia = { ...prev };
+                    if (!e.target.checked) { delete copia[p.id]; return copia; }
+                    copia[p.id] = p.quantita_riordino || (manca > 0 ? manca : 1);
+                    return copia;
+                  })}
+                  style={{ flexShrink: 0 }}
+                />
+                <span style={{ flex: "1 1 120px", minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY, overflowWrap: "anywhere" }}>
+                  {p.nome}
+                  <span style={{ display: "block", ...fontBody, fontSize: 11, color: manca > 0 ? "#C0392B" : MUTED }}>
+                    {p.quantita || 0} in stock{p.soglia_riordino != null ? ` · soglia ${p.soglia_riordino}` : ""}{manca > 0 ? ` · mancano ${manca}` : ""}
+                  </span>
+                </span>
+                <input
+                  type="number" min="0" placeholder="0"
+                  value={quantita[p.id] ?? ""}
+                  onChange={(e) => setQuantita((prev) => {
+                    const copia = { ...prev };
+                    const valore = e.target.value === "" ? "" : Math.max(0, Number(e.target.value));
+                    if (valore === "" || valore === 0) delete copia[p.id]; else copia[p.id] = valore;
+                    return copia;
+                  })}
+                  style={{ ...inputStyle, width: 62, padding: "5px 7px", flexShrink: 0 }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <Button onClick={generaProforma} disabled={generando || scelti.length === 0} style={{ width: "100%" }}>
+        {generando ? "Genero il PDF…" : `Genera proforma${scelti.length > 0 ? ` — ${scelti.length} prodotti, ${totalePezzi} pezzi` : ""}`}
+      </Button>
+    </div>
+  );
+}
+function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId }) {
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
   const thStyle = { ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" };
@@ -29970,9 +30137,23 @@ function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco
                           </span>
                         </td>
                         <td style={tdStyle}>
-                          {onApriScheda ? (
-                            <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
-                          ) : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>—</span>}
+                          <span style={{ display: "inline-flex", flexDirection: "column", gap: 6, alignItems: "stretch" }}>
+                            {onApriScheda ? (
+                              <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
+                            ) : <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>—</span>}
+                            {/* l'ordine si fa al fornitore, non al singolo
+                                prodotto: da qui si apre il suo ordine, con
+                                accanto tutto il resto che sta finendo */}
+                            {onOrdineFornitore && p.fornitore_id && (
+                              <button
+                                onClick={() => onOrdineFornitore(p)}
+                                title="Apri l'ordine di questo fornitore, con gli altri suoi prodotti in esaurimento"
+                                style={{ ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1.25, color: fornitoreApertoId === p.fornitore_id ? "#fff" : NAVY, background: fornitoreApertoId === p.fornitore_id ? NAVY : "#fff", border: `1px solid ${fornitoreApertoId === p.fornitore_id ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "6px 10px", cursor: "pointer", maxWidth: 150, whiteSpace: "normal" }}
+                              >
+                                Associa con altri prodotti dello stesso fornitore
+                              </button>
+                            )}
+                          </span>
                         </td>
                       </tr>
                     );
@@ -30725,15 +30906,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
   // apre di fianco all'elenco, con i prodotti di quel fornitore ordinati
   // per quanto sono sotto scorta, e alla fine genera la proforma in PDF.
   const [fornitoreOrdineId, setFornitoreOrdineId] = useState(null);
-  const [quantitaOrdine, setQuantitaOrdine] = useState({}); // prodottoId -> quantità scelta
-  const [generandoProforma, setGenerandoProforma] = useState(false);
-  // quanto un prodotto è sotto la sua scorta: è l'ordine con cui si
-  // guardano i prodotti di un fornitore — prima quelli che mancano di più
-  function mancanzaDi(p) {
-    const stock = p.quantita || 0;
-    if (p.soglia_riordino != null) return p.soglia_riordino - stock;
-    return -stock;
-  }
+  const [quantitaOrdine, setQuantitaOrdine] = useState({}); // prodottoId -> quantità suggerita all'apertura
   function apriOrdineFornitore(fornitoreId, righeGiaDaOrdinare) {
     setFornitoreOrdineId(fornitoreId);
     // le righe che l'Advisor ha già segnalato arrivano spuntate con la
@@ -30743,66 +30916,6 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       if (r.quantitaSuggerita != null && r.quantitaSuggerita > 0) iniziale[r.prodotto.id] = r.quantitaSuggerita;
     });
     setQuantitaOrdine(iniziale);
-  }
-  async function generaProformaOrdine(fornitore, righeScelte) {
-    if (righeScelte.length === 0) { window.alert("Scegli almeno un prodotto da ordinare."); return; }
-    setGenerandoProforma(true);
-    try {
-      const { PDFDocument, StandardFonts } = await getPdfLib();
-      const doc = await PDFDocument.create();
-      const normale = await doc.embedFont(StandardFonts.Helvetica);
-      const grassetto = await doc.embedFont(StandardFonts.HelveticaBold);
-      const A4 = [595.28, 841.89];
-      let pagina = doc.addPage(A4);
-      let y = A4[1] - 60;
-      const scrivi = (testo, { x = 50, size = 11, font = normale } = {}) => {
-        pagina.drawText(String(testo), { x, y, size, font });
-      };
-      const nuovaRiga = (quanto = 16) => {
-        y -= quanto;
-        if (y < 70) { pagina = doc.addPage(A4); y = A4[1] - 60; }
-      };
-      scrivi("PROFORMA D'ORDINE", { size: 18, font: grassetto });
-      nuovaRiga(26);
-      scrivi("Accademia Elitederma", { size: 11, font: grassetto });
-      nuovaRiga();
-      scrivi(`Fornitore: ${fornitore?.nome || "—"}`);
-      nuovaRiga();
-      if (fornitore?.email) { scrivi(`Email: ${fornitore.email}`); nuovaRiga(); }
-      scrivi(`Data: ${fmtData(dataOggiStr())}`);
-      nuovaRiga(28);
-      scrivi("Q.tà", { x: 50, font: grassetto });
-      scrivi("Prodotto", { x: 100, font: grassetto });
-      nuovaRiga(8);
-      pagina.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 0.7 });
-      nuovaRiga(16);
-      let totalePezzi = 0;
-      righeScelte.forEach((r) => {
-        totalePezzi += r.quantita;
-        scrivi(r.quantita, { x: 50 });
-        // il nome si taglia solo se davvero non entra nella riga
-        const nome = String(r.prodotto.nome || "");
-        const massimo = 70;
-        scrivi(nome.length > massimo ? `${nome.slice(0, massimo - 1)}…` : nome, { x: 100 });
-        nuovaRiga();
-      });
-      nuovaRiga(6);
-      pagina.drawLine({ start: { x: 50, y }, end: { x: 545, y }, thickness: 0.7 });
-      nuovaRiga(18);
-      scrivi(`Totale: ${righeScelte.length} prodotti, ${totalePezzi} pezzi`, { font: grassetto });
-      const bytes = await doc.save();
-      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `proforma-${slugify(fornitore?.nome || "fornitore")}-${dataOggiStr()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      window.alert("Errore nella generazione della proforma: " + e.message);
-    }
-    setGenerandoProforma(false);
   }
 
   // "Da ordinare adesso" raggruppato per fornitore: cinque righe dello
@@ -31107,78 +31220,14 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
         ))}
         </div>
 
-        {fornitoreOrdineId && (() => {
-          const fornitore = fornitorePerId[fornitoreOrdineId] || null;
-          // tutti i prodotti di quel fornitore, dal più scoperto in giù:
-          // quelli che l'Advisor ha già segnalato sono in cima per forza,
-          // ma accanto si vede anche cosa sta per finire senza esserlo ancora
-          const prodottiFornitore = (prodottiShop || [])
-            .filter((p) => p.fornitore_id === fornitoreOrdineId && p.attivo !== false && p.conta_magazzino !== false)
-            .sort((a, b) => mancanzaDi(b) - mancanzaDi(a) || (a.nome || "").localeCompare(b.nome || ""));
-          const scelti = prodottiFornitore
-            .filter((p) => Number(quantitaOrdine[p.id]) > 0)
-            .map((p) => ({ prodotto: p, quantita: Number(quantitaOrdine[p.id]) }));
-          const totalePezzi = scelti.reduce((s, r) => s + r.quantita, 0);
-          return (
-            <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, background: BG_CHIARO }}>
-              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
-                <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fornitore?.nome || "Fornitore"}</div>
-                <button onClick={() => setFornitoreOrdineId(null)} title="Chiudi" style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
-              </div>
-              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
-                Tutti i suoi prodotti, dal più scoperto in giù. Spunta quelli da mettere nello stesso ordine e correggi le quantità.
-              </div>
-              {prodottiFornitore.length === 0 ? (
-                <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto collegato a questo fornitore.</div>
-              ) : (
-                <div style={{ maxHeight: 420, overflowY: "auto", marginBottom: 12 }}>
-                  {prodottiFornitore.map((p) => {
-                    const scelto = Number(quantitaOrdine[p.id]) > 0;
-                    const manca = mancanzaDi(p);
-                    return (
-                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: `1px solid ${CREAM_BORDER}` }}>
-                        <input
-                          type="checkbox" checked={scelto}
-                          onChange={(e) => setQuantitaOrdine((prev) => {
-                            const copia = { ...prev };
-                            if (!e.target.checked) { delete copia[p.id]; return copia; }
-                            copia[p.id] = p.quantita_riordino || (manca > 0 ? manca : 1);
-                            return copia;
-                          })}
-                          style={{ flexShrink: 0 }}
-                        />
-                        <span style={{ flex: "1 1 120px", minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY, overflowWrap: "anywhere" }}>
-                          {p.nome}
-                          <span style={{ display: "block", ...fontBody, fontSize: 11, color: manca > 0 ? "#C0392B" : MUTED }}>
-                            {p.quantita || 0} in stock{p.soglia_riordino != null ? ` · soglia ${p.soglia_riordino}` : ""}{manca > 0 ? ` · mancano ${manca}` : ""}
-                          </span>
-                        </span>
-                        <input
-                          type="number" min="0" placeholder="0"
-                          value={quantitaOrdine[p.id] ?? ""}
-                          onChange={(e) => setQuantitaOrdine((prev) => {
-                            const copia = { ...prev };
-                            const valore = e.target.value === "" ? "" : Math.max(0, Number(e.target.value));
-                            if (valore === "" || valore === 0) delete copia[p.id]; else copia[p.id] = valore;
-                            return copia;
-                          })}
-                          style={{ ...inputStyle, width: 62, padding: "5px 7px", flexShrink: 0 }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <Button
-                onClick={() => generaProformaOrdine(fornitore, scelti)}
-                disabled={generandoProforma || scelti.length === 0}
-                style={{ width: "100%" }}
-              >
-                {generandoProforma ? "Genero il PDF…" : `Genera proforma${scelti.length > 0 ? ` — ${scelti.length} prodotti, ${totalePezzi} pezzi` : ""}`}
-              </Button>
-            </div>
-          );
-        })()}
+        {fornitoreOrdineId && (
+          <PannelloOrdineFornitore
+            fornitore={fornitorePerId[fornitoreOrdineId] || null}
+            prodottiShop={prodottiShop}
+            suggerimenti={quantitaOrdine}
+            onChiudi={() => setFornitoreOrdineId(null)}
+          />
+        )}
         </div>
       </div>
 
