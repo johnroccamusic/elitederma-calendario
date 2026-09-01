@@ -17464,29 +17464,40 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     // gli altri 440 non erano scritti da nessuna parte, e la scheda
     // sembrava a posto. Vale solo sulle iscrizioni nuove — sulle vecchie
     // bloccherebbe anche il salvataggio automatico di un campo qualsiasi.
-    // Il confronto va fatto sull'IMPONIBILE, non sul totale: il campo qui
-    // sopra è "Totale pattuito per la vendita (senza IVA)", mentre il
-    // "totale" di ogni quota è quello che il cliente paga davvero, IVA
-    // compresa. Confrontarli fra loro faceva risultare in eccesso ogni
-    // iscrizione con almeno una quota con IVA — 1.553,80 di quote contro
-    // 1.490 pattuiti, dove i 63,80 di troppo erano esattamente l'IVA.
-    // Le quote senza IVA (Cash) hanno imponibile uguale al totale, quindi
-    // rientrano nel conto senza eccezioni; se l'imponibile non è ancora
-    // stato calcolato (metodo non scelto) vale il totale.
-    const sommaQuote = round2(
-      [pagAcconto, ...accontoExtra, pagPrecorso, ...precorsoExtra, pagSaldo]
-        .reduce((somma, q) => {
-          const imponibile = q.imponibile === "" || q.imponibile == null ? null : parseNum(q.imponibile);
-          if (imponibile != null) return somma + imponibile;
-          return somma + (q.totale === "" ? 0 : parseNum(q.totale));
-        }, 0)
-    );
+    // Le quote devono coprire il totale pattuito — ma "coprire" si può
+    // leggere in due modi, e sono buoni entrambi.
+    //
+    // Il campo si chiama "Totale pattuito per la vendita (senza IVA)":
+    // 1.490 pattuiti vogliono dire 1.817,80 che il cliente tira fuori.
+    // Un venditore può quindi scrivere le quote in due modi altrettanto
+    // legittimi: al netto (290 + 1.200 = 1.490 di imponibile) oppure al
+    // lordo (353,80 + 1.464 = 1.817,80 incassati). Il secondo è quello che
+    // succede sempre quando una quota è in contanti: 1.464 in Cash no iva
+    // è già la cifra che passa di mano, non ha un netto proprio da cui
+    // ricavarla.
+    //
+    // Confrontare un solo lato bocciava metà delle iscrizioni vere: il
+    // lordo contro il netto le faceva risultare in eccesso dell'IVA, il
+    // netto contro il netto bocciava quelle con una quota in contanti. Si
+    // controllano quindi entrambi i lati, e basta che uno torni. Il
+    // controllo serve a intercettare l'errore grosso — l'iscrizione da 590
+    // con dentro solo l'acconto da 150 — non a fare da revisore dell'IVA.
+    const quoteTutte = [pagAcconto, ...accontoExtra, pagPrecorso, ...precorsoExtra, pagSaldo];
+    const sommaImponibili = round2(quoteTutte.reduce((somma, q) => {
+      const imponibile = q.imponibile === "" || q.imponibile == null ? null : parseNum(q.imponibile);
+      if (imponibile != null) return somma + imponibile;
+      return somma + (q.totale === "" ? 0 : parseNum(q.totale));
+    }, 0));
+    const sommaTotali = round2(quoteTutte.reduce((somma, q) => somma + (q.totale === "" ? 0 : parseNum(q.totale)), 0));
     const pattuito = totalePattuito === "" ? 0 : parseNum(totalePattuito);
-    if (strict && pattuito > 0 && Math.abs(sommaQuote - pattuito) > 0.01) {
-      const differenza = round2(Math.abs(pattuito - sommaQuote));
-      setMsg(sommaQuote < pattuito
-        ? `Impossibile salvare: le quote registrate valgono ${fmtEuroErp2(sommaQuote)} di imponibile su ${fmtEuroErp2(pattuito)} di totale pattuito. Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
-        : `Impossibile salvare: le quote registrate valgono ${fmtEuroErp2(sommaQuote)} di imponibile e superano di ${fmtEuroErp2(differenza)} il totale pattuito di ${fmtEuroErp2(pattuito)}.`);
+    const pattuitoConIva = round2(pattuito * 1.22);
+    const tornaSulNetto = Math.abs(sommaImponibili - pattuito) <= 0.01;
+    const tornaSulLordo = Math.abs(sommaTotali - pattuitoConIva) <= 0.01 || Math.abs(sommaTotali - pattuito) <= 0.01;
+    if (strict && pattuito > 0 && !tornaSulNetto && !tornaSulLordo) {
+      const differenza = round2(Math.abs(pattuito - sommaImponibili));
+      setMsg(sommaImponibili < pattuito
+        ? `Impossibile salvare: le quote registrate coprono ${fmtEuroErp2(sommaImponibili)} di imponibile (${fmtEuroErp2(sommaTotali)} con IVA) contro un pattuito di ${fmtEuroErp2(pattuito)} (${fmtEuroErp2(pattuitoConIva)} con IVA). Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
+        : `Impossibile salvare: le quote registrate coprono ${fmtEuroErp2(sommaImponibili)} di imponibile (${fmtEuroErp2(sommaTotali)} con IVA) e superano di ${fmtEuroErp2(differenza)} il pattuito di ${fmtEuroErp2(pattuito)} (${fmtEuroErp2(pattuitoConIva)} con IVA).`);
       return false;
     }
 
