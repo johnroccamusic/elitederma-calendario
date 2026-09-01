@@ -8751,7 +8751,7 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
             ...base, id: `${cd.id}-master-${g.numero_giorno}`, ruolo: "master", numeroGiorno: g.numero_giorno,
             tipo: g.tipo_modella_master || "Modella del Master", allievoNome: null,
             nomeModella: entry?.nome_modella || "", telefonoModella: entry?.telefono_modella || "",
-            assegnata: !!(entry?.nome_modella && entry.nome_modella.trim()),
+            assegnata: modellaTrovata(entry),
           });
         }
         if (g.richiede_modelle_allievi) {
@@ -8764,7 +8764,7 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
                 tipo: m.tipo || g.tipo_modella_allievi || "?", allievoNome: `${i.nome} ${i.cognome}`,
                 iscrittoId: i.id, indexTipi: idx,
                 nomeModella: m.nome_modella || "", telefonoModella: m.telefono_modella || "",
-                assegnata: !!(m.nome_modella && m.nome_modella.trim()),
+                assegnata: modellaTrovata(m),
               });
             });
           });
@@ -8780,7 +8780,7 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
             ...base, id: `${cd.id}-allievo-${i.id}-${idx}`, ruolo: "allievo", numeroGiorno: null,
             tipo: m.tipo || "?", allievoNome: `${i.nome} ${i.cognome}`, iscrittoId: i.id, indexTipi: idx,
             nomeModella: m.nome_modella || "", telefonoModella: m.telefono_modella || "",
-            assegnata: !!(m.nome_modella && m.nome_modella.trim()),
+            assegnata: modellaTrovata(m),
           });
         });
       });
@@ -13604,6 +13604,12 @@ function corsoParzialeDaKitPmuBase(testoKit) {
 function campiModella(campo, valore) {
   return campo && typeof campo === "object" ? campo : { [campo]: valore };
 }
+// una modella e' trovata solo quando ci sono NOME e NUMERO: un nome senza
+// telefono non serve a niente — non la si puo' chiamare, e chi legge
+// l'elenco crederebbe che quel posto sia coperto
+function modellaTrovata(m) {
+  return !!(String(m?.nome_modella || "").trim() && String(m?.telefono_modella || "").trim());
+}
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
 // nella pagina pubblica di ricerca modelle), e nome/telefono della modella
 // una volta trovata. Nome/telefono usano stato locale e si salvano solo al
@@ -13639,9 +13645,21 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // volta, il secondo salvataggio ripartiva dai dati vecchi e cancellava il
   // primo — ed e' cosi' che il nome inserito la mattina spariva la sera
   const daSalvare = nome !== (modella.nome_modella || "") || telefono !== (modella.telefono_modella || "");
+  const trovata = modellaTrovata(modella);
   function salvaNomeETelefono() {
     if (!daSalvare) return;
-    onSalva({ nome_modella: nome, telefono_modella: telefono });
+    const n = nome.trim();
+    const t = telefono.trim();
+    // svuotare tutti e due libera il posto: e' il modo per dire "questa
+    // modella non viene piu'", e deve restare possibile
+    if (!n && !t) { onSalva({ nome_modella: "", telefono_modella: "" }); return; }
+    // mezzo dato no: senza numero non la si puo' chiamare, e il posto
+    // risulterebbe coperto quando non lo e'
+    if (!n || !t) {
+      window.alert(`Per confermare servono sia il nome sia il numero: manca ${!n ? "il nome" : "il numero"}.`);
+      return;
+    }
+    onSalva({ nome_modella: n, telefono_modella: t });
   }
 
   return (
@@ -13693,7 +13711,6 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           placeholder="Nome"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          onBlur={salvaNomeETelefono}
           style={{ ...inputStyle, flex: "2 1 150px", padding: "6px 10px" }}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 140px" }}>
@@ -13701,7 +13718,6 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             placeholder="Tel."
             value={telefono}
             onChange={(e) => setTelefono(e.target.value)}
-            onBlur={salvaNomeETelefono}
             style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "6px 10px" }}
           />
           {telefono.trim() && (
@@ -13715,11 +13731,11 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             </>
           )}
         </div>
-        {/* il tasto di conferma: finche' c'e' qualcosa da salvare si vede e
-            chiede di premerlo, appena e' salvato lascia il posto alla
-            spunta verde. Il salvataggio parte anche uscendo dal campo, ma
-            avere un gesto esplicito e' l'unico modo per sapere con
-            certezza che la modella e' stata registrata */}
+        {/* Nome e numero non si salvano da soli: si scrivono tutti e due e
+            si preme Conferma. Il salvataggio automatico all'uscita dal
+            campo sembrava comodo, ma lasciava mezzo dato scritto senza che
+            nessuno l'avesse deciso — e con mezzo dato il posto risultava
+            coperto pur non essendolo */}
         {daSalvare ? (
           <button
             onClick={salvaNomeETelefono}
@@ -13727,10 +13743,10 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           >
             Conferma
           </button>
-        ) : (modella.nome_modella || "").trim() ? (
+        ) : trovata ? (
           <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap", flexShrink: 0 }}>✓ Trovata</span>
         ) : (
-          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", flexShrink: 0 }}>Da cercare</span>
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", flexShrink: 0 }}>Da trovare</span>
         )}
       </div>
     </div>
