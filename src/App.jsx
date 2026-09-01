@@ -29549,9 +29549,13 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               )}
             </div>
           )}
-          {/* lo spazio a destra degli avvisi: qui si apre l'ordine del
-              fornitore, di fianco alla riga che l'ha fatto scattare */}
-          {ordineFornitore && (
+          {/* Lo spazio a destra degli avvisi: da schermo largo l'ordine del
+              fornitore si apre li', di fianco alla riga che l'ha fatto
+              scattare. Da telefono quello spazio non esiste — le colonne
+              diventano una sola — e il pannello finiva in fondo alla
+              pagina, sotto tutta la tabella degli avvisi: si vedeva solo il
+              tasto diventare nero. Li' si apre in una finestra */}
+          {ordineFornitore && !isMobile && (
             <PannelloOrdineFornitore
               fornitore={(fornitori || []).find((f) => f.id === ordineFornitore.fornitoreId) || null}
               prodottiShop={prodottiShop}
@@ -29560,6 +29564,20 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             />
           )}
         </div>
+        {ordineFornitore && isMobile && (() => {
+          const f = (fornitori || []).find((x) => x.id === ordineFornitore.fornitoreId) || null;
+          return (
+            <Modal title={f?.nome || "Ordine fornitore"} onClose={() => setOrdineFornitore(null)}>
+              <PannelloOrdineFornitore
+                fornitore={f}
+                prodottiShop={prodottiShop}
+                suggerimenti={ordineFornitore.suggerimenti}
+                onChiudi={() => setOrdineFornitore(null)}
+                dentroModale
+              />
+            </Modal>
+          );
+        })()}
         </>)}
 
         {/* titolo, scelta della vista e vista a categorie stanno fuori dai
@@ -30172,7 +30190,7 @@ function bundleVirtuale(p) {
 // Si apre di fianco all'elenco da cui si è partiti, mai al suo posto: a
 // sinistra resta la riga che ha fatto scattare l'ordine, a destra il
 // pannello. Alla fine genera la proforma in PDF, pronta da mandare.
-function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiudi }) {
+function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiudi, dentroModale }) {
   const [quantita, setQuantita] = useState(suggerimenti || {});
   const [generando, setGenerando] = useState(false);
   // cambiando fornitore il pannello riparte dai suoi suggerimenti: senza
@@ -30254,18 +30272,22 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
   }
 
   return (
-    <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, background: BG_CHIARO }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
-        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fornitore?.nome || "Fornitore"}</div>
-        <button onClick={onChiudi} title="Chiudi" style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
-      </div>
+    <div style={dentroModale ? undefined : { border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, padding: 14, background: BG_CHIARO }}>
+      {/* dentro una finestra il nome del fornitore lo scrive gia' la
+          finestra stessa, e la crocetta pure */}
+      {!dentroModale && (
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, marginBottom: 2 }}>
+          <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>{fornitore?.nome || "Fornitore"}</div>
+          <button onClick={onChiudi} title="Chiudi" style={{ background: "none", border: "none", color: MUTED, cursor: "pointer", fontSize: 16, padding: 2 }}>✕</button>
+        </div>
+      )}
       <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
         Tutti i suoi prodotti, dal più scoperto in giù. Spunta quelli da mettere nello stesso ordine e correggi le quantità.
       </div>
       {prodottiFornitore.length === 0 ? (
         <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>Nessun prodotto collegato a questo fornitore.</div>
       ) : (
-        <div style={{ maxHeight: 420, overflowY: "auto", marginBottom: 12 }}>
+        <div style={{ maxHeight: dentroModale ? "60vh" : 420, overflowY: "auto", marginBottom: 12 }}>
           {prodottiFornitore.map((p) => {
             const scelto = Number(quantita[p.id]) > 0;
             const manca = mancanzaDi(p);
@@ -31545,13 +31567,26 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
         ))}
         </div>
 
-        {fornitoreOrdineId && (
+        {/* da telefono la colonna di fianco non c'e': l'ordine si apre in
+            una finestra, invece di finire in fondo alla pagina */}
+        {fornitoreOrdineId && !isMobile && (
           <PannelloOrdineFornitore
             fornitore={fornitorePerId[fornitoreOrdineId] || null}
             prodottiShop={prodottiShop}
             suggerimenti={quantitaOrdine}
             onChiudi={() => setFornitoreOrdineId(null)}
           />
+        )}
+        {fornitoreOrdineId && isMobile && (
+          <Modal title={fornitorePerId[fornitoreOrdineId]?.nome || "Ordine fornitore"} onClose={() => setFornitoreOrdineId(null)}>
+            <PannelloOrdineFornitore
+              fornitore={fornitorePerId[fornitoreOrdineId] || null}
+              prodottiShop={prodottiShop}
+              suggerimenti={quantitaOrdine}
+              onChiudi={() => setFornitoreOrdineId(null)}
+              dentroModale
+            />
+          </Modal>
         )}
         </div>
       </div>
