@@ -1,7 +1,9 @@
 // Edge Function "woo-import-storico"
 // Recupera dallo storico WooCommerce gli ordini mancanti su Supabase (es.
 // se il webhook "woo-webhook" si è fermato per un po') — è idempotente:
-// rieseguirla non duplica nulla, fa solo un upsert su woo_order_id.
+// rieseguirla non duplica nulla, fa solo un upsert su woo_order_id, e il
+// magazzino si muove solo sui PASSAGGI di stato (vedi salvaLotto), mai due
+// volte per lo stesso ordine.
 // Richiamabile dal tasto "Recupera ordini mancanti" in Vendite shop
 // (supabase.functions.invoke, stessa autenticazione anon-key delle altre
 // funzioni Woo — nessun secret separato da gestire lato client).
@@ -17,9 +19,15 @@
 //   WC_SITE_URL        — es. https://shop.elitederma.it (senza slash finale)
 //   WC_CONSUMER_KEY    — Consumer key generata in WooCommerce → Impostazioni → Avanzate → REST API
 //   WC_CONSUMER_SECRET — Consumer secret della stessa chiave
+// Facoltative, servono solo a rispingere sul sito la disponibilità dei kit
+// componibili dopo uno scarico (senza, il magazzino qui è comunque giusto):
+//   WC_CONSUMER_KEY_WRITE / WC_CONSUMER_SECRET_WRITE — chiave in scrittura
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { mappaOrdine, attribuisciMasterReferral } from "../_shared/woo.ts";
+import {
+  mappaOrdine, attribuisciMasterReferral,
+  STATI_VIVI, applicaMovimentoBundle, applicaMovimentoProdottiSemplici, sincronizzaDisponibilitaBundle,
+} from "../_shared/woo.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -37,6 +45,76 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Salva un lotto di ordini e, come fa il webhook, muove il magazzino sui
+// PASSAGGI di stato: un ordine che diventa "vivo" (processing/completed)
+// scarica, uno che smette di esserlo ripristina, uno che resta com'era non
+// muove niente. Prima questa funzione salvava e basta: quando il webhook
+// non arrivava — succede, se il sito è irraggiungibile e WooCommerce
+// smette di riprovare — l'ordine veniva recuperato ma i pezzi restavano in
+// magazzino, e la giacenza divergeva in silenzio.
+//
+// Leggere lo stato precedente PRIMA dell'upsert è l'unica cosa che rende
+// il conto sicuro: rieseguire il recupero dieci volte non scarica dieci
+// volte, perché la seconda volta il passaggio non c'è più.
+async function salvaLotto(supabase: any, ordini: any[], siteUrl: string) {
+  const righe: Record<string, unknown>[] = [];
+  for (const o of ordini) {
+    const riga = mappaOrdine(o);
+    if (!riga) continue;
+    // stessa attribuzione del referral code applicata da woo-webhook in
+    // tempo reale — prima mancava qui, quindi lo storico di un ordine mai
+    // arrivato via webhook restava senza operatore/coupon
+    await attribuisciMasterReferral(supabase, o, riga);
+    righe.push(riga);
+  }
+  if (righe.length === 0) return { salvati: 0, errore: null as string | null };
+
+  const ids = righe.map((r) => r.woo_order_id as number);
+  const { data: esistenti } = await supabase
+    .from("vendite_shop").select("woo_order_id, stato, prodotti").in("woo_order_id", ids);
+  const primaDi = new Map<number, any>((esistenti || []).map((r: any) => [r.woo_order_id, r]));
+
+  const { error } = await supabase.from("vendite_shop").upsert(righe, { onConflict: "woo_order_id" });
+  if (error) return { salvati: 0, errore: error.message };
+
+  // come nel webhook, un guasto sul magazzino non fa fallire il salvataggio:
+  // le vendite di questo lotto sono già scritte, e restituire un 500 qui
+  // farebbe perdere anche il conteggio delle pagine già importate,
+  // costringendo a ripartire. Il problema si legge nei log.
+  try {
+    const bundleToccati = new Set<string>();
+    for (const riga of righe) {
+      const prima = primaDi.get(riga.woo_order_id as number);
+      const eraVivo = STATI_VIVI.includes(String(prima?.stato || ""));
+      const oraVivo = STATI_VIVI.includes(String(riga.stato || ""));
+      if (!eraVivo && oraVivo) {
+        (await applicaMovimentoBundle(supabase, riga.prodotti as any[], -1)).forEach((id: string) => bundleToccati.add(id));
+        await applicaMovimentoProdottiSemplici(supabase, riga.prodotti as any[], -1);
+      } else if (eraVivo && !oraVivo) {
+        (await applicaMovimentoBundle(supabase, (prima?.prodotti as any[]) || [], 1)).forEach((id: string) => bundleToccati.add(id));
+        await applicaMovimentoProdottiSemplici(supabase, (prima?.prodotti as any[]) || [], 1);
+      }
+    }
+    // i kit componibili si ricalcolano e si rispingono sul sito, o
+    // WooCommerce continuerebbe a vendere un kit che i componenti non
+    // permettono più di comporre. Serve la chiave di scrittura: se non c'è,
+    // il magazzino qui è comunque a posto e il sito si riallinea al primo
+    // salvataggio di quel prodotto
+    const chiaveWrite = Deno.env.get("WC_CONSUMER_KEY_WRITE");
+    const segretoWrite = Deno.env.get("WC_CONSUMER_SECRET_WRITE");
+    if (bundleToccati.size) {
+      if (chiaveWrite && segretoWrite) {
+        await sincronizzaDisponibilitaBundle(supabase, bundleToccati, siteUrl, chiaveWrite, segretoWrite);
+      } else {
+        console.error("Componenti bundle aggiornati, ma WC_CONSUMER_KEY_WRITE/SECRET mancanti: disponibilità non sincronizzata su WooCommerce");
+      }
+    }
+  } catch (erroreStock) {
+    console.error("Errore nello scarico/ripristino dello stock:", erroreStock);
+  }
+  return { salvati: righe.length, errore: null };
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -92,27 +170,15 @@ Deno.serve(async (req) => {
     const ordini = await risposta.json();
     if (!Array.isArray(ordini) || ordini.length === 0) { completato = true; break; }
 
-    const righe: Record<string, unknown>[] = [];
-    for (const o of ordini) {
-      const riga = mappaOrdine(o);
-      if (!riga) continue;
-      // stessa attribuzione del referral code applicata da woo-webhook in
-      // tempo reale — prima mancava qui, quindi lo storico di un ordine mai
-      // arrivato via webhook restava senza operatore/coupon
-      await attribuisciMasterReferral(supabase, o, riga);
-      righe.push(riga);
-    }
-    if (righe.length > 0) {
-      const { error } = await supabase.from("vendite_shop").upsert(righe, { onConflict: "woo_order_id" });
-      if (error) {
-        return new Response(
-          JSON.stringify({ errore: "Errore salvataggio su Supabase: " + error.message, ordiniImportati, pagina }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+    const esito = await salvaLotto(supabase, ordini, siteUrl);
+    if (esito.errore) {
+      return new Response(
+        JSON.stringify({ errore: "Errore salvataggio su Supabase: " + esito.errore, ordiniImportati, pagina }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    ordiniImportati += righe.length;
+    ordiniImportati += esito.salvati;
     if (ordini.length < PER_PAGE) { completato = true; break; }
     pagina += 1;
   }
@@ -129,9 +195,11 @@ Deno.serve(async (req) => {
   // (parametro "include"), e si riallinea il loro stato. Sono pochi per
   // definizione: quelli ancora da evadere.
   //
-  // Come tutto il resto di questa funzione NON si tocca il magazzino: gli
-  // scarichi e i ripristini restano del webhook, che li applica nel momento
-  // in cui lo stato cambia davvero.
+  // Anche qui il magazzino si muove, ma solo se lo stato cambia davvero:
+  // questi ordini da noi risultano aperti, quindi "processing" resta
+  // "processing" e non muove niente, mentre uno passato a "cancelled" o
+  // "refunded" sul sito rimette a posto i pezzi che il webhook mancato non
+  // aveva ripristinato.
   let ordiniRiallineati = 0;
   const { data: aperti } = await supabase
     .from("vendite_shop")
@@ -148,18 +216,9 @@ Deno.serve(async (req) => {
     if (!risposta.ok) break;
     const ordini = await risposta.json();
     if (!Array.isArray(ordini) || ordini.length === 0) continue;
-    const righe: Record<string, unknown>[] = [];
-    for (const o of ordini) {
-      const riga = mappaOrdine(o);
-      if (!riga) continue;
-      await attribuisciMasterReferral(supabase, o, riga);
-      righe.push(riga);
-    }
-    if (righe.length > 0) {
-      const { error } = await supabase.from("vendite_shop").upsert(righe, { onConflict: "woo_order_id" });
-      if (error) break;
-      ordiniRiallineati += righe.length;
-    }
+    const esito = await salvaLotto(supabase, ordini, siteUrl);
+    if (esito.errore) break;
+    ordiniRiallineati += esito.salvati;
   }
 
   return new Response(
