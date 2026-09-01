@@ -9643,11 +9643,21 @@ function PaginaPrezziCorsi({ ruoloUtente, onBack, titolo = "Prezzi corsi", ordin
     const { data, error } = await supabase.storage.from("locandine-corsi").list("", { limit: 500, sortBy: { column: "name", order: "asc" } });
     if (error) { window.alert("Errore nel caricare le locandine: " + error.message); return; }
     const file = (data || []).filter((f) => ESTENSIONI_LOCANDINE.test(f.name));
-    setLocandine(file.map((f) => ({
-      nome: f.name,
-      titolo: titoloDaNomeFile(f.name),
-      url: supabase.storage.from("locandine-corsi").getPublicUrl(f.name).data.publicUrl,
-    })));
+    // L'indirizzo pubblico di un file dipende solo dal suo nome: cancellare
+    // una locandina e ricaricarne un'altra con lo stesso nome dava lo
+    // stesso indirizzo di prima, e il browser (con la cache di Supabase
+    // dietro) continuava a mostrare la vecchia immagine per un'ora buona.
+    // Attaccando la data dell'ultima modifica l'indirizzo cambia insieme al
+    // file, e la nuova immagine si vede subito.
+    setLocandine(file.map((f) => {
+      const base = supabase.storage.from("locandine-corsi").getPublicUrl(f.name).data.publicUrl;
+      const versione = f.updated_at || f.created_at || "";
+      return {
+        nome: f.name,
+        titolo: titoloDaNomeFile(f.name),
+        url: versione ? `${base}?v=${encodeURIComponent(versione)}` : base,
+      };
+    }));
   }
 
   useEffect(() => {
