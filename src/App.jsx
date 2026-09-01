@@ -9496,7 +9496,157 @@ function PaginaDashboardModelle({ corsi, location, corsiDate, iscritti, master, 
 // più le stesse modalità di "Date corsi" già usate in Dashboard
 // venditori/Gestione corsi — qui pilotate da tab in alto invece che dalle
 // pillole interne di SezioneDateCorsi, per restare fedeli al mockup
-// (Dashboard | Calendario corsi | Archivio corsi). Cliccando una
+// ---------- CRM modelle ----------
+// Tutte le modelle che hanno davvero fatto da modella, una riga per volta
+// che l'hanno fatto: nome, numero, trattamento, corso, città e data.
+//
+// Si legge dai due posti in cui una modella viene registrata — la modella
+// del Master (corsi_date.modelle_master) e quelle degli allievi
+// (iscritti.tipi_modelle) — e si tengono solo quelle con NOME e NUMERO:
+// senza il numero non è una rubrica, è un elenco di nomi.
+//
+// Ci sono anche le modelle portate dalle allieve ("SUA"): in dashboard non
+// contano, perché non sono un fabbisogno nostro, ma qui sì — hanno fatto
+// da modella a un nostro corso come le altre.
+function raccogliModelleStoriche({ corsiDate, corsi, location, iscritti }) {
+  const corsoById = Object.fromEntries((corsi || []).map((c) => [c.id, c]));
+  const locById = Object.fromEntries((location || []).map((l) => [l.id, l]));
+  const righe = [];
+  (corsiDate || []).forEach((cd) => {
+    const corso = corsoById[cd.corso_id];
+    const loc = locById[cd.location_id];
+    const base = {
+      corsoDataId: cd.id,
+      corsoNome: corso?.nome || "—",
+      citta: loc?.nome ? toTitleCase(loc.nome) : "—",
+      data: cd.data_inizio,
+    };
+    (Array.isArray(cd.modelle_master) ? cd.modelle_master : []).forEach((m, i) => {
+      if (!modellaTrovata(m)) return;
+      righe.push({
+        ...base, chiave: `m-${cd.id}-${i}`,
+        nome: String(m.nome_modella).trim(), telefono: String(m.telefono_modella).trim(),
+        tipo: m.tipo || "Modella del Master", per: "Master",
+      });
+    });
+    (iscritti || []).filter((i) => i.corso_data_id === cd.id).forEach((isc) => {
+      (Array.isArray(isc.tipi_modelle) ? isc.tipi_modelle : []).forEach((m, i) => {
+        if (!modellaTrovata(m)) return;
+        righe.push({
+          ...base, chiave: `a-${isc.id}-${i}`,
+          nome: String(m.nome_modella).trim(), telefono: String(m.telefono_modella).trim(),
+          tipo: m.tipo || "—", per: `${isc.nome || ""} ${isc.cognome || ""}`.trim(),
+        });
+      });
+    });
+  });
+  return righe.sort((a, b) =>
+    a.nome.localeCompare(b.nome, "it", { sensitivity: "base" }) || String(b.data).localeCompare(String(a.data))
+  );
+}
+
+function PaginaCrmModelle({ corsi, location, corsiDate, iscritti }) {
+  const isMobile = useIsMobile();
+  const [ricerca, setRicerca] = useState("");
+  const righe = useMemo(
+    () => raccogliModelleStoriche({ corsiDate, corsi, location, iscritti }),
+    [corsiDate, corsi, location, iscritti]
+  );
+  const filtrate = ricerca.trim()
+    ? righe.filter((r) => {
+        const q = ricerca.trim().toLowerCase();
+        return [r.nome, r.telefono, r.tipo, r.corsoNome, r.citta, r.per].some((v) => String(v || "").toLowerCase().includes(q));
+      })
+    : righe;
+  // quante persone, non quante volte: la stessa modella tornata tre volte
+  // resta una modella sola, e il numero di telefono è ciò che la identifica
+  const quantePersone = new Set(filtrate.map((r) => r.telefono.replace(/\s+/g, ""))).size;
+
+  const thStyle = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "10px 12px", textAlign: "left", whiteSpace: "nowrap" };
+  const tdStyle = { padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 13, color: NAVY, verticalAlign: "top" };
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>
+          <b style={{ color: NAVY }}>{quantePersone}</b> modell{quantePersone === 1 ? "a" : "e"} · {filtrate.length} partecipazion{filtrate.length === 1 ? "e" : "i"} ai corsi
+        </div>
+        <div style={{ flex: "1 1 260px", maxWidth: 360 }}>
+          <CampoRicerca value={ricerca} onChange={(e) => setRicerca(e.target.value)} placeholder="Cerca nome, numero, trattamento, città…" />
+        </div>
+      </div>
+
+      {filtrate.length === 0 ? (
+        <div style={{ ...cardStyle, padding: 20, ...fontBody, fontSize: 13.5, color: MUTED }}>
+          {righe.length === 0
+            ? "Nessuna modella registrata: compaiono qui appena vengono confermate con nome e numero nella scheda di un corso."
+            : "Nessuna modella trovata con questa ricerca."}
+        </div>
+      ) : isMobile ? (
+        // da telefono la tabella non ci sta: una scheda per riga
+        <div>
+          {filtrate.map((r) => (
+            <div key={r.chiave} style={{ ...cardStyle, padding: 14, marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                <span style={{ ...fontBody, fontSize: 15, fontWeight: 700, color: NAVY, textTransform: "uppercase" }}>{r.nome}</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <a href={`tel:${r.telefono.replace(/\s+/g, "")}`} style={{ ...fontBody, fontSize: 13, color: NAVY, textDecoration: "underline" }}>{r.telefono}</a>
+                  <a href={`https://wa.me/${numeroWhatsapp(r.telefono)}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ display: "flex" }}>
+                    <IconaWhatsapp size={20} />
+                  </a>
+                </span>
+              </div>
+              <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 3, lineHeight: 1.5 }}>
+                {r.tipo} · {r.citta} · {fmtData(r.data)}
+                <span style={{ display: "block" }}>{r.corsoNome} — per {toTitleCase(r.per)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+              <thead>
+                <tr style={{ background: BG }}>
+                  <th style={thStyle}>Modella</th>
+                  <th style={thStyle}>Cellulare</th>
+                  <th style={thStyle}>Trattamento</th>
+                  <th style={thStyle}>Città</th>
+                  <th style={thStyle}>Data</th>
+                  <th style={thStyle}>Corso</th>
+                  <th style={thStyle}>Per</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrate.map((r) => (
+                  <tr key={r.chiave}>
+                    <td style={{ ...tdStyle, fontWeight: 700, textTransform: "uppercase" }}>{r.nome}</td>
+                    <td style={tdStyle}>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+                        <a href={`tel:${r.telefono.replace(/\s+/g, "")}`} style={{ color: NAVY, textDecoration: "underline" }}>{r.telefono}</a>
+                        <a href={`https://wa.me/${numeroWhatsapp(r.telefono)}`} target="_blank" rel="noopener noreferrer" title="WhatsApp" style={{ display: "flex" }}>
+                          <IconaWhatsapp size={18} />
+                        </a>
+                      </span>
+                    </td>
+                    <td style={tdStyle}>{r.tipo}</td>
+                    <td style={tdStyle}>{r.citta}</td>
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>{fmtData(r.data)}</td>
+                    <td style={{ ...tdStyle, color: MUTED }}>{r.corsoNome}</td>
+                    <td style={{ ...tdStyle, color: MUTED }}>{toTitleCase(r.per)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// (Dashboard | Calendario corsi | Archivio corsi | CRM modelle). Cliccando una
 // data si entra direttamente nella scheda "Assegna modelle" di
 // quell'edizione (onApriData qui è apriDataModelle, non apriData)
 function PaginaGestioneModelle({
@@ -9508,7 +9658,7 @@ function PaginaGestioneModelle({
   titolo = "Gestione modelle",
 }) {
   const isMobile = useIsMobile();
-  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio
+  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio | crm
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -9522,11 +9672,14 @@ function PaginaGestioneModelle({
             <TabPillola attivo={tabGM === "dashboard"} onClick={() => setTabGM("dashboard")}>Dashboard</TabPillola>
             <TabPillola attivo={tabGM === "richieste"} onClick={() => setTabGM("richieste")}>Calendario corsi</TabPillola>
             <TabPillola attivo={tabGM === "archivio"} onClick={() => setTabGM("archivio")}>Archivio corsi</TabPillola>
+            <TabPillola attivo={tabGM === "crm"} onClick={() => setTabGM("crm")}>CRM modelle</TabPillola>
           </div>
         </div>
         <div style={{ marginBottom: 20 }} />
 
-        {tabGM === "dashboard" ? (
+        {tabGM === "crm" ? (
+          <PaginaCrmModelle corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} />
+        ) : tabGM === "dashboard" ? (
           <PaginaDashboardModelle
             corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
             ricarica={ricarica} apriDataModelle={apriDataModelle}
