@@ -8794,7 +8794,10 @@ function calcolaSlotModelle({ corsiDate, corsi, location, master, iscritti, cors
 // nome/telefono vuoti "liberano" lo slot (usato anche per "Elimina")
 async function scriviSlotModella(slotDaScrivere, { corsiDate, iscritti }, nomeModella, telefonoModella) {
   if (slotDaScrivere.ruolo === "master") {
-    const cd = corsiDate.find((c) => c.id === slotDaScrivere.corsoDataId);
+    // si rilegge dal database invece di usare la copia in pagina: due
+    // scritture ravvicinate sullo stesso corso, partendo entrambe dalla
+    // stessa copia vecchia, si cancellavano a vicenda
+    const { data: cd } = await supabase.from("corsi_date").select("modelle_master").eq("id", slotDaScrivere.corsoDataId).maybeSingle();
     const attuale = Array.isArray(cd?.modelle_master) ? cd.modelle_master : [];
     const idx = attuale.findIndex((m) => m.numero_giorno === slotDaScrivere.numeroGiorno);
     const nuovo = idx >= 0
@@ -8803,7 +8806,7 @@ async function scriviSlotModella(slotDaScrivere, { corsiDate, iscritti }, nomeMo
     const { error } = await supabase.from("corsi_date").update({ modelle_master: nuovo }).eq("id", slotDaScrivere.corsoDataId);
     return error;
   }
-  const iscritto = iscritti.find((i) => i.id === slotDaScrivere.iscrittoId);
+  const { data: iscritto } = await supabase.from("iscritti").select("tipi_modelle").eq("id", slotDaScrivere.iscrittoId).maybeSingle();
   const attuale = Array.isArray(iscritto?.tipi_modelle) ? iscritto.tipi_modelle : [];
   const nuovo = attuale.map((m, i) => (i === slotDaScrivere.indexTipi ? { ...m, nome_modella: nomeModella, telefono_modella: telefonoModella } : m));
   const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovo }).eq("id", slotDaScrivere.iscrittoId);
@@ -13592,6 +13595,15 @@ function corsoParzialeDaKitPmuBase(testoKit) {
   return { corsoParziale: true, giorniPresenza: giorniDichiarati > 0 ? elenco.slice(0, giorniDichiarati) : elenco };
 }
 
+// Un salvataggio puo' riguardare un campo solo ("mattina") o piu' campi
+// insieme ({nome_modella, telefono_modella}). Scriverli insieme non e' un
+// dettaglio: scritti uno alla volta, il secondo salvataggio partiva
+// dall'elenco vecchio — quello che aveva in mano prima del primo — e
+// rimetteva indietro il campo appena scritto. Il nome della modella
+// spariva cosi', qualche ora dopo averlo inserito.
+function campiModella(campo, valore) {
+  return campo && typeof campo === "object" ? campo : { [campo]: valore };
+}
 // una riga di "Assegna modelle": trattamento, eventuali MAT/POM (nascosti
 // nella pagina pubblica di ricerca modelle), e nome/telefono della modella
 // una volta trovata. Nome/telefono usano stato locale e si salvano solo al
@@ -13622,6 +13634,15 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   const altriSlot = Array.isArray(tuttiGliSlot) && tuttiGliSlot.length > 1 && mioIndice != null && mioIndice >= 0
     ? tuttiGliSlot.map((s, i) => ({ s, i })).filter(({ i }) => i !== mioIndice)
     : [];
+
+  // nome e telefono si scrivono SEMPRE insieme, in un colpo solo: uno alla
+  // volta, il secondo salvataggio ripartiva dai dati vecchi e cancellava il
+  // primo — ed e' cosi' che il nome inserito la mattina spariva la sera
+  const daSalvare = nome !== (modella.nome_modella || "") || telefono !== (modella.telefono_modella || "");
+  function salvaNomeETelefono() {
+    if (!daSalvare) return;
+    onSalva({ nome_modella: nome, telefono_modella: telefono });
+  }
 
   return (
     <div style={{ padding: "10px 0", borderTop: primaRiga ? "none" : `1px solid ${CREAM_BORDER}` }}>
@@ -13672,7 +13693,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           placeholder="Nome"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          onBlur={() => { if (nome !== (modella.nome_modella || "")) onSalva("nome_modella", nome); }}
+          onBlur={salvaNomeETelefono}
           style={{ ...inputStyle, flex: "2 1 150px", padding: "6px 10px" }}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 140px" }}>
@@ -13680,7 +13701,7 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             placeholder="Tel."
             value={telefono}
             onChange={(e) => setTelefono(e.target.value)}
-            onBlur={() => { if (telefono !== (modella.telefono_modella || "")) onSalva("telefono_modella", telefono); }}
+            onBlur={salvaNomeETelefono}
             style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "6px 10px" }}
           />
           {telefono.trim() && (
@@ -13694,6 +13715,23 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             </>
           )}
         </div>
+        {/* il tasto di conferma: finche' c'e' qualcosa da salvare si vede e
+            chiede di premerlo, appena e' salvato lascia il posto alla
+            spunta verde. Il salvataggio parte anche uscendo dal campo, ma
+            avere un gesto esplicito e' l'unico modo per sapere con
+            certezza che la modella e' stata registrata */}
+        {daSalvare ? (
+          <button
+            onClick={salvaNomeETelefono}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}
+          >
+            Conferma
+          </button>
+        ) : (modella.nome_modella || "").trim() ? (
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#2E7D32", whiteSpace: "nowrap", flexShrink: 0 }}>✓ Trovata</span>
+        ) : (
+          <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", whiteSpace: "nowrap", flexShrink: 0 }}>Da cercare</span>
+        )}
       </div>
     </div>
   );
@@ -17845,13 +17883,21 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // iscritto: si salva subito, niente tasto "Salva" separato — nome/
   // telefono passano dal gruppo (vedi gruppoModellaAggiornaCampo) perché
   // possono essere condivisi con altri posti dello stesso allievo
+  // Si rilegge SEMPRE l'elenco dal database prima di riscriverlo, invece di
+  // fidarsi di quello che c'e' in pagina: fra un salvataggio e l'altro il
+  // dato in memoria puo' essere vecchio di un secondo — o di un'ora, se un
+  // collega sta scrivendo dallo stesso corso — e riscriverlo intero
+  // cancellerebbe quello che nel frattempo e' cambiato
   async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
-    const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
-    if (!iscritto) return;
-    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
-    const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
-      ? gruppoModellaAggiornaCampo(elenco, idx, campo, valore)
-      : elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const campi = campiModella(campo, valore);
+    const { data: riga } = await supabase.from("iscritti").select("tipi_modelle").eq("id", iscrittoId).maybeSingle();
+    const elenco = Array.isArray(riga?.tipi_modelle) ? riga.tipi_modelle : [];
+    let nuovoElenco = elenco;
+    Object.entries(campi).forEach(([nomeCampo, valoreCampo]) => {
+      nuovoElenco = (nomeCampo === "nome_modella" || nomeCampo === "telefono_modella")
+        ? gruppoModellaAggiornaCampo(nuovoElenco, idx, nomeCampo, valoreCampo)
+        : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
+    });
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
@@ -17875,11 +17921,13 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // un array in corsi_date.modelle_master con una voce per giorno che la
   // richiede, creata al volo la prima volta che si scrive qualcosa
   async function aggiornaModellaMaster(numeroGiorno, campo, valore) {
-    const elencoAttuale = Array.isArray(corsoData.modelle_master) ? corsoData.modelle_master : [];
+    const campi = campiModella(campo, valore);
+    const { data: riga } = await supabase.from("corsi_date").select("modelle_master").eq("id", corsoData.id).maybeSingle();
+    const elencoAttuale = Array.isArray(riga?.modelle_master) ? riga.modelle_master : [];
     const esiste = elencoAttuale.some((m) => m.numero_giorno === numeroGiorno);
     const nuovoElenco = esiste
-      ? elencoAttuale.map((m) => (m.numero_giorno === numeroGiorno ? { ...m, [campo]: valore } : m))
-      : [...elencoAttuale, { numero_giorno: numeroGiorno, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", [campo]: valore }];
+      ? elencoAttuale.map((m) => (m.numero_giorno === numeroGiorno ? { ...m, ...campi } : m))
+      : [...elencoAttuale, { numero_giorno: numeroGiorno, mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "", ...campi }];
     const { error } = await supabase.from("corsi_date").update({ modelle_master: nuovoElenco }).eq("id", corsoData.id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["corsi_date"]);
@@ -17906,7 +17954,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   async function aggiornaModellaAllievoGiorno(iscrittoId, numeroGiorno, campo, valore, opzioni = {}) {
     const iscritto = listaIscritti.find((x) => x.id === iscrittoId);
     if (!iscritto) return;
-    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
+    const campi = campiModella(campo, valore);
+    const { data: riga } = await supabase.from("iscritti").select("tipi_modelle").eq("id", iscrittoId).maybeSingle();
+    const elenco = Array.isArray(riga?.tipi_modelle) ? riga.tipi_modelle : [];
     const idx = elenco.findIndex((m) => (m.giorno ?? giornoDiRipiegoAllievi) === numeroGiorno);
     if (idx < 0) {
       if (!opzioni.creaSeMancante) {
@@ -17918,16 +17968,19 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         tipo: opzioni.tipoDefault || "",
         mattina: false, pomeriggio: false,
         nome_modella: "", telefono_modella: "",
-        [campo]: valore,
+        ...campi,
       };
       const { error: erroreNuovo } = await supabase.from("iscritti").update({ tipi_modelle: [...elenco, nuovoPosto] }).eq("id", iscrittoId);
       if (erroreNuovo) { setMsg("Errore: " + erroreNuovo.message); return; }
       ricarica(["iscritti"]);
       return;
     }
-    const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
-      ? gruppoModellaAggiornaCampo(elenco, idx, campo, valore)
-      : elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    let nuovoElenco = elenco;
+    Object.entries(campi).forEach(([nomeCampo, valoreCampo]) => {
+      nuovoElenco = (nomeCampo === "nome_modella" || nomeCampo === "telefono_modella")
+        ? gruppoModellaAggiornaCampo(nuovoElenco, idx, nomeCampo, valoreCampo)
+        : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
+    });
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
@@ -20371,12 +20424,18 @@ function VistaRicercaModelle({ param, mostraClasse }) {
   const iscrittiConModelle = iscritti.filter((i) => Array.isArray(i.tipi_modelle) && i.tipi_modelle.some((m) => presenteIlGiorno(i.giorni_presenza, m.giorno)));
 
   async function aggiornaModellaSlot(iscrittoId, idx, campo, valore) {
-    const iscritto = iscritti.find((x) => x.id === iscrittoId);
-    if (!iscritto) return;
-    const elenco = Array.isArray(iscritto.tipi_modelle) ? iscritto.tipi_modelle : [];
-    const nuovoElenco = (campo === "nome_modella" || campo === "telefono_modella")
-      ? gruppoModellaAggiornaCampo(elenco, idx, campo, valore)
-      : elenco.map((m, i) => (i === idx ? { ...m, [campo]: valore } : m));
+    const campi = campiModella(campo, valore);
+    // si rilegge dal database: questa pagina sta aperta per ore sul
+    // telefono di chi cerca le modelle, e quello che ha in memoria puo'
+    // essere vecchio quanto la mattina
+    const { data: riga } = await supabase.from("iscritti").select("tipi_modelle").eq("id", iscrittoId).maybeSingle();
+    const elenco = Array.isArray(riga?.tipi_modelle) ? riga.tipi_modelle : [];
+    let nuovoElenco = elenco;
+    Object.entries(campi).forEach(([nomeCampo, valoreCampo]) => {
+      nuovoElenco = (nomeCampo === "nome_modella" || nomeCampo === "telefono_modella")
+        ? gruppoModellaAggiornaCampo(nuovoElenco, idx, nomeCampo, valoreCampo)
+        : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
+    });
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
     if (error) return;
     setDati((prev) => ({
