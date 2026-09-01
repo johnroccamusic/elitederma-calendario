@@ -17464,16 +17464,29 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     // gli altri 440 non erano scritti da nessuna parte, e la scheda
     // sembrava a posto. Vale solo sulle iscrizioni nuove — sulle vecchie
     // bloccherebbe anche il salvataggio automatico di un campo qualsiasi.
+    // Il confronto va fatto sull'IMPONIBILE, non sul totale: il campo qui
+    // sopra è "Totale pattuito per la vendita (senza IVA)", mentre il
+    // "totale" di ogni quota è quello che il cliente paga davvero, IVA
+    // compresa. Confrontarli fra loro faceva risultare in eccesso ogni
+    // iscrizione con almeno una quota con IVA — 1.553,80 di quote contro
+    // 1.490 pattuiti, dove i 63,80 di troppo erano esattamente l'IVA.
+    // Le quote senza IVA (Cash) hanno imponibile uguale al totale, quindi
+    // rientrano nel conto senza eccezioni; se l'imponibile non è ancora
+    // stato calcolato (metodo non scelto) vale il totale.
     const sommaQuote = round2(
       [pagAcconto, ...accontoExtra, pagPrecorso, ...precorsoExtra, pagSaldo]
-        .reduce((somma, q) => somma + (q.totale === "" ? 0 : parseNum(q.totale)), 0)
+        .reduce((somma, q) => {
+          const imponibile = q.imponibile === "" || q.imponibile == null ? null : parseNum(q.imponibile);
+          if (imponibile != null) return somma + imponibile;
+          return somma + (q.totale === "" ? 0 : parseNum(q.totale));
+        }, 0)
     );
     const pattuito = totalePattuito === "" ? 0 : parseNum(totalePattuito);
     if (strict && pattuito > 0 && Math.abs(sommaQuote - pattuito) > 0.01) {
       const differenza = round2(Math.abs(pattuito - sommaQuote));
       setMsg(sommaQuote < pattuito
-        ? `Impossibile salvare: le quote registrate sono ${fmtEuroErp2(sommaQuote)} su ${fmtEuroErp2(pattuito)} di totale pattuito. Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
-        : `Impossibile salvare: le quote registrate sono ${fmtEuroErp2(sommaQuote)} e superano di ${fmtEuroErp2(differenza)} il totale pattuito di ${fmtEuroErp2(pattuito)}.`);
+        ? `Impossibile salvare: le quote registrate valgono ${fmtEuroErp2(sommaQuote)} di imponibile su ${fmtEuroErp2(pattuito)} di totale pattuito. Mancano ${fmtEuroErp2(differenza)} da distribuire fra quota pre corso e da avere al corso.`
+        : `Impossibile salvare: le quote registrate valgono ${fmtEuroErp2(sommaQuote)} di imponibile e superano di ${fmtEuroErp2(differenza)} il totale pattuito di ${fmtEuroErp2(pattuito)}.`);
       return false;
     }
 
