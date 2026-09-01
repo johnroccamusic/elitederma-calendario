@@ -17789,7 +17789,9 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   }
 
   async function elimina(id) {
-    if (!window.confirm("Sei sicuro di voler cancellare in modo definitivo l'allievo?")) return;
+    const chi = iscritti.find((x) => x.id === id);
+    const nome = chi ? `${chi.nome || ""} ${chi.cognome || ""}`.trim().toUpperCase() : "";
+    if (!window.confirm(`Sei sicuro di voler cancellare in modo definitivo l'allievo${nome ? ` ${nome}` : ""}? Spariscono anche tutti i suoi dati di pagamento, e non si torna indietro.`)) return;
     const { error } = await supabase.from("iscritti").delete().eq("id", id);
     if (error) { setMsg("Errore: " + error.message); return; }
     ricarica(["iscritti"]);
@@ -19873,14 +19875,29 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                     {dermografoAcquistato(i) && <span style={{ fontSize: 12, fontWeight: 400, color: GOLD }}>· {etichettaDermografo(dermografoAcquistato(i))}</span>}
                     {i.note && <span style={{ fontSize: 12, fontWeight: 400, color: MUTED }}>({i.note})</span>}
                   </div>
-                  {i.telefono && (
-                    <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
-                      <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
-                      <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
-                        <IconaWhatsapp size={22} />
-                      </a>
-                    </span>
-                  )}
+                  <span style={{ fontSize: 12, fontWeight: 400, color: MUTED, display: "inline-flex", alignItems: "center", gap: 12, marginLeft: "auto" }}>
+                    {i.telefono && (
+                      <>
+                        <a href={`tel:${i.telefono.replace(/\s+/g, "")}`} onClick={(e) => e.stopPropagation()} style={{ color: MUTED, textDecoration: "underline" }}>{i.telefono}</a>
+                        <a href={`https://wa.me/${numeroWhatsapp(i.telefono)}`} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} title="Apri chat WhatsApp" style={{ display: "flex", alignItems: "center", padding: 8, margin: -8 }}>
+                          <IconaWhatsapp size={22} />
+                        </a>
+                      </>
+                    )}
+                    {/* il cestino solo a chi amministra: da qui si cancella
+                        un allievo senza dover entrare in Contabilità classe,
+                        ma non e' un gesto che debba avere sotto mano
+                        chiunque apra la lista della classe */}
+                    {adminSbloccato && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); elimina(i.id); }}
+                        title="Elimina questo allievo"
+                        style={{ border: "none", background: "none", cursor: "pointer", color: "#C0392B", padding: 6, margin: -6, display: "flex", alignItems: "center" }}
+                      >
+                        <IconaCestino size={18} />
+                      </button>
+                    )}
+                  </span>
                 </div>
               )}
               {mostraGestione && (
