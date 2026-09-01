@@ -28801,7 +28801,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -29094,7 +29094,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     const piano = pianoRiordino({ prodottiShop, risultato, oggi });
     const ritardi = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo").length;
     const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente").length;
-    return { risultato, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
+    return { risultato, piano, daOrdinare: piano.daOrdinare.length, ritardi, urgenti };
   }, [corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, prodottiShop]);
 
   // i totali aggregati contano solo chi ha davvero un magazzino da
@@ -29128,6 +29128,29 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (typeof va === "boolean") return (va === vb ? 0 : va ? -1 : 1) * dir;
     return (va - vb) * dir;
   });
+
+  // I prodotti che bloccano un corso in calendario. "Attenzione magazzino"
+  // guardava solo la scorta minima, e quella e' una regola di negozio: dice
+  // "sta finendo", non "senza questo il corso del 10 salta". Cosi' l'Advisor
+  // annunciava 68 prodotti da ordinare e il pannello sotto ne mostrava 2,
+  // nessuno dei quali era il motivo del corso scoperto. Qui si prende la
+  // stessa lista dell'Advisor — quella che ragiona sulle date dei corsi — e
+  // si mettono in cima le righe legate a una data: prima i ritardi, poi
+  // quelle con meno giorni davanti.
+  const bloccanti = useMemo(() => {
+    const righe = (sintesiAdvisor.piano?.daOrdinare || []).filter((r) => r.perData);
+    return [...righe].sort((a, b) => (a.perData.giorni ?? 0) - (b.perData.giorni ?? 0));
+  }, [sintesiAdvisor]);
+  const corsoPerIdMag = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
+  const edizionePerIdMag = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
+  const locPerIdMag = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
+  function etichettaEdizioneMag(corsoDataId) {
+    const cd = edizionePerIdMag[corsoDataId];
+    if (!cd) return "un corso";
+    const nome = corsoPerIdMag[cd.corso_id]?.nome || "corso";
+    const citta = locPerIdMag[cd.location_id]?.nome;
+    return `${nome}${citta ? ` ${toTitleCase(citta)}` : ""} del ${fmtData(cd.data_inizio)}`;
+  }
 
   // l'ordine per fornitore aperto di fianco agli avvisi: { fornitoreId,
   // suggerimenti } — i suggerimenti sono le quantità già spuntate
@@ -29266,6 +29289,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : `minmax(0,${divisioneColonne}fr) 14px minmax(0,${100 - divisioneColonne}fr)`, gap: isMobile ? 18 : 0, alignItems: "start", marginBottom: 24, position: "relative" }}>
           <PannelloAvvisiMagazzino
             avvisi={avvisiMagazzino}
+            bloccanti={bloccanti}
+            etichettaEdizione={etichettaEdizioneMag}
+            onApriAdvisor={onApriAdvisor}
             immaginePerProdotto={immaginePerProdottoMagazzino}
             onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
             onApriScheda={(p) => apriScheda(p)}
@@ -30055,9 +30081,14 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
     </div>
   );
 }
-function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId }) {
+function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId }) {
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
+  // dei prodotti che bloccano un corso se ne mostrano i primi: sono
+  // ordinati per urgenza, e oltre una certa lunghezza un elenco smette di
+  // essere una cosa da fare e diventa un muro. Il resto sta nell'Advisor
+  const MAX_BLOCCANTI = 12;
+  const bloccantiVisti = bloccanti.slice(0, MAX_BLOCCANTI);
   const thStyle = { ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" };
   const tdStyle = { padding: "8px 10px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "center", ...fontBody, fontSize: 12.5, color: NAVY };
 
@@ -30078,6 +30109,12 @@ function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>Gli articoli che chiedono un intervento adesso.</div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {bloccanti.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #C0392B", background: "#FBE4E1", borderRadius: 12, padding: "8px 12px" }}>
+              <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#C0392B" }}>{bloccanti.length}</span>
+              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>bloccano un corso</span>
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #F0C9C2", background: "#FDF3F1", borderRadius: 12, padding: "8px 12px" }}>
             <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#C0392B" }}>{daRiordinare.length}</span>
             <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>da riordinare</span>
@@ -30089,15 +30126,75 @@ function PannelloAvvisiMagazzino({ avvisi, immaginePerProdotto = {}, onApriPacco
         </div>
       </div>
 
-      {avvisi.length === 0 && (
+      {avvisi.length === 0 && bloccanti.length === 0 && (
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "0 18px 18px" }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
+      )}
+
+      {/* Quello che serve ai corsi in arrivo. Sta in cima perche' e' l'unica
+          urgenza con una data: la scorta minima dice "sta finendo", questa
+          dice "senza, il corso del 10 non si fa" */}
+      {bloccanti.length > 0 && (
+        <div style={{ padding: "0 12px 12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px", flexWrap: "wrap" }}>
+            <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 12, fontWeight: 700 }}>!</span>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Servono per i corsi in arrivo</span>
+            <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "2px 10px" }}>{bloccanti.length} articol{bloccanti.length === 1 ? "o" : "i"}</span>
+          </div>
+          <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+            {bloccantiVisti.map((r) => {
+              const p = r.prodotto;
+              const inRitardo = r.perData.stato === "ritardo";
+              return (
+                <div key={`b-${p.id}`} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <Miniatura prodotto={p} />
+                  <span style={{ flex: "1 1 200px", minWidth: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1.25, overflowWrap: "anywhere" }}>{p.nome}</span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: inRitardo ? "#C0392B" : MUTED, display: "block", lineHeight: 1.35 }}>
+                      {inRitardo
+                        ? `Dovevi ordinarlo il ${fmtData(r.perData.dataLimite)} — ${-r.perData.giorni} giorni di ritardo`
+                        : `Ordina entro il ${fmtData(r.perData.dataLimite)} (${r.perData.giorni} giorni)`}
+                      {etichettaEdizione ? ` · serve per ${etichettaEdizione(r.perData.edizioneCriticaId)}` : ""}
+                    </span>
+                  </span>
+                  {r.quantitaSuggerita != null && (
+                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
+                      ordina {r.quantitaSuggerita}
+                    </span>
+                  )}
+                  <span style={{ display: "inline-flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
+                    {onApriScheda && (
+                      <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
+                    )}
+                    {onOrdineFornitore && p.fornitore_id && (
+                      <button
+                        onClick={() => onOrdineFornitore(p)}
+                        title="Apri l'ordine di questo fornitore, con gli altri suoi prodotti in esaurimento"
+                        style={{ ...fontBody, fontSize: 11, fontWeight: 700, lineHeight: 1.25, color: fornitoreApertoId === p.fornitore_id ? "#fff" : NAVY, background: fornitoreApertoId === p.fornitore_id ? NAVY : "#fff", border: `1px solid ${fornitoreApertoId === p.fornitore_id ? NAVY : CREAM_BORDER}`, borderRadius: 10, padding: "6px 10px", cursor: "pointer", maxWidth: 150, whiteSpace: "normal" }}
+                      >
+                        Associa con altri prodotti dello stesso fornitore
+                      </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+            {bloccanti.length > MAX_BLOCCANTI && (
+              <button
+                onClick={onApriAdvisor}
+                style={{ width: "100%", textAlign: "left", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 12px", cursor: "pointer" }}
+              >
+                e altri {bloccanti.length - MAX_BLOCCANTI} — aprili nell'Advisor ›
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {daRiordinare.length > 0 && (
         <div style={{ padding: "0 12px 12px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 6px" }}>
             <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 12, fontWeight: 700 }}>!</span>
-            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Da riordinare</span>
+            <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Sotto la scorta minima</span>
             <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "2px 10px" }}>{daRiordinare.length} articol{daRiordinare.length === 1 ? "o" : "i"}</span>
           </div>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
@@ -44119,7 +44216,7 @@ export default function App() {
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
@@ -45303,7 +45400,7 @@ export default function App() {
           ruoloUtente={ruoloUtente}
           categorieProdotti={categorieProdotti} prodottiShop={prodottiShop} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
-          corsi={corsi} corsiDate={corsiDate} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
+          corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
