@@ -6,3 +6,4 @@ supabase/.temp
 .vercel
 .env*
 .DS_Store
+.claude/worktrees/
