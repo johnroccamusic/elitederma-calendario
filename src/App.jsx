@@ -14293,8 +14293,13 @@ function Modal({ title, onClose, children, maxWidth = 560, paddingTop = 40 }) {
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", justifyContent: "center", padding: `${paddingTop}px 20px`, overflowY: "auto", zIndex: 1000 }}
       onClick={onClose}
     >
+      {/* "margin: auto" invece dell'allineamento in alto: una finestra
+          corta si mette in mezzo allo schermo invece di restare appiccicata
+          sotto l'intestazione, e una piu' alta dello schermo continua a
+          partire dall'alto e a scorrere — con margini automatici non viene
+          mai tagliata in cima, come succederebbe con align-items: center */}
       <div
-        style={{ ...cardStyle, maxWidth, width: "100%", height: "fit-content", marginBottom: 0 }}
+        style={{ ...cardStyle, maxWidth, width: "100%", height: "fit-content", margin: "auto" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
