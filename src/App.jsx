@@ -29029,7 +29029,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, onBack, titolo = "Gestione magazzino" }) {
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -29120,6 +29120,20 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     }
     onBack();
   }
+  // vale anche per la freccia del dock e per il "indietro" del telefono:
+  // finche' si sta guardando la scheda di un prodotto aperta dall'elenco,
+  // il primo passo indietro riporta all'elenco, non fuori dalla pagina
+  useEffect(() => {
+    if (!registraInterceptaIndietro) return undefined;
+    if (!vistaPrimaDellaScheda) { registraInterceptaIndietro(null); return undefined; }
+    registraInterceptaIndietro(() => {
+      mostraVista(vistaPrimaDellaScheda);
+      setVistaPrimaDellaScheda(null);
+      setAperturaScheda(null);
+    });
+    return () => registraInterceptaIndietro(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaPrimaDellaScheda, registraInterceptaIndietro]);
 
   function ordinaPer(campo) {
     if (!campo) return;
@@ -45693,6 +45707,7 @@ export default function App() {
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
+          registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
