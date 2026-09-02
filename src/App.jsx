@@ -30614,6 +30614,22 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
                       accanto a un prodotto che blocca un corso non dice
                       niente a nessuno. Quanto ordinare si decide
                       nell'ordine al fornitore, dove ci sono le caselle */}
+                  {/* prima dello stock, il conto che lo spiega: quanti
+                      allievi e quanti pezzi si portano via. 5 aghi a testa
+                      per 5 allievi fanno 25 impegnati, e allora uno stock
+                      di 20 si legge da solo */}
+                  {r.allieviConsiderati > 0 && (
+                    <span
+                      title="Gli allievi dei corsi futuri che concorrono a questo fabbisogno, e i pezzi che serviranno in tutto"
+                      style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "center", minWidth: 118 }}
+                    >
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                        <IconaGruppoTeam size={14} color={MUTED} />
+                        {r.allieviConsiderati} alliev{r.allieviConsiderati === 1 ? "o" : "i"}
+                      </span>
+                      <span style={{ display: "block", color: MUTED, marginTop: 2 }}>quantità impegnata {r.fabbisognoTotale || 0}</span>
+                    </span>
+                  )}
                   <span style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "center", minWidth: 96 }}>
                     <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: "#C0392B" }}>Stock {p.quantita || 0}</span>
                     <span style={{ display: "block", color: MUTED, marginTop: 2 }}>soglia {p.soglia_riordino != null ? p.soglia_riordino : "—"}</span>
@@ -30632,18 +30648,6 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
                       </button>
                     )}
                   </span>
-                  {/* su quante persone e' stato fatto il conto: un
-                      fabbisogno senza il numero di allievi dietro non si
-                      puo' controllare a mente */}
-                  {r.allieviConsiderati > 0 && (
-                    <span
-                      title="Gli allievi dei corsi futuri che concorrono a questo fabbisogno"
-                      style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "5px 11px", whiteSpace: "nowrap" }}
-                    >
-                      <IconaGruppoTeam size={14} color={MUTED} />
-                      {r.allieviConsiderati} alliev{r.allieviConsiderati === 1 ? "o" : "i"}
-                    </span>
-                  )}
                 </div>
               );
             })}
