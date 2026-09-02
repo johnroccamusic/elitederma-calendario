@@ -29053,7 +29053,19 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     if (chiave === "categorie") setCategorieMontate(true);
     setVistaProdotti(chiave);
   }
+  // scegliendo una vista a mano il "da dove venivo" non serve più: sei
+  // tornato indietro da solo
+  function cambiaVistaAMano(chiave) {
+    setVistaPrimaDellaScheda(null);
+    mostraVista(chiave);
+  }
+  // Aprire la scheda di un prodotto da un avviso porta nella vista a
+  // categorie: si ricorda da dove si veniva, o il tasto "indietro" farebbe
+  // uscire dall'intera pagina invece di riportare all'elenco — due passi
+  // indietro invece di uno
+  const [vistaPrimaDellaScheda, setVistaPrimaDellaScheda] = useState(null);
   function apriSchedaProdotto(opzioni) {
+    if (vistaProdotti !== "categorie") setVistaPrimaDellaScheda(vistaProdotti);
     setAperturaScheda((prec) => ({ ...opzioni, n: (prec?.n || 0) + 1 }));
     mostraVista("categorie");
   }
@@ -29099,7 +29111,15 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     ridimensionamentoRef.current = null;
   }
 
-  function tornaIndietro() { onBack(); }
+  function tornaIndietro() {
+    if (vistaPrimaDellaScheda) {
+      mostraVista(vistaPrimaDellaScheda);
+      setVistaPrimaDellaScheda(null);
+      setAperturaScheda(null);
+      return;
+    }
+    onBack();
+  }
 
   function ordinaPer(campo) {
     if (!campo) return;
@@ -29394,7 +29414,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
-        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo="Gestione magazzino e shop" onClick={tornaIndietro} /></div>
+        {/* il tasto dice sempre dove porta: tornando da una scheda aperta
+            da un avviso porta all'elenco, non fuori dalla pagina */}
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : "Gestione magazzino e shop"} onClick={tornaIndietro} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -29594,7 +29616,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               ].map((v) => (
                 <button
                   key={v.chiave}
-                  onClick={() => mostraVista(v.chiave)}
+                  onClick={() => cambiaVistaAMano(v.chiave)}
                   style={{ display: "flex", alignItems: "center", gap: 7, ...fontBody, fontSize: 12.5, fontWeight: 700, padding: "9px 15px", border: "none", cursor: "pointer", background: vistaProdotti === v.chiave ? NAVY : "transparent", color: vistaProdotti === v.chiave ? "#fff" : NAVY }}
                 >
                   {v.icona}{v.etichetta}
@@ -29630,7 +29652,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                   la tabella sa mostrare: sceglierne uno riporta all'elenco
                   invece di restare un tasto che non fa niente */}
               {[{ v: "tutti", l: "Tutti" }, { v: "sottoscorta", l: "Sotto scorta" }, { v: "esauriti", l: "Esauriti" }, { v: "senzacosto", l: "Senza costo" }, { v: "fermi", l: "Fermi" }].map((f) => (
-                <button key={f.v} onClick={() => { setFiltroRapido(f.v); mostraVista("elenco"); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
+                <button key={f.v} onClick={() => { setFiltroRapido(f.v); cambiaVistaAMano("elenco"); }} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, padding: "7px 13px", borderRadius: 16, border: "none", background: vistaProdotti === "elenco" && filtroRapido === f.v ? NAVY : "transparent", color: vistaProdotti === "elenco" && filtroRapido === f.v ? "#fff" : NAVY, cursor: "pointer" }}>
                   {f.l}
                 </button>
               ))}
