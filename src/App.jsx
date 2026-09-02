@@ -863,6 +863,161 @@ function IconaMatitaNota({ size = 16, color = "currentColor" }) {
     </svg>
   );
 }
+// Le icone delle categorie del POS. Sono disegni a filo, tutti sullo
+// stesso tratto: servono a far riconoscere la categoria con la coda
+// dell'occhio, non a illustrarla — chi vende ha le mani occupate e cerca
+// la fila giusta, non un'immagine.
+function IconaCatPigmento({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 2h4v3h-4z" /><path d="M9 5h6l1.5 4.5V21a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V9.5z" /><path d="M8 13h8" />
+    </svg>
+  );
+}
+function IconaCatLama({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 3l4 4L8 20l-5 1 1-5z" /><path d="M14 6l4 4" />
+    </svg>
+  );
+}
+function IconaCatLaminazione({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="4" width="12" height="14" rx="2" /><path d="M7 8h6" />
+      <path d="M17.5 15.5l1 2 2 1-2 1-1 2-1-2-2-1 2-1z" />
+    </svg>
+  );
+}
+function IconaCatCiglia({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 14c3-4 6-6 9-6s6 2 9 6" />
+      <path d="M5 15l-1.5 2.5M9 16.5L8.5 19M13 16.5l.5 2.5M17 15l1.5 2.5" />
+    </svg>
+  );
+}
+function IconaCatNeedling({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v7" /><path d="M12 21a4 4 0 0 0 4-4c0-2.2-4-7-4-7s-4 4.8-4 7a4 4 0 0 0 4 4z" />
+    </svg>
+  );
+}
+function IconaCatTrico({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 3l5 5-9 9-5-5z" /><path d="M7 12l-4 9 9-4" /><path d="M9.5 17.5h.01M6.5 19h.01" />
+    </svg>
+  );
+}
+function IconaCatWear({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="15" r="5" /><circle cx="16" cy="15" r="5" /><path d="M8 10V6M16 10V6" />
+    </svg>
+  );
+}
+function IconaCatDermografo({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2l8 8-3 3-8-8z" /><path d="M11 5l-7 7v5l5 5 7-7" /><path d="M4 20l3-3" />
+    </svg>
+  );
+}
+function IconaCatDocumento({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 4h7v16H4z" /><path d="M13 4h7v16h-7z" /><path d="M11 4v16" />
+    </svg>
+  );
+}
+function IconaCatArredo({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 11V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5" /><rect x="3" y="11" width="18" height="6" rx="2" />
+      <path d="M6 17v3M18 17v3" />
+    </svg>
+  );
+}
+function IconaCatGemma({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3h12l3 6-9 12L3 9z" /><path d="M3 9h18M9 3l3 18M15 3l-3 18" />
+    </svg>
+  );
+}
+function IconaCatEtichetta({ size = 20, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 12V4h8l10 10-8 8z" /><circle cx="7.5" cy="7.5" r="1.2" />
+    </svg>
+  );
+}
+// dal nome della categoria alla sua icona: si va per parole, cosi' una
+// categoria nuova prende da sola quella giusta senza toccare il codice
+function iconaCategoriaPos(nome) {
+  const n = String(nome || "").toLowerCase();
+  if (/pigment|corrective|henne|lips|eyebrow|eyeliner|tinta|colore/.test(n)) return IconaCatPigmento;
+  if (/kit|composizione|astucc|scatol|packaging|box/.test(n)) return IconaScatolaErp;
+  if (/lama|microblading|twizer/.test(n)) return IconaCatLama;
+  if (/laminazione/.test(n)) return IconaCatLaminazione;
+  if (/lash|ciglia|extension/.test(n)) return IconaCatCiglia;
+  if (/needling|agh/.test(n)) return IconaCatNeedling;
+  if (/trico/.test(n)) return IconaCatTrico;
+  if (/wear|acc\./.test(n)) return IconaCatWear;
+  if (/dermografo|manipolo/.test(n)) return IconaCatDermografo;
+  if (/stampe|quaderni|manual|progettazione|consulenz/.test(n)) return IconaCatDocumento;
+  if (/postazion|arred|banch/.test(n)) return IconaCatArredo;
+  if (/gemme/.test(n)) return IconaCatGemma;
+  return IconaCatEtichetta;
+}
+// La striscia delle categorie del POS: una barra crema, un'icona d'oro per
+// ognuna e il nome sotto o di fianco, separati da un filetto. Scorre in
+// orizzontale perche' le categorie sono trenta e non ci staranno mai tutte:
+// si scorre come uno scaffale, invece di far crescere la pagina.
+function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = false }) {
+  const voci = [{ id: "", nome: "Tutti" }, ...(categorie || [])];
+  return (
+    <div
+      style={{
+        display: "flex", alignItems: "stretch", flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch",
+        background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
+        padding: compatta ? "4px 6px" : "6px 8px", marginBottom: compatta ? 10 : 16, scrollbarWidth: "none",
+      }}
+    >
+      {voci.map((c, i) => {
+        const Icona = c.id ? iconaCategoriaPos(c.nome) : IconaTilePos;
+        const scelta = selezionata === c.id;
+        return (
+          <React.Fragment key={c.id || "tutti"}>
+            {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, margin: "6px 0", flexShrink: 0 }} />}
+            <button
+              onClick={() => onSeleziona(c.id)}
+              title={c.nome}
+              style={{
+                display: "flex", alignItems: "center", gap: 8, flexShrink: 0,
+                padding: compatta ? "8px 10px" : "10px 14px", borderRadius: 12,
+                background: scelta ? NAVY : "transparent", border: "1px solid transparent",
+                cursor: "pointer", ...fontBody, fontSize: compatta ? 11.5 : 12.5, fontWeight: 700,
+                color: scelta ? "#fff" : NAVY, textAlign: "left",
+              }}
+            >
+              <span style={{ display: "inline-flex", flexShrink: 0, color: scelta ? "#fff" : GOLD }}>
+                <Icona size={compatta ? 17 : 20} color={scelta ? "#fff" : GOLD} />
+              </span>
+              {/* due parole vanno a capo invece di allungare la striscia:
+                  "Lame Microblading" su una riga sola la fa scorrere il
+                  doppio */}
+              <span style={{ maxWidth: 96, lineHeight: 1.2, whiteSpace: "normal" }}>{c.nome}</span>
+            </button>
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
 function IconaPiuCerchiato({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
@@ -37454,18 +37609,39 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
       {/* i conti in un blocco solo, con la riga d'oro di fianco: e' la
           parte che si guarda per ultima prima di incassare */}
-      <div style={{ background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`, padding: isMobile ? "12px 14px" : "16px 18px", marginBottom: isMobile ? 12 : 16 }}>
-        {[["Subtotale (IVA incl.)", subtotale], ["Imponibile", imponibile], ["IVA 22%", iva]].map(([etichetta, valore]) => (
-          <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY, marginBottom: 8 }}>
-            <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: MUTED, fontSize: isMobile ? 11 : 11.5, fontWeight: 700 }}>{etichetta}</span>
-            <span style={{ fontWeight: 600 }}>{fmtEuroErp2(valore)}</span>
-          </div>
-        ))}
-        <div style={{ height: 1, background: CREAM_BORDER, margin: "10px 0" }} />
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
-          <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
-          <span style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+      {/* da telefono i tre conti stanno a sinistra e il totale a destra,
+          fianco a fianco: in colonna il riquadro diventava alto quanto
+          mezzo schermo e il totale finiva sotto la piega */}
+      <div style={{
+        background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`,
+        padding: isMobile ? "12px 14px" : "16px 18px", marginBottom: isMobile ? 12 : 16,
+        display: isMobile ? "flex" : "block", alignItems: "stretch", gap: 14,
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {[["Subtotale (IVA incl.)", subtotale], ["Imponibile", imponibile], ["IVA 22%", iva]].map(([etichetta, valore], i) => (
+            <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY, marginBottom: isMobile && i === 2 ? 0 : 8 }}>
+              <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: MUTED, fontSize: isMobile ? 10.5 : 11.5, fontWeight: 700 }}>{etichetta}</span>
+              <span style={{ fontWeight: 600, whiteSpace: "nowrap" }}>{fmtEuroErp2(valore)}</span>
+            </div>
+          ))}
         </div>
+        {isMobile ? (
+          <>
+            <span style={{ width: 1, background: CREAM_BORDER, flexShrink: 0 }} />
+            <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", minWidth: 120 }}>
+              <span style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5, lineHeight: 1.25 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
+              <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY, marginTop: 4 }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ height: 1, background: CREAM_BORDER, margin: "10px 0" }} />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
+              <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       {puoScontare && (
@@ -37764,17 +37940,12 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
           <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1 }} />
         </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", marginBottom: 10, marginLeft: -16, marginRight: -16, padding: "0 16px 4px", scrollbarWidth: "none" }}>
-          {[{ id: "", nome: "Tutti" }, ...categorieOrdinate].map((c) => (
-            <button
-              key={c.id || "tutti"}
-              onClick={() => cambiaFiltro(() => setCategoriaSel(c.id))}
-              style={{ ...fontBody, fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 14, border: categoriaSel === c.id ? "none" : `1px solid ${CREAM_BORDER}`, background: categoriaSel === c.id ? NAVY : "#fff", color: categoriaSel === c.id ? "#fff" : NAVY, cursor: "pointer", flexShrink: 0, whiteSpace: "nowrap" }}
-            >
-              {c.nome}
-            </button>
-          ))}
-        </div>
+        <StrisciaCategoriePos
+          categorie={categorieOrdinate}
+          selezionata={categoriaSel}
+          onSeleziona={(id) => cambiaFiltro(() => setCategoriaSel(id))}
+          compatta
+        />
 
         <div style={{ ...cardStyle, marginBottom: 0, padding: "6px 14px" }}>{elencoProdotti}</div>
         {paginazione}
@@ -37912,12 +38083,11 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
             <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1, minWidth: 220 }} />
             </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-              <TabPillola attivo={!categoriaSel} onClick={() => cambiaFiltro(() => setCategoriaSel(""))}>Tutti</TabPillola>
-              {categorieOrdinate.map((c) => (
-                <TabPillola key={c.id} attivo={categoriaSel === c.id} onClick={() => cambiaFiltro(() => setCategoriaSel(c.id))}>{c.nome}</TabPillola>
-              ))}
-            </div>
+            <StrisciaCategoriePos
+              categorie={categorieOrdinate}
+              selezionata={categoriaSel}
+              onSeleziona={(id) => cambiaFiltro(() => setCategoriaSel(id))}
+            />
 
             {elencoProdotti}
             {paginazione}
