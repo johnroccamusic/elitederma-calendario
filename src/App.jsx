@@ -847,6 +847,22 @@ function IconaCamionConsegna({ size = 18, color = "#fff" }) {
     </svg>
   );
 }
+// le icone del carrello POS: regalo, matita e lucchetto
+function IconaRegalo({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="10" width="18" height="10" rx="1.5" /><path d="M3 10h18M12 10v10" />
+      <path d="M12 10S9.5 4.5 7 6.5 12 10 12 10zM12 10s2.5-5.5 5-3.5S12 10 12 10z" />
+    </svg>
+  );
+}
+function IconaMatitaNota({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15.5 4.5l4 4L8 20H4v-4z" /><path d="M13.5 6.5l4 4" />
+    </svg>
+  );
+}
 function IconaPiuCerchiato({ size = 16, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
@@ -37284,6 +37300,8 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
   }
 
   const numeroPezziCarrello = carrello.reduce((s, r) => s + r.quantita, 0);
+  // le etichettine in maiuscoletto sopra i campi del carrello
+  const etichettaPos = { ...fontBody, fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.7, marginBottom: 6 };
 
   // corpo del carrello (righe, sconto, totali, pagamento, note, conferma):
   // identico sia nel pannello laterale desktop sia nel foglio mobile, solo
@@ -37295,24 +37313,39 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           vendita vera che sparisce dai conti, ed è il danno peggiore di
           tutti quelli che questa modalità serve a evitare */}
       {puoSimulare && (
+        // la simulazione ha il suo interruttore, non una spunta in mezzo
+        // alle altre: acceso si vede da lontano, ed e' proprio quello che
+        // serve — una prova dimenticata accesa e' una vendita vera che
+        // sparisce dai conti
         <div style={{
-          marginBottom: isMobile ? 8 : 14, borderRadius: 12, padding: "10px 12px",
-          background: simulazione ? "#FBF1D9" : "transparent",
+          marginBottom: isMobile ? 8 : 16, borderRadius: 14, padding: "12px 14px",
+          display: "flex", alignItems: "center", gap: 12,
+          background: simulazione ? "#FBF1D9" : BG,
           border: `1px ${simulazione ? "solid" : "dashed"} ${simulazione ? GOLD : CREAM_BORDER}`,
         }}>
-          <label style={{ display: "flex", alignItems: "flex-start", gap: 9, cursor: "pointer" }}>
-            <input type="checkbox" checked={simulazione} onChange={(e) => setSimulazione(e.target.checked)} style={{ marginTop: 3 }} />
-            <span style={{ minWidth: 0 }}>
-              <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: simulazione ? "#8A6D1D" : NAVY }}>
-                {simulazione ? "MODALITÀ SIMULAZIONE ATTIVA" : "Modalità simulazione"}
-              </span>
-              <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 1, lineHeight: 1.4 }}>
-                {simulazione
-                  ? "Quello che vendi ora è una prova: nessun incasso nei conti, nessun pezzo scaricato dal magazzino. Si cancella da Logistica, senza lasciare traccia."
-                  : "Solo per chi programma: registra vendite di prova che non toccano né i conti né il magazzino."}
-              </span>
+          <span style={{ width: 44, height: 44, borderRadius: 10, border: `1px dashed ${GOLD}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "#fff" }}>
+            <IconaBorsaShop size={20} color={GOLD} />
+          </span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: simulazione ? "#8A6D1D" : NAVY, display: "block" }}>
+              {simulazione ? "MODALITÀ SIMULAZIONE ATTIVA" : "Modalità simulazione"}
             </span>
-          </label>
+            <span style={{ display: "block", ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 2, lineHeight: 1.4 }}>
+              {simulazione
+                ? "Quello che vendi ora è una prova: nessun incasso nei conti, nessun pezzo scaricato dal magazzino. Si cancella da Logistica, senza lasciare traccia."
+                : "Solo per chi programma: registra vendite di prova che non toccano né i conti né il magazzino."}
+            </span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={simulazione}
+            onClick={() => setSimulazione(!simulazione)}
+            title={simulazione ? "Spegni la simulazione" : "Accendi la simulazione"}
+            style={{ width: 56, height: 30, borderRadius: 20, border: "none", padding: 3, flexShrink: 0, cursor: "pointer", background: simulazione ? GOLD : "#CFCABA", display: "flex", justifyContent: simulazione ? "flex-end" : "flex-start", alignItems: "center", transition: "background 160ms ease" }}
+          >
+            <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }} />
+          </button>
         </div>
       )}
 
@@ -37346,7 +37379,17 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
       {carrello.length === 0 ? (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: isMobile ? "10px 0" : "20px 0", textAlign: "center" }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
+        <div style={{ textAlign: "center", padding: isMobile ? "14px 0" : "26px 0" }}>
+          <span style={{ width: 64, height: 64, borderRadius: "50%", background: "#FDF8EC", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <IconaCarrelloPos size={28} color={GOLD} />
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "14px 0 4px" }}>
+            <span style={{ flex: 1, height: 1, background: CREAM_BORDER }} />
+            <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Il carrello è vuoto</span>
+            <span style={{ flex: 1, height: 1, background: CREAM_BORDER }} />
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{isMobile ? "Aggiungi un prodotto per iniziare." : "Clicca un prodotto per aggiungerlo al carrello."}</div>
+        </div>
       ) : (
         <div style={{ marginBottom: isMobile ? 8 : 16 }}>
           {carrello.map((r) => (
@@ -37372,39 +37415,36 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      {puoScontare && (
-        <>
-          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: couponNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
-            <div style={{ flex: 1 }}>
-              <Field label="Sconto vendita">
-                <select style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
-                  <option value="percentuale">Percentuale</option>
-                  <option value="importo">Importo fisso</option>
-                </select>
-              </Field>
+      {/* sconto e coupon in una tessera sola: sono due modi di fare la
+          stessa cosa e si escludono a vicenda, tenerli vicini lo dice
+          senza doverlo scrivere */}
+      <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 14, padding: isMobile ? "10px 12px" : "12px 14px", marginBottom: isMobile ? 10 : 14, display: "flex", gap: isMobile ? 10 : 14, alignItems: "flex-end", flexWrap: "wrap" }}>
+        {puoScontare && (
+          <>
+            <div style={{ flex: "1 1 150px", minWidth: 0 }}>
+              <div style={etichettaPos}>Sconto vendita</div>
+              <select style={{ ...inputStyle, background: BG, opacity: couponNum > 0 ? 0.5 : 1 }} value={scontoTipo} disabled={couponNum > 0} onChange={(e) => setScontoTipo(e.target.value)}>
+                <option value="percentuale">Percentuale</option>
+                <option value="importo">Importo fisso</option>
+              </select>
             </div>
-            <div style={{ flex: 1 }}>
-              <Field label={scontoTipo === "percentuale" ? "%" : "€"}>
-                <input style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
-              </Field>
+            <div style={{ flex: "0 1 110px", minWidth: 0 }}>
+              <div style={etichettaPos}>{scontoTipo === "percentuale" ? "%" : "€"}</div>
+              <input style={{ ...inputStyle, opacity: couponNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={scontoValore} disabled={couponNum > 0} onChange={(e) => setScontoValore(e.target.value)} placeholder="0" />
             </div>
-          </div>
-          {couponNum > 0 && (
-            <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Svuota il campo Coupon per inserire uno sconto manuale.</div>
-          )}
-        </>
-      )}
-
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: scontoNum > 0 ? 4 : (isMobile ? 8 : 14) }}>
-        <div style={{ flex: 1 }}>
-          <Field label="Coupon (%)">
-            <input style={{ ...inputStyle, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
-          </Field>
+            <span style={{ width: 1, alignSelf: "stretch", background: CREAM_BORDER }} />
+          </>
+        )}
+        <div style={{ flex: "1 1 130px", minWidth: 0 }}>
+          <div style={etichettaPos}>Coupon (%)</div>
+          <input style={{ ...inputStyle, opacity: scontoNum > 0 ? 0.5 : 1 }} inputMode="decimal" value={couponValore} disabled={scontoNum > 0} onChange={(e) => { setCouponValore(e.target.value); setCouponAttivo(null); }} placeholder="0" />
         </div>
+        {(couponNum > 0 || scontoNum > 0) && (
+          <div style={{ flexBasis: "100%", ...fontBody, fontSize: 11.5, color: MUTED }}>
+            {couponNum > 0 ? "Svuota il campo Coupon per inserire uno sconto manuale." : "Svuota lo sconto vendita per usare un coupon."}
+          </div>
+        )}
       </div>
-      {scontoNum > 0 && (
-        <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>Svuota lo sconto vendita per usare un coupon.</div>
-      )}
 
       {scontoApplicato > 0 && (
         <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 13, color: "#C0392B", marginBottom: isMobile ? 6 : 10 }}>
@@ -37412,31 +37452,39 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 2 : 4 }}>
-        <span>Subtotale (IVA incl.)</span><span>{fmtEuroErp2(subtotale)}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 2 : 4 }}>
-        <span>Imponibile</span><span>{fmtEuroErp2(imponibile)}</span>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", ...fontBody, fontSize: isMobile ? 12 : 12.5, color: MUTED, marginBottom: isMobile ? 8 : 14 }}>
-        <span>IVA 22%</span><span>{fmtEuroErp2(iva)}</span>
-      </div>
-      <div style={{ background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 10, padding: isMobile ? "8px 12px" : "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isMobile ? 10 : 16 }}>
-        <span style={{ ...fontBody, fontSize: isMobile ? 11.5 : 12.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
-        <span style={{ ...fontDisplay, fontSize: isMobile ? 18 : 22, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+      {/* i conti in un blocco solo, con la riga d'oro di fianco: e' la
+          parte che si guarda per ultima prima di incassare */}
+      <div style={{ background: omaggioAttivo ? "#FBF1D9" : BG, borderRadius: 14, borderLeft: `4px solid ${GOLD}`, padding: isMobile ? "12px 14px" : "16px 18px", marginBottom: isMobile ? 12 : 16 }}>
+        {[["Subtotale (IVA incl.)", subtotale], ["Imponibile", imponibile], ["IVA 22%", iva]].map(([etichetta, valore]) => (
+          <div key={etichetta} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", ...fontBody, fontSize: isMobile ? 12 : 13, color: NAVY, marginBottom: 8 }}>
+            <span style={{ textTransform: "uppercase", letterSpacing: 0.4, color: MUTED, fontSize: isMobile ? 11 : 11.5, fontWeight: 700 }}>{etichetta}</span>
+            <span style={{ fontWeight: 600 }}>{fmtEuroErp2(valore)}</span>
+          </div>
+        ))}
+        <div style={{ height: 1, background: CREAM_BORDER, margin: "10px 0" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <span style={{ ...fontBody, fontSize: isMobile ? 12 : 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{omaggioAttivo ? "Omaggio — nessun incasso" : "Totale da incassare"}</span>
+          <span style={{ ...fontDisplay, fontSize: isMobile ? 22 : 26, fontWeight: 700, color: NAVY }}>{fmtEuroErp2(totaleDaIncassare)}</span>
+        </div>
       </div>
 
       {puoScontare && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: isMobile ? 8 : 14 }}>
-          <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 16, height: 16 }} />
-          <label htmlFor="pos-omaggio" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Omaggio — azzera l'incasso</label>
-        </div>
+        <label htmlFor="pos-omaggio" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", borderBottom: `1px solid ${CREAM_BORDER}` }}>
+          <input id="pos-omaggio" type="checkbox" checked={omaggioAttivo} onChange={(e) => setOmaggioAttivo(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
+          <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <IconaRegalo size={17} color={GOLD} />
+          </span>
+          <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Omaggio — azzera l'incasso</span>
+        </label>
       )}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: spedizioneAttiva ? 8 : (isMobile ? 8 : 14) }}>
-        <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 16, height: 16 }} />
-        <label htmlFor="pos-spedizione" style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, cursor: "pointer" }}>Aggiungi spese di spedizione — non ho il prodotto con me</label>
-      </div>
+      <label htmlFor="pos-spedizione" style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", cursor: "pointer", marginBottom: spedizioneAttiva ? 8 : (isMobile ? 8 : 14), borderBottom: `1px solid ${CREAM_BORDER}` }}>
+        <input id="pos-spedizione" type="checkbox" checked={spedizioneAttiva} onChange={(e) => setSpedizioneAttiva(e.target.checked)} style={{ width: 17, height: 17, flexShrink: 0 }} />
+        <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <IconaCamionConsegna size={17} color={GOLD} />
+        </span>
+        <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Aggiungi spese di spedizione — non ho il prodotto con me</span>
+      </label>
       {spedizioneAttiva && (
         <div style={{ background: BG, borderRadius: 10, padding: 12, marginBottom: isMobile ? 8 : 14 }}>
           {iscrittiCorsoPos.length > 0 && (
@@ -37503,20 +37551,38 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
       {!omaggioAttivo && (
         <>
-          <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 6 : 8 }}>Modalità di pagamento</div>
-          <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 8 : 14 }}>
-            {[{ v: "pos", l: "POS / Carta" }, { v: "contanti", l: "Contanti" }].map((m) => (
-              <button key={m.v} onClick={() => setMetodoPagamento(m.v)} style={{ flex: 1, padding: isMobile ? "8px 8px" : "12px 10px", borderRadius: 10, border: metodoPagamento === m.v ? `2px solid ${NAVY}` : `1px solid ${CREAM_BORDER}`, background: "#fff", cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13, fontWeight: 700, color: NAVY }}>
-                {m.l}
-              </button>
-            ))}
+          <div style={etichettaPos}>Modalità di pagamento</div>
+          <div style={{ display: "flex", gap: 10, marginBottom: isMobile ? 10 : 16 }}>
+            {[{ v: "pos", l: "POS / Carta", Icona: IconaCartaPos }, { v: "contanti", l: "Contanti", Icona: IconaBanconota }].map((m) => {
+              const scelto = metodoPagamento === m.v;
+              return (
+                <button
+                  key={m.v}
+                  onClick={() => setMetodoPagamento(m.v)}
+                  style={{ flex: 1, padding: isMobile ? "10px 8px" : "14px 10px", borderRadius: 12, border: `1px solid ${scelto ? NAVY : CREAM_BORDER}`, background: scelto ? NAVY : "#fff", cursor: "pointer", ...fontBody, fontSize: isMobile ? 12.5 : 13.5, fontWeight: 700, color: scelto ? "#fff" : NAVY, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}
+                >
+                  <span style={{ display: "inline-flex", color: scelto ? "#fff" : GOLD }}><m.Icona size={18} /></span>
+                  {m.l}
+                </button>
+              );
+            })}
           </div>
         </>
       )}
       {!isMobile && (
-        <Field label={omaggioAttivo ? "Nota (obbligatoria per l'omaggio)" : "Note (opzionale)"}>
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} style={{ ...inputStyle, resize: "vertical", ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }} placeholder={omaggioAttivo ? "Perché questo prodotto viene regalato?" : "Aggiungi note sulla vendita…"} />
-        </Field>
+        <div style={{ marginBottom: 14 }}>
+          <div style={etichettaPos}>{omaggioAttivo ? "Nota (obbligatoria per l'omaggio)" : "Note (opzionale)"}</div>
+          {/* la matita in fondo al riquadro: dice che si scrive, senza
+              bisogno di un'etichetta in piu' */}
+          <div style={{ position: "relative" }}>
+            <textarea
+              value={note} onChange={(e) => setNote(e.target.value)} rows={2}
+              style={{ ...inputStyle, background: BG, resize: "vertical", paddingRight: 34, ...(omaggioAttivo && !note.trim() ? { border: "1px solid #C0392B" } : {}) }}
+              placeholder={omaggioAttivo ? "Perché questo prodotto viene regalato?" : "Aggiungi note sulla vendita…"}
+            />
+            <span style={{ position: "absolute", right: 10, bottom: 10, color: MUTED, pointerEvents: "none" }}><IconaMatitaNota size={15} /></span>
+          </div>
+        </div>
       )}
       {isMobile && (
         <div style={{ marginBottom: 4 }}>
@@ -37530,10 +37596,33 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
 
       {!operatore && <div style={{ ...fontBody, fontSize: 12.5, color: "#C0392B", marginBottom: 8 }}>Nessun account riconosciuto in questa sessione: esci e rientra con la tua password per poter vendere.</div>}
       {msg && <div style={{ ...fontBody, fontSize: 12.5, color: (msg.startsWith("Vendita registrata") || msg.startsWith("Omaggio registrato")) ? "#2E7D32" : "#C0392B", marginBottom: isMobile ? 6 : 10 }}>{msg}</div>}
-      <Button onClick={confermaVendita} disabled={carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim())} style={{ width: "100%", marginBottom: 10, ...(isMobile ? { padding: "10px 14px" } : {}) }}>
-        {omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp2(totaleDaIncassare)}`}
-      </Button>
-      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center" }}>La vendita aggiornerà automaticamente le giacenze di magazzino.</div>
+      {(() => {
+        const bloccato = carrello.length === 0 || !operatore || (omaggioAttivo && !note.trim());
+        return (
+          <button
+            onClick={confermaVendita}
+            disabled={bloccato}
+            style={{
+              width: "100%", marginBottom: 10, display: "flex", alignItems: "center", gap: 10,
+              background: NAVY, color: "#fff", border: "none", borderRadius: 14,
+              padding: isMobile ? "12px 14px" : "16px 18px", cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.45 : 1,
+              ...fontBody, fontSize: isMobile ? 13.5 : 15, fontWeight: 700,
+            }}
+          >
+            {/* il lucchetto d'oro a sinistra e la freccia a destra: il tasto
+                che chiude la vendita non deve somigliare agli altri */}
+            <span style={{ display: "inline-flex", color: GOLD, flexShrink: 0 }}><IconaLucchetto size={18} /></span>
+            <span style={{ flex: 1, textAlign: "center" }}>
+              {omaggioAttivo ? "Conferma omaggio" : `Conferma vendita e incassa ${fmtEuroErp2(totaleDaIncassare)}`}
+            </span>
+            <span style={{ display: "inline-flex", flexShrink: 0 }}><IconaChevronDestra size={18} color="#fff" /></span>
+          </button>
+        );
+      })()}
+      <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+        <IconaScudoSicurezza size={14} color={MUTED} />
+        La vendita aggiornerà automaticamente le giacenze di magazzino.
+      </div>
     </>
   );
 
@@ -37760,9 +37849,23 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
                 Chiudi
               </button>
               <div style={{ padding: "4px 16px calc(env(safe-area-inset-bottom, 0px) + 20px)", overflowY: "auto", flex: 1, minHeight: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                  <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
-                  {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <span style={{ width: 34, height: 34, borderRadius: 10, background: NAVY, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <IconaBorsaShop size={17} color="#fff" />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
+                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY }}>Carrello vendita</span>
+                    <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span>
+                  </div>
+                  {carrello.length > 0 && (
+                    <button
+                      onClick={() => { if (window.confirm("Vuoi svuotare il carrello?")) svuotaCarrello(); }}
+                      aria-label="Svuota il carrello"
+                      style={{ width: 30, height: 30, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
                 {contenutoCarrelloCorpo}
               </div>
@@ -37821,9 +37924,27 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
 
           <div style={{ ...cardStyle, marginBottom: 0, position: "sticky", top: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: NAVY }}>Carrello vendita <span style={{ ...fontBody, fontSize: 12, fontWeight: 400, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span></div>
-              {carrello.length > 0 && <button onClick={svuotaCarrello} style={{ ...fontBody, fontSize: 12.5, fontWeight: 600, color: "#C0392B", background: "none", border: "none", cursor: "pointer" }}>Svuota carrello</button>}
+            {/* la testata del carrello: la borsa nel quadrato scuro, il
+                titolo in serif e il conteggio di fianco. La ✕ svuota — e'
+                l'unico gesto distruttivo qui, quindi chiede conferma */}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <span style={{ width: 44, height: 44, borderRadius: 12, background: NAVY, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconaBorsaShop size={22} color="#fff" />
+              </span>
+              <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ ...fontDisplay, fontSize: 22, fontWeight: 700, color: NAVY }}>Carrello vendita</span>
+                <span style={{ ...fontBody, fontSize: 12.5, color: MUTED }}>{carrello.length} articol{carrello.length === 1 ? "o" : "i"}</span>
+              </div>
+              {carrello.length > 0 && (
+                <button
+                  onClick={() => { if (window.confirm("Vuoi svuotare il carrello?")) svuotaCarrello(); }}
+                  title="Svuota il carrello"
+                  aria-label="Svuota il carrello"
+                  style={{ width: 36, height: 36, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: MUTED, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}
+                >
+                  ✕
+                </button>
+              )}
             </div>
             {contenutoCarrelloCorpo}
           </div>
