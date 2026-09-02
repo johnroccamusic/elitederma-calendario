@@ -29031,7 +29031,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -29073,6 +29073,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
     mostraVista("categorie");
   }
   const apriScheda = (p) => apriSchedaProdotto({ prodottoId: p.id });
+  // arrivando dall'Advisor la scheda si apre da sola. Qui NON si segna la
+  // vista di provenienza: il primo "indietro" deve riportare all'Advisor,
+  // non all'elenco di un magazzino in cui non si e' mai passati
+  useEffect(() => {
+    if (!aperturaEsterna?.prodottoId) return;
+    setAperturaScheda({ prodottoId: aperturaEsterna.prodottoId, n: aperturaEsterna.n });
+    setVistaPrimaDellaScheda(null);
+    mostraVista("categorie");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aperturaEsterna?.n]);
   const [prodottoIspezionato, setProdottoIspezionato] = useState(null);
   const [apriConfezioneBoxId, setApriConfezioneBoxId] = useState(null); // id del box di cui aprire confezioni, o null
   const [sincronizzando, setSincronizzando] = useState(false);
@@ -29438,7 +29448,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       <div style={{ maxWidth: 1300, margin: "0 auto" }}>
         {/* il tasto dice sempre dove porta: tornando da una scheda aperta
             da un avviso porta all'elenco, non fuori dalla pagina */}
-        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : "Gestione magazzino e shop"} onClick={tornaIndietro} /></div>
+        <div style={{ marginBottom: 6 }}><TastoLivelloPrecedente titolo={vistaPrimaDellaScheda ? "Gestione magazzino" : (titoloIndietro || "Gestione magazzino e shop")} onClick={tornaIndietro} /></div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
           <div style={{ ...fontDisplay, fontSize: 28, fontWeight: 700, color: NAVY }}>{titolo}</div>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
@@ -31250,7 +31260,7 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, ricarica, onApriIscritto, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
@@ -31716,7 +31726,20 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
             {righe.map((r) => (
               <div key={r.prodotto.id} style={rigaStyle}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700 }}>{r.prodotto.nome}</div>
+                  {/* il nome apre la scheda del prodotto: da qui si decide
+                      cosa ordinare, e la decisione si prende guardando la
+                      scheda — non riscrivendo il nome nella ricerca */}
+                  {onApriProdotto ? (
+                    <button
+                      onClick={() => onApriProdotto(r.prodotto.id)}
+                      title="Apri la scheda del prodotto"
+                      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
+                    >
+                      {r.prodotto.nome}
+                    </button>
+                  ) : (
+                    <div style={{ fontWeight: 700 }}>{r.prodotto.nome}</div>
+                  )}
                   <div style={{ fontSize: 12, color: MUTED }}>
                     {r.criterio === "data" && r.perData ? (
                       r.perData.stato === "ritardo"
@@ -44879,6 +44902,11 @@ export default function App() {
   // l'app: solo il programmatore fissa la vista per tutti
   useEffect(() => { impostaRuoloApp(ruoloUtente); }, [ruoloUtente]);
   const [viewPrimaDiAdvisor, setViewPrimaDiAdvisor] = useState("magazzino");
+  // la scheda di un prodotto aperta da fuori (dall'Advisor, cliccando il
+  // nome): il magazzino la apre appena entra, e il primo "indietro"
+  // riporta da dove si veniva invece che nel suo elenco
+  const [prodottoDaAprireInMagazzino, setProdottoDaAprireInMagazzino] = useState(null);
+  const [viewPrimaDiMagazzino, setViewPrimaDiMagazzino] = useState("magazzinoshop");
   const [dockCoricato, setDockCoricato] = useState(false);
   const [dockNascosto, setDockNascosto] = useState(false);
   const [pacchiDaSpedire, setPacchiDaSpedire] = useState(0);
@@ -45127,7 +45155,12 @@ export default function App() {
   function apriCrmAllievi() { apriViewProtetta("crmallievi"); }
   function apriCrmAllieviElenco() { apriViewProtetta("crmallievielenco"); }
   function apriStoricoAllievi() { apriViewProtetta("storicoallievi"); }
-  function apriMagazzino() { apriViewProtetta("magazzino"); }
+  function apriMagazzino() { setProdottoDaAprireInMagazzino(null); setViewPrimaDiMagazzino("magazzinoshop"); apriViewProtetta("magazzino"); }
+  function apriProdottoInMagazzino(prodottoId, vistaDiPartenza) {
+    setProdottoDaAprireInMagazzino({ prodottoId, n: Date.now() });
+    setViewPrimaDiMagazzino(vistaDiPartenza);
+    setView("magazzino");
+  }
   function apriMagazziniEsterni() { apriViewProtetta("magazzinoesterni"); }
   function apriGestioneShop() { apriViewProtetta("gestioneshop"); }
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
@@ -45833,8 +45866,12 @@ export default function App() {
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           fornitori={fornitori}
           onApriIscritto={apriIscrittoDaAdvisor}
+          onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "advisor")}
           // si torna da dove si è entrati: dal magazzino o dagli avvisi in Logistica
-          ricarica={fetchDati} onBack={() => setView(viewPrimaDiAdvisor)}
+          ricarica={fetchDati}
+          // tornando nel magazzino si azzera anche il "da dove venivo" di
+          // quella pagina, o il suo indietro rimanderebbe qui all'infinito
+          onBack={() => { if (viewPrimaDiAdvisor === "magazzino") setViewPrimaDiMagazzino("magazzinoshop"); setView(viewPrimaDiAdvisor); }}
         />
       )}
 
@@ -45847,7 +45884,10 @@ export default function App() {
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
           registraInterceptaIndietro={registraInterceptaIndietro}
-          venditeShop={venditeShop} ricarica={fetchDati} onBack={() => setView("magazzinoshop")}
+          venditeShop={venditeShop} ricarica={fetchDati}
+          aperturaEsterna={prodottoDaAprireInMagazzino}
+          titoloIndietro={viewPrimaDiMagazzino === "advisor" ? "Advisor" : null}
+          onBack={() => { setProdottoDaAprireInMagazzino(null); setView(viewPrimaDiMagazzino); }}
           titolo={etichettaTasto("magazzinoshop", "gestionemagazzino", "Gestione magazzino")}
         />
       )}
