@@ -31990,6 +31990,14 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       .sort((a, b) => String(a.riordino.data_ordine).localeCompare(String(b.riordino.data_ordine)));
   }, [riordiniInCorso, prodottiShop]);
   const dueColonneOrdini = !isMobile && inAttesaDiRicezione.length > 0 && !fornitoreOrdineId;
+  // corsi futuri: prima gli scoperti, poi i coperti, ognuno in ordine di
+  // data. L'elenco arriva gia' cronologico, quindi basta un ordinamento
+  // stabile sul solo stato
+  const edizioniOrdinate = useMemo(
+    () => [...(risultato.perEdizione || [])].sort((a, b) => (a.coperta === b.coperta ? 0 : a.coperta ? 1 : -1)),
+    [risultato]
+  );
+  const primoCoperto = edizioniOrdinate.findIndex((e) => e.coperta) < 0 ? edizioniOrdinate.length : edizioniOrdinate.findIndex((e) => e.coperta);
 
   // i tre numeri in evidenza: il primo c'e' sempre, gli altri sono i primi
   // due che hanno davvero qualcosa da dire — un contatore a zero occupa
@@ -32601,8 +32609,22 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
         <TestataAdvisor Icona={IconaCalendarioCard} titolo="Corsi futuri" />
         {risultato.perEdizione.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso futuro in calendario.</div>
-        ) : risultato.perEdizione.map((e) => (
-          <div key={e.corsoDataId} style={rigaStyle}>
+        ) : edizioniOrdinate.map((e, i) => (<React.Fragment key={e.corsoDataId}>
+          {/* prima gli scoperti, poi i coperti: chi apre questa lista
+              cerca i corsi in difficolta', e prima erano sparsi in mezzo
+              agli altri in ordine di data. Dentro ciascun gruppo la data
+              comanda come prima */}
+          {i === primoCoperto && primoCoperto > 0 && (
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 0.6, padding: "14px 0 2px" }}>
+              Coperti ({risultato.perEdizione.length - primoCoperto})
+            </div>
+          )}
+          {i === 0 && primoCoperto > 0 && (
+            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6, padding: "0 0 2px" }}>
+              Scoperti ({primoCoperto})
+            </div>
+          )}
+          <div style={rigaStyle}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>{etichettaEdizione(e.corsoDataId)}</div>
               {!e.coperta && (
@@ -32617,7 +32639,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
               {e.coperta ? "coperto" : "scoperto"}
             </div>
           </div>
-        ))}
+        </React.Fragment>))}
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 24 }}>
