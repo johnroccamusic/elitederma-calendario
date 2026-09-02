@@ -31993,11 +31993,13 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
   // corsi futuri: prima gli scoperti, poi i coperti, ognuno in ordine di
   // data. L'elenco arriva gia' cronologico, quindi basta un ordinamento
   // stabile sul solo stato
-  const edizioniOrdinate = useMemo(
-    () => [...(risultato.perEdizione || [])].sort((a, b) => (a.coperta === b.coperta ? 0 : a.coperta ? 1 : -1)),
-    [risultato]
-  );
-  const primoCoperto = edizioniOrdinate.findIndex((e) => e.coperta) < 0 ? edizioniOrdinate.length : edizioniOrdinate.findIndex((e) => e.coperta);
+  // Solo i corsi scoperti: l'Advisor serve a dire cosa va male, e una
+  // lista di corsi che stanno bene e' rumore in mezzo a quelli che
+  // chiedono un intervento. I coperti restano un numero, e chi vuole
+  // controllarli li apre.
+  const edizioniScoperte = useMemo(() => (risultato.perEdizione || []).filter((e) => !e.coperta), [risultato]);
+  const edizioniCoperte = useMemo(() => (risultato.perEdizione || []).filter((e) => e.coperta), [risultato]);
+  const [mostraCoperti, setMostraCoperti] = useState(false);
 
   // i tre numeri in evidenza: il primo c'e' sempre, gli altri sono i primi
   // due che hanno davvero qualcosa da dire — un contatore a zero occupa
@@ -32606,24 +32608,17 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-        <TestataAdvisor Icona={IconaCalendarioCard} titolo="Corsi futuri" />
+        <TestataAdvisor
+          Icona={IconaCalendarioCard}
+          titolo={edizioniScoperte.length > 0 ? `Corsi futuri scoperti (${edizioniScoperte.length})` : "Corsi futuri"}
+        />
         {risultato.perEdizione.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso futuro in calendario.</div>
-        ) : edizioniOrdinate.map((e, i) => (<React.Fragment key={e.corsoDataId}>
-          {/* prima gli scoperti, poi i coperti: chi apre questa lista
-              cerca i corsi in difficolta', e prima erano sparsi in mezzo
-              agli altri in ordine di data. Dentro ciascun gruppo la data
-              comanda come prima */}
-          {i === primoCoperto && primoCoperto > 0 && (
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#2E7D32", textTransform: "uppercase", letterSpacing: 0.6, padding: "14px 0 2px" }}>
-              Coperti ({risultato.perEdizione.length - primoCoperto})
-            </div>
-          )}
-          {i === 0 && primoCoperto > 0 && (
-            <div style={{ ...fontBody, fontSize: 11, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6, padding: "0 0 2px" }}>
-              Scoperti ({primoCoperto})
-            </div>
-          )}
+        ) : edizioniScoperte.length === 0 ? (
+          <div style={{ ...fontBody, fontSize: 13, color: "#2E7D32", fontWeight: 700 }}>
+            Nessun corso scoperto: con le scorte di oggi tutti i {risultato.perEdizione.length} corsi in calendario sono coperti.
+          </div>
+        ) : (mostraCoperti ? [...edizioniScoperte, ...edizioniCoperte] : edizioniScoperte).map((e) => (<React.Fragment key={e.corsoDataId}>
           <div style={rigaStyle}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>{etichettaEdizione(e.corsoDataId)}</div>
@@ -32640,6 +32635,16 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
             </div>
           </div>
         </React.Fragment>))}
+        {edizioniScoperte.length > 0 && edizioniCoperte.length > 0 && (
+          <button
+            onClick={() => setMostraCoperti((v) => !v)}
+            style={{ ...fontBody, fontSize: 12, color: MUTED, background: "none", border: "none", padding: "10px 0 0", cursor: "pointer", textDecoration: "underline" }}
+          >
+            {mostraCoperti
+              ? `nascondi i ${edizioniCoperte.length} corsi coperti`
+              : `altri ${edizioniCoperte.length} corsi sono coperti — vedili`}
+          </button>
+        )}
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 24 }}>
