@@ -290,12 +290,103 @@ function useAppDaSchermataHome() {
   }, []);
   return installata;
 }
-function useIsMobile(breakpoint = 700) {
-  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth <= breakpoint);
+// Lo zoom della pagina (Ctrl/Cmd + rotellina). Non e' la lente del
+// sistema, che ingrandisce i pixel e basta: qui cambia la dimensione in
+// CSS della pagina, quindi il testo si riimpagina e le colonne si
+// ridispongono come con lo zoom del browser.
+//
+// Vive qui, fuori dai componenti, perche' serve a due mestieri diversi:
+// a chi lo cambia e a chi misura quanta larghezza e' rimasta — a zoom 200%
+// lo schermo del portatile vale come un telefono, e il layout deve saperlo.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2.5;
+const CHIAVE_ZOOM = "elitederma_zoom_pagina";
+let zoomPagina = 1;
+function leggiZoomSalvato() {
+  try {
+    const v = Number(window.localStorage.getItem(CHIAVE_ZOOM));
+    return Number.isFinite(v) && v >= ZOOM_MIN && v <= ZOOM_MAX ? v : 1;
+  } catch (e) { return 1; }
+}
+function applicaZoomPagina(z) {
+  zoomPagina = z;
+  // "zoom" e non "transform: scale": scale disegna piu' grande e basta,
+  // zoom cambia davvero le misure e fa riimpaginare
+  if (document.body) document.body.style.zoom = z === 1 ? "" : String(z);
+  try { window.localStorage.setItem(CHIAVE_ZOOM, String(z)); } catch (e) { /* navigazione privata */ }
+  window.dispatchEvent(new Event("zoom-pagina"));
+}
+function larghezzaUtile() { return window.innerWidth / (zoomPagina || 1); }
+
+// L'ascolto sta qui, a livello di modulo: cosi' lo zoom vale ovunque —
+// gestionale, pagina pubblica delle modelle, vista master — e non solo
+// dentro l'app principale.
+//
+// Su Mac il Ctrl+rotellina e' preso dal sistema e fa la lente
+// d'ingrandimento; il Cmd+rotellina invece non fa niente. Qui li
+// intercettiamo tutti e due prima del browser. Il pizzico sul trackpad
+// arriva come una rotellina con ctrlKey: viene zoomato anche quello, in
+// modo continuo perche' i suoi passi sono piccoli.
+if (typeof window !== "undefined") {
+  applicaZoomPagina(leggiZoomSalvato());
+  window.addEventListener("wheel", (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const fattore = Math.exp(-e.deltaY * 0.0015);
+    const nuovo = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(zoomPagina * fattore * 100) / 100));
+    if (nuovo !== zoomPagina) applicaZoomPagina(nuovo);
+  }, { passive: false });
+  window.addEventListener("keydown", (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    // Cmd/Ctrl + 0 rimette al 100%: e' il gesto che tutti conoscono, e
+    // senza si resta incastrati a uno zoom scomodo
+    if (e.key === "0" && zoomPagina !== 1) { e.preventDefault(); applicaZoomPagina(1); }
+  });
+}
+
+// la pastiglia che compare in basso a sinistra mentre si zooma: dice a
+// quanto si e' e permette di tornare al 100% con un dito
+function IndicatoreZoom() {
+  const [zoom, setZoom] = useState(zoomPagina);
+  const [visibile, setVisibile] = useState(false);
   useEffect(() => {
-    function aggiorna() { setIsMobile(window.innerWidth <= breakpoint); }
+    let timer = null;
+    function aggiorna() {
+      setZoom(zoomPagina);
+      setVisibile(zoomPagina !== 1);
+      clearTimeout(timer);
+      // resta in vista qualche secondo dopo l'ultimo scatto, poi si toglie
+      // di mezzo: e' un promemoria, non un comando permanente
+      if (zoomPagina !== 1) timer = setTimeout(() => setVisibile(false), 2600);
+    }
+    window.addEventListener("zoom-pagina", aggiorna);
+    aggiorna();
+    return () => { window.removeEventListener("zoom-pagina", aggiorna); clearTimeout(timer); };
+  }, []);
+  if (!visibile) return null;
+  return (
+    <div style={{ position: "fixed", left: 16, bottom: 16, zIndex: 3000, display: "flex", alignItems: "center", gap: 8, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "7px 12px", boxShadow: "0 6px 20px rgba(14,27,51,.12)" }}>
+      <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY }}>Zoom {Math.round(zoom * 100)}%</span>
+      <button
+        onClick={() => applicaZoomPagina(1)}
+        style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: MUTED, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+      >
+        torna al 100%
+      </button>
+    </div>
+  );
+}
+
+function useIsMobile(breakpoint = 700) {
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && larghezzaUtile() <= breakpoint);
+  useEffect(() => {
+    function aggiorna() { setIsMobile(larghezzaUtile() <= breakpoint); }
     window.addEventListener("resize", aggiorna);
-    return () => window.removeEventListener("resize", aggiorna);
+    window.addEventListener("zoom-pagina", aggiorna);
+    return () => {
+      window.removeEventListener("resize", aggiorna);
+      window.removeEventListener("zoom-pagina", aggiorna);
+    };
   }, [breakpoint]);
   return isMobile;
 }
@@ -29324,7 +29415,7 @@ function ModaleIspezioneVetrina({ vetrina, onChiudi, onApriVariante, onAggiungiV
 // tabella prodotti). Le analisi vendite/rotazione/trend che c'erano qui
 // si trovano ora in "Dashboard analisi → Analisi Magazzino" (vedi
 // SezioneAnalisiMagazzino), che tiene un proprio periodo indipendente
-function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
+function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodottiCategorie, prodottiImmagini, bundleComponenti, impostazioniIva, fornitori, venditeShop, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, riordiniInCorso = [], onApriAdvisor, ricarica, assicuraTabelle, registraInterceptaIndietro, aperturaEsterna, titoloIndietro, onBack, titolo = "Gestione magazzino" }) {
   useEffect(() => {
     assicuraTabelle?.(["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "bundle_componenti", "fornitori", "impostazioni_iva"]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -29655,7 +29746,11 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const senzaCosto = prodottiConStato.filter((p) => p.conta_magazzino !== false && p.costo_acquisto == null);
   const fermi = prodottiConStato.filter((p) => p.giorniFermo > 90);
   const totSegnalazioni = sottoScorta.length + fermi.length + senzaCosto.length;
-  const avvisiMagazzino = useMemo(() => calcolaAvvisiMagazzino(prodottiShop), [prodottiShop]);
+  const giaOrdinatiMag = useMemo(
+    () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
+    [riordiniInCorso]
+  );
+  const avvisiMagazzino = useMemo(() => calcolaAvvisiMagazzino(prodottiShop, giaOrdinatiMag), [prodottiShop, giaOrdinatiMag]);
   // sintesi dell'Advisor, in una riga sola: la stessa simulazione della
   // pagina dedicata, qui ridotta al titolo e al conteggio di cosa ordinare
   const sintesiAdvisor = useMemo(() => {
@@ -29711,9 +29806,16 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   // si mettono in cima le righe legate a una data: prima i ritardi, poi
   // quelle con meno giorni davanti.
   const bloccanti = useMemo(() => {
-    const righe = (sintesiAdvisor.piano?.daOrdinare || []).filter((r) => r.perData);
+    // quello che e' gia' stato ordinato non blocca piu' niente: e' in
+    // viaggio, e l'avviso l'ha gia' fatto scattare qualcuno
+    const righe = (sintesiAdvisor.piano?.daOrdinare || []).filter((r) => r.perData && !giaOrdinatiMag.has(r.prodotto.id));
     return [...righe].sort((a, b) => (a.perData.giorni ?? 0) - (b.perData.giorni ?? 0));
-  }, [sintesiAdvisor]);
+  }, [sintesiAdvisor, giaOrdinatiMag]);
+  // quanti sono in viaggio: si dice, o sparirebbero senza spiegazione
+  const quantiGiaOrdinati = useMemo(
+    () => (sintesiAdvisor.piano?.daOrdinare || []).filter((r) => giaOrdinatiMag.has(r.prodotto.id)).length,
+    [sintesiAdvisor, giaOrdinatiMag]
+  );
   const corsoPerIdMag = useMemo(() => Object.fromEntries((corsi || []).map((c) => [c.id, c])), [corsi]);
   const edizionePerIdMag = useMemo(() => Object.fromEntries((corsiDate || []).map((cd) => [cd.id, cd])), [corsiDate]);
   const locPerIdMag = useMemo(() => Object.fromEntries((location || []).map((l) => [l.id, l])), [location]);
@@ -29865,6 +29967,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
           <PannelloAvvisiMagazzino
             avvisi={avvisiMagazzino}
             bloccanti={bloccanti}
+            quantiGiaOrdinati={quantiGiaOrdinati}
             etichettaEdizione={etichettaEdizioneMag}
             onApriAdvisor={onApriAdvisor}
             immaginePerProdotto={immaginePerProdottoMagazzino}
@@ -30692,7 +30795,7 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
     </div>
   );
 }
-function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna }) {
+function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], quantiGiaOrdinati = 0, etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna }) {
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
   // dei prodotti che bloccano un corso se ne mostrano i primi: sono
@@ -30789,8 +30892,25 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
         </div>
       </div>
 
+      {quantiGiaOrdinati > 0 && (
+        <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, padding: "0 18px 10px" }}>
+          <b style={{ color: NAVY }}>{quantiGiaOrdinati}</b> {quantiGiaOrdinati === 1 ? "prodotto è già stato ordinato" : "prodotti sono già stati ordinati"} e non {quantiGiaOrdinati === 1 ? "compare" : "compaiono"} più qui:
+          {" "}
+          <button
+            onClick={onApriAdvisor}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline" }}
+          >
+            {quantiGiaOrdinati === 1 ? "è" : "sono"} in attesa di ricezione nell'Advisor ›
+          </button>
+        </div>
+      )}
+
       {avvisi.length === 0 && bloccanti.length === 0 && (
-        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "0 18px 18px" }}>Nessun avviso: nessun pacco da aprire e niente da riordinare.</div>
+        <div style={{ ...fontBody, fontSize: 13, color: MUTED, padding: "0 18px 18px" }}>
+          {quantiGiaOrdinati > 0
+            ? "Nessun avviso aperto: quello che serviva è già stato ordinato."
+            : "Nessun avviso: nessun pacco da aprire e niente da riordinare."}
+        </div>
       )}
 
       {/* Quello che serve ai corsi in arrivo. Sta in cima perche' e' l'unica
@@ -31042,7 +31162,13 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
   );
 }
 
-function calcolaAvvisiMagazzino(prodottiShop) {
+// "giaOrdinati" e' l'insieme dei prodotti per cui esiste gia' un ordine
+// aperto (vedi riordini_in_corso): l'avviso ha gia' fatto il suo mestiere,
+// continuare a suonare non aggiunge niente e nasconde quelli veri. Fa
+// eccezione la giacenza negativa, che non e' una questione di ordini ma un
+// conto sbagliato: quella resta.
+function calcolaAvvisiMagazzino(prodottiShop, giaOrdinati) {
+  const ordinati = giaOrdinati instanceof Set ? giaOrdinati : new Set();
   const attivi = (prodottiShop || []).filter((p) => p.attivo !== false);
   const boxPerSfusoId = new Map();
   attivi.forEach((b) => { if (b.prodotto_sfuso_id) boxPerSfusoId.set(b.prodotto_sfuso_id, b); });
@@ -31053,6 +31179,7 @@ function calcolaAvvisiMagazzino(prodottiShop) {
     const stock = p.quantita || 0;
     const sottoSoglia = (p.soglia_riordino != null && stock < p.soglia_riordino) || stock <= 0;
     if (!sottoSoglia) return;
+    if (ordinati.has(p.id)) return;
     const box = boxPerSfusoId.get(p.id) || null;
     if (box && (box.quantita || 0) > 0) avvisi.push({ tipo: "apri_pacco", prodotto: p, box });
     else if (box) avvisi.push({ tipo: "riordina", prodotto: p, box });
@@ -44864,6 +44991,11 @@ export default function App() {
   // "Assegna modelle"): il tasto "torna" della scheda deve allora uscire
   // verso Gestione modelle invece che verso una lista mai mostrata
   const [riordiniInCorso, setRiordiniInCorso] = useState([]);
+  // i prodotti con un ordine gia' partito: non devono piu' suonare
+  const prodottiGiaOrdinati = useMemo(
+    () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
+    [riordiniInCorso]
+  );
   const [vieneDaGestioneModelle, setVieneDaGestioneModelle] = useState(false);
   const [venditoreLoggato, setVenditoreLoggato] = useState(null);
 
@@ -45284,7 +45416,7 @@ export default function App() {
     // prodotti in memoria il conto e' sempre zero, e il tasto non lampeggia
     // mai. E' la stessa tabella che carica l'hub della logistica per il suo
     // tasto Advisor, che infatti il pallino lo mostrava
-    magazzinoshop: ["prodotti_shop"],
+    magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
     impostazioni: ["corsi", "location", "master", "hotel", "assistente", "leva", "corsi_giorni", "tipi_modella", "corsi_tipi_modella", "venditori", "prodotti_shop", "target_vendite_prodotti", "costi_categorie", "costi_sottocategorie", "impostazioni_categorie_gruppi", "impostazioni_iva"],
@@ -45310,7 +45442,7 @@ export default function App() {
     // "prodotti_immagini" serve da quando la vista a categorie (con le foto
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
-    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
     advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
@@ -46381,7 +46513,7 @@ export default function App() {
           onApriClassificazioneVoci={apriClassificazioneVoci}
           onApriGeneraCoupon={apriGeneraCoupon}
           onApriMagazziniEsterni={apriMagazziniEsterni}
-          numeroAvvisiMagazzino={calcolaAvvisiMagazzino(prodottiShop).length}
+          numeroAvvisiMagazzino={calcolaAvvisiMagazzino(prodottiShop, prodottiGiaOrdinati).length}
           ruoloUtente={ruoloUtente} ordineTasti={layoutTasti.magazzinoshop?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("magazzinoshop", { ordine: o })}
           colonneTasti={layoutTasti.magazzinoshop?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("magazzinoshop", { colonne: n })}
           etichetteTasti={layoutTasti.magazzinoshop?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("magazzinoshop", chiave, testo)}
@@ -46524,6 +46656,7 @@ export default function App() {
           bundleComponenti={bundleComponenti} impostazioniIva={impostazioniIva} fornitori={fornitori}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti} kitDefinizioni={kitDefinizioni}
           corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
+          riordiniInCorso={riordiniInCorso}
           onApriAdvisor={() => apriAdvisorDa("magazzino")} assicuraTabelle={assicuraTabelle}
           registraInterceptaIndietro={registraInterceptaIndietro}
           venditeShop={venditeShop} ricarica={fetchDati}
@@ -46964,6 +47097,7 @@ export default function App() {
           onTornaGestioneModelle={() => setView("gestionemodelle")}
         />
       )}
+      <IndicatoreZoom />
     </div>
   );
 }
