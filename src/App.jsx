@@ -31787,6 +31787,23 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
     ricarica(["prodotti_shop"]);
   }
 
+  // il tempo di consegna di UN prodotto solo: il tasto di gruppo scrive
+  // lo stesso numero su tutti, ma due prodotti dello stesso fornitore
+  // possono arrivare in tempi diversi — e finche' non si vedeva nemmeno
+  // quali fossero i prodotti mancanti, scriverli giusti era impossibile
+  const [giorniProdotto, setGiorniProdotto] = useState({});
+  const [salvandoProdottoLead, setSalvandoProdottoLead] = useState(null);
+  async function salvaLeadProdotto(prodotto) {
+    const giorni = interoOpzionale(giorniProdotto[prodotto.id]);
+    if (giorni == null) { window.alert("Scrivi un numero di giorni."); return; }
+    setSalvandoProdottoLead(prodotto.id);
+    const { error } = await supabase.from("prodotti_shop").update({ lead_time_giorni: giorni }).eq("id", prodotto.id);
+    setSalvandoProdottoLead(null);
+    if (error) { window.alert("Errore: " + error.message); return; }
+    setGiorniProdotto((prev) => ({ ...prev, [prodotto.id]: "" }));
+    ricarica(["prodotti_shop"]);
+  }
+
   const inRitardo = piano.daOrdinare.filter((r) => r.perData?.stato === "ritardo");
   const urgenti = piano.daOrdinare.filter((r) => r.perData?.stato === "urgente");
   const soloSoglia = piano.daOrdinare.filter((r) => !r.perData && r.perSoglia);
@@ -32145,6 +32162,42 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                   sovrascrivi anche i {g.impostati.length} già impostati
                 </button>
               )}
+              {/* quali sono, uno per riga, con il loro campo: il tasto di
+                  gruppo scrive lo stesso numero su tutti, ma se i prodotti
+                  non si vedono nemmeno non si puo' sapere se e' il numero
+                  giusto per ognuno */}
+              <div style={{ flexBasis: "100%", marginTop: 2 }}>
+                {g.vuoti.map((p) => (
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0 6px 48px" }}>
+                    {onApriProdotto ? (
+                      <button
+                        onClick={() => onApriProdotto(p.id)}
+                        title="Apri la scheda del prodotto"
+                        style={{ flex: "1 1 200px", minWidth: 0, textAlign: "left", ...fontBody, fontSize: 12.5, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
+                      >
+                        {p.nome}
+                      </button>
+                    ) : (
+                      <span style={{ flex: "1 1 200px", minWidth: 0, ...fontBody, fontSize: 12.5, color: NAVY }}>{p.nome}</span>
+                    )}
+                    <input
+                      style={{ ...inputStyle, width: 80, padding: "5px 8px", fontSize: 12.5 }}
+                      inputMode="numeric" placeholder="giorni"
+                      value={giorniProdotto[p.id] || ""}
+                      onChange={(e) => setGiorniProdotto((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                      onKeyDown={(e) => { if (e.key === "Enter") salvaLeadProdotto(p); }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => salvaLeadProdotto(p)}
+                      disabled={salvandoProdottoLead === p.id || !String(giorniProdotto[p.id] || "").trim()}
+                      style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 8, padding: "6px 12px", cursor: "pointer", opacity: (salvandoProdottoLead === p.id || !String(giorniProdotto[p.id] || "").trim()) ? 0.45 : 1, touchAction: "manipulation" }}
+                    >
+                      {salvandoProdottoLead === p.id ? "Salvo…" : "Salva"}
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
