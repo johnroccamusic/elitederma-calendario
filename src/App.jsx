@@ -30428,11 +30428,16 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
                       {etichettaEdizione ? ` · serve per ${etichettaEdizione(r.perData.edizioneCriticaId)}` : ""}
                     </span>
                   </span>
-                  {r.quantitaSuggerita != null && (
-                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, whiteSpace: "nowrap", flexShrink: 0 }}>
-                      ordina {r.quantitaSuggerita}
-                    </span>
-                  )}
+                  {/* stock e soglia, non la quantita' da ordinare: quella
+                      scendeva a "ordina 0" ogni volta che il prodotto e'
+                      gia' sotto zero rispetto alla soglia, e un "ordina 0"
+                      accanto a un prodotto che blocca un corso non dice
+                      niente a nessuno. Quanto ordinare si decide
+                      nell'ordine al fornitore, dove ci sono le caselle */}
+                  <span style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "right" }}>
+                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#C0392B" }}>Stock {p.quantita || 0}</span>
+                    <span style={{ display: "block", color: MUTED }}>soglia {p.soglia_riordino != null ? p.soglia_riordino : "—"}</span>
+                  </span>
                   <span style={{ display: "inline-flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
                     {onApriScheda && (
                       <button onClick={() => onApriScheda(p)} style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "#fff", border: "1px solid #F0C9C2", borderRadius: 10, padding: "7px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>Apri scheda</button>
