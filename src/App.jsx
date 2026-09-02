@@ -731,6 +731,71 @@ function IconaCarrelloPos({ size = 18, color = "#fff" }) {
     </svg>
   );
 }
+// Le icone dell'Advisor: ogni blocco della pagina ha la sua, in un
+// quadratino blu — servono a riconoscere il blocco da lontano, scorrendo
+// una pagina che e' lunga per forza
+function IconaGraficoSu({ size = 18, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 17l5.5-5.5 3.5 3.5L21 6" /><path d="M15 6h6v6" />
+    </svg>
+  );
+}
+function IconaDermografoAdvisor({ size = 18, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15.5 3.5l5 5-10 10H5.5v-5z" /><path d="M13 6l5 5" />
+    </svg>
+  );
+}
+function IconaCamionConsegna({ size = 18, color = "#fff" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 7h11v9H2z" /><path d="M13 10h4l3 3v3h-7z" />
+      <circle cx="7" cy="18" r="1.7" /><circle cx="17" cy="18" r="1.7" />
+    </svg>
+  );
+}
+function IconaBorsaShop({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8h16l-1.2 12H5.2z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" />
+    </svg>
+  );
+}
+function IconaScudoSicurezza({ size = 18, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z" />
+    </svg>
+  );
+}
+
+// L'intestazione di un blocco dell'Advisor: quadratino con l'icona, titolo
+// in maiuscoletto, la spiegazione sotto e, a destra, l'eventuale comando
+// del blocco (i due tasti "per categoria / per fornitore", per esempio)
+function TestataAdvisor({ Icona, titolo, sotto, azione, coloreIcona = NAVY }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+      {/* il colore va messo anche sul contenitore: qualche icona disegna
+          con currentColor e senza questo resterebbe blu su blu */}
+      <span style={{ width: 38, height: 38, borderRadius: 11, background: coloreIcona, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Icona size={19} color="#fff" />
+      </span>
+      <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+        <div style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.5 }}>{titolo}</div>
+        {sotto && <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>{sotto}</div>}
+      </div>
+      {azione}
+    </div>
+  );
+}
+
+// le iniziali di un nome, per il tondino accanto all'allievo
+function inizialiNome(nome) {
+  return String(nome || "").trim().split(/\s+/).slice(0, 2).map((p) => p[0] || "").join("").toUpperCase() || "?";
+}
+
 // Il terminale POS: display, tastierino, la carta infilata di lato e lo
 // scontrino che esce da sotto.
 //
@@ -31473,6 +31538,34 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
     return [...gruppi.entries()];
   }, [piano]);
 
+  // i tre numeri in evidenza: il primo c'e' sempre, gli altri sono i primi
+  // due che hanno davvero qualcosa da dire — un contatore a zero occupa
+  // spazio e non chiede niente
+  const senzaMargine = piano.nonCalcolabili.filter((n) => n.motivo === "margine_sicurezza").length;
+  // i dermografi da sistemare sono due elenchi diversi, con due gesti
+  // diversi: chi ha una scelta che contraddice il pacchetto e chi non ha
+  // scelto affatto
+  const sezioniDermografi = [
+    dermografiDaControllare.daVerificare.length > 0 && {
+      chiave: "verificare", colore: "#C0392B", titolo: `Da verificare (${dermografiDaControllare.daVerificare.length})`,
+      nota: null, righe: dermografiDaControllare.daVerificare,
+    },
+    dermografiDaControllare.daScegliere.length > 0 && {
+      chiave: "scegliere", colore: GOLD, titolo: `Ancora da scegliere (${dermografiDaControllare.daScegliere.length})`,
+      nota: "Finché restano vuoti non contano nel fabbisogno: nessun dermografo verrà preparato per loro.",
+      righe: dermografiDaControllare.daScegliere,
+    },
+  ].filter(Boolean);
+  const numeriAdvisor = [
+    { numero: prodottiConfigurati.length, etichetta: "Prodotti attivi", sotto: `su ${prodottiConfigurati.length + prodottiDaConfigurare.length}`, Icona: IconaBorsaShop, colore: NAVY, sfondo: "#EAF0FA" },
+    ...[
+      { quanti: risultato.edizioniSenzaIscritti, numero: risultato.edizioniSenzaIscritti, etichetta: "Corsi futuri senza iscritti", sotto: "fabbisogno a zero", Icona: IconaGruppoTeam, colore: NAVY, sfondo: "#FDF8EC" },
+      { quanti: senzaMargine, numero: senzaMargine, etichetta: "Prodotti senza margine", sotto: "di sicurezza", Icona: IconaScudoSicurezza, colore: "#C0392B", sfondo: "#FBE4E1" },
+      { quanti: prodottiDaConfigurare.length, numero: prodottiDaConfigurare.length, etichetta: "Senza tempo di consegna", sotto: "non so quando ordinare", Icona: IconaCamionConsegna, colore: "#B8860B", sfondo: "#FDF8EC" },
+      { quanti: risultato.nonRisolti.length, numero: risultato.nonRisolti.length, etichetta: "Iscritti con kit non riconosciuto", sotto: "valgono come senza kit", Icona: IconaGruppoTeam, colore: "#B8860B", sfondo: "#FDF8EC" },
+    ].filter((n) => n.quanti > 0).slice(0, 2),
+  ];
+
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -31481,7 +31574,11 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 18 }}>
           Con le scorte di adesso, fino a quando riesci a coprire i corsi in calendario — e cosa devi ordinare.
         </div>
-      <div style={{ ...cardStyle, padding: 18, background: sfondoSemaforo, border: `1px solid ${coloreSemaforo}33`, marginBottom: 16 }}>
+      <div style={{ ...cardStyle, padding: 18, background: sfondoSemaforo, border: `1px solid ${coloreSemaforo}33`, marginBottom: 16, display: "flex", gap: 14, alignItems: "flex-start" }}>
+        {/* il tondo col punto esclamativo prende il colore del semaforo:
+            rosso quando un corso resta scoperto, verde quando reggono */}
+        <span style={{ width: 34, height: 34, borderRadius: "50%", background: coloreSemaforo, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontDisplay, fontSize: 19, fontWeight: 700 }}>!</span>
+        <div style={{ flex: 1, minWidth: 0 }}>
         {risultato.modalita === "senza_date" ? (
           <>
             <div style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: coloreSemaforo, marginBottom: 6 }}>
@@ -31514,27 +31611,50 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
             </div>
           </>
         )}
+        </div>
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-        <div style={titoloBlocco}>Quanto sto vedendo</div>
-        <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.7 }}>
-          Advisor attivo su <b>{prodottiConfigurati.length}</b> prodotti su {prodottiConfigurati.length + prodottiDaConfigurare.length}.
-          {prodottiDaConfigurare.length > 0 && <> <b>{prodottiDaConfigurare.length}</b> senza tempo di consegna: su quelli non posso dire entro quando ordinare.</>}
-          {risultato.nonRisolti.length > 0 && <><br /><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: valgono come "nessun kit" finché non li assegni qui sotto.</>}
-          {risultato.senzaKit > 0 && <><br /><b>{risultato.senzaKit}</b> iscritti senza kit: nessun fabbisogno, nessun problema.</>}
-          {risultato.edizioniSenzaIscritti > 0 && <><br /><b>{risultato.edizioniSenzaIscritti}</b> corsi futuri non hanno ancora iscritti: per loro il fabbisogno risulta zero.</>}
-          {piano.nonCalcolabili.some((n) => n.motivo === "margine_sicurezza") && <><br /><b style={{ color: "#C0392B" }}>{piano.nonCalcolabili.filter((n) => n.motivo === "margine_sicurezza").length} prodotti senza margine di sicurezza</b>: si scrive nella scheda del prodotto, senza non calcolo la data limite d'ordine.</>}
+        {/* i numeri grossi a sinistra, il ragionamento a destra: prima era
+            un paragrafo solo, e i tre dati che contano ci si perdevano */}
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "minmax(0,1.15fr) minmax(0,1fr)", gap: 18, alignItems: "start" }}>
+          <div>
+            <TestataAdvisor Icona={IconaGraficoSu} titolo="Quanto sto vedendo" />
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+              {numeriAdvisor.map((n) => (
+                <div key={n.etichetta} style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 120 }}>
+                  <span style={{ width: 44, height: 44, borderRadius: "50%", background: n.sfondo, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <n.Icona size={20} color={n.colore} />
+                  </span>
+                  <span>
+                    <span style={{ ...fontDisplay, fontSize: 26, fontWeight: 700, color: n.colore, display: "block", lineHeight: 1 }}>{n.numero}</span>
+                    <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.4, display: "block", marginTop: 4, lineHeight: 1.25 }}>{n.etichetta}</span>
+                    {n.sotto && <span style={{ ...fontBody, fontSize: 11, color: MUTED, display: "block", marginTop: 2 }}>{n.sotto}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ ...fontBody, fontSize: 12.5, color: NAVY, lineHeight: 1.6, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div>
+              Advisor attivo su <b>{prodottiConfigurati.length}</b> prodotti su {prodottiConfigurati.length + prodottiDaConfigurare.length}.
+              {prodottiDaConfigurare.length > 0 && <> <b>{prodottiDaConfigurare.length}</b> senza tempo di consegna: su quelli non posso dire entro quando ordinare.</>}
+            </div>
+            {risultato.nonRisolti.length > 0 && <div><b>{risultato.nonRisolti.length}</b> iscritti con kit non riconosciuto: valgono come "nessun kit" finché non li assegni qui sotto.</div>}
+            {risultato.senzaKit > 0 && <div><b>{risultato.senzaKit}</b> iscritti senza kit: nessun fabbisogno, nessun problema.</div>}
+            {risultato.edizioniSenzaIscritti > 0 && <div><b>{risultato.edizioniSenzaIscritti}</b> corsi futuri non hanno ancora iscritti: per loro il fabbisogno risulta zero.</div>}
+            {senzaMargine > 0 && <div style={{ color: "#C0392B" }}><b>{senzaMargine} prodotti senza margine di sicurezza</b>: si scrive nella scheda del prodotto, senza non calcolo la data limite d'ordine.</div>}
+          </div>
         </div>
       </div>
 
       {gruppiDaAssegnare.length > 0 && (
         <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8D9A0` }}>
-          <div style={titoloBlocco}>Kit da assegnare ({risultato.nonRisolti.length} iscritti)</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
-            Su questi iscritti il pacchetto kit è scritto a mano e non corrisponde a nessun kit configurato per il loro corso.
-            Finché restano così valgono come <b>nessun kit</b>: il loro fabbisogno non entra nella previsione. Scegli il kit giusto e il calcolo si aggiorna da solo.
-          </div>
+          <TestataAdvisor
+            Icona={IconaGruppoTeam}
+            titolo={`Kit da assegnare (${risultato.nonRisolti.length} iscritti)`}
+            sotto={<>Su questi iscritti il pacchetto kit è scritto a mano e non corrisponde a nessun kit configurato per il loro corso. Finché restano così valgono come <b>nessun kit</b>: il loro fabbisogno non entra nella previsione. Scegli il kit giusto e il calcolo si aggiorna da solo.</>}
+          />
           {gruppiDaAssegnare.map((g) => {
             // stesso ordine (e stessi divisori) della pagina "Gestisci kit":
             // chi sceglie qui ha in testa quell'elenco, non l'alfabeto
@@ -31600,56 +31720,59 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
           di chi ha venduto, elenca e lascia il gesto a chi sa */}
       {(dermografiDaControllare.daScegliere.length > 0 || dermografiDaControllare.daVerificare.length > 0) && (
         <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8D9A0` }}>
-          <div style={titoloBlocco}>
-            Dermografi da sistemare ({dermografiDaControllare.daScegliere.length + dermografiDaControllare.daVerificare.length} iscritti)
-          </div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12, lineHeight: 1.45 }}>
-            Solo corsi ancora da fare che prevedono il dermografo. Clicca il nome per aprire la scheda dell'allievo e scegliere; da lì il tasto "indietro" riporta qui.
+          {/* due elenchi di persone, non di prodotti: il tondino con le
+              iniziali li fa leggere come una lista di allievi, che e'
+              quello che sono */}
+          <div style={{ display: "grid", gridTemplateColumns: (!isMobile && sezioniDermografi.length === 1) ? "minmax(0,1.4fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, alignItems: "start" }}>
+            <TestataAdvisor
+              Icona={IconaDermografoAdvisor}
+              titolo={`Dermografi da sistemare (${dermografiDaControllare.daScegliere.length + dermografiDaControllare.daVerificare.length} iscritti)`}
+              sotto={<>Solo corsi ancora da fare che prevedono il dermografo.<br />Clicca il nome per aprire la scheda dell'allievo e scegliere; da lì il tasto "indietro" riporta qui.</>}
+            />
+            {!isMobile && sezioniDermografi.length === 1 && (
+              <div>
+                <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: sezioniDermografi[0].colore, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>
+                  {sezioniDermografi[0].titolo}
+                </div>
+                {sezioniDermografi[0].nota && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, lineHeight: 1.45 }}>{sezioniDermografi[0].nota}</div>}
+              </div>
+            )}
           </div>
 
-          {dermografiDaControllare.daVerificare.length > 0 && (
-            <div style={{ marginBottom: dermografiDaControllare.daScegliere.length ? 14 : 0 }}>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
-                Da verificare ({dermografiDaControllare.daVerificare.length})
+          {sezioniDermografi.map((sez, iSez) => (
+            <div key={sez.chiave} style={{ marginTop: iSez === 0 ? 6 : 14 }}>
+              {(isMobile || sezioniDermografi.length > 1) && (
+                <>
+                  <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: sez.colore, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 4 }}>{sez.titolo}</div>
+                  {sez.nota && <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>{sez.nota}</div>}
+                </>
+              )}
+              <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
+                {sez.righe.map((r, iRiga) => (
+                  <div key={r.iscrittoId} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", padding: "10px 12px", background: "#fff", borderTop: iRiga === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
+                    <span style={{ width: 34, height: 34, borderRadius: "50%", background: "#FDF8EC", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 11.5, fontWeight: 700, color: GOLD }}>
+                      {inizialiNome(r.nome)}
+                    </span>
+                    <button
+                      onClick={() => onApriIscritto && onApriIscritto(r.iscrittoId)}
+                      title="Apri la scheda dell'allievo"
+                      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
+                    >
+                      {r.nome}
+                    </button>
+                    <span style={{ ...fontBody, fontSize: 12, color: MUTED, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+                      <span>{r.corso}</span><span>•</span><span>{fmtData(r.data)}</span><span>•</span><span>{r.pacchetto}</span>
+                    </span>
+                    {sez.chiave === "verificare" && (
+                      <span style={{ ...fontBody, fontSize: 12, color: NAVY }}>
+                        scelto <b>{etichettaDermografo(r.scelta)}</b>, ma {r.motivo}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
-              {dermografiDaControllare.daVerificare.map((r) => (
-                <div key={r.iscrittoId} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                  <button
-                    onClick={() => onApriIscritto && onApriIscritto(r.iscrittoId)}
-                    title="Apri la scheda dell'allievo"
-                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}
-                  >
-                    {r.nome}
-                  </button>
-                  <span style={{ color: MUTED }}>{r.corso} · {fmtData(r.data)}</span>
-                  <span>scelto <b>{etichettaDermografo(r.scelta)}</b>, ma {r.motivo} <span style={{ color: MUTED }}>("{r.pacchetto}")</span></span>
-                </div>
-              ))}
             </div>
-          )}
-
-          {dermografiDaControllare.daScegliere.length > 0 && (
-            <div>
-              <div style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 6 }}>
-                Ancora da scegliere ({dermografiDaControllare.daScegliere.length})
-              </div>
-              <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginBottom: 6 }}>
-                Finché restano vuoti non contano nel fabbisogno: nessun dermografo verrà preparato per loro.
-              </div>
-              {dermografiDaControllare.daScegliere.map((r) => (
-                <div key={r.iscrittoId} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline", padding: "6px 0", borderTop: `1px solid ${CREAM_BORDER}`, ...fontBody, fontSize: 12.5, color: NAVY }}>
-                  <button
-                    onClick={() => onApriIscritto && onApriIscritto(r.iscrittoId)}
-                    title="Apri la scheda dell'allievo"
-                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER }}
-                  >
-                    {r.nome}
-                  </button>
-                  <span style={{ color: MUTED }}>{r.corso} · {fmtData(r.data)} · {r.pacchetto}</span>
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
       )}
 
@@ -31658,10 +31781,12 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
           un prodotto che non sa quale sia, lo dichiara e basta */}
       {(risultato.dermografiSenzaProdotto || []).length > 0 && (
         <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8A0A0` }}>
-          <div style={titoloBlocco}>Dermografi senza prodotto in magazzino</div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 10, lineHeight: 1.4 }}>
-            Questi allievi hanno chiesto un dermografo che in anagrafica non trovo (o ne trovo più d'uno con lo stesso nome): non lo conto nel fabbisogno e non verrà scaricato.
-          </div>
+          <TestataAdvisor
+            Icona={IconaDermografoAdvisor}
+            coloreIcona="#C0392B"
+            titolo="Dermografi senza prodotto in magazzino"
+            sotto="Questi allievi hanno chiesto un dermografo che in anagrafica non trovo (o ne trovo più d'uno con lo stesso nome): non lo conto nel fabbisogno e non verrà scaricato."
+          />
           {risultato.dermografiSenzaProdotto.map((d, i) => (
             <div key={i} style={{ ...fontBody, fontSize: 13, color: NAVY, padding: "4px 0", borderTop: i === 0 ? "none" : `1px solid ${CREAM_BORDER}` }}>
               <b>{d.quantita} × {etichettaDermografo(d.modello)}</b> — corso del {fmtData(d.data)}
@@ -31672,27 +31797,31 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
 
       {prodottiDaConfigurare.length > 0 && (
         <div style={{ ...cardStyle, padding: 16, marginBottom: 16, border: `1px solid #E8D9A0` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-            <div style={titoloBlocco}>Tempi di consegna da configurare ({prodottiDaConfigurare.length} prodotti)</div>
-            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              {[["categoria", "per categoria"], ["fornitore", "per fornitore"]].map(([valore, etichetta]) => (
-                <button
-                  key={valore} onClick={() => setRaggruppaLead(valore)}
-                  style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 8, cursor: "pointer",
-                    border: `1px solid ${raggruppaLead === valore ? NAVY : CREAM_BORDER}`, background: raggruppaLead === valore ? NAVY : "#fff",
-                    color: raggruppaLead === valore ? "#fff" : NAVY }}
-                >{etichetta}</button>
-              ))}
-            </div>
-          </div>
-          <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginBottom: 12 }}>
-            Scrivi un numero per gruppo: riempie <b>solo i prodotti ancora vuoti</b>, quelli già scritti a mano restano intatti. Ogni prodotto resta comunque modificabile dalla sua scheda.
-          </div>
+          <TestataAdvisor
+            Icona={IconaCamionConsegna}
+            titolo={`Tempi di consegna da configurare (${prodottiDaConfigurare.length} prodotti)`}
+            sotto={<>Scrivi un numero per gruppo: riempie <b>solo i prodotti ancora vuoti</b>, quelli già scritti a mano restano intatti. Ogni prodotto resta comunque modificabile dalla sua scheda.</>}
+            azione={(
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                {[["categoria", "per categoria"], ["fornitore", "per fornitore"]].map(([valore, etichetta]) => (
+                  <button
+                    key={valore} onClick={() => setRaggruppaLead(valore)}
+                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, padding: "7px 14px", borderRadius: 10, cursor: "pointer",
+                      border: `1px solid ${raggruppaLead === valore ? NAVY : CREAM_BORDER}`, background: raggruppaLead === valore ? NAVY : "#fff",
+                      color: raggruppaLead === valore ? "#fff" : NAVY }}
+                  >{etichetta}</button>
+                ))}
+              </div>
+            )}
+          />
           {gruppiLeadTime.filter((g) => g.vuoti.length > 0).map((g) => (
-            <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "9px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ flex: "1 1 240px", minWidth: 0, ...fontBody, fontSize: 13, color: NAVY }}>
+            <div key={g.chiave} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "12px 0", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ width: 38, height: 38, borderRadius: 10, background: BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <IconaScatolaErp size={17} color={GOLD} />
+              </span>
+              <div style={{ flex: "1 1 220px", minWidth: 0, ...fontBody, fontSize: 13.5, color: NAVY }}>
                 <b>{g.nome}</b>
-                <span style={{ color: MUTED, fontSize: 12 }}> · {g.vuoti.length} da configurare{g.impostati.length > 0 ? `, ${g.impostati.length} già impostati` : ""}</span>
+                <span style={{ color: MUTED, fontSize: 12, display: "block", marginTop: 2 }}>{g.vuoti.length} da configurare{g.impostati.length > 0 ? `, ${g.impostati.length} già impostati` : ""}</span>
               </div>
               <input
                 style={{ ...inputStyle, width: 90 }} inputMode="numeric" placeholder="giorni"
@@ -31705,7 +31834,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
               {g.impostati.length > 0 && (
                 <button
                   onClick={() => applicaLeadTime(g, true)} disabled={salvandoLead === g.chiave}
-                  style={{ ...fontBody, fontSize: 11.5, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                  style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.3, textAlign: "right", color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0, maxWidth: 130 }}
                 >
                   sovrascrivi anche i {g.impostati.length} già impostati
                 </button>
@@ -31716,7 +31845,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       )}
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-        <div style={titoloBlocco}>Da ordinare adesso</div>
+        <TestataAdvisor Icona={IconaCarrelloPos} titolo="Da ordinare adesso" />
         {/* quando si apre l'ordine di un fornitore la scheda si divide in
             due: a sinistra resta l'elenco da cui si è partiti, a destra
             compare il suo ordine — così si vede da dove viene */}
@@ -31726,11 +31855,14 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Niente da ordinare: nessun prodotto è in ritardo, in scadenza d'ordine o sotto scorta minima.</div>
         ) : perFornitore.map(([fornitoreId, righe]) => (
           <div key={fornitoreId} style={{ marginBottom: 14 }}>
-            <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD, marginBottom: 2 }}>
-              {fornitoreId === "__nessuno" ? "Senza fornitore assegnato" : (fornitorePerId[fornitoreId]?.nome || "Fornitore")}
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
+              <IconaScatolaErp size={14} color={GOLD} />
+              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
+                {fornitoreId === "__nessuno" ? "Senza fornitore assegnato" : (fornitorePerId[fornitoreId]?.nome || "Fornitore")}
+              </span>
             </div>
             {righe.map((r) => (
-              <div key={r.prodotto.id} style={rigaStyle}>
+              <div key={r.prodotto.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {/* il nome apre la scheda del prodotto: da qui si decide
                       cosa ordinare, e la decisione si prende guardando la
@@ -31756,12 +31888,28 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                     )}
                   </div>
                 </div>
-                <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                  {r.quantitaSuggerita != null && <div style={{ fontWeight: 700 }}>ordina {r.quantitaSuggerita}</div>}
-                  <div style={{ fontSize: 11.5, color: MUTED }}>
+                {/* la quantità in una pastiglia e la freccia che porta
+                    alla scheda: il numero da solo si confondeva con il
+                    testo della riga */}
+                <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  {r.quantitaSuggerita != null && (
+                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "4px 14px", display: "inline-block" }}>
+                      ordina {r.quantitaSuggerita}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>
                     {r.baseQuantita === "quantita_riordino" ? "quantità di riordino del prodotto" : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta" : "quantità da valutare"}
                   </div>
                 </div>
+                {onApriProdotto && (
+                  <button
+                    onClick={() => onApriProdotto(r.prodotto.id)}
+                    title="Apri la scheda del prodotto"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: "none", background: "none", color: MUTED, cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <IconaChevronDestra size={16} color={MUTED} />
+                  </button>
+                )}
               </div>
             ))}
             {fornitoreId !== "__nessuno" && (
@@ -31801,7 +31949,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-        <div style={titoloBlocco}>Autonomia per kit</div>
+        <TestataAdvisor Icona={IconaScatolaErp} titolo="Autonomia per kit" />
         {kitOggi.filter((k) => !k.senzaComposizione).length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun kit con composizione configurata.</div>
         ) : kitOggi.filter((k) => !k.senzaComposizione)
@@ -31851,7 +31999,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
-        <div style={titoloBlocco}>Corsi futuri</div>
+        <TestataAdvisor Icona={IconaCalendarioCard} titolo="Corsi futuri" />
         {risultato.perEdizione.length === 0 ? (
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Nessun corso futuro in calendario.</div>
         ) : risultato.perEdizione.map((e) => (
@@ -31874,7 +32022,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
       </div>
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 24 }}>
-        <div style={titoloBlocco}>Non posso esprimermi</div>
+        <TestataAdvisor Icona={IconaScudoSicurezza} titolo="Non posso esprimermi" />
         <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.6 }}>
           {prodottiDaConfigurare.length === 0 && kitSenzaComposizione.length === 0 && nonRisoltiPerEtichetta.length === 0 && piano.nonCalcolabili.length === 0 && (
             <span style={{ color: MUTED }}>Niente: tutti i dati necessari sono compilati.</span>
