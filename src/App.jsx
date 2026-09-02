@@ -46218,6 +46218,14 @@ export default function App() {
     setSchedeAffiancateIscritti(iscrittiArr);
     setView("schedeaffiancate");
   }
+  // le proporzioni del dock del Mac: tasto grande e quadrato con gli
+  // angoli molto arrotondati, spazio fra uno e l'altro circa un quarto del
+  // tasto
+  const stileTastoDock = {
+    background: NAVY, color: "#fff", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 18,
+    width: 62, height: 62, flexShrink: 0, padding: 0,
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
   const corsoDataApertaObj = corsiDate.find((cd) => cd.id === corsoDataAperta) || null;
   // ricongiunge il payload_raw (caricato a parte, vedi vendite_shop_crm)
   // alle righe di venditeShop solo per il CRM Shop, l'unico punto che lo usa
@@ -46233,76 +46241,89 @@ export default function App() {
     <div style={{
       ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh",
       paddingTop: appDaSchermataHome ? "max(env(safe-area-inset-top, 0px), 54px)" : "env(safe-area-inset-top, 0px)",
-      paddingBottom: isMobile ? 16 : 0,
+      paddingBottom: isMobile ? 16 : 110,
     }}>
       {!isMobile && (
-        <div
-          style={{
-            position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)", width: "calc(100% - 24px)", maxWidth: 640,
-            zIndex: 2000, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-            background: NAVY, borderRadius: 30, padding: "8px 8px 8px 16px", boxShadow: "0 4px 16px rgba(0,0,0,0.12)",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", minWidth: 0, overflow: "hidden" }}>
-            <img src="/logo-elitederma.png" alt="Elitederma" style={{ height: 34, width: "auto", flexShrink: 1, minWidth: 0, filter: "invert(1) brightness(1.8)" }} />
-          </div>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-            {!utenteLoggato?.soloCalendarioLettura && (
-              <>
-                <button
-                  onClick={vaiIndietro}
-                  disabled={pilaIndietro.length === 0}
-                  style={{
-                    ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
-                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                    cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1,
-                  }}
-                >
-                  ← Indietro
-                </button>
-                <button
-                  onClick={vaiAvanti}
-                  disabled={pilaAvanti.length === 0}
-                  style={{
-                    ...fontBody, background: "#F1ECDF", color: NAVY, border: "none", borderRadius: 20,
-                    padding: "8px 14px", fontSize: 13, fontWeight: 600,
-                    cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1,
-                  }}
-                >
-                  Avanti →
-                </button>
-              </>
-            )}
-            {/* Home resta anche per il profilo di sola lettura: senza, chi
-                entra col calendario non ha più nessun modo di uscirne */}
+        // Il dock da scrivania. Prima era una barra in cima, sopra il
+        // contenuto: la si guardava per forza anche quando non serviva, e
+        // rubava la prima riga di ogni pagina. Qui sta in basso al centro,
+        // con gli stessi tasti quadrati del telefono e le proporzioni del
+        // dock del Mac — icona grande, spazi generosi.
+        <div style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 2000, transition: "transform 260ms ease" }}>
+          <div style={{ transform: dockNascosto ? "translateY(calc(100% - 20px))" : "translateY(0)", transition: "transform 260ms ease" }}>
             <button
-              onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
-              aria-label="Home"
-              title="Home"
+              onClick={() => setDockNascosto((v) => !v)}
+              aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+              title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
               style={{
-                background: "#fff", color: NAVY, border: "none", borderRadius: "50%",
-                width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 74, height: 20, margin: "0 auto", cursor: "pointer",
+                background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                border: "1px solid rgba(255,255,255,0.22)", borderBottom: "none",
+                borderRadius: "12px 12px 0 0", color: "#fff", padding: 0,
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points={dockNascosto ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
               </svg>
             </button>
-            <button
-              onClick={apriRotellinaPassword}
-              aria-label="Password menù"
-              title="Password menù"
+            <div
               style={{
-                background: "#F1ECDF", color: NAVY, border: "none", borderRadius: "50%",
-                width: 38, height: 38, flexShrink: 0, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                display: "flex", alignItems: "center", gap: 16,
+                background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                border: "1px solid rgba(255,255,255,0.22)", borderRadius: 28, padding: "12px 16px",
+                boxShadow: "0 10px 30px rgba(0,0,0,0.28)",
               }}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </button>
+              {/* il logo e' il tasto Home: e' il gesto che si fa gia' con
+                  l'icona di un'applicazione, e tiene il marchio in vista
+                  senza rubare un posto in piu' */}
+              <button
+                onClick={() => { scrollAppInCima(); setView("home"); setCorsoDataAperta(null); setSottoVistaScheda(null); }}
+                aria-label="Home"
+                title="Home"
+                style={{ ...stileTastoDock, cursor: "pointer" }}
+              >
+                <img src="/logo-elitederma.png" alt="" style={{ width: 44, height: "auto", filter: "invert(1) brightness(1.8)" }} />
+              </button>
+              {!utenteLoggato?.soloCalendarioLettura && (
+                <>
+                  <button
+                    onClick={vaiIndietro}
+                    disabled={pilaIndietro.length === 0}
+                    aria-label="Indietro"
+                    title="Indietro"
+                    style={{ ...stileTastoDock, cursor: pilaIndietro.length === 0 ? "default" : "pointer", opacity: pilaIndietro.length === 0 ? 0.4 : 1 }}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={vaiAvanti}
+                    disabled={pilaAvanti.length === 0}
+                    aria-label="Avanti"
+                    title="Avanti"
+                    style={{ ...stileTastoDock, cursor: pilaAvanti.length === 0 ? "default" : "pointer", opacity: pilaAvanti.length === 0 ? 0.4 : 1 }}
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                  </button>
+                </>
+              )}
+              <button
+                onClick={apriRotellinaPassword}
+                aria-label="Password menù"
+                title="Password menù"
+                style={{ ...stileTastoDock, cursor: "pointer" }}
+              >
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       )}
