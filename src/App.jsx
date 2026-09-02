@@ -46240,8 +46240,12 @@ export default function App() {
     // cima vale quindi ovunque, non solo in home
     <div style={{
       ...fontBody, background: "transparent", boxSizing: "border-box", minHeight: "100vh",
-      paddingTop: appDaSchermataHome ? "max(env(safe-area-inset-top, 0px), 54px)" : "env(safe-area-inset-top, 0px)",
-      paddingBottom: isMobile ? 16 : 110,
+      // da scrivania il dock sta in cima: lo spazio va lasciato li', o
+      // coprirebbe il titolo di ogni pagina
+      paddingTop: isMobile
+        ? (appDaSchermataHome ? "max(env(safe-area-inset-top, 0px), 54px)" : "env(safe-area-inset-top, 0px)")
+        : 104,
+      paddingBottom: isMobile ? 16 : 24,
     }}>
       {!isMobile && (
         // Il dock da scrivania. Prima era una barra in cima, sopra il
@@ -46249,24 +46253,8 @@ export default function App() {
         // rubava la prima riga di ogni pagina. Qui sta in basso al centro,
         // con gli stessi tasti quadrati del telefono e le proporzioni del
         // dock del Mac — icona grande, spazi generosi.
-        <div style={{ position: "fixed", left: "50%", bottom: 18, transform: "translateX(-50%)", zIndex: 2000, transition: "transform 260ms ease" }}>
-          <div style={{ transform: dockNascosto ? "translateY(calc(100% - 20px))" : "translateY(0)", transition: "transform 260ms ease" }}>
-            <button
-              onClick={() => setDockNascosto((v) => !v)}
-              aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
-              title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
-              style={{
-                display: "flex", alignItems: "center", justifyContent: "center",
-                width: 74, height: 20, margin: "0 auto", cursor: "pointer",
-                background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
-                border: "1px solid rgba(255,255,255,0.22)", borderBottom: "none",
-                borderRadius: "12px 12px 0 0", color: "#fff", padding: 0,
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points={dockNascosto ? "6 15 12 9 18 15" : "6 9 12 15 18 9"} />
-              </svg>
-            </button>
+        <div style={{ position: "fixed", left: "50%", top: 14, transform: "translateX(-50%)", zIndex: 2000 }}>
+          <div style={{ transform: dockNascosto ? "translateY(calc(-100% + 20px))" : "translateY(0)", transition: "transform 260ms ease" }}>
             <div
               style={{
                 display: "flex", alignItems: "center", gap: 16,
@@ -46324,6 +46312,24 @@ export default function App() {
                 </svg>
               </button>
             </div>
+            {/* la linguetta sta sotto la barra: tirandola, il dock risale
+                fuori dallo schermo e resta solo lei con la freccia in giu' */}
+            <button
+              onClick={() => setDockNascosto((v) => !v)}
+              aria-label={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+              title={dockNascosto ? "Mostra i tasti" : "Nascondi i tasti"}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 74, height: 20, margin: "0 auto", cursor: "pointer",
+                background: "rgba(14,27,51,0.28)", backdropFilter: "blur(18px)", WebkitBackdropFilter: "blur(18px)",
+                border: "1px solid rgba(255,255,255,0.22)", borderTop: "none",
+                borderRadius: "0 0 12px 12px", color: "#fff", padding: 0,
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points={dockNascosto ? "6 9 12 15 18 9" : "6 15 12 9 18 15"} />
+              </svg>
+            </button>
           </div>
         </div>
       )}
