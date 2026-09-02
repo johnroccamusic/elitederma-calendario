@@ -847,6 +847,13 @@ function IconaCamionConsegna({ size = 18, color = "#fff" }) {
     </svg>
   );
 }
+function IconaPiuCerchiato({ size = 16, color = "currentColor" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" />
+    </svg>
+  );
+}
 function IconaBorsaShop({ size = 18, color = "currentColor" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -31690,10 +31697,26 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, riordiniInCorso = [], ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, prodottiImmagini, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, riordiniInCorso = [], ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
+
+  // la prima foto di ogni prodotto: una riga d'ordine con la foto si
+  // riconosce senza leggerla, ed e' la stessa che si vede in magazzino
+  const immaginePerProdotto = useMemo(() => {
+    const mappa = {};
+    [...(prodottiImmagini || [])].sort((a, b) => (a.ordine || 0) - (b.ordine || 0)).forEach((im) => { if (!mappa[im.prodotto_id]) mappa[im.prodotto_id] = im.url; });
+    return mappa;
+  }, [prodottiImmagini]);
+  function MiniaturaAdvisor({ prodotto, lato = 44 }) {
+    const url = immaginePerProdotto[prodotto?.id];
+    return (
+      <span style={{ width: lato, height: lato, borderRadius: 10, background: url ? "#fff" : BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: url ? 3 : 0 }}>
+        {url ? <img src={url} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <IconaScatolaErp size={Math.round(lato * 0.42)} color={MUTED} />}
+      </span>
+    );
+  }
 
   // Quello che e' stato gia' ordinato. Fra "l'Advisor dice di ordinarlo" e
   // "la merce arriva" passano giorni in cui l'avviso resta identico: senza
@@ -32368,14 +32391,18 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
           <div style={{ ...fontBody, fontSize: 13, color: MUTED }}>Niente da ordinare: nessun prodotto è in ritardo, in scadenza d'ordine o sotto scorta minima.</div>
         ) : perFornitore.map(([fornitoreId, righe]) => (
           <div key={fornitoreId} style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 4 }}>
-              <IconaScatolaErp size={14} color={GOLD} />
-              <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: GOLD }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <IconaScatolaErp size={15} color={GOLD} />
+              <span style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.6, whiteSpace: "nowrap" }}>
                 {fornitoreId === "__nessuno" ? "Senza fornitore assegnato" : (fornitorePerId[fornitoreId]?.nome || "Fornitore")}
               </span>
+              {/* la linea che continua fino a bordo scheda tiene insieme il
+                  gruppo: senza, le righe di due fornitori si confondevano */}
+              <span style={{ flex: 1, height: 1, background: "#EBD9AE" }} />
             </div>
             {righe.map((r) => (
               <div key={r.prodotto.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
+                <MiniaturaAdvisor prodotto={r.prodotto} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {/* il nome apre la scheda del prodotto: da qui si decide
                       cosa ordinare, e la decisione si prende guardando la
@@ -32391,11 +32418,20 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                   ) : (
                     <div style={{ fontWeight: 700 }}>{r.prodotto.nome}</div>
                   )}
-                  <div style={{ fontSize: 12, color: MUTED }}>
+                  <div style={{ fontSize: 12, color: MUTED, lineHeight: 1.4 }}>
                     {r.criterio === "data" && r.perData ? (
                       r.perData.stato === "ritardo"
-                        ? <span style={{ color: "#C0392B", fontWeight: 700 }}>Dovevi ordinare il {fmtData(r.perData.dataLimite)} — {-r.perData.giorni} giorni di ritardo: {etichettaEdizione(r.perData.edizioneCriticaId)} non sarà coperto</span>
-                        : <>Ordina entro il <b>{fmtData(r.perData.dataLimite)}</b> ({r.perData.giorni} giorni) — serve per {etichettaEdizione(r.perData.edizioneCriticaId)}</>
+                        ? (
+                          <span style={{ color: "#C0392B", fontWeight: 700 }}>
+                            Dovevi ordinare il {fmtData(r.perData.dataLimite)} — {-r.perData.giorni} giorni di ritardo:
+                            <span style={{ display: "block" }}>{etichettaEdizione(r.perData.edizioneCriticaId)} non sarà coperto</span>
+                          </span>
+                        ) : (
+                          <>
+                            Ordina entro il <b>{fmtData(r.perData.dataLimite)}</b> ({r.perData.giorni} giorni)
+                            <span style={{ display: "block" }}>serve per {etichettaEdizione(r.perData.edizioneCriticaId)}</span>
+                          </>
+                        )
                     ) : (
                       <>Sotto scorta minima: {r.perSoglia.disponibile} disponibili contro {r.perSoglia.soglia}</>
                     )}
@@ -32437,7 +32473,10 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                 onClick={() => (fornitoreOrdineId === fornitoreId ? setFornitoreOrdineId(null) : apriOrdineFornitore(fornitoreId, righe))}
                 style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: fornitoreOrdineId === fornitoreId ? "#fff" : NAVY, background: fornitoreOrdineId === fornitoreId ? NAVY : "#fff", border: `1px solid ${fornitoreOrdineId === fornitoreId ? NAVY : CREAM_BORDER}`, borderRadius: 14, padding: "7px 12px", cursor: "pointer", marginTop: 8 }}
               >
-                {fornitoreOrdineId === fornitoreId ? "Chiudi l'ordine" : "Associa prodotti dello stesso fornitore"}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                  <IconaPiuCerchiato size={16} color={fornitoreOrdineId === fornitoreId ? "#fff" : GOLD} />
+                  {fornitoreOrdineId === fornitoreId ? "Chiudi l'ordine" : "Associa prodotti dello stesso fornitore"}
+                </span>
               </button>
             )}
           </div>
@@ -32482,6 +32521,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
             const giorniDaOrdine = giorniTra(String(riordino.data_ordine), oggi);
             return (
               <div key={riordino.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
+                <MiniaturaAdvisor prodotto={prodotto} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {onApriProdotto ? (
                     <button
@@ -32501,26 +32541,26 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                     {" · "}in magazzino adesso {prodotto.quantita || 0}
                   </div>
                 </div>
-                <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "6px 14px", display: "inline-block" }}>
+                {/* in colonna a destra: quanto era stato ordinato, il tasto
+                    per registrare l'arrivo e, sotto, il ripensamento */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "6px 14px" }}>
                     già ordinato {riordino.quantita || 0}
                   </span>
-                  <div style={{ marginTop: 4 }}>
-                    <button
-                      onClick={() => annullaOrdine(riordino)}
-                      style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-                    >
-                      non l'ho ordinato
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setRicezioneAperta({ riordino, prodotto }); setQuantitaRicevuta(String(riordino.quantita || "")); }}
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 20px", cursor: "pointer", touchAction: "manipulation" }}
+                  >
+                    Ricevuto
+                  </button>
+                  <button
+                    onClick={() => annullaOrdine(riordino)}
+                    style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                  >
+                    non l'ho ordinato
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => { setRicezioneAperta({ riordino, prodotto }); setQuantitaRicevuta(String(riordino.quantita || "")); }}
-                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 16px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
-                >
-                  Ricevuto
-                </button>
               </div>
             );
           })}
@@ -45470,7 +45510,7 @@ export default function App() {
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
-    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
+    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "prodotti_immagini", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -46661,7 +46701,7 @@ export default function App() {
 
       {view === "advisor" && (
         <PaginaAdvisor
-          prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie}
+          prodottiShop={prodottiShop} categorieProdotti={categorieProdotti} prodottiCategorie={prodottiCategorie} prodottiImmagini={prodottiImmagini}
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           fornitori={fornitori}
