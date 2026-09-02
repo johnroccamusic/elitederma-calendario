@@ -31792,6 +31792,9 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
   // possono arrivare in tempi diversi — e finche' non si vedeva nemmeno
   // quali fossero i prodotti mancanti, scriverli giusti era impossibile
   const [giorniProdotto, setGiorniProdotto] = useState({});
+  // oltre una dozzina l'elenco diventa un muro: si aprono a richiesta
+  const MAX_VUOTI_IN_VISTA = 12;
+  const [gruppoLeadAperto, setGruppoLeadAperto] = useState({});
   const [salvandoProdottoLead, setSalvandoProdottoLead] = useState(null);
   async function salvaLeadProdotto(prodotto) {
     const giorni = interoOpzionale(giorniProdotto[prodotto.id]);
@@ -32167,7 +32170,7 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                   non si vedono nemmeno non si puo' sapere se e' il numero
                   giusto per ognuno */}
               <div style={{ flexBasis: "100%", marginTop: 2 }}>
-                {g.vuoti.map((p) => (
+                {(gruppoLeadAperto[g.chiave] ? g.vuoti : g.vuoti.slice(0, MAX_VUOTI_IN_VISTA)).map((p) => (
                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "6px 0 6px 48px" }}>
                     {onApriProdotto ? (
                       <button
@@ -32197,6 +32200,14 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                     </button>
                   </div>
                 ))}
+                {g.vuoti.length > MAX_VUOTI_IN_VISTA && (
+                  <button
+                    onClick={() => setGruppoLeadAperto((prev) => ({ ...prev, [g.chiave]: !prev[g.chiave] }))}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: "4px 0 0 48px", cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    {gruppoLeadAperto[g.chiave] ? "mostra solo i primi" : `vedi tutti e ${g.vuoti.length}`}
+                  </button>
+                )}
               </div>
             </div>
           ))}
