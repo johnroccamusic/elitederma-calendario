@@ -9610,6 +9610,136 @@ function raccogliModelleStoriche({ corsiDate, corsi, location, iscritti }) {
   );
 }
 
+// ---------- Modelle da sistemare ----------
+// Non "modelle ancora da trovare" — quello e' il lavoro normale, e sta
+// nella Dashboard. Qui finisce solo cio' che e' STORTO: una richiesta che
+// non dice quale trattamento, un trattamento che non corrisponde a nessun
+// giorno del corso, un numero di modelle pagate diverso dai posti in
+// elenco, una modella con il nome ma senza numero. Sono i casi in cui chi
+// assegna le modelle si ferma e non sa cosa fare — e finora doveva
+// accorgersene da solo, classe per classe.
+function raccogliModelleDaSistemare({ corsiDate, corsi, location, iscritti, corsiGiorni }) {
+  const oggi = dataOggiStr();
+  const righe = [];
+  (corsiDate || [])
+    .filter((cd) => (cd.data_inizio || "") >= oggi)
+    .sort((a, b) => String(a.data_inizio).localeCompare(String(b.data_inizio)))
+    .forEach((cd) => {
+      const corso = (corsi || []).find((c) => c.id === cd.corso_id);
+      const citta = (location || []).find((l) => l.id === cd.location_id)?.nome || "";
+      const giorniAllievi = (corsiGiorni || []).filter((g) => g.corso_id === cd.corso_id && g.richiede_modelle_allievi);
+      (iscritti || []).filter((i) => i.corso_data_id === cd.id).forEach((i) => {
+        const posti = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
+        const motivi = [];
+        const pagate = i.numero_modelle == null ? null : Number(i.numero_modelle);
+
+        if (i.richiede_modelle && (pagate || 0) > 0 && posti.length === 0) {
+          motivi.push({ gravita: "alta", testo: `Ha ${pagate} modelle da noi, ma nessun trattamento in elenco: non c'e' niente da assegnare.` });
+        }
+        if (i.richiede_modelle && posti.length > 0 && pagate != null && pagate !== posti.length) {
+          motivi.push({ gravita: "alta", testo: `Modelle pagate ${pagate}, trattamenti in elenco ${posti.length}: uno dei due numeri e' sbagliato.` });
+        }
+
+        posti.forEach((m, idx) => {
+          const tipo = normalizzaTipoModella(m.tipo);
+          const etichettaPosto = m.tipo ? `"${m.tipo}"` : `${idx + 1}° posto`;
+          if (!tipo) {
+            motivi.push({ gravita: "alta", testo: `Il ${idx + 1}° posto non dice quale trattamento: sceglilo, o resta in un giorno a caso.` });
+          } else if (m.giorno == null && giorniAllievi.length > 0 && !giorniAllievi.some((g) => normalizzaTipoModella(g.tipo_modella_allievi) === tipo)) {
+            motivi.push({ gravita: "media", testo: `${etichettaPosto} non corrisponde a nessun giorno del corso: finisce nel primo giorno utile.` });
+          }
+          const nomeM = String(m.nome_modella || "").trim();
+          const telM = String(m.telefono_modella || "").trim();
+          if (nomeM && !telM) motivi.push({ gravita: "media", testo: `${etichettaPosto}: c'e' il nome "${nomeM}" ma manca il numero, quindi il posto non risulta coperto.` });
+          if (!nomeM && telM) motivi.push({ gravita: "media", testo: `${etichettaPosto}: c'e' il numero ma manca il nome.` });
+        });
+
+        if (motivi.length > 0) {
+          righe.push({
+            iscrittoId: i.id,
+            nome: `${i.nome || ""} ${i.cognome || ""}`.trim() || "senza nome",
+            corsoDataId: cd.id, corsoData: cd,
+            corsoNome: corso?.nome || "corso", citta, data: cd.data_inizio,
+            nostra: !!i.richiede_modelle,
+            motivi,
+          });
+        }
+      });
+    });
+  return righe;
+}
+
+function PaginaModelleDaSistemare({ corsi, location, corsiDate, iscritti, corsiGiorni, onApriIscritto, onApriData }) {
+  const righe = useMemo(
+    () => raccogliModelleDaSistemare({ corsiDate, corsi, location, iscritti, corsiGiorni }),
+    [corsiDate, corsi, location, iscritti, corsiGiorni]
+  );
+  // una scheda per edizione: chi assegna le modelle ragiona per classe,
+  // non per allievo sparso
+  const perEdizione = [];
+  righe.forEach((r) => {
+    const ultimo = perEdizione[perEdizione.length - 1];
+    if (ultimo && ultimo.corsoDataId === r.corsoDataId) ultimo.righe.push(r);
+    else perEdizione.push({ corsoDataId: r.corsoDataId, corsoData: r.corsoData, corsoNome: r.corsoNome, citta: r.citta, data: r.data, righe: [r] });
+  });
+
+  if (righe.length === 0) {
+    return (
+      <div style={{ ...cardStyle, padding: 20, ...fontBody, fontSize: 13.5, color: MUTED }}>
+        Nessun problema: in tutte le classi in programma le richieste di modelle sono complete e coerenti.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 14, lineHeight: 1.5 }}>
+        {righe.length} alliev{righe.length === 1 ? "o" : "i"} con qualcosa da sistemare nelle modelle. Clicca il nome per aprire la sua scheda:
+        il trattamento, il numero di modelle e il giorno si correggono da lì.
+      </div>
+      {perEdizione.map((ed) => (
+        <div key={ed.corsoDataId} style={{ ...cardStyle, padding: 16, marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+            <div>
+              <div style={{ ...fontDisplay, fontSize: 15, fontWeight: 700, color: NAVY }}>
+                {ed.corsoNome}{ed.citta ? ` · ${toTitleCase(ed.citta)}` : ""}
+              </div>
+              <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 2 }}>{fmtData(ed.data)} — {ed.righe.length} da sistemare</div>
+            </div>
+            {onApriData && (
+              <Button variant="ghost" onClick={() => onApriData(ed.corsoData)}>Assegna modelle ›</Button>
+            )}
+          </div>
+          {ed.righe.map((r) => (
+            <div key={r.iscrittoId} style={{ borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 0" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ width: 30, height: 30, borderRadius: "50%", background: "#FDF8EC", border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0, ...fontBody, fontSize: 11, fontWeight: 700, color: GOLD }}>
+                  {inizialiNome(r.nome)}
+                </span>
+                <button
+                  onClick={() => onApriIscritto && onApriIscritto(r.iscrittoId)}
+                  title="Apri la scheda dell'allievo"
+                  style={{ ...fontBody, fontSize: 13.5, fontWeight: 700, color: NAVY, textTransform: "uppercase", letterSpacing: 0.3, background: "none", border: "none", padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
+                >
+                  {r.nome}
+                </button>
+                <span style={{ ...fontBody, fontSize: 10.5, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: r.nostra ? "#F7EDDB" : "#FDECEC", color: r.nostra ? "#8A6D1D" : "#C0392B" }}>
+                  {r.nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
+                </span>
+              </div>
+              <div style={{ marginTop: 4, marginLeft: 38 }}>
+                {r.motivi.map((m, iM) => (
+                  <div key={iM} style={{ ...fontBody, fontSize: 12.5, color: m.gravita === "alta" ? "#C0392B" : MUTED, lineHeight: 1.45 }}>• {m.testo}</div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function PaginaCrmModelle({ corsi, location, corsiDate, iscritti }) {
   const isMobile = useIsMobile();
   const [ricerca, setRicerca] = useState("");
@@ -9715,7 +9845,7 @@ function PaginaCrmModelle({ corsi, location, corsiDate, iscritti }) {
 // data si entra direttamente nella scheda "Assegna modelle" di
 // quell'edizione (onApriData qui è apriDataModelle, non apriData)
 function PaginaGestioneModelle({
-  corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, onBack, apriDataModelle,
+  corsi, location, corsiDate, iscritti, master, corsiGiorni, ricarica, onBack, apriDataModelle, onApriIscritto,
   filtroCorsoHome, setFiltroCorsoHome, filtroCittaHome, setFiltroCittaHome, filtroMasterHome, setFiltroMasterHome,
   cronologicoHome, setCronologicoHome,
   apriFiltroCorsoHome, setApriFiltroCorsoHome, apriFiltroCittaHome, setApriFiltroCittaHome, apriFiltroMasterHome, setApriFiltroMasterHome,
@@ -9723,7 +9853,11 @@ function PaginaGestioneModelle({
   titolo = "Gestione modelle",
 }) {
   const isMobile = useIsMobile();
-  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio | crm
+  const [tabGM, setTabGM] = useState("dashboard"); // dashboard | richieste | archivio | crm | dasistemare
+  const quantiDaSistemare = useMemo(
+    () => raccogliModelleDaSistemare({ corsiDate, corsi, location, iscritti, corsiGiorni }).length,
+    [corsiDate, corsi, location, iscritti, corsiGiorni]
+  );
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "24px 16px 60px" : "32px 28px 60px" }}>
       <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -9738,11 +9872,21 @@ function PaginaGestioneModelle({
             <TabPillola attivo={tabGM === "richieste"} onClick={() => setTabGM("richieste")}>Calendario corsi</TabPillola>
             <TabPillola attivo={tabGM === "archivio"} onClick={() => setTabGM("archivio")}>Archivio corsi</TabPillola>
             <TabPillola attivo={tabGM === "crm"} onClick={() => setTabGM("crm")}>CRM modelle</TabPillola>
+            {/* il numero rosso dice subito se c'e' qualcosa di storto: senza,
+                nessuno aprirebbe mai una tab che di solito e' vuota */}
+            <TabPillola attivo={tabGM === "dasistemare"} onClick={() => setTabGM("dasistemare")}>
+              Da sistemare{quantiDaSistemare > 0 ? ` (${quantiDaSistemare})` : ""}
+            </TabPillola>
           </div>
         </div>
         <div style={{ marginBottom: 20 }} />
 
-        {tabGM === "crm" ? (
+        {tabGM === "dasistemare" ? (
+          <PaginaModelleDaSistemare
+            corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} corsiGiorni={corsiGiorni}
+            onApriIscritto={onApriIscritto} onApriData={apriDataModelle}
+          />
+        ) : tabGM === "crm" ? (
           <PaginaCrmModelle corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} />
         ) : tabGM === "dashboard" ? (
           <PaginaDashboardModelle
@@ -45545,6 +45689,19 @@ export default function App() {
   // stessa cosa di apriIscritto, ma memorizza che si arriva dall'Advisor:
   // così il tasto "torna indietro" della scheda riporta lì e non nella
   // vista da cui si era entrati l'ultima volta in una scheda
+  // come apriIscrittoDaAdvisor, ma si torna in Gestione modelle: e' da li'
+  // che si parte quando una richiesta di modelle e' da sistemare
+  function apriIscrittoDaModelle(iscrittoId) {
+    const i = (iscritti || []).find((x) => x.id === iscrittoId);
+    if (!i) return;
+    scrollAppInCima();
+    setViewPrimaDiScheda("gestionemodelle");
+    setVieneDaGestioneModelle(true);
+    setCorsoDataAperta(i.corso_data_id);
+    setSottoVistaScheda({ vista: "form", modificandoId: i.id, mostraGestione: false });
+    setSchedaKey((k) => k + 1);
+    setView("scheda");
+  }
   function apriIscrittoDaAdvisor(iscrittoId) {
     const i = (iscritti || []).find((x) => x.id === iscrittoId);
     if (!i) return;
@@ -46318,6 +46475,7 @@ export default function App() {
         <PaginaGestioneModelle
           corsi={corsi} location={location} corsiDate={corsiDate} iscritti={iscritti} master={master} corsiGiorni={corsiGiorni}
           ricarica={fetchDati} onBack={() => setView("home")} apriDataModelle={apriDataModelle}
+          onApriIscritto={apriIscrittoDaModelle}
           filtroCorsoHome={filtroCorsoHome} setFiltroCorsoHome={setFiltroCorsoHome}
           filtroCittaHome={filtroCittaHome} setFiltroCittaHome={setFiltroCittaHome}
           filtroMasterHome={filtroMasterHome} setFiltroMasterHome={setFiltroMasterHome}
