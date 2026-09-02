@@ -13864,19 +13864,37 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
   // primo — ed e' cosi' che il nome inserito la mattina spariva la sera
   const daSalvare = nome !== (modella.nome_modella || "") || telefono !== (modella.telefono_modella || "");
   const trovata = modellaTrovata(modella);
+  // si legge direttamente dai due campi, non solo dallo stato di React:
+  // sulle tastiere di Android la parola in corso di composizione (con
+  // correttore e suggerimenti) puo' non essere ancora arrivata a React
+  // quando il dito lascia il tasto, e quello che si vede scritto nel campo
+  // e' l'unica verita' di cui fidarsi
+  const rifNome = React.useRef(null);
+  const rifTelefono = React.useRef(null);
+  const salvataggioInCorso = React.useRef(false);
+  // finche' si sta scrivendo in uno dei due campi il tasto Conferma resta
+  // in vista anche se lo stato di React non registra ancora differenze:
+  // su Android puo' succedere, ed e' proprio il momento in cui il tasto
+  // serve
+  const [inModifica, setInModifica] = useState(false);
   function salvaNomeETelefono() {
-    if (!daSalvare) return;
-    const n = nome.trim();
-    const t = telefono.trim();
+    const n = String(rifNome.current?.value ?? nome).trim();
+    const t = String(rifTelefono.current?.value ?? telefono).trim();
+    if (n === (modella.nome_modella || "") && t === (modella.telefono_modella || "")) { setInModifica(false); return; }
+    // lo stato locale si riallinea a quello che stiamo per scrivere, o il
+    // campo tornerebbe indietro per un istante prima che il dato ricaricato
+    // arrivi dal database
+    setNome(n); setTelefono(t);
     // svuotare tutti e due libera il posto: e' il modo per dire "questa
     // modella non viene piu'", e deve restare possibile
-    if (!n && !t) { onSalva({ nome_modella: "", telefono_modella: "" }); return; }
+    if (!n && !t) { setInModifica(false); onSalva({ nome_modella: "", telefono_modella: "" }); return; }
     // mezzo dato no: senza numero non la si puo' chiamare, e il posto
     // risulterebbe coperto quando non lo e'
     if (!n || !t) {
       window.alert(`Per confermare servono sia il nome sia il numero: manca ${!n ? "il nome" : "il numero"}.`);
       return;
     }
+    setInModifica(false);
     onSalva({ nome_modella: n, telefono_modella: t });
   }
 
@@ -13926,15 +13944,19 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
           </>
         )}
         <input
+          ref={rifNome}
           placeholder="Nome"
           value={nome}
+          onFocus={() => setInModifica(true)}
           onChange={(e) => setNome(e.target.value)}
           style={{ ...inputStyle, flex: "2 1 150px", padding: "6px 10px" }}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 2, flex: "1 1 140px" }}>
           <input
+            ref={rifTelefono}
             placeholder="Tel."
             value={telefono}
+            onFocus={() => setInModifica(true)}
             onChange={(e) => setTelefono(e.target.value)}
             style={{ ...inputStyle, flex: 1, minWidth: 0, padding: "6px 10px" }}
           />
@@ -13954,10 +13976,24 @@ function RigaModella({ modella, mostraOrario = true, primaRiga, onSalva, opzioni
             campo sembrava comodo, ma lasciava mezzo dato scritto senza che
             nessuno l'avesse deciso — e con mezzo dato il posto risultava
             coperto pur non essendolo */}
-        {daSalvare ? (
+        {(daSalvare || inModifica) ? (
           <button
-            onClick={salvaNomeETelefono}
-            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "8px 14px", cursor: "pointer", flexShrink: 0 }}
+            type="button"
+            // Su iPad e su Android il tocco su questo tasto faceva prima
+            // uscire dal campo: la tastiera si chiudeva, la pagina si
+            // riassestava e il tasto scivolava via da sotto il dito, cosi'
+            // il "click" non arrivava mai e il nome non veniva salvato.
+            // Si salva quindi al primo contatto, impedendo l'uscita dal
+            // campo; il click che segue viene ignorato per non salvare due
+            // volte la stessa cosa
+            onPointerDown={(e) => {
+              e.preventDefault();
+              salvataggioInCorso.current = true;
+              salvaNomeETelefono();
+              setTimeout(() => { salvataggioInCorso.current = false; }, 700);
+            }}
+            onClick={() => { if (!salvataggioInCorso.current) salvaNomeETelefono(); }}
+            style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
           >
             Conferma
           </button>
@@ -20671,7 +20707,9 @@ function VistaRicercaModelle({ param, mostraClasse }) {
         : nuovoElenco.map((m, i) => (i === idx ? { ...m, [nomeCampo]: valoreCampo } : m));
     });
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
-    if (error) return;
+    // un errore di rete o di permessi qui spariva senza dire niente, e chi
+    // aveva appena premuto Conferma restava convinto di aver salvato
+    if (error) { window.alert("Non sono riuscito a salvare: " + error.message + "\nControlla la connessione e riprova."); return; }
     setDati((prev) => ({
       ...prev,
       iscritti: prev.iscritti.map((x) => (x.id === iscrittoId ? { ...x, tipi_modelle: nuovoElenco } : x)),
@@ -20684,7 +20722,7 @@ function VistaRicercaModelle({ param, mostraClasse }) {
     const nuovoElenco = spuntato ? gruppoModellaSpunta(elenco, idx, altroIdx) : gruppoModellaTogli(elenco, altroIdx);
     if (!nuovoElenco) return;
     const { error } = await supabase.from("iscritti").update({ tipi_modelle: nuovoElenco }).eq("id", iscrittoId);
-    if (error) return;
+    if (error) { window.alert("Non sono riuscito a salvare: " + error.message); return; }
     setDati((prev) => ({
       ...prev,
       iscritti: prev.iscritti.map((x) => (x.id === iscrittoId ? { ...x, tipi_modelle: nuovoElenco } : x)),
@@ -20700,7 +20738,7 @@ function VistaRicercaModelle({ param, mostraClasse }) {
           {masterNome && ` — Master: ${masterNome.toUpperCase()}`} — Ricerca modelle
         </div>
         <div style={{ ...fontBody, fontSize: 13, color: MUTED, marginBottom: 24 }}>
-          Appena trovi una modella per un trattamento, spunta se viene la mattina o il pomeriggio e scrivi il suo nome e il suo numero: si salva da solo.
+          Appena trovi una modella per un trattamento, spunta se viene la mattina o il pomeriggio, scrivi il suo nome e il suo numero e premi <b>Conferma</b>: senza tutti e due i dati il posto non risulta coperto.
         </div>
 
         {mostraClasse && (
