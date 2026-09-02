@@ -28442,6 +28442,7 @@ function interoOpzionale(testo) {
 // centrate, e nessun titolo stava sopra la sua colonna
 const COLONNE_MAGAZZINO = [
   { label: "Prodotto", campo: "nome", direzioneIniziale: "asc", larghezza: 170, allinea: "left" },
+  { label: "Fornitore", campo: "nomeFornitore", direzioneIniziale: "asc", larghezza: 110, allinea: "left" },
   { label: "Categoria", campo: "nomeCategorie", direzioneIniziale: "asc", larghezza: 100, allinea: "left" },
   { label: "Unità di misura", campo: null, larghezza: 52 },
   { label: "Stock", campo: "stockTotale", direzioneIniziale: "desc", larghezza: 60 },
@@ -28794,6 +28795,7 @@ function RigaProdottoMagazzino({ prodotto: p, onApriModifica, ricarica, onApriIs
         />
         <span style={{ textDecoration: "underline", textDecorationColor: CREAM_BORDER, textDecorationThickness: 1, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nome}</span>
       </td>
+      <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: p.nomeFornitore ? NAVY : MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeFornitore || "—"}</td>
       <td style={{ ...tdTesto, ...fontBody, fontSize: 10.5, color: MUTED, overflow: "hidden", textOverflow: "ellipsis" }}>{p.nomeCategorie || "—"}</td>
       <td style={tdStyle}>
         <input style={{ ...cellInputStyle, width: 36, textAlign: "center" }} value={unitaMisura} onChange={(e) => setUnitaMisura(e.target.value)} onBlur={salvaUnitaMisura} placeholder="pz" />
@@ -29038,6 +29040,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   const oggi = new Date();
   const oggiStr = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, "0")}-${String(oggi.getDate()).padStart(2, "0")}`;
   const [categoriaSel, setCategoriaSel] = useState("");
+  const [fornitoreSel, setFornitoreSel] = useState("");
   const [ricercaProdotto, setRicercaProdotto] = useState("");
   const [filtroRapido, setFiltroRapido] = useState("tutti");
   const [ordinamento, setOrdinamento] = useState({ campo: "quantitaVenduta", direzione: "desc" });
@@ -29221,6 +29224,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
   }
 
   const categoriaNomeById = Object.fromEntries((categorieProdotti || []).map((c) => [c.id, c.nome]));
+  const fornitoreNomePerId = Object.fromEntries((fornitori || []).map((f) => [f.id, f.nome]));
   const categorieOrdinate = [...(categorieProdotti || [])].sort((a, b) => a.nome.localeCompare(b.nome));
   const categorieIdPerProdottoId = {};
   (prodottiCategorie || []).forEach((pc) => { (categorieIdPerProdottoId[pc.prodotto_id] ||= []).push(pc.categoria_id); });
@@ -29327,6 +29331,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
       margine,
       categorieIds,
       nomeCategorie: categorieIds.map((id) => categoriaNomeById[id]).filter(Boolean).join(", "),
+      nomeFornitore: (p.fornitore_id && fornitoreNomePerId[p.fornitore_id]) || "",
       giorniFermo: giorniFermo(p.nome),
       stockTotale,
       riordinoCompleto: p.soglia_riordino != null && p.lead_time_giorni != null && !!p.fornitore_id,
@@ -29373,6 +29378,9 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
 
   let prodottiVisti = prodottiConStato;
   if (categoriaSel) prodottiVisti = prodottiVisti.filter((p) => p.categorieIds.includes(categoriaSel));
+  // "senza fornitore" e' una scelta utile quanto le altre: sono i prodotti
+  // che l'Advisor non sa a chi ordinare
+  if (fornitoreSel) prodottiVisti = prodottiVisti.filter((p) => (fornitoreSel === "__nessuno" ? !p.fornitore_id : p.fornitore_id === fornitoreSel));
   if (ricercaProdotto.trim()) { const q = ricercaProdotto.trim().toLowerCase(); prodottiVisti = prodottiVisti.filter((p) => p.nome.toLowerCase().includes(q)); }
   if (filtroRapido === "sottoscorta") prodottiVisti = prodottiVisti.filter((p) => p.sottoScorta);
   if (filtroRapido === "esauriti") prodottiVisti = prodottiVisti.filter((p) => p.esaurito);
@@ -29643,16 +29651,23 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
               <option value="">Tutte le categorie</option>
               {categorieOrdinate.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
+            <select style={{ ...inputStyle, width: "auto", minWidth: 180 }} value={fornitoreSel} onChange={(e) => setFornitoreSel(e.target.value)}>
+              <option value="">Tutti i fornitori</option>
+              {[...(fornitori || [])].sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "it")).map((f) => (
+                <option key={f.id} value={f.id}>{f.nome}</option>
+              ))}
+              <option value="__nessuno">— senza fornitore —</option>
+            </select>
             <CampoRicerca value={ricercaProdotto} onChange={(e) => setRicercaProdotto(e.target.value)} placeholder="Cerca prodotto…" style={{ minWidth: 200 }} />
             {/* compare solo quando c'è davvero qualcosa da azzerare: un tasto
                 sempre presente e quasi sempre inutile è solo rumore. Toglie
-                in un colpo ricerca, categoria e filtro di stato — capita di
-                non vedere un prodotto e non ricordare quale dei tre lo
-                stava nascondendo */}
-            {(ricercaProdotto.trim() || categoriaSel || filtroRapido !== "tutti") && (
+                in un colpo ricerca, categoria, fornitore e filtro di stato —
+                capita di non vedere un prodotto e non ricordare quale dei
+                filtri lo stava nascondendo */}
+            {(ricercaProdotto.trim() || categoriaSel || fornitoreSel || filtroRapido !== "tutti") && (
               <button
-                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFiltroRapido("tutti"); }}
-                title="Togli ricerca, categoria e filtro di stato"
+                onClick={() => { setRicercaProdotto(""); setCategoriaSel(""); setFornitoreSel(""); setFiltroRapido("tutti"); }}
+                title="Togli ricerca, categoria, fornitore e filtro di stato"
                 style={{ display: "flex", alignItems: "center", gap: 6, ...fontBody, fontSize: 12.5, fontWeight: 600, color: NAVY, background: "#fff", border: `1px solid ${CREAM_BORDER}`, borderRadius: 999, padding: "8px 14px", cursor: "pointer", whiteSpace: "nowrap" }}
               >
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
