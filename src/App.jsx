@@ -13819,6 +13819,7 @@ function corsoParzialeDaKitPmuBase(testoKit) {
 // dall'elenco vecchio — quello che aveva in mano prima del primo — e
 // rimetteva indietro il campo appena scritto. Il nome della modella
 // spariva cosi', qualche ora dopo averlo inserito.
+function normalizzaTipoModella(t) { return String(t || "").trim().toUpperCase(); }
 function campiModella(campo, valore) {
   return campo && typeof campo === "object" ? campo : { [campo]: valore };
 }
@@ -16996,6 +16997,32 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
   // funzionalità (senza "giorno" valorizzato): il primo/unico giorno
   // Allievi del corso, così non spariscono dalla vista
   const giornoDiRipiegoAllievi = giorniAllieviCorso[0]?.numero_giorno ?? null;
+  // A quale giorno appartiene un posto modella.
+  //
+  // Se il posto porta scritto il suo "giorno" non c'e' niente da decidere.
+  // Se non ce l'ha — sono le richieste inserite prima che i giorni
+  // esistessero, e ce ne sono ancora parecchie — lo si riconosce dal
+  // TRATTAMENTO: il giorno che chiede LABBRA e' il giorno della modella
+  // labbra, per chiunque. Prima finivano tutte insieme sul primo giorno
+  // utile, dove se ne vedeva una sola: le altre erano invisibili, e nel
+  // giorno giusto compariva al loro posto una riga vuota che rifiutava di
+  // salvare. E' cosi' che "la modella labbra non si conferma".
+  //
+  // Solo se il trattamento non corrisponde a nessun giorno del corso si
+  // ripiega sul primo giorno con allievi: meglio nel posto sbagliato che
+  // sparita.
+  function giornoDelPostoModella(m) {
+    // il giorno scritto vale, ma solo se in quel giorno il corso prevede
+    // davvero le modelle degli allievi: se il template e' cambiato dopo
+    // l'iscrizione, quel giorno non viene disegnato e il posto sparirebbe
+    if (m?.giorno != null && giorniAllieviCorso.some((x) => x.numero_giorno === m.giorno)) return m.giorno;
+    const tipo = normalizzaTipoModella(m?.tipo);
+    if (tipo) {
+      const g = giorniAllieviCorso.find((x) => normalizzaTipoModella(x.tipo_modella_allievi) === tipo);
+      if (g) return g.numero_giorno;
+    }
+    return giornoDiRipiegoAllievi;
+  }
   // tipi di modella selezionabili per QUESTO corso (da "Definisci corsi");
   // nessuna riga configurata = nessuna restrizione, si mostra tutto il catalogo
   const idTipiModellaCorso = (corsiTipiModella || []).filter((x) => x.corso_id === corsoData.corso_id).map((x) => x.tipo_modella_id);
@@ -18227,10 +18254,19 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
     const campi = campiModella(campo, valore);
     const { data: riga } = await supabase.from("iscritti").select("tipi_modelle").eq("id", iscrittoId).maybeSingle();
     const elenco = Array.isArray(riga?.tipi_modelle) ? riga.tipi_modelle : [];
-    const idx = elenco.findIndex((m) => (m.giorno ?? giornoDiRipiegoAllievi) === numeroGiorno);
-    if (idx < 0) {
+    // l'indice arriva dalla pagina, ma l'elenco appena riletto dal
+    // database potrebbe non essere piu' lo stesso (un collega che scrive
+    // sullo stesso allievo): si controlla che in quella posizione ci sia
+    // ancora lo stesso trattamento, altrimenti si ricerca per giorno
+    const indicePassato = opzioni.indice != null && opzioni.indice >= 0 ? opzioni.indice : -1;
+    const indiceAffidabile = indicePassato >= 0 && elenco[indicePassato]
+      && (opzioni.tipoAtteso == null || normalizzaTipoModella(elenco[indicePassato].tipo) === normalizzaTipoModella(opzioni.tipoAtteso));
+    const idx = indiceAffidabile ? indicePassato : elenco.findIndex((m) => giornoDelPostoModella(m) === numeroGiorno);
+    if (idx < 0 || !elenco[idx]) {
       if (!opzioni.creaSeMancante) {
-        setMsg(`${iscritto.nome} ${iscritto.cognome} non ha richiesto questo trattamento: aggiungilo dalla scheda di iscrizione, non da qui.`);
+        // avviso in faccia, non una riga in fondo alla pagina: chi scrive
+        // da tablet non la vede, e sembra che il tasto non funzioni
+        window.alert(`${iscritto.nome} ${iscritto.cognome} non ha richiesto questo trattamento per questo giorno: aggiungilo dalla scheda di iscrizione, non da qui.`);
         return;
       }
       const nuovoPosto = {
@@ -19953,7 +19989,7 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
         // è presente non conta come da trovare per lei — vedi presenteIlGiorno()
         const nostreConModelle = listaIscritti
           .filter((i) => i.richiede_modelle && Array.isArray(i.tipi_modelle) && i.tipi_modelle.length > 0)
-          .map((i) => ({ ...i, tipi_modelle: i.tipi_modelle.filter((m) => presenteIlGiorno(i.giorni_presenza, m.giorno ?? giornoDiRipiegoAllievi)) }))
+          .map((i) => ({ ...i, tipi_modelle: i.tipi_modelle.filter((m) => presenteIlGiorno(i.giorni_presenza, giornoDelPostoModella(m))) }))
           .filter((i) => i.tipi_modelle.length > 0);
         const conteggioPerTipo = {};
         nostreConModelle.forEach((i) => {
@@ -20127,17 +20163,20 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                         const nostra = !!i.richiede_modelle;
                         const ultimo = idx === elencoOrdinato.length - 1;
                         const elenco = Array.isArray(i.tipi_modelle) ? i.tipi_modelle : [];
-                        const slotEsistente = elenco.find((m) => (m.giorno ?? giornoDiRipiegoAllievi) === g.numero_giorno);
-                        // una riga scrivibile sempre presente, anche se non
-                        // esiste ancora nulla salvato per questo allievo in
-                        // questo giorno (creata al primo carattere digitato)
-                        // — vale sia per NOSTRA che per SUA: sapere chi porta
-                        // quale modella è utile in entrambi i casi. Le
-                        // caselle di gruppo compaiono solo se il posto esiste
-                        // già davvero (mioIndice reale): una riga non ancora
-                        // creata non può far parte di un gruppo
-                        const modellaVista = slotEsistente || { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" };
-                        const indiceReale = slotEsistente ? elenco.indexOf(slotEsistente) : null;
+                        // TUTTI i posti di questo allievo in questo giorno,
+                        // non solo il primo: un allievo puo' avere due
+                        // trattamenti nello stesso giorno, e prima il
+                        // secondo non compariva da nessuna parte
+                        const postiDelGiorno = elenco
+                          .map((m, indice) => ({ m, indice }))
+                          .filter(({ m }) => giornoDelPostoModella(m) === g.numero_giorno);
+                        // se non ce n'e' nessuno resta una riga scrivibile,
+                        // creata al primo carattere digitato — ma solo per
+                        // chi porta la SUA modella: per gli altri sarebbe una
+                        // richiesta mai fatta (vedi aggiornaModellaAllievoGiorno)
+                        const daMostrare = postiDelGiorno.length > 0
+                          ? postiDelGiorno
+                          : [{ m: { tipo: g.tipo_modella_allievi || "", mattina: false, pomeriggio: false, nome_modella: "", telefono_modella: "" }, indice: null }];
                         return (
                           <div
                             key={i.id}
@@ -20156,15 +20195,22 @@ function SchedaData({ ruoloUtente, puoAssegnareModelle = true, codiceAmministrat
                                 {nostra ? "NOSTRA" : "HA LA SUA MODELLA"}
                               </span>
                             </div>
-                            <RigaModella
-                              modella={modellaVista}
-                              primaRiga
-                              opzioniTipo={opzioniTipoModellaCorso}
-                              tuttiGliSlot={elenco}
-                              mioIndice={indiceReale}
-                              onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, { creaSeMancante: !nostra, tipoDefault: g.tipo_modella_allievi || "" })}
-                              onCambiaGruppo={indiceReale != null ? (altroIdx, spuntato) => aggiornaModellaGruppo(i.id, indiceReale, altroIdx, spuntato) : undefined}
-                            />
+                            {daMostrare.map(({ m: modellaVista, indice: indiceReale }, iPosto) => (
+                              <RigaModella
+                                key={indiceReale ?? `nuovo-${iPosto}`}
+                                modella={modellaVista}
+                                primaRiga={iPosto === 0}
+                                opzioniTipo={opzioniTipoModellaCorso}
+                                tuttiGliSlot={elenco}
+                                mioIndice={indiceReale}
+                                // con l'indice del posto il salvataggio va
+                                // esattamente su quella riga: senza, due
+                                // trattamenti nello stesso giorno finivano
+                                // tutti e due sul primo
+                                onSalva={(campo, valore) => aggiornaModellaAllievoGiorno(i.id, g.numero_giorno, campo, valore, { creaSeMancante: !nostra, tipoDefault: g.tipo_modella_allievi || "", indice: indiceReale, tipoAtteso: modellaVista.tipo })}
+                                onCambiaGruppo={indiceReale != null ? (altroIdx, spuntato) => aggiornaModellaGruppo(i.id, indiceReale, altroIdx, spuntato) : undefined}
+                              />
+                            ))}
                           </div>
                         );
                       })}
