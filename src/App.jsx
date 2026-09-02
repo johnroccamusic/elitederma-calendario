@@ -29568,6 +29568,7 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
             onApriPacco={(box) => setApriConfezioneBoxId(box.id)}
             onApriScheda={(p) => apriScheda(p)}
             fornitoreApertoId={ordineFornitore?.fornitoreId || null}
+            onAggiorna={() => ricarica(["prodotti_shop", "corsi_date"])}
             onOrdineFornitore={(p) => setOrdineFornitore(
               ordineFornitore?.fornitoreId === p.fornitore_id
                 ? null
@@ -30382,22 +30383,81 @@ function PannelloOrdineFornitore({ fornitore, prodottiShop, suggerimenti, onChiu
     </div>
   );
 }
-function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId }) {
+function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, onApriAdvisor, immaginePerProdotto = {}, onApriPacco, onApriScheda, onOrdineFornitore, fornitoreApertoId, onAggiorna }) {
   const daAprire = avvisi.filter((a) => a.tipo === "apri_pacco");
   const daRiordinare = avvisi.filter((a) => a.tipo !== "apri_pacco");
   // dei prodotti che bloccano un corso se ne mostrano i primi: sono
   // ordinati per urgenza, e oltre una certa lunghezza un elenco smette di
   // essere una cosa da fare e diventa un muro. Il resto sta nell'Advisor
   const MAX_BLOCCANTI = 12;
-  const bloccantiVisti = bloccanti.slice(0, MAX_BLOCCANTI);
+  // Due modi di leggere la stessa lista, e servono tutti e due: "per corso"
+  // risponde a "cosa devo ordinare prima" (la data del corso comanda), "per
+  // stock" a "di cosa sono a zero" — un prodotto a zero con il corso fra un
+  // mese non e' urgente oggi, ma e' quello che si ordina insieme al resto.
+  const [ordineBloccanti, setOrdineBloccanti] = useState("corso");
+  // l'ora dell'ultima lettura: parte da quando il pannello si apre e si
+  // riscrive a ogni aggiornamento chiesto a mano
+  const [istanteLettura, setIstanteLettura] = useState(() => new Date());
+  const [aggiornando, setAggiornando] = useState(false);
+  async function aggiornaAdesso() {
+    if (!onAggiorna || aggiornando) return;
+    setAggiornando(true);
+    try { await onAggiorna(); setIstanteLettura(new Date()); } finally { setAggiornando(false); }
+  }
+  const oraAggiornamento = `oggi, ${istanteLettura.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Rome" })}`;
+  const bloccantiOrdinati = useMemo(() => {
+    const righe = [...bloccanti];
+    if (ordineBloccanti === "stock") {
+      // prima gli esauriti, poi chi ne ha meno; a pari quantita' decide di
+      // nuovo il corso piu' vicino
+      righe.sort((a, b) => {
+        const qa = Number(a.prodotto?.quantita) || 0;
+        const qb = Number(b.prodotto?.quantita) || 0;
+        if (qa !== qb) return qa - qb;
+        return (a.perData?.giorni ?? 0) - (b.perData?.giorni ?? 0);
+      });
+    } else {
+      righe.sort((a, b) => (a.perData?.giorni ?? 0) - (b.perData?.giorni ?? 0));
+    }
+    return righe;
+  }, [bloccanti, ordineBloccanti]);
+  const bloccantiVisti = bloccantiOrdinati.slice(0, MAX_BLOCCANTI);
   const thStyle = { ...fontBody, fontSize: 10, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.5, padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" };
   const tdStyle = { padding: "8px 10px", borderTop: `1px solid ${CREAM_BORDER}`, textAlign: "center", ...fontBody, fontSize: 12.5, color: NAVY };
 
-  function Miniatura({ prodotto }) {
+  function Miniatura({ prodotto, lato = 34 }) {
     const url = immaginePerProdotto[prodotto.id];
+    // le foto dei prodotti sono verticali quasi sempre (un pennello, una
+    // fiala): ritagliarle al quadrato ne mostrava solo il manico. Qui la
+    // foto sta dentro per intero su fondo bianco, il segnaposto tiene il
+    // fondo crema
     return (
-      <span style={{ width: 34, height: 34, borderRadius: 8, background: BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0 }}>
-        {url ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <IconaScatolaErp size={16} color={MUTED} />}
+      <span style={{ width: lato, height: lato, borderRadius: 10, background: url ? "#fff" : BG, border: `1px solid ${CREAM_BORDER}`, display: "inline-flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, padding: url ? 3 : 0 }}>
+        {url ? <img src={url} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} /> : <IconaScatolaErp size={Math.round(lato * 0.42)} color={MUTED} />}
+      </span>
+    );
+  }
+
+  // le due righe sotto al nome, ognuna con il suo calendarino: prima erano
+  // un paragrafo unico e la data del corso finiva a capo in mezzo a quella
+  // dell'ordine
+  function Pastiglia({ Icona, colore, bordo, sfondo, numero, righe }) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, border: `1px solid ${bordo}`, background: sfondo, borderRadius: 12, padding: "8px 12px" }}>
+        <span style={{ display: "inline-flex", color: colore, flexShrink: 0 }}><Icona size={17} color={colore} /></span>
+        <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: colore }}>{numero}</span>
+        <span style={{ ...fontBody, fontSize: 11, color: MUTED, lineHeight: 1.2 }}>
+          {righe.map((r) => <span key={r} style={{ display: "block" }}>{r}</span>)}
+        </span>
+      </div>
+    );
+  }
+
+  function RigaData({ colore, children }) {
+    return (
+      <span style={{ display: "flex", alignItems: "center", gap: 6, color: colore, marginTop: 3 }}>
+        <span style={{ display: "inline-flex", flexShrink: 0, color: colore }}><IconaCalendarioCard size={13} /></span>
+        <span style={{ ...fontBody, fontSize: 11.5, lineHeight: 1.35, overflowWrap: "anywhere" }}>{children}</span>
       </span>
     );
   }
@@ -30410,20 +30470,13 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
           <div style={{ ...fontBody, fontSize: 12.5, color: MUTED, marginTop: 2 }}>Gli articoli che chiedono un intervento adesso.</div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {/* ogni pastiglia porta la sua icona e il testo su due righe: a
+              colpo d'occhio si distinguono senza leggerle */}
           {bloccanti.length > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #C0392B", background: "#FBE4E1", borderRadius: 12, padding: "8px 12px" }}>
-              <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#C0392B" }}>{bloccanti.length}</span>
-              <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>bloccano un corso</span>
-            </div>
+            <Pastiglia Icona={IconaScatolaErp} colore="#C0392B" bordo="#C0392B" sfondo="#FBE4E1" numero={bloccanti.length} righe={["bloccano", "un corso"]} />
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #F0C9C2", background: "#FDF3F1", borderRadius: 12, padding: "8px 12px" }}>
-            <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#C0392B" }}>{daRiordinare.length}</span>
-            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>da riordinare</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, border: "1px solid #EBD9AE", background: "#FDF8EC", borderRadius: 12, padding: "8px 12px" }}>
-            <span style={{ ...fontDisplay, fontSize: 18, fontWeight: 700, color: "#B8860B" }}>{daAprire.length}</span>
-            <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>pacchi da aprire</span>
-          </div>
+          <Pastiglia Icona={IconaResetCircolare} colore="#C0392B" bordo="#F0C9C2" sfondo="#FDF3F1" numero={daRiordinare.length} righe={["da", "riordinare"]} />
+          <Pastiglia Icona={IconaScatolaErp} colore="#B8860B" bordo="#EBD9AE" sfondo="#FDF8EC" numero={daAprire.length} righe={["pacchi", "da aprire"]} />
         </div>
       </div>
 
@@ -30440,22 +30493,39 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
             <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#C0392B", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", ...fontBody, fontSize: 12, fontWeight: 700 }}>!</span>
             <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: "#C0392B", textTransform: "uppercase", letterSpacing: 0.6 }}>Servono per i corsi in arrivo</span>
             <span style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "2px 10px" }}>{bloccanti.length} articol{bloccanti.length === 1 ? "o" : "i"}</span>
+            <span style={{ display: "inline-flex", gap: 6, marginLeft: "auto", flexWrap: "wrap" }}>
+              {[{ chiave: "corso", testo: "Ordina per corso", spiega: "Prima quello che serve al corso più vicino" }, { chiave: "stock", testo: "Ordina per stock", spiega: "Prima gli esauriti e chi ne ha meno" }].map((o) => {
+                const attivo = ordineBloccanti === o.chiave;
+                return (
+                  <button
+                    key={o.chiave}
+                    onClick={() => setOrdineBloccanti(o.chiave)}
+                    title={o.spiega}
+                    style={{ ...fontBody, fontSize: 11.5, fontWeight: 700, color: attivo ? "#fff" : NAVY, background: attivo ? NAVY : "#fff", border: `1px solid ${attivo ? NAVY : CREAM_BORDER}`, borderRadius: 20, padding: "5px 12px", cursor: "pointer", whiteSpace: "nowrap" }}
+                  >
+                    {o.testo}
+                  </button>
+                );
+              })}
+            </span>
           </div>
           <div style={{ border: `1px solid ${CREAM_BORDER}`, borderRadius: 12, overflow: "hidden" }}>
             {bloccantiVisti.map((r) => {
               const p = r.prodotto;
               const inRitardo = r.perData.stato === "ritardo";
               return (
-                <div key={`b-${p.id}`} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 12px", borderTop: `1px solid ${CREAM_BORDER}` }}>
-                  <Miniatura prodotto={p} />
-                  <span style={{ flex: "1 1 200px", minWidth: 0 }}>
-                    <span style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1.25, overflowWrap: "anywhere" }}>{p.nome}</span>
-                    <span style={{ ...fontBody, fontSize: 11.5, color: inRitardo ? "#C0392B" : MUTED, display: "block", lineHeight: 1.35 }}>
+                <div key={`b-${p.id}`} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 14px", background: "#fff", borderTop: `1px solid ${CREAM_BORDER}` }}>
+                  <Miniatura prodotto={p} lato={52} />
+                  <span style={{ flex: "1 1 220px", minWidth: 0 }}>
+                    <span style={{ ...fontBody, fontSize: 14, fontWeight: 700, color: NAVY, display: "block", lineHeight: 1.25, overflowWrap: "anywhere" }}>{p.nome}</span>
+                    <RigaData colore={inRitardo ? "#C0392B" : MUTED}>
                       {inRitardo
-                        ? `Dovevi ordinarlo il ${fmtData(r.perData.dataLimite)} — ${-r.perData.giorni} giorni di ritardo`
-                        : `Ordina entro il ${fmtData(r.perData.dataLimite)} (${r.perData.giorni} giorni)`}
-                      {etichettaEdizione ? ` · serve per ${etichettaEdizione(r.perData.edizioneCriticaId)}` : ""}
-                    </span>
+                        ? `Dovevi ordinarlo il ${fmtData(r.perData.dataLimite)} • ${-r.perData.giorni} giorni di ritardo`
+                        : `Ordina entro il ${fmtData(r.perData.dataLimite)} • fra ${r.perData.giorni} giorni`}
+                    </RigaData>
+                    {etichettaEdizione && (
+                      <RigaData colore={inRitardo ? "#C0392B" : MUTED}>Serve per {etichettaEdizione(r.perData.edizioneCriticaId)}</RigaData>
+                    )}
                   </span>
                   {/* stock e soglia, non la quantita' da ordinare: quella
                       scendeva a "ordina 0" ogni volta che il prodotto e'
@@ -30463,9 +30533,9 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
                       accanto a un prodotto che blocca un corso non dice
                       niente a nessuno. Quanto ordinare si decide
                       nell'ordine al fornitore, dove ci sono le caselle */}
-                  <span style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "right" }}>
-                    <span style={{ ...fontDisplay, fontSize: 16, fontWeight: 700, color: "#C0392B" }}>Stock {p.quantita || 0}</span>
-                    <span style={{ display: "block", color: MUTED }}>soglia {p.soglia_riordino != null ? p.soglia_riordino : "—"}</span>
+                  <span style={{ ...fontBody, fontSize: 12.5, whiteSpace: "nowrap", flexShrink: 0, textAlign: "center", minWidth: 96 }}>
+                    <span style={{ ...fontDisplay, fontSize: 17, fontWeight: 700, color: "#C0392B" }}>Stock {p.quantita || 0}</span>
+                    <span style={{ display: "block", color: MUTED, marginTop: 2 }}>soglia {p.soglia_riordino != null ? p.soglia_riordino : "—"}</span>
                   </span>
                   <span style={{ display: "inline-flex", flexDirection: "column", gap: 6, flexShrink: 0 }}>
                     {onApriScheda && (
@@ -30484,14 +30554,32 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
                 </div>
               );
             })}
-            {bloccanti.length > MAX_BLOCCANTI && (
-              <button
-                onClick={onApriAdvisor}
-                style={{ width: "100%", textAlign: "left", ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "#fff", border: "none", borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 12px", cursor: "pointer" }}
-              >
-                e altri {bloccanti.length - MAX_BLOCCANTI} — aprili nell'Advisor ›
-              </button>
-            )}
+            {/* piede: a sinistra il resto della lista, a destra quando i
+                numeri sono stati letti — un elenco di giacenze senza l'ora
+                a cui e' stato calcolato non dice se e' di adesso o di ieri */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, flexWrap: "wrap", background: "#fff", borderTop: `1px solid ${CREAM_BORDER}`, padding: "10px 14px" }}>
+              {bloccanti.length > MAX_BLOCCANTI ? (
+                <button
+                  onClick={onApriAdvisor}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, cursor: "pointer" }}
+                >
+                  e altri {bloccanti.length - MAX_BLOCCANTI} — aprili nell'Advisor ›
+                </button>
+              ) : <span />}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span style={{ ...fontBody, fontSize: 11.5, color: MUTED }}>Ultimo aggiornamento: {oraAggiornamento}</span>
+                {onAggiorna && (
+                  <button
+                    onClick={aggiornaAdesso}
+                    disabled={aggiornando}
+                    title="Rileggi giacenze e date dal database"
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", border: `1px solid ${CREAM_BORDER}`, background: "#fff", color: MUTED, cursor: aggiornando ? "default" : "pointer", opacity: aggiornando ? 0.5 : 1 }}
+                  >
+                    <IconaResetCircolare size={14} color={MUTED} />
+                  </button>
+                )}
+              </span>
+            </div>
           </div>
         </div>
       )}
