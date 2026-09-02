@@ -31736,17 +31736,32 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
   const [ricezioneAperta, setRicezioneAperta] = useState(null); // { riordino, prodotto }
   const [quantitaRicevuta, setQuantitaRicevuta] = useState("");
 
-  async function segnaOrdinato(riga) {
+  // La quantita' suggerita e' un consiglio, non un ordine: dal fornitore
+  // si compra a confezioni, si approfitta di un'offerta, si prende meno
+  // perche' costa. Quindi si scrive quanti pezzi si sono ordinati davvero.
+  const [ordineDaSegnare, setOrdineDaSegnare] = useState(null); // { riga }
+  const [quantitaOrdinata, setQuantitaOrdinata] = useState("");
+  function apriSegnaOrdinato(riga) {
+    if (ordineApertoPerProdotto[riga.prodotto.id]) return;
+    setOrdineDaSegnare({ riga });
+    setQuantitaOrdinata(riga.quantitaSuggerita != null ? String(Math.max(0, Math.round(riga.quantitaSuggerita))) : "");
+  }
+  async function confermaOrdinato() {
+    const riga = ordineDaSegnare?.riga;
+    if (!riga) return;
     const p = riga.prodotto;
-    if (salvandoRiordino || ordineApertoPerProdotto[p.id]) return;
+    const q = Math.round(Number(String(quantitaOrdinata).replace(",", ".")));
+    if (!Number.isFinite(q) || q <= 0) { window.alert("Scrivi quanti pezzi hai ordinato."); return; }
     setSalvandoRiordino(p.id);
     const { error } = await supabase.from("riordini_in_corso").insert({
       prodotto_id: p.id,
       fornitore_id: p.fornitore_id || null,
-      quantita: riga.quantitaSuggerita != null ? Math.max(0, Math.round(riga.quantitaSuggerita)) : 0,
+      quantita: q,
     });
     setSalvandoRiordino(null);
     if (error) { window.alert("Non sono riuscito a segnarlo come ordinato: " + error.message); return; }
+    setOrdineDaSegnare(null);
+    setQuantitaOrdinata("");
     await ricarica(["riordini_in_corso"]);
   }
 
@@ -32451,9 +32466,9 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
                       attesa di ricezione" */}
                   <button
                     type="button"
-                    onClick={() => segnaOrdinato(r)}
+                    onClick={() => apriSegnaOrdinato(r)}
                     disabled={salvandoRiordino === r.prodotto.id}
-                    title="Segna che questo prodotto è stato ordinato"
+                    title="Segna che questo prodotto è stato ordinato, scrivendo quanti pezzi"
                     style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "6px 14px", display: "inline-block", cursor: "pointer", opacity: salvandoRiordino === r.prodotto.id ? 0.5 : 1 }}
                   >
                     {r.quantitaSuggerita != null ? `ordina ${r.quantitaSuggerita}` : "ordina"}
@@ -32572,6 +32587,41 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, pro
         </div>
       )}
       </div>
+
+      {ordineDaSegnare && (
+        <Modal
+          title={`Ordinato — ${ordineDaSegnare.riga.prodotto.nome}`}
+          onClose={() => { setOrdineDaSegnare(null); setQuantitaOrdinata(""); }}
+          maxWidth={420}
+        >
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.5, marginBottom: 12 }}>
+            In magazzino adesso ce ne sono <b>{ordineDaSegnare.riga.prodotto.quantita || 0}</b>
+            {ordineDaSegnare.riga.prodotto.soglia_riordino != null ? <>, la scorta minima è {ordineDaSegnare.riga.prodotto.soglia_riordino}</> : null}.
+            {ordineDaSegnare.riga.quantitaSuggerita != null && <> Il consiglio è di ordinarne <b>{ordineDaSegnare.riga.quantitaSuggerita}</b>.</>}
+          </div>
+          <label style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, display: "block", marginBottom: 6 }}>
+            Quantità ordinata davvero
+          </label>
+          <input
+            style={{ ...inputStyle, width: 140 }}
+            inputMode="numeric"
+            autoFocus
+            value={quantitaOrdinata}
+            onChange={(e) => setQuantitaOrdinata(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") confermaOrdinato(); }}
+          />
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
+            Il prodotto passa in <b>In attesa di ricezione</b> e smette di comparire fra gli avvisi. Il magazzino non si tocca adesso:
+            si carica quando la merce arriva, con la quantità che arriva davvero.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+            <Button onClick={confermaOrdinato} disabled={salvandoRiordino === ordineDaSegnare.riga.prodotto.id}>
+              {salvandoRiordino === ordineDaSegnare.riga.prodotto.id ? "Segno…" : "Segna come ordinato"}
+            </Button>
+            <Button variant="ghost" onClick={() => { setOrdineDaSegnare(null); setQuantitaOrdinata(""); }}>Annulla</Button>
+          </div>
+        </Modal>
+      )}
 
       {ricezioneAperta && (
         <Modal title={`Ricevuto — ${ricezioneAperta.prodotto.nome}`} onClose={() => { setRicezioneAperta(null); setQuantitaRicevuta(""); }} maxWidth={420}>
