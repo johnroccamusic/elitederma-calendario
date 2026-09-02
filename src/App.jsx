@@ -29743,7 +29743,13 @@ function PaginaMagazzino({ ruoloUtente, categorieProdotti, prodottiShop, prodott
                         onPointerMove={muoviRidimensionamento}
                         onPointerUp={fineRidimensionamento}
                         onPointerCancel={fineRidimensionamento}
-                        style={{ position: "absolute", top: 0, right: -4, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
+                        // la maniglia sta tutta dentro la sua colonna.
+                        // Sporgendo di 4px sulla colonna accanto, meta' di
+                        // essa finiva coperta dall'intestazione successiva
+                        // (stessa quota, disegnata dopo) e sulle colonne
+                        // strette come S/R restava un filo di 4px da
+                        // prendere: sembrava non averla proprio
+                        style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 8, cursor: "col-resize", touchAction: "none", zIndex: 3 }}
                       />
                     </th>
                   ))}
