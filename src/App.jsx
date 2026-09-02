@@ -31563,10 +31563,67 @@ function giorniTra(daIso, aIso) {
 // scrive niente, si limita a mettere in fila le domande nell'ordine in cui
 // servono — cosa ordinare oggi, quanti kit reggo, quali corsi saltano,
 // cosa non sono in grado di dire e perché.
-function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
+function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, corsi, corsiDate, location, iscritti, kitDefinizioni, corsiKitProdotti, logisticaKitEdizioni, fornitori, riordiniInCorso = [], ricarica, onApriIscritto, onApriProdotto, onBack, titolo = "Advisor" }) {
   const isMobile = useIsMobile();
   const oggi = dataOggiStr();
   const [kitAperto, setKitAperto] = useState(null);
+
+  // Quello che e' stato gia' ordinato. Fra "l'Advisor dice di ordinarlo" e
+  // "la merce arriva" passano giorni in cui l'avviso resta identico: senza
+  // segnarlo, il giorno dopo nessuno sa piu' se l'ordine e' partito, e si
+  // ordina due volte o non si ordina affatto.
+  const ordineApertoPerProdotto = useMemo(() => {
+    const m = {};
+    (riordiniInCorso || []).filter((r) => r.stato === "ordinato").forEach((r) => { m[r.prodotto_id] = r; });
+    return m;
+  }, [riordiniInCorso]);
+  const [salvandoRiordino, setSalvandoRiordino] = useState(null);
+  const [ricezioneAperta, setRicezioneAperta] = useState(null); // { riordino, prodotto }
+  const [quantitaRicevuta, setQuantitaRicevuta] = useState("");
+
+  async function segnaOrdinato(riga) {
+    const p = riga.prodotto;
+    if (salvandoRiordino || ordineApertoPerProdotto[p.id]) return;
+    setSalvandoRiordino(p.id);
+    const { error } = await supabase.from("riordini_in_corso").insert({
+      prodotto_id: p.id,
+      fornitore_id: p.fornitore_id || null,
+      quantita: riga.quantitaSuggerita != null ? Math.max(0, Math.round(riga.quantitaSuggerita)) : 0,
+    });
+    setSalvandoRiordino(null);
+    if (error) { window.alert("Non sono riuscito a segnarlo come ordinato: " + error.message); return; }
+    await ricarica(["riordini_in_corso"]);
+  }
+
+  async function annullaOrdine(riordino) {
+    if (!window.confirm("Vuoi rimettere questo prodotto fra quelli da ordinare?")) return;
+    const { error } = await supabase.from("riordini_in_corso").delete().eq("id", riordino.id);
+    if (error) { window.alert("Non sono riuscito ad annullare: " + error.message); return; }
+    await ricarica(["riordini_in_corso"]);
+  }
+
+  // la merce arrivata entra in magazzino: si somma alla giacenza, non la
+  // sostituisce, e si rilegge la quantita' dal database un attimo prima —
+  // fra l'ordine e l'arrivo qualcuno puo' aver venduto o scaricato pezzi
+  async function confermaRicezione() {
+    const { riordino, prodotto } = ricezioneAperta || {};
+    if (!riordino || !prodotto) return;
+    const q = Math.round(Number(String(quantitaRicevuta).replace(",", ".")));
+    if (!Number.isFinite(q) || q < 0) { window.alert("Scrivi quanti pezzi sono arrivati."); return; }
+    setSalvandoRiordino(prodotto.id);
+    const { data: attuale } = await supabase.from("prodotti_shop").select("quantita").eq("id", prodotto.id).maybeSingle();
+    const nuova = (Number(attuale?.quantita) || 0) + q;
+    const { error: erroreStock } = await supabase.from("prodotti_shop").update({ quantita: nuova }).eq("id", prodotto.id);
+    if (erroreStock) { setSalvandoRiordino(null); window.alert("Non sono riuscito a caricare il magazzino: " + erroreStock.message); return; }
+    const { error } = await supabase.from("riordini_in_corso")
+      .update({ stato: "ricevuto", data_ricezione: dataOggiStr(), quantita_ricevuta: q })
+      .eq("id", riordino.id);
+    setSalvandoRiordino(null);
+    if (error) { window.alert("Pezzi caricati in magazzino, ma non sono riuscito a chiudere l'ordine: " + error.message); }
+    setRicezioneAperta(null);
+    setQuantitaRicevuta("");
+    await ricarica(["prodotti_shop", "riordini_in_corso"]);
+  }
 
   // dermografi da controllare a mano. Due casi, tenuti distinti perché
   // vogliono due gesti diversi:
@@ -31762,13 +31819,30 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
   // stesso fornitore sono un ordine solo, non cinque
   const perFornitore = useMemo(() => {
     const gruppi = new Map();
-    [...inRitardo, ...urgenti, ...soloSoglia].forEach((r) => {
-      const chiave = r.prodotto.fornitore_id || "__nessuno";
-      if (!gruppi.has(chiave)) gruppi.set(chiave, []);
-      gruppi.get(chiave).push(r);
-    });
+    [...inRitardo, ...urgenti, ...soloSoglia]
+      // quello che e' gia' stato ordinato non e' piu' "da ordinare": e'
+      // sceso nella lista di sotto, in attesa che arrivi
+      .filter((r) => !ordineApertoPerProdotto[r.prodotto.id])
+      .forEach((r) => {
+        const chiave = r.prodotto.fornitore_id || "__nessuno";
+        if (!gruppi.has(chiave)) gruppi.set(chiave, []);
+        gruppi.get(chiave).push(r);
+      });
     return [...gruppi.entries()];
-  }, [piano]);
+  }, [piano, ordineApertoPerProdotto]);
+
+  // In attesa di ricezione: gli ordini dichiarati e non ancora arrivati,
+  // dal piu' vecchio — se uno e' li' da tre settimane, il fornitore va
+  // chiamato
+  const inAttesaDiRicezione = useMemo(() => {
+    const perId = Object.fromEntries((prodottiShop || []).map((p) => [p.id, p]));
+    return (riordiniInCorso || [])
+      .filter((r) => r.stato === "ordinato")
+      .map((r) => ({ riordino: r, prodotto: perId[r.prodotto_id] || null }))
+      .filter((x) => x.prodotto)
+      .sort((a, b) => String(a.riordino.data_ordine).localeCompare(String(b.riordino.data_ordine)));
+  }, [riordiniInCorso, prodottiShop]);
+  const dueColonneOrdini = !isMobile && inAttesaDiRicezione.length > 0 && !fornitoreOrdineId;
 
   // i tre numeri in evidenza: il primo c'e' sempre, gli altri sono i primi
   // due che hanno davvero qualcosa da dire — un contatore a zero occupa
@@ -32076,7 +32150,13 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
         </div>
       )}
 
-      <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
+      {/* "Da ordinare adesso" e "In attesa di ricezione" sono due meta'
+          dello stesso lavoro e stanno affiancate: un prodotto esce da
+          sinistra ed entra a destra. Si torna a una colonna sola quando
+          l'ordine di un fornitore e' aperto (gli serve tutta la larghezza)
+          o non c'e' niente in attesa */}
+      <div style={{ display: "grid", gridTemplateColumns: dueColonneOrdini ? "minmax(0,1fr) minmax(0,1fr)" : "minmax(0,1fr)", gap: 16, alignItems: "start", marginBottom: 16 }}>
+      <div style={{ ...cardStyle, padding: 16, marginBottom: 0 }}>
         <TestataAdvisor Icona={IconaCarrelloPos} titolo="Da ordinare adesso" />
         {/* quando si apre l'ordine di un fornitore la scheda si divide in
             due: a sinistra resta l'elenco da cui si è partiti, a destra
@@ -32124,11 +32204,18 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
                     alla scheda: il numero da solo si confondeva con il
                     testo della riga */}
                 <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {r.quantitaSuggerita != null && (
-                    <div style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "4px 14px", display: "inline-block" }}>
-                      ordina {r.quantitaSuggerita}
-                    </div>
-                  )}
+                  {/* la pastiglia e' un tasto: premendola si dichiara che
+                      l'ordine e' partito, e il prodotto scende in "In
+                      attesa di ricezione" */}
+                  <button
+                    type="button"
+                    onClick={() => segnaOrdinato(r)}
+                    disabled={salvandoRiordino === r.prodotto.id}
+                    title="Segna che questo prodotto è stato ordinato"
+                    style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#C0392B", background: "#FDF3F1", border: "1px solid #F0C9C2", borderRadius: 20, padding: "6px 14px", display: "inline-block", cursor: "pointer", opacity: salvandoRiordino === r.prodotto.id ? 0.5 : 1 }}
+                  >
+                    {r.quantitaSuggerita != null ? `ordina ${r.quantitaSuggerita}` : "ordina"}
+                  </button>
                   <div style={{ fontSize: 11.5, color: MUTED, marginTop: 3 }}>
                     {r.baseQuantita === "quantita_riordino" ? "quantità di riordino del prodotto" : r.baseQuantita === "soglia_riordino" ? "per rientrare in scorta" : "quantità da valutare"}
                   </div>
@@ -32179,6 +32266,95 @@ function PaginaAdvisor({ prodottiShop, categorieProdotti, prodottiCategorie, cor
         )}
         </div>
       </div>
+
+      {/* In attesa di ricezione: quello che e' stato ordinato e non e'
+          ancora arrivato. Sta subito sotto la lista degli ordini perche' e'
+          la sua seconda meta': si esce da una e si entra nell'altra */}
+      {inAttesaDiRicezione.length > 0 && (
+        <div style={{ ...cardStyle, padding: 16, marginBottom: 0 }}>
+          <TestataAdvisor
+            Icona={IconaCamionConsegna}
+            titolo={`In attesa di ricezione (${inAttesaDiRicezione.length})`}
+            sotto="Ordini già partiti. Quando la merce arriva premi Ricevuto e scrivi quanti pezzi sono davvero arrivati: il sistema li carica in magazzino."
+          />
+          {inAttesaDiRicezione.map(({ riordino, prodotto }) => {
+            const giorniDaOrdine = giorniTra(String(riordino.data_ordine), oggi);
+            return (
+              <div key={riordino.id} style={{ ...rigaStyle, alignItems: "center", padding: "10px 0" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {onApriProdotto ? (
+                    <button
+                      onClick={() => onApriProdotto(prodotto.id)}
+                      title="Apri la scheda del prodotto"
+                      style={{ ...fontBody, fontSize: 13, fontWeight: 700, color: NAVY, background: "none", border: "none", padding: 0, textAlign: "left", cursor: "pointer", textDecoration: "underline", textDecorationColor: CREAM_BORDER, textUnderlineOffset: 3 }}
+                    >
+                      {prodotto.nome}
+                    </button>
+                  ) : (
+                    <div style={{ fontWeight: 700 }}>{prodotto.nome}</div>
+                  )}
+                  <div style={{ fontSize: 12, color: MUTED }}>
+                    Ordinato il {fmtData(riordino.data_ordine)}
+                    {giorniDaOrdine > 0 ? ` — ${giorniDaOrdine} giorn${giorniDaOrdine === 1 ? "o" : "i"} fa` : " — oggi"}
+                    {riordino.fornitore_id && fornitorePerId[riordino.fornitore_id]?.nome ? ` · ${fornitorePerId[riordino.fornitore_id].nome}` : ""}
+                    {" · "}in magazzino adesso {prodotto.quantita || 0}
+                  </div>
+                </div>
+                <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <span style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 20, padding: "6px 14px", display: "inline-block" }}>
+                    già ordinato {riordino.quantita || 0}
+                  </span>
+                  <div style={{ marginTop: 4 }}>
+                    <button
+                      onClick={() => annullaOrdine(riordino)}
+                      style={{ ...fontBody, fontSize: 11, color: MUTED, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+                    >
+                      non l'ho ordinato
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setRicezioneAperta({ riordino, prodotto }); setQuantitaRicevuta(String(riordino.quantita || "")); }}
+                  style={{ ...fontBody, fontSize: 12.5, fontWeight: 700, color: "#fff", background: NAVY, border: "none", borderRadius: 10, padding: "9px 16px", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
+                >
+                  Ricevuto
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      </div>
+
+      {ricezioneAperta && (
+        <Modal title={`Ricevuto — ${ricezioneAperta.prodotto.nome}`} onClose={() => { setRicezioneAperta(null); setQuantitaRicevuta(""); }} maxWidth={420}>
+          <div style={{ ...fontBody, fontSize: 13, color: NAVY, lineHeight: 1.5, marginBottom: 12 }}>
+            Ordinato il {fmtData(ricezioneAperta.riordino.data_ordine)}: {ricezioneAperta.riordino.quantita || 0} pezzi.
+            In magazzino adesso ce ne sono <b>{ricezioneAperta.prodotto.quantita || 0}</b>.
+          </div>
+          <label style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: 0.4, display: "block", marginBottom: 6 }}>
+            Quantità ricevuta
+          </label>
+          <input
+            style={{ ...inputStyle, width: 140 }}
+            inputMode="numeric"
+            autoFocus
+            value={quantitaRicevuta}
+            onChange={(e) => setQuantitaRicevuta(e.target.value)}
+          />
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, marginTop: 8, lineHeight: 1.45 }}>
+            Questi pezzi si <b>sommano</b> alla giacenza, non la sostituiscono. Se ne sono arrivati meno del previsto scrivi quanti ne sono arrivati davvero:
+            l'ordine si chiude comunque e il prodotto, se resta sotto scorta, ricompare fra quelli da ordinare.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+            <Button onClick={confermaRicezione} disabled={salvandoRiordino === ricezioneAperta.prodotto.id}>
+              {salvandoRiordino === ricezioneAperta.prodotto.id ? "Carico…" : "Carica in magazzino"}
+            </Button>
+            <Button variant="ghost" onClick={() => { setRicezioneAperta(null); setQuantitaRicevuta(""); }}>Annulla</Button>
+          </div>
+        </Modal>
+      )}
 
       <div style={{ ...cardStyle, padding: 16, marginBottom: 16 }}>
         <TestataAdvisor Icona={IconaScatolaErp} titolo="Autonomia per kit" />
@@ -44623,6 +44799,7 @@ export default function App() {
   // modelle" (apriDataModelle, che salta la lista allievi e apre subito
   // "Assegna modelle"): il tasto "torna" della scheda deve allora uscire
   // verso Gestione modelle invece che verso una lista mai mostrata
+  const [riordiniInCorso, setRiordiniInCorso] = useState([]);
   const [vieneDaGestioneModelle, setVieneDaGestioneModelle] = useState(false);
   const [venditoreLoggato, setVenditoreLoggato] = useState(null);
 
@@ -44946,6 +45123,7 @@ export default function App() {
       setLayoutTasti(Object.fromEntries(righe.map((r) => [r.pagina, r])));
     },
     citta: async () => setCitta((await supabase.from("citta").select("*").order("nome")).data || []),
+    riordini_in_corso: async () => setRiordiniInCorso((await supabase.from("riordini_in_corso").select("*").order("data_ordine", { ascending: false })).data || []),
   };
 
   // "ricarica" (passata come prop dappertutto): senza argomenti rifà
@@ -45069,7 +45247,7 @@ export default function App() {
     // dei prodotti e la scheda completa) vive dentro Gestione magazzino:
     // senza, entrando da qui le immagini risultavano sparite pur essendoci
     magazzino: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "bundle_componenti", "impostazioni_iva", "fornitori", "corsi", "corsi_date", "location", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
-    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni"],
+    advisor: ["prodotti_shop", "categorie_prodotti", "prodotti_categorie", "fornitori", "corsi", "location", "corsi_date", "iscritti", "kit_definizioni", "corsi_kit_prodotti", "logistica_kit_edizioni", "riordini_in_corso"],
     magazzinoesterni: ["location", "magazzino_locale_consumabili", "inventario_sede", "prodotti_shop", "costi_sottocategorie", "segnalazioni_magazzino", "corsi", "corsi_date", "master"],
     pos: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini", "vendite_shop", "target_vendite_prodotti", "corsi_date", "corsi", "location", "iscritti", "coupon", "bundle_componenti"],
     gestioneshop: ["categorie_prodotti", "prodotti_shop", "prodotti_categorie", "prodotti_immagini"],
@@ -46264,6 +46442,7 @@ export default function App() {
           corsi={corsi} corsiDate={corsiDate} location={location} iscritti={iscritti}
           kitDefinizioni={kitDefinizioni} corsiKitProdotti={corsiKitProdotti} logisticaKitEdizioni={logisticaKitEdizioni}
           fornitori={fornitori}
+          riordiniInCorso={riordiniInCorso}
           onApriIscritto={apriIscrittoDaAdvisor}
           onApriProdotto={(prodottoId) => apriProdottoInMagazzino(prodottoId, "advisor")}
           // si torna da dove si è entrati: dal magazzino o dagli avvisi in Logistica
