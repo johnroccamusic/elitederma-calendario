@@ -30551,6 +30551,18 @@ function PannelloAvvisiMagazzino({ avvisi, bloccanti = [], etichettaEdizione, on
                       </button>
                     )}
                   </span>
+                  {/* su quante persone e' stato fatto il conto: un
+                      fabbisogno senza il numero di allievi dietro non si
+                      puo' controllare a mente */}
+                  {r.allieviConsiderati > 0 && (
+                    <span
+                      title="Gli allievi dei corsi futuri che concorrono a questo fabbisogno"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, ...fontBody, fontSize: 12, fontWeight: 700, color: NAVY, background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 20, padding: "5px 11px", whiteSpace: "nowrap" }}
+                    >
+                      <IconaGruppoTeam size={14} color={MUTED} />
+                      {r.allieviConsiderati} alliev{r.allieviConsiderati === 1 ? "o" : "i"}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -30934,6 +30946,14 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
   const nonRisolti = [];
   const senzaKit = [];
   const conteggioKit = {};
+  // quanti allievi stanno dietro a ogni prodotto: "servono 18 lipbrush" da
+  // solo non si controlla, "18 lipbrush per 9 allievi" si'. Si contano solo
+  // le persone iscritte — le riserve di kit tenute da parte non sono
+  // allievi e non entrano qui
+  const allieviPerKit = {};
+  const allieviPerProdotto = {};
+  const allieviEdizione = (iscritti || []).filter((i) => i.corso_data_id === corsoData.id).length;
+  const aggiungiAllievi = (prodottoId, n) => { if (n > 0) allieviPerProdotto[prodottoId] = (allieviPerProdotto[prodottoId] || 0) + n; };
 
   (iscritti || []).forEach((i) => {
     if (i.corso_data_id !== corsoData.id) return;
@@ -30946,6 +30966,7 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
     const kit = (kitDefinizioni || []).find((k) => k.corso_id === corsoData.corso_id && k.nome === i.pacchetto_kit);
     if (!kit) { nonRisolti.push({ iscrittoId: i.id, nome: `${i.nome || ""} ${i.cognome || ""}`.trim(), etichetta }); return; }
     conteggioKit[kit.id] = (conteggioKit[kit.id] || 0) + 1;
+    allieviPerKit[kit.id] = (allieviPerKit[kit.id] || 0) + 1;
   });
 
   Object.entries(statoLogistica?.riserva_per_kit || {}).forEach(([kitId, q]) => {
@@ -30966,15 +30987,18 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
     // fabbisogno su un prodotto che non sa quale sia, lo dichiara e tace
     if (!prodotto) { dermografiSenzaProdotto.push({ modello, quantita: residuo }); return; }
     perProdotto[prodotto.id] = (perProdotto[prodotto.id] || 0) + residuo;
+    aggiungiAllievi(prodotto.id, residuo); // un dermografo, un allievo
   });
 
   const giaScaricato = statoLogistica?.scarico_per_kit || {};
   Object.entries(conteggioKit).forEach(([kitId, quantita]) => {
     const residuo = Math.max(0, quantita - (giaScaricato[kitId] || 0));
     if (!residuo) return;
+    const allieviKit = Math.min(residuo, allieviPerKit[kitId] || 0);
     (corsiKitProdotti || []).forEach((r) => {
       if (r.kit_id !== kitId || r.tipo !== "kit" || !r.prodotto_id) return;
       perProdotto[r.prodotto_id] = (perProdotto[r.prodotto_id] || 0) + (r.quantita || 0) * residuo;
+      aggiungiAllievi(r.prodotto_id, allieviKit);
     });
   });
 
@@ -30985,10 +31009,20 @@ function fabbisognoEdizione(corsoData, iscritti, kitDefinizioni, corsiKitProdott
     const prodottoId = chiave.split("::")[1];
     if (!prodottoId) return;
     const residuo = Math.max(0, (q || 0) - (accessoriScaricati[chiave] || 0));
-    if (residuo > 0) perProdotto[prodottoId] = (perProdotto[prodottoId] || 0) + residuo;
+    if (residuo > 0) {
+      perProdotto[prodottoId] = (perProdotto[prodottoId] || 0) + residuo;
+      // un accessorio lo decide l'edizione, non il singolo kit: gli allievi
+      // che lo riguardano sono quelli della classe
+      aggiungiAllievi(prodottoId, allieviEdizione);
+    }
   });
 
-  return { perProdotto, nonRisolti, senzaKit, conteggioKit, dermografiRichiesti, dermografiSenzaProdotto };
+  // nessun prodotto puo' riguardare piu' allievi di quanti ne abbia la
+  // classe: se compare sia nel kit sia fra gli accessori, e' sempre la
+  // stessa gente
+  Object.keys(allieviPerProdotto).forEach((k) => { allieviPerProdotto[k] = Math.min(allieviPerProdotto[k], allieviEdizione); });
+
+  return { perProdotto, nonRisolti, senzaKit, conteggioKit, dermografiRichiesti, dermografiSenzaProdotto, allieviPerProdotto };
 }
 
 // il cuore: scorre i corsi futuri in ordine di data sottraendo il
@@ -31042,7 +31076,7 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
   const dermografiSenzaProdottoTotali = [];
 
   edizioni.forEach((cd) => {
-    const { perProdotto: richiesto, nonRisolti, senzaKit, conteggioKit, dermografiSenzaProdotto } =
+    const { perProdotto: richiesto, nonRisolti, senzaKit, conteggioKit, dermografiSenzaProdotto, allieviPerProdotto } =
       fabbisognoEdizione(cd, iscritti, kitDefinizioni, corsiKitProdotti, statoPerEdizione[cd.id], prodottiShop);
     (dermografiSenzaProdotto || []).forEach((d) => dermografiSenzaProdottoTotali.push({ ...d, corsoDataId: cd.id, data: cd.data_inizio }));
     nonRisolti.forEach((n) => nonRisoltiTotali.push({ ...n, corsoDataId: cd.id, corsoId: cd.corso_id, data: cd.data_inizio }));
@@ -31056,8 +31090,9 @@ function simulaScorte({ corsiDate, iscritti, kitDefinizioni, corsiKitProdotti, l
       // un prodotto senza giacenza propria (bundle virtuale, vetrina) non
       // ha uno stock da esaurire: si scarica dai suoi componenti altrove
       if (!p || p.giacenza_propria === false || p.conta_magazzino === false) return;
-      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, dataCritica: null, edizioneCriticaId: null, richieste: [] });
+      const riga = perProdotto[prodottoId] || (perProdotto[prodottoId] = { fabbisogno: 0, mancante: 0, allievi: 0, dataCritica: null, edizioneCriticaId: null, richieste: [] });
       riga.fabbisogno += quantita;
+      riga.allievi += (allieviPerProdotto || {})[prodottoId] || 0;
       riga.richieste.push({ data: cd.data_inizio, quantita });
       const manca = preleva(prodottoId, quantita);
       if (manca > 0) {
@@ -31183,6 +31218,7 @@ function pianoRiordino({ prodottiShop, risultato, oggi }) {
     daOrdinare.push({
       prodotto: p, criterio, perData, perSoglia, disponibile,
       fabbisognoTotale: previsione?.fabbisogno || 0,
+      allieviConsiderati: previsione?.allievi || 0,
       quantitaSuggerita: suggerita != null ? arrotondaALotto(suggerita, p.lotto_minimo_ordine) : null,
       baseQuantita: p.quantita_riordino != null ? "quantita_riordino" : (p.soglia_riordino != null ? "soglia_riordino" : null),
     });
