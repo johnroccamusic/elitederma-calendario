@@ -1333,6 +1333,19 @@ function percorsoIngranaggio(cx, cy, rMedio, ampiezza, denti, punti = 96) {
   return `M${coords[0]} L${coords.slice(1).join(" L")} Z`;
 }
 const PERCORSO_INGRANAGGIO = percorsoIngranaggio(12, 12, 7.1, 1.25, 8);
+// Normative: un foglio con il sigillo. E' l'area dei documenti che
+// l'accademia deve rispettare e mostrare — non un archivio qualunque
+function IconaTileNormative({ size = 44, color = NAVY }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 6h16l8 8v20a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z" />
+      <path d="M28 6v8h8" />
+      <path d="M15 21h12M15 27h8" />
+      <circle cx="32" cy="33" r="6" stroke={GOLD} />
+      <path d="M29.5 33l2 2 3.5-3.5" stroke={GOLD} />
+    </svg>
+  );
+}
 function IconaTileImpostazioni({ size = 44, color = NAVY }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -16431,6 +16444,7 @@ const TASTI_HOME = [
   { chiave: "storicoallievi", etichetta: "Storico Allievi" },
   { chiave: "impostazioni", etichetta: "Setting" },
   { chiave: "prezzicorsi", etichetta: "Prezzi corsi" },
+  { chiave: "normative", etichetta: "Normative" },
 ];
 // viste interne che non sono un tasto della home (sotto-sezioni raggiunte
 // da dentro un'area già sbloccata, es. "Anagrafiche" dentro Amministrazione)
@@ -22508,6 +22522,34 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
+// "Normative": l'area delle regole che l'accademia deve rispettare e dei
+// documenti che le accompagnano. Per ora ospita un solo argomento —
+// "Ritorno al Corso" — ed e' fatta con la stessa griglia di tessere delle
+// altre aree, cosi' aggiungerne altri e' solo una riga in piu'.
+function PaginaNormative({ ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, onApriRitornoAlCorso, onBack, titolo = "Normative" }) {
+  const isMobile = useIsMobile();
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 1100, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 60px" }}>
+        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo="Home" onClick={onBack} />
+        </div>
+        <div style={{ ...fontDisplay, fontSize: isMobile ? 21 : 32, fontWeight: 700, color: NAVY, marginBottom: isMobile ? 2 : 6 }}>{titolo}</div>
+        <div style={{ ...fontBody, fontSize: isMobile ? 12 : 14, color: MUTED, marginBottom: isMobile ? 12 : 26 }}>
+          Le regole da rispettare e i documenti che le accompagnano.
+        </div>
+        <GrigliaTasti
+          pagina="normative" ordine={ordineTasti} colonne={colonneTasti} etichette={etichetteTasti} ruoloUtente={ruoloUtente}
+          onSalvaOrdine={onSalvaOrdineTasti} onSalvaColonne={onSalvaColonneTasti} onSalvaEtichetta={onSalvaEtichettaTasti} colonneDesktop={3}
+          definizioni={[
+            { chiave: "ritornoalcorso", title: "Ritorno al Corso", descrizione: "Le regole per chi torna a frequentare un corso già fatto.", Icona: IconaTileNormative, attivo: true, onClick: onApriRitornoAlCorso || (() => {}) },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
 function PaginaMagazzinoShop({ onBack, onApriMagazzino, onApriGestioneShop, onApriVenditeShop, onApriVenditeAlBanco, onApriProdottiUsatiKit, onApriOmaggi, onApriClassificazioneVoci, onApriGeneraCoupon, onApriMagazziniEsterni, numeroAvvisiMagazzino, ruoloUtente, ordineTasti, onSalvaOrdineTasti, colonneTasti, onSalvaColonneTasti, etichetteTasti, onSalvaEtichettaTasti, titolo = "Gestione magazzino e shop" }) {
   const isMobile = useIsMobile();
   return (
@@ -45829,6 +45871,7 @@ export default function App() {
     // prodotti in memoria il conto e' sempre zero, e il tasto non lampeggia
     // mai. E' la stessa tabella che carica l'hub della logistica per il suo
     // tasto Advisor, che infatti il pallino lo mostrava
+    normative: [],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
@@ -46339,6 +46382,7 @@ export default function App() {
   function apriGenerazioneLoghi() { apriViewProtetta("generazioneloghi"); }
   function apriGestioneModelle() { apriViewProtetta("gestionemodelle"); }
   function apriPrezziCorsi() { apriViewProtetta("prezzicorsi"); }
+  function apriNormative() { apriViewProtetta("normative"); }
   function apriPos() { apriViewProtetta("pos"); }
   function apriLogisticaProdotti() { apriViewProtetta("logisticaprodotti"); }
   function apriSpedizioniCorsi() { apriViewProtetta("spedizionicorsi"); }
@@ -46791,6 +46835,7 @@ export default function App() {
               { chiave: "statistiche", title: "Statistiche", descrizione: "Analisi, report e KPI della tua Academy", Icona: IconaTileStatistiche, attivo: tastoAbilitato("statistiche"), onClick: apriStatistiche },
               { chiave: "crmallievi", title: "CRM / Allievi", descrizione: "Anagrafica di tutti gli allievi che hanno acquistato un corso", Icona: IconaGruppoTeam, attivo: tastoAbilitato("crmallievi"), onClick: apriCrmAllievi },
               { chiave: "storicoallievi", title: "Storico Allievi", descrizione: "Corsi svolti prima del gestionale, recuperati dagli archivi", Icona: IconaStoricoPos, attivo: tastoAbilitato("storicoallievi"), onClick: apriStoricoAllievi },
+              { chiave: "normative", title: "Normative", descrizione: "Le regole da rispettare e i documenti che le accompagnano", Icona: IconaTileNormative, attivo: tastoAbilitato("normative"), onClick: apriNormative },
               { chiave: "impostazioni", title: "Impostazioni", descrizione: "Configura preferenze, utenti e permessi", Icona: IconaTileImpostazioni, attivo: tastoAbilitato("impostazioni"), onClick: apriImpostazioni },
               { chiave: "progettiincorso", title: "Progetti in corso", descrizione: "Questa sezione sarà presto disponibile.", Icona: IconaTileLampadina, attivo: false, onClick: () => {} },
             ]}
@@ -47284,6 +47329,17 @@ export default function App() {
           ruoloUtente={ruoloUtente} utenteLoggato={utenteLoggato}
           ricarica={fetchDati} onBack={() => setView("home")}
           titolo={etichettaTasto("home", "agenda", "Agenda")}
+        />
+      )}
+
+      {view === "normative" && (
+        <PaginaNormative
+          ruoloUtente={ruoloUtente}
+          ordineTasti={layoutTasti.normative?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("normative", { ordine: o })}
+          colonneTasti={layoutTasti.normative?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("normative", { colonne: n })}
+          etichetteTasti={layoutTasti.normative?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("normative", chiave, testo)}
+          onBack={() => setView("home")}
+          titolo={etichettaTasto("home", "normative", "Normative")}
         />
       )}
 
