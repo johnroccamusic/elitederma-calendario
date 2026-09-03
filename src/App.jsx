@@ -298,13 +298,19 @@ function useAppDaSchermataHome() {
 // Vive qui, fuori dai componenti, perche' serve a due mestieri diversi:
 // a chi lo cambia e a chi misura quanta larghezza e' rimasta — a zoom 200%
 // lo schermo del portatile vale come un telefono, e il layout deve saperlo.
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 2.5;
+// Limiti stretti di proposito: a 250% su uno schermo grande la pagina
+// diventava larga come un telefono e l'app passava al layout da telefono —
+// tessere enormi, niente carrello di fianco. Fra 70% e 140% si stringe o si
+// allarga il testo senza stravolgere niente.
+const ZOOM_MIN = 0.7;
+const ZOOM_MAX = 1.4;
 const CHIAVE_ZOOM = "elitederma_zoom_pagina";
 let zoomPagina = 1;
 function leggiZoomSalvato() {
   try {
     const v = Number(window.localStorage.getItem(CHIAVE_ZOOM));
+    // fuori dai limiti (o salvato quando i limiti erano altri) si torna
+    // al 100%: meglio ripartire normali che ritrovarsi la pagina deformata
     return Number.isFinite(v) && v >= ZOOM_MIN && v <= ZOOM_MAX ? v : 1;
   } catch (e) { return 1; }
 }
@@ -316,7 +322,12 @@ function applicaZoomPagina(z) {
   try { window.localStorage.setItem(CHIAVE_ZOOM, String(z)); } catch (e) { /* navigazione privata */ }
   window.dispatchEvent(new Event("zoom-pagina"));
 }
-function larghezzaUtile() { return window.innerWidth / (zoomPagina || 1); }
+// Larghezza vera dello schermo, senza tenere conto dello zoom. Dividerla
+// per lo zoom sembrava giusto (e' quello che fa il browser con le sue
+// media query) ma in pratica significava che chi ingrandiva un po' si
+// ritrovava di colpo l'app del telefono sul monitor: il layout lo decide
+// lo schermo, non quanto e' grande il testo.
+function larghezzaUtile() { return window.innerWidth; }
 
 // L'ascolto sta qui, a livello di modulo: cosi' lo zoom vale ovunque —
 // gestionale, pagina pubblica delle modelle, vista master — e non solo
@@ -329,8 +340,13 @@ function larghezzaUtile() { return window.innerWidth / (zoomPagina || 1); }
 // modo continuo perche' i suoi passi sono piccoli.
 if (typeof window !== "undefined") {
   applicaZoomPagina(leggiZoomSalvato());
+  // Sul Mac lo zoom si fa solo con Cmd. Il pizzico sul trackpad arriva
+  // come Ctrl+rotellina, ed e' facilissimo farlo senza accorgersene
+  // mentre si scorre: bastava quello per ritrovarsi la pagina al 250%.
+  const suMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || "");
   window.addEventListener("wheel", (e) => {
-    if (!e.ctrlKey && !e.metaKey) return;
+    const conModificatore = suMac ? e.metaKey : (e.ctrlKey || e.metaKey);
+    if (!conModificatore) return;
     e.preventDefault();
     const fattore = Math.exp(-e.deltaY * 0.0015);
     const nuovo = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(zoomPagina * fattore * 100) / 100));
@@ -350,18 +366,16 @@ function IndicatoreZoom() {
   const [zoom, setZoom] = useState(zoomPagina);
   const [visibile, setVisibile] = useState(false);
   useEffect(() => {
-    let timer = null;
     function aggiorna() {
       setZoom(zoomPagina);
+      // resta in vista finche' lo zoom non torna al 100%: sparendo da sola
+      // lasciava la pagina ingrandita senza piu' nessun modo evidente di
+      // rimetterla a posto, e nessuno si ricordava piu' del perche'
       setVisibile(zoomPagina !== 1);
-      clearTimeout(timer);
-      // resta in vista qualche secondo dopo l'ultimo scatto, poi si toglie
-      // di mezzo: e' un promemoria, non un comando permanente
-      if (zoomPagina !== 1) timer = setTimeout(() => setVisibile(false), 2600);
     }
     window.addEventListener("zoom-pagina", aggiorna);
     aggiorna();
-    return () => { window.removeEventListener("zoom-pagina", aggiorna); clearTimeout(timer); };
+    return () => window.removeEventListener("zoom-pagina", aggiorna);
   }, []);
   if (!visibile) return null;
   return (
@@ -981,9 +995,14 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
   return (
     <div
       style={{
-        display: "flex", alignItems: "stretch", flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch",
+        // va a capo su due o tre righe invece di correre in orizzontale:
+        // con trenta categorie la striscia era larga il doppio dello
+        // schermo e, dentro una colonna della griglia, si portava dietro
+        // tutta la pagina — il POS finiva dilatato e passava al layout da
+        // telefono
+        display: "flex", alignItems: "stretch", flexWrap: "wrap",
         background: BG, border: `1px solid ${CREAM_BORDER}`, borderRadius: 16,
-        padding: compatta ? "4px 6px" : "6px 8px", marginBottom: compatta ? 10 : 16, scrollbarWidth: "none",
+        padding: compatta ? "4px 6px" : "6px 8px", marginBottom: compatta ? 10 : 16,
       }}
     >
       {voci.map((c, i) => {
@@ -991,7 +1010,7 @@ function StrisciaCategoriePos({ categorie, selezionata, onSeleziona, compatta = 
         const scelta = selezionata === c.id;
         return (
           <React.Fragment key={c.id || "tutti"}>
-            {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, margin: "6px 0", flexShrink: 0 }} />}
+            {i > 0 && <span style={{ width: 1, background: CREAM_BORDER, margin: "6px 0", flexShrink: 0, alignSelf: "stretch" }} />}
             <button
               onClick={() => onSeleziona(c.id)}
               title={c.nome}
@@ -38449,8 +38468,10 @@ function PaginaPOS({ prodottiShop, categorieProdotti, prodottiCategorie, prodott
           </div>
         )}
 
-        <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 18, alignItems: "flex-start" }}>
-          <div>
+        {/* minmax(0,…): senza, un contenuto largo (la striscia delle
+            categorie) allargava la colonna e con lei tutta la pagina */}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.5fr) minmax(0,1fr)", gap: 18, alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
               <CampoRicerca value={ricerca} onChange={(e) => cambiaFiltro(() => setRicerca(e.target.value))} placeholder="Cerca prodotto, codice o categoria…" style={{ flex: 1, minWidth: 220 }} />
             </div>
