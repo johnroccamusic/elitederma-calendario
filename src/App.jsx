@@ -29115,7 +29115,10 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
   const [ricerca, setRicerca] = useState("");
   const [soloAttivi, setSoloAttivi] = useState(false);
   const oggi = dataOggiStr();
-  const filtrate = righe
+  // in cima quelli usati di recente: un elenco di codici e' interessante
+  // per quello che si e' mosso, non per l'ordine in cui e' stato creato
+  const filtrate = [...righe]
+    .sort((a, b) => String(b.ultimo_utilizzo || "").localeCompare(String(a.ultimo_utilizzo || "")))
     .filter((c) => {
       if (!soloAttivi) return true;
       const scaduto = c.data_scadenza && c.data_scadenza < oggi;
@@ -29152,9 +29155,11 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: isMobile ? 720 : undefined }}>
             <thead>
               <tr>
+                <th style={thStyle}>Usato il</th>
                 <th style={thStyle}>Codice</th>
                 <th style={thStyle}>Tipo di codice promozionale</th>
                 <th style={{ ...thStyle, textAlign: "right" }}>Importo</th>
+                <th style={{ ...thStyle, textAlign: "right" }}>Sconto applicato</th>
                 <th style={thStyle}>Descrizione</th>
                 <th style={{ ...thStyle, textAlign: "center" }}>Uso / Limite</th>
                 <th style={thStyle}>Data di scadenza</th>
@@ -29162,7 +29167,7 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
             </thead>
             <tbody>
               {filtrate.length === 0 ? (
-                <tr><td colSpan={6} style={{ ...tdStyle, color: MUTED, textAlign: "center", padding: 20 }}>
+                <tr><td colSpan={8} style={{ ...tdStyle, color: MUTED, textAlign: "center", padding: 20 }}>
                   {righe.length === 0 ? "Nessun codice scaricato: premi \"Aggiorna da WooCommerce\"." : "Nessun codice trovato."}
                 </td></tr>
               ) : filtrate.map((c) => {
@@ -29170,10 +29175,35 @@ function TabellaCouponWoo({ righe, isMobile, sincronizzando, onSincronizza, ulti
                 const esaurito = c.limite_uso != null && (c.usati || 0) >= c.limite_uso;
                 return (
                   <tr key={c.woo_coupon_id}>
+                    {/* quando e' stato speso davvero: WooCommerce dice solo
+                        quante volte, la data la sanno i nostri ordini */}
+                    <td style={{ ...tdStyle, whiteSpace: "nowrap" }}>
+                      {c.ultimo_utilizzo ? (
+                        <>
+                          <span style={{ fontWeight: 700 }}>{fmtData(c.ultimo_utilizzo)}</span>
+                          {c.primo_utilizzo && c.primo_utilizzo !== c.ultimo_utilizzo && (
+                            <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED }}>dal {fmtData(c.primo_utilizzo)}</span>
+                          )}
+                        </>
+                      ) : <span style={{ color: MUTED }}>mai usato</span>}
+                    </td>
                     <td style={{ ...tdStyle, fontWeight: 700, whiteSpace: "nowrap", opacity: scaduto || esaurito ? 0.55 : 1 }}>{c.codice}</td>
                     <td style={{ ...tdStyle, color: MUTED, whiteSpace: "nowrap" }}>{etichettaTipo(c.tipo_sconto)}</td>
                     <td style={{ ...tdStyle, fontWeight: 700, textAlign: "right", whiteSpace: "nowrap" }}>
                       {c.importo == null ? "—" : c.tipo_sconto === "percent" ? `${Number(c.importo).toLocaleString("it-IT")}%` : fmtEuroErp2(Number(c.importo))}
+                    </td>
+                    {/* quanto ha tolto davvero: un 15% vale una cifra
+                        diversa a ogni ordine, e il valore nominale del
+                        coupon non lo dice */}
+                    <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+                      {(c.ordini_con_codice || 0) > 0 ? (
+                        <>
+                          <span style={{ fontWeight: 700, color: "#C0392B" }}>− {fmtEuroErp2(Number(c.sconto_totale) || 0)}</span>
+                          <span style={{ display: "block", ...fontBody, fontSize: 11, color: MUTED }}>
+                            su {fmtEuroErp2(Number(c.incasso_ordini) || 0)} di ordini
+                          </span>
+                        </>
+                      ) : <span style={{ color: MUTED }}>—</span>}
                     </td>
                     <td style={{ ...tdStyle, color: MUTED, maxWidth: 280 }}>{c.descrizione || "—"}</td>
                     <td style={{ ...tdStyle, textAlign: "center", whiteSpace: "nowrap", color: esaurito ? "#C0392B" : NAVY, fontWeight: esaurito ? 700 : 400 }}>
@@ -46497,7 +46527,9 @@ export default function App() {
     citta: async () => setCitta((await supabase.from("citta").select("*").order("nome")).data || []),
     riordini_in_corso: async () => setRiordiniInCorso((await supabase.from("riordini_in_corso").select("*").order("data_ordine", { ascending: false })).data || []),
     normative_testi: async () => setNormativeTesti((await supabase.from("normative_testi").select("*")).data || []),
-    woo_coupon: async () => setWooCoupon((await supabase.from("woo_coupon").select("*").order("data_creazione", { ascending: false })).data || []),
+    // dalla vista, non dalla tabella: porta anche quando e per quanto ogni
+    // codice e' stato speso davvero nei nostri ordini
+    woo_coupon: async () => setWooCoupon((await supabase.from("woo_coupon_con_utilizzi").select("*").order("data_creazione", { ascending: false })).data || []),
   };
 
   // "ricarica" (passata come prop dappertutto): senza argomenti rifà
