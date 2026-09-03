@@ -16601,6 +16601,8 @@ const AREA_MADRE_VISTA = {
   spesaform: ["erp", "gestionedate"],
   dashboardanalisi: ["statistiche"],
   statistichevenditeprodotti: ["statistiche"],
+  // si entra direttamente qui dal tasto "Vendite prodotti": stessa area
+  statvenditeshop: ["statistiche"],
   statisticamaster: ["statistiche"],
   classificazionevocishop: ["magazzinoshop"],
   crmshop: ["crmallievi"],
@@ -29122,9 +29124,12 @@ function TabsStatisticheVenditeProdotti({ attivo, onApriTotale, onApriShop, onAp
   const isMobile = useIsMobile();
   return (
     <div style={isMobile ? { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 20 } : { display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
-      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
+      {/* prima lo shop, poi il banco, poi i totali: si entra per guardare
+          quello che si e' venduto online, il totale e' la somma e viene
+          dopo */}
       <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "shop"} onClick={onApriShop} Icona={IconaTileVenditeShop} sfondo="#EAF3EA" bordo="#CFE3CF" coloreIcona="#2E7D32">Statistiche Vendite Shop Online</SchedaTabAmministrazione>
       <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "banco"} onClick={onApriBanco} Icona={IconaTilePos} sfondo="#FBEEE0" bordo="#F0D9BE" coloreIcona="#C67C2E">Statistiche Vendite al Banco</SchedaTabAmministrazione>
+      <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "totale"} onClick={onApriTotale} Icona={IconaGruppoVenditeProdotti} sfondo="#FBF3E0" bordo="#E8D9B5" coloreIcona="#B8860B">Statistiche Totali Vendite Prodotti</SchedaTabAmministrazione>
       <SchedaTabAmministrazione compatto={isMobile} attivo={attivo === "analisi"} onClick={onApriAnalisi} Icona={IconaTileDashboardAnalisi} sfondo="#E7EEF5" bordo="#C7D9E8" coloreIcona="#3B6FA0">Analisi Vendita Prodotti</SchedaTabAmministrazione>
     </div>
   );
@@ -47284,7 +47289,10 @@ export default function App() {
   function apriCrmShop() { apriViewProtetta("crmshop"); }
   function apriGeneraCoupon() { apriViewProtetta("generacoupon"); }
   function apriGestioneIva() { apriViewProtetta("gestioneiva"); }
-  function apriStatisticheVenditeProdotti() { apriViewProtetta("statistichevenditeprodotti"); }
+  // entrando in "Vendite prodotti" si arriva sullo shop online: e' il
+  // canale che si guarda tutti i giorni. I totali restano un tasto di
+  // fianco, come le altre viste
+  function apriStatisticheVenditeProdotti() { apriViewProtetta("statvenditeshop"); }
   // raggiungibili solo dai due tasti dentro "Statistiche Vendite
   // Prodotti" (già un'area protetta): nessun secondo cancello password,
   // a differenza di "venditeshop"/"venditealbanco" che sono anche tasti
