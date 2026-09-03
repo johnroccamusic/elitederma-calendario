@@ -1,8 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { regioneDaCitta } from "./comuni-regioni";
-import { CSS_NORMATIVA_PMU } from "./normativa-pmu-css";
-import { HTML_NORMATIVA_PMU } from "./normativa-pmu-html";
 import { generaCodiceCasuale, livelloIniziale, inizialiMaster } from "../supabase/functions/_shared/codiceReferral.js";
 
 // pdfjs-dist e pdf-lib (+fontkit) pesano insieme oltre 1MB minificato: se
@@ -23066,6 +23064,22 @@ function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, testoIniziale =
 // del tema avrebbero cambiato l'aspetto dell'intera app.
 function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" }) {
   const isMobile = useIsMobile();
+  // Il documento (80 KB di testo e stile) si scarica solo quando questa
+  // pagina si apre, non insieme all'app: stando nel pacchetto principale
+  // pesava sull'avvio e su ogni schermata, Normative compresa. Stesso
+  // trucco gia' usato per pdf-lib e pdfjs.
+  const [documento, setDocumento] = useState(null);
+  useEffect(() => {
+    let annullato = false;
+    (async () => {
+      const [css, html] = await Promise.all([
+        import("./normativa-pmu-css"),
+        import("./normativa-pmu-html"),
+      ]);
+      if (!annullato) setDocumento({ css: css.CSS_NORMATIVA_PMU, html: html.HTML_NORMATIVA_PMU });
+    })();
+    return () => { annullato = true; };
+  }, []);
   // i caratteri del documento (Fraunces, Source Sans 3, IBM Plex Mono) si
   // caricano solo quando la pagina si apre: sono suoi, non dell'app
   useEffect(() => {
@@ -23085,7 +23099,7 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
   const rifDocumento = React.useRef(null);
   useEffect(() => {
     const radice = rifDocumento.current;
-    if (!radice) return undefined;
+    if (!radice || !documento) return undefined;
 
     // 1. da telefono l'indice diventa un menu a tendina: le stesse voci
     //    della colonna laterale, dentro un pannello che si apre col
@@ -23127,7 +23141,9 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
 
     // 3. ogni cella della tabella si porta dietro il nome della sua
     //    colonna: da telefono le righe diventano schede e senza
-    //    l'etichetta i numeri non direbbero di cosa parlano
+    //    l'etichetta i numeri non direbbero di cosa parlano. Si fa qui,
+    //    prima di mettere da parte le sezioni chiuse, cosi' vale anche
+    //    per le tabelle che verranno rimesse dentro piu' tardi
     radice.querySelectorAll("table").forEach((tabella) => {
       const intestazioni = [...tabella.querySelectorAll("thead th")].map((th) => th.textContent.trim());
       tabella.querySelectorAll("tbody tr").forEach((riga) => {
@@ -23137,8 +23153,26 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
       });
     });
 
+    // Le sezioni chiuse non restano nemmeno nella pagina: il loro
+    // contenuto viene messo da parte e rimesso dentro solo quando si
+    // aprono. Nasconderle con il CSS bastava per non vederle, ma il
+    // telefono doveva comunque costruire e tenere in memoria migliaia di
+    // elementi tutti insieme — ed e' per quello che la pagina ci metteva
+    // tanto a comparire.
+    const conservate = new Map();
+    sezioni.forEach((sez) => {
+      const pezzi = document.createDocumentFragment();
+      [...sez.children].forEach((figlio) => {
+        if (!figlio.classList.contains("testata-sezione")) pezzi.appendChild(figlio);
+      });
+      conservate.set(sez, pezzi);
+    });
+
     function apriSezione(sez) {
-      if (sez) sez.classList.remove("chiudibile");
+      if (!sez) return;
+      const pezzi = conservate.get(sez);
+      if (pezzi) { sez.appendChild(pezzi); conservate.delete(sez); }
+      sez.classList.remove("chiudibile");
     }
     function suClic(e) {
       const tastoMenu = e.target.closest(".tasto-menu");
@@ -23148,7 +23182,9 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
       }
       const testata = e.target.closest(".testata-sezione");
       if (testata && radice.contains(testata)) {
-        testata.parentElement.classList.toggle("chiudibile");
+        const sez = testata.parentElement;
+        if (sez.classList.contains("chiudibile")) apriSezione(sez);
+        else sez.classList.add("chiudibile");
         return;
       }
       // 4. l'indice (laterale o a tendina): senza intercettarlo il
@@ -23168,17 +23204,18 @@ function PaginaMappaNormativePmu({ onBack, titolo = "Mappa normative regionali" 
     }
     radice.addEventListener("click", suClic);
     return () => radice.removeEventListener("click", suClic);
-  }, []);
+  }, [documento]);
 
   return (
     <div style={{ background: "transparent", minHeight: "100vh", padding: isMobile ? "16px 12px 60px" : "8px 20px 60px" }}>
       <div style={{ maxWidth: 1220, margin: "0 auto" }}>
         <div style={{ marginBottom: 8 }}><TastoLivelloPrecedente titolo="Normative" onClick={onBack} /></div>
-        <style>{CSS_NORMATIVA_PMU}</style>
+        {!documento && <div style={{ ...fontBody, fontSize: 13.5, color: MUTED, padding: "20px 0" }}>Apro il documento…</div>}
+        {documento && <style>{documento.css}</style>}
         {/* data-theme="light": il documento nasceva con un tema scuro
             automatico, che dentro un'app tutta chiara diventava una pagina
             nera in mezzo al crema */}
-        <div ref={rifDocumento} className="mappa-pmu" data-theme="light" dangerouslySetInnerHTML={{ __html: HTML_NORMATIVA_PMU }} />
+        {documento && <div ref={rifDocumento} className="mappa-pmu" data-theme="light" dangerouslySetInnerHTML={{ __html: documento.html }} />}
       </div>
     </div>
   );
