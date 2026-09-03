@@ -16453,6 +16453,7 @@ const TASTI_HOME = [
 // entra senza dover sbloccare una seconda volta la stessa area con una
 // password — vedi apriViewProtetta
 const AREA_MADRE_VISTA = {
+  ritornoalcorso: ["normative"],
   amministrazione: ["erp"],
   catalogocategoriecosti: ["erp"],
   riconciliazione: ["erp"],
@@ -22522,6 +22523,173 @@ function PaginaAnagrafiche({ master, assistente, hotel, location, venditori, for
 
 // hub d'ingresso di "Gestione magazzino e shop": prodotti/scorte, lo shop
 // online e le vendite che ne derivano — stesso stile di Contabilità
+// Il testo di partenza di "Ritorno al Corso": e' quello pubblicato su
+// elitederma.it/torna-al-corso. Vive qui solo come punto di partenza —
+// appena la pagina si apre viene scritto sul database, e da li' in poi
+// comanda quello che c'e' scritto sul database, non questo.
+const NORMATIVA_RITORNO_AL_CORSO = [
+  { id: "b1", tipo: "titolo", testo: "Cosa puoi fare se hai già fatto un corso e vuoi tornare a studiare" },
+  { id: "b2", tipo: "sezione", testo: "Regolamento Elitederma post corso" },
+  { id: "b3", tipo: "paragrafo", testo: "Elitederma continua a supportare i propri allievi anche dopo il percorso formativo, offrendo la possibilità di rifrequentare i corsi gratuitamente o a tariffe agevolate per consolidare le competenze acquisite." },
+  { id: "b4", tipo: "paragrafo", testo: "Poiché la dermopigmentazione si evolve costantemente, chi torna in aula potrebbe affrontare un programma aggiornato rispetto a quello originario, con prodotti, pigmenti e strumenti differenti." },
+  { id: "b5", tipo: "paragrafo", testo: "Il contributo richiesto rappresenta quindi un investimento nella propria crescita professionale e un sostegno all'impegno dell'accademia nell'innovazione e nell'aggiornamento continuo." },
+  { id: "b6", tipo: "nota", testo: "NB: le presenti regole sono valide unicamente per i corsi base e sono esclusi i corsi avanzati, per i quali sarà dovuto nuovamente l'intero importo scontato del 10%." },
+  { id: "b7", tipo: "sezione", testo: "Cosa puoi fare se sei ancora durante il periodo di supporto post corso" },
+  { id: "b8", tipo: "paragrafo", testo: "Entro il termine degli otto mesi di supporto potrai tornare in aula gratuitamente e usufruire della parte teorica senza alcun costo." },
+  { id: "b9", tipo: "paragrafo", testo: "Le esercitazioni su modella saranno da considerarsi a parte e avranno un costo di euro 200 per ogni modella o, per il corso base di PMU, euro 500 nel caso di acquisto di tutte e 3 le modelle da fare al corso." },
+  { id: "b10", tipo: "paragrafo", testo: "Non sarà incluso un nuovo kit." },
+  { id: "b11", tipo: "sezione", testo: "Cosa puoi fare entro 16 mesi dalla fine del corso" },
+  { id: "b12", tipo: "paragrafo", testo: "Se non sono trascorsi 16 mesi dalla data della fine del corso, potrai acquistare dei mesi di supporto aggiuntivo al costo di 150 euro al mese." },
+  { id: "b13", tipo: "paragrafo", testo: "Con l'acquisto di almeno 3 mesi di supporto avrai anche la possibilità di tornare al corso gratuitamente." },
+  { id: "b14", tipo: "paragrafo", testo: "Le esercitazioni su modella saranno da considerarsi a parte e avranno un costo di euro 200 per ogni modella o, per il corso base di PMU, euro 500 nel caso di acquisto di tutte e 3 le modelle da fare al corso." },
+  { id: "b15", tipo: "paragrafo", testo: "Non sarà incluso un nuovo kit." },
+  { id: "b16", tipo: "sezione", testo: "Cosa puoi fare dal 16° mese fino al 23° mese dalla fine del corso" },
+  { id: "b17", tipo: "paragrafo", testo: "Dopo i 16 mesi dal corso non ti sarà possibile acquistare solo il supporto aggiuntivo, ma potrai tornare in aula per l'intero corso con l'agevolazione di uno sconto pari al 50% sul prezzo del corso. Saranno inclusi nuovamente 8 mesi di supporto e un nuovo kit prodotti, ad eccezione del dermografo, che potrà comunque essere acquistato avvalendosi di uno sconto pari al 50%." },
+  { id: "b18", tipo: "sezione", testo: "Cosa puoi fare dal 24° mese (2 anni) ed entro il 4° anno dalla fine del corso" },
+  { id: "b19", tipo: "paragrafo", testo: "Tra i 2 e i 4 anni dal corso non potrai più acquistare solo il supporto aggiuntivo, ma potrai tornare a frequentare l'intero corso, incluse le modelle, con uno sconto pari al 25% sul prezzo totale del corso." },
+  { id: "b20", tipo: "paragrafo", testo: "Saranno inclusi nuovamente 8 mesi di supporto e un nuovo kit colori ed accessori, ma nel caso del corso di PMU sarà escluso il dermografo, che potrà comunque essere acquistato nuovamente avvalendosi di uno sconto del 25%." },
+  { id: "b21", tipo: "sezione", testo: "Cosa puoi fare se sono trascorsi oltre 4 anni dalla fine del corso" },
+  { id: "b22", tipo: "paragrafo", testo: "Se sono trascorsi 4 anni dalla fine del corso potrai tornare nuovamente al corso, incluso di supporto, con un'agevolazione pari al 15% sul prezzo totale del corso. Sarà incluso il kit e, nel caso del corso di PMU, anche il dermografo (oppure potrai scegliere il pacchetto senza dermografo)." },
+  { id: "b23", tipo: "titolo2", testo: "Perché applichiamo questa politica" },
+  { id: "b24", tipo: "paragrafo", testo: "Elitederma si impegna costantemente a supportare i propri allievi, anche dopo il completamento del percorso formativo. Comprendiamo che, per diverse ragioni, alcuni studenti possano non aver avuto l'opportunità di esercitare quanto appreso." },
+  { id: "b25", tipo: "paragrafo", testo: "Per questo motivo abbiamo ideato una formula di rientro con tariffe agevolate, che consente di frequentare nuovamente il corso e consolidare le competenze acquisite." },
+  { id: "b26", tipo: "paragrafo", testo: "È importante tuttavia considerare che la dermopigmentazione è una disciplina in continua evoluzione: manuali, strumenti, tecniche e protocolli didattici vengono regolarmente aggiornati per rispondere agli standard più attuali." },
+  { id: "b27", tipo: "paragrafo", testo: "Di conseguenza, chi sceglie di rifrequentare il corso potrebbe trovarsi di fronte a un programma profondamente rinnovato, diverso in molti aspetti rispetto a quello originario." },
+  { id: "b28", tipo: "paragrafo", testo: "Il contributo richiesto per la nuova iscrizione deve quindi essere visto non solo come un investimento nella propria crescita professionale, ma anche come un sostegno all'attività continua di ricerca e aggiornamento dell'accademia." },
+  { id: "b29", tipo: "paragrafo", testo: "Solo così possiamo garantire agli studenti una formazione sempre allineata alle innovazioni del settore e fornire loro strumenti e tecniche all'avanguardia." },
+];
+
+
+// La pagina di una normativa: titolo, sezioni e paragrafi come sul sito.
+// In modalita' programmatore ogni blocco si apre cliccandoci sopra e si
+// riscrive li' dentro; quello che si salva lo vedono tutti, perche' sta
+// sul database e non nel browser di chi ha scritto.
+function PaginaNormativa({ chiave, ruoloUtente, testi, ricarica, assicuraTabelle, testoIniziale = [], onBack, titolo = "Normativa", titoloIndietro = "Normative" }) {
+  const isMobile = useIsMobile();
+  const programmatore = ruoloUtente === "programmatore";
+  const riga = (testi || []).find((t) => t.chiave === chiave) || null;
+  const [inModifica, setInModifica] = useState(null);   // id del blocco aperto
+  const [bozza, setBozza] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const seminato = React.useRef(false);
+
+  useEffect(() => { assicuraTabelle?.(["normative_testi"]); }, [assicuraTabelle]);
+
+  // prima apertura: il testo di partenza finisce sul database, cosi' da
+  // quel momento e' modificabile come tutto il resto
+  useEffect(() => {
+    if (riga || seminato.current || !testoIniziale.length) return;
+    seminato.current = true;
+    (async () => {
+      await supabase.from("normative_testi").insert({ chiave, titolo, blocchi: testoIniziale });
+      await ricarica(["normative_testi"]);
+    })();
+  }, [riga, chiave, titolo, testoIniziale, ricarica]);
+
+  const blocchi = Array.isArray(riga?.blocchi) && riga.blocchi.length ? riga.blocchi : testoIniziale;
+
+  async function salvaBlocchi(nuovi) {
+    setSalvando(true);
+    const { error } = await supabase.from("normative_testi")
+      .upsert({ chiave, titolo, blocchi: nuovi, aggiornato_il: new Date().toISOString() }, { onConflict: "chiave" });
+    setSalvando(false);
+    if (error) { window.alert("Non sono riuscito a salvare: " + error.message); return false; }
+    await ricarica(["normative_testi"]);
+    return true;
+  }
+
+  async function confermaModifica(id) {
+    const nuovi = blocchi.map((b) => (b.id === id ? { ...b, testo: bozza } : b));
+    if (await salvaBlocchi(nuovi)) { setInModifica(null); setBozza(""); }
+  }
+  async function eliminaBlocco(id) {
+    if (!window.confirm("Sei sicuro di voler cancellare questo pezzo di testo?")) return;
+    await salvaBlocchi(blocchi.filter((b) => b.id !== id));
+  }
+  async function aggiungiBlocco(tipo) {
+    const nuovo = { id: `b${Date.now()}`, tipo, testo: tipo === "paragrafo" ? "Scrivi qui il testo…" : "Nuovo titolo" };
+    if (await salvaBlocchi([...blocchi, nuovo])) { setInModifica(nuovo.id); setBozza(nuovo.testo); }
+  }
+
+  // ogni tipo di blocco ha il suo stile, gli stessi pesi della pagina sul
+  // sito: titolone, titoletti di sezione in maiuscoletto, testo corrente
+  function stileDi(tipo) {
+    if (tipo === "titolo") return { ...fontDisplay, fontSize: isMobile ? 24 : 34, fontWeight: 700, color: NAVY, lineHeight: 1.2, textTransform: "uppercase", letterSpacing: 0.3, marginBottom: 18 };
+    if (tipo === "titolo2") return { ...fontDisplay, fontSize: isMobile ? 20 : 26, fontWeight: 700, color: NAVY, lineHeight: 1.25, textTransform: "uppercase", letterSpacing: 0.3, margin: "30px 0 14px" };
+    if (tipo === "sezione") return { ...fontBody, fontSize: isMobile ? 14 : 15.5, fontWeight: 700, color: GOLD, textTransform: "uppercase", letterSpacing: 0.8, lineHeight: 1.35, margin: "26px 0 10px" };
+    if (tipo === "nota") return { ...fontBody, fontSize: isMobile ? 12.5 : 13.5, color: "#8A6D1D", background: "#FDF8EC", border: "1px solid #EBD9AE", borderRadius: 12, padding: "12px 14px", lineHeight: 1.6, margin: "14px 0" };
+    return { ...fontBody, fontSize: isMobile ? 13.5 : 15, color: NAVY, lineHeight: 1.75, marginBottom: 12 };
+  }
+
+  return (
+    <div style={{ background: "transparent", minHeight: "100vh" }}>
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: isMobile ? "24px 20px 60px" : "32px 32px 80px" }}>
+        <div style={{ marginBottom: isMobile ? 12 : 18 }}>
+          <TastoLivelloPrecedente titolo={titoloIndietro} onClick={onBack} />
+        </div>
+        {programmatore && (
+          <div style={{ ...fontBody, fontSize: 12, color: MUTED, background: BG, border: `1px dashed ${CREAM_BORDER}`, borderRadius: 12, padding: "10px 12px", marginBottom: 18 }}>
+            Sei in modalità programmatore: clicca su un qualsiasi pezzo di testo per riscriverlo. Quello che salvi lo vedono tutti.
+          </div>
+        )}
+
+        {blocchi.map((b) => {
+          const aperto = inModifica === b.id;
+          if (aperto) {
+            return (
+              <div key={b.id} style={{ marginBottom: 14 }}>
+                <textarea
+                  autoFocus
+                  value={bozza}
+                  onChange={(e) => setBozza(e.target.value)}
+                  rows={Math.max(2, Math.ceil(bozza.length / 70))}
+                  style={{ ...inputStyle, width: "100%", resize: "vertical", lineHeight: 1.6, fontSize: isMobile ? 13.5 : 14.5 }}
+                />
+                <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                  <Button onClick={() => confermaModifica(b.id)} disabled={salvando}>{salvando ? "Salvo…" : "Salva"}</Button>
+                  <Button variant="ghost" onClick={() => { setInModifica(null); setBozza(""); }}>Annulla</Button>
+                  <button
+                    onClick={() => eliminaBlocco(b.id)}
+                    style={{ ...fontBody, fontSize: 12, fontWeight: 700, color: "#C0392B", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+                  >
+                    Cancella questo pezzo
+                  </button>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div
+              key={b.id}
+              onClick={programmatore ? () => { setInModifica(b.id); setBozza(b.testo); } : undefined}
+              title={programmatore ? "Clicca per riscrivere" : undefined}
+              style={{ ...stileDi(b.tipo), cursor: programmatore ? "text" : "default", borderRadius: 8, ...(programmatore ? { outline: "1px dashed transparent", transition: "outline-color 120ms" } : {}) }}
+              onMouseEnter={programmatore ? (e) => { e.currentTarget.style.outlineColor = CREAM_BORDER; } : undefined}
+              onMouseLeave={programmatore ? (e) => { e.currentTarget.style.outlineColor = "transparent"; } : undefined}
+            >
+              {b.testo}
+            </div>
+          );
+        })}
+
+        {programmatore && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 24, paddingTop: 16, borderTop: `1px solid ${CREAM_BORDER}` }}>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("sezione")}>+ Titolo di sezione</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("paragrafo")}>+ Paragrafo</Button>
+            <Button variant="ghost" onClick={() => aggiungiBlocco("nota")}>+ Nota</Button>
+          </div>
+        )}
+
+        {riga?.aggiornato_il && (
+          <div style={{ ...fontBody, fontSize: 11.5, color: MUTED, marginTop: 20 }}>
+            Ultima modifica: {new Date(riga.aggiornato_il).toLocaleString("it-IT", { timeZone: "Europe/Rome" })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // "Normative": l'area delle regole che l'accademia deve rispettare e dei
 // documenti che le accompagnano. Per ora ospita un solo argomento —
 // "Ritorno al Corso" — ed e' fatta con la stessa griglia di tessere delle
@@ -45446,6 +45614,7 @@ export default function App() {
   // "Assegna modelle"): il tasto "torna" della scheda deve allora uscire
   // verso Gestione modelle invece che verso una lista mai mostrata
   const [riordiniInCorso, setRiordiniInCorso] = useState([]);
+  const [normativeTesti, setNormativeTesti] = useState([]);
   // i prodotti con un ordine gia' partito: non devono piu' suonare
   const prodottiGiaOrdinati = useMemo(
     () => new Set((riordiniInCorso || []).filter((r) => r.stato === "ordinato").map((r) => r.prodotto_id)),
@@ -45775,6 +45944,7 @@ export default function App() {
     },
     citta: async () => setCitta((await supabase.from("citta").select("*").order("nome")).data || []),
     riordini_in_corso: async () => setRiordiniInCorso((await supabase.from("riordini_in_corso").select("*").order("data_ordine", { ascending: false })).data || []),
+    normative_testi: async () => setNormativeTesti((await supabase.from("normative_testi").select("*")).data || []),
   };
 
   // "ricarica" (passata come prop dappertutto): senza argomenti rifà
@@ -45872,6 +46042,7 @@ export default function App() {
     // mai. E' la stessa tabella che carica l'hub della logistica per il suo
     // tasto Advisor, che infatti il pallino lo mostrava
     normative: [],
+    ritornoalcorso: ["normative_testi"],
     magazzinoshop: ["prodotti_shop", "riordini_in_corso"],
     gestioneiva: ["prodotti_shop", "vendite_shop", "voci_shop_classificazione"],
     archivio: ["corsi", "location", "corsi_date", "iscritti", "master"],
@@ -47338,8 +47509,22 @@ export default function App() {
           ordineTasti={layoutTasti.normative?.ordine} onSalvaOrdineTasti={(o) => salvaLayoutTasti("normative", { ordine: o })}
           colonneTasti={layoutTasti.normative?.colonne} onSalvaColonneTasti={(n) => salvaLayoutTasti("normative", { colonne: n })}
           etichetteTasti={layoutTasti.normative?.etichette} onSalvaEtichettaTasti={(chiave, testo) => salvaEtichettaTasto("normative", chiave, testo)}
+          onApriRitornoAlCorso={() => setView("ritornoalcorso")}
           onBack={() => setView("home")}
           titolo={etichettaTasto("home", "normative", "Normative")}
+        />
+      )}
+
+      {view === "ritornoalcorso" && (
+        <PaginaNormativa
+          chiave="ritorno_al_corso"
+          ruoloUtente={ruoloUtente}
+          testi={normativeTesti}
+          testoIniziale={NORMATIVA_RITORNO_AL_CORSO}
+          ricarica={fetchDati}
+          assicuraTabelle={assicuraTabelle}
+          onBack={() => setView("normative")}
+          titolo="Ritorno al Corso"
         />
       )}
 
